@@ -316,6 +316,22 @@ PGPASSWORD=postgres ./scripts/cleanup/remove-award-points.sh
 ```
 The runner is the safe entry point; `cleanup/remove-award-points.sql` is the underlying apply step (markers-first delete, idempotent) if you prefer to run it directly in `psql`.
 
+#### `cleanup/backfill-event-clubs.sh` (#794)
+One-off: find events with **no club** and re-file them under an archive club, so migration `V44` (`ALTER TABLE events ALTER COLUMN club_id SET NOT NULL`) can apply. Flyway runs on app startup and `DatabaseConfig` rethrows on failure, so a single clubless row fails the migration, fails the boot, and the Cloud Run revision never listens on `$PORT` — that is what broke the v2.0.8 deploy (`ERROR: column "club_id" of relation "events" contains null values`, SQLSTATE 23502). **Soft-deleted events are included on purpose**: `NOT NULL` does not care that we consider a row deleted, and they are the likely reason an earlier manual pass came up short, since the UI hides them. Defaults to a **dry run** (summary + per-event detail); `--apply` re-files (with a typed confirmation) and then asserts zero remain. Idempotent. Access is not widened — event authorization (#789) reads `club_owners`, so a club with no named owners grants nobody new access.
+
+**Usage:**
+```bash
+# Dry run against the local restored copy (default connection):
+PGPASSWORD=postgres ./scripts/cleanup/backfill-event-clubs.sh
+# Dry run against an explicit connection:
+./scripts/cleanup/backfill-event-clubs.sh "postgresql://postgres@localhost:5432/skopeo_prodcopy"
+# Apply (prompts to confirm; --yes skips the prompt):
+./scripts/cleanup/backfill-event-clubs.sh --apply "postgresql://user@host:5432/dbname"
+```
+Config: `DB_URL` (default connection), `ARCHIVE_CLUB_CODE` (destination club's `public_code`, default `XCBXNV` = "(Old) Archived"). Prod's Cloud SQL is private-IP only, so open a path first — `cloud-sql-proxy` from inside the VPC, or Cloud SQL Studio in the console.
+
+⚠️ Re-run the dry run immediately before re-triggering **Deploy API**: the live 2.0.7 API still accepts a null `clubId`, so fresh clubless events can appear after a cleanup.
+
 ---
 
 ### 📚 Reference
