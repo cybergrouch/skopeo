@@ -63,6 +63,7 @@ The design/decision records above, with status:
 - [DEPLOYMENT_GCP.md](engineering/operations/DEPLOYMENT_GCP.md) — Cloud Run + Cloud SQL + Firebase Hosting deployment.
 - [DOCKER_DEPLOYMENT.md](engineering/operations/DOCKER_DEPLOYMENT.md) — container build & local Docker run.
 - [database-setup.md](engineering/operations/database-setup.md) — local DB setup, migrations, sample queries.
+- [DB_MIGRATIONS.md](engineering/operations/DB_MIGRATIONS.md) — Flyway conventions + the checklist for constraint-tightening migrations (must carry their own backfill; CI migrates an empty DB, #799), with the V44 post-mortem and an audit of V1–V44.
 - [CICD.md](engineering/operations/CICD.md) — GitHub Actions CI/CD plan.
 - [JVM_COMPATIBILITY.md](engineering/operations/JVM_COMPATIBILITY.md) — Java/Gradle/detekt version strategy.
 - [LOGGING_AND_METRICS.md](engineering/operations/LOGGING_AND_METRICS.md) — logging and Prometheus metrics.
