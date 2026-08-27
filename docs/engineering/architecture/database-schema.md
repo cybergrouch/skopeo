@@ -333,7 +333,7 @@ erDiagram
         uuid created_by FK "nullable"
         boolean is_active
         timestamp disabled_at
-        uuid club_id FK "owning club (V6; nullable)"
+        uuid club_id FK "owning club (V6; not null since V44, RESTRICT since V45)"
         uuid circuit_id FK "circuit for a TOURNAMENT (V26; nullable)"
         double calc_priority "admin calc-order override (V8; nullable)"
         string type "OPEN_PLAY / LEAGUE / TOURNAMENT (V15; default OPEN_PLAY)"
@@ -601,7 +601,7 @@ A user is granted one or more broad **capabilities**: `PLAYER`, `HOST`, `CLUB_OW
 
 ### Post-baseline subsystems
 
-- **`clubs` / `club_owners`** (V5/V10, #313) — a host organization with a shareable `public_code` and a `tournaments_sanctioned` flag (#525); `club_owners` is the club↔owner junction. Events may belong to a club (`events.club_id`, SET NULL).
+- **`clubs` / `club_owners`** (V5/V10, #313) — a host organization with a shareable `public_code` and a `tournaments_sanctioned` flag (#525); `club_owners` is the club↔owner junction. Every event belongs to a club (`events.club_id`, NOT NULL since V44/#794, **ON DELETE RESTRICT** since V45/#800 — a club with events cannot be hard-deleted; soft-disable it via `ClubService.disable`, which is all the application ever does. RESTRICT rather than CASCADE because cascading would silently destroy the match and rating history hanging off those events).
 - **`circuits`** (V25, #525) — administrator-defined groupings of TOURNAMENT events (`events.circuit_id`, SET NULL).
 - **`standings_snapshots` / `standings_entries`** (V12/V14, #113/#146) — a published ranking snapshot (`seq` = DB-monotonic order; `status` PUBLISHED/DRAFT; `source` RATING or POINTS) and its per-(band, sex) ranked rows (`rank`, `ordering_value`, tiebreak). Reads pick the latest PUBLISHED generation.
 - **`ranking_point_awards`** (V13/V18/V19, #403/#448) — the append-only ranking-points ledger: `points` in a `point_class` validity tier, `band`/`sex`, a `valid_from`/`valid_until` window, and `status` ACTIVE/REVOKED. A revocation is itself a row (`revokes_award_id`). Awards link to their granting `event_id` and/or `match_id`.
@@ -836,6 +836,8 @@ CREATE UNIQUE INDEX uq_rating_requests_open ON rating_requests(user_id) WHERE st
 -- Events & host seeding
 ALTER TABLE events ADD CONSTRAINT chk_event_dates CHECK (end_date >= start_date);
 CREATE UNIQUE INDEX uq_events_public_code ON events(public_code);
+-- club_id is NOT NULL (V44) so its delete action must refuse, not NULL out (V45): see #800.
+ALTER TABLE events ADD CONSTRAINT events_club_id_fkey FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE RESTRICT;
 ALTER TABLE event_participants  ADD CONSTRAINT uq_event_participant  UNIQUE (event_id, user_id);
 ALTER TABLE player_list_members ADD CONSTRAINT uq_player_list_members UNIQUE (list_id, user_id);
 ALTER TABLE seedings            ADD CONSTRAINT uq_seedings_list       UNIQUE (list_id);
