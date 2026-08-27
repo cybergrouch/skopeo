@@ -52,6 +52,8 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 
 **Database**: `config/DatabaseConfig.kt` wires HikariCP + Flyway migrations + Exposed on startup. `Application.module(initDatabase: Boolean)` allows tests to skip DB init — integration tests call `module(initDatabase = false)`. Config is read from `src/main/resources/application.yaml` (env vars `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`).
 
+**Migrations**: schema changes go in a *new* `V<n>__*.sql` under `src/main/resources/db/migration/` — never edit a migration that has shipped. **A migration that tightens a constraint (`SET NOT NULL`, a new `UNIQUE`/`CHECK`, a narrowing `ALTER TYPE`) must make its own precondition true in the same file** — backfill first, then constrain; Flyway wraps the migration in one transaction, so either both land or neither does. Tests cannot catch a missing backfill: `PostgresTestDatabase` migrates a *fresh, empty* container, so a tightening is validated against zero rows and passes in CI no matter what production holds (this is how `V44__events_require_club.sql` broke the v2.0.8 deploy, #799). If the backfill value can't be derived, use `CHECK (…) NOT VALID` plus a later `VALIDATE CONSTRAINT` migration. Checklist: `docs/engineering/operations/DB_MIGRATIONS.md`.
+
 **Algorithm behavior** (details in `docs/product/RATING_CALCULATION_ALGORITHM.md`): single NTRP K-factor of 0.16 over the 1.0–7.0 range. Rating changes depend on dominance (game margin), the rating gap vs a competitive threshold (8.3% of the NTRP range = 0.5 points; expected wins beyond it yield zero change), a 2× upset multiplier, and optional USTA-style smoothing via `options.smoothingFactor`.
 
 ## Code Style Enforcement

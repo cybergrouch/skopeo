@@ -166,6 +166,12 @@ docker run --rm \
 3. Write SQL DDL statements
 4. Test by starting the app (it migrates on startup) or with the Flyway CLI Docker `migrate` command above
 
+> **If the migration tightens a constraint** (`SET NOT NULL`, a new `UNIQUE`/`CHECK`, a narrowing `ALTER TYPE`),
+> step 4 will not catch a missing backfill — both the test suite and a local `migrate` run against an empty or
+> near-empty database, so the constraint is validated against no rows. Work through
+> [DB_MIGRATIONS.md](DB_MIGRATIONS.md) instead: the migration must backfill its own precondition in the same
+> file, or use `CHECK (…) NOT VALID` plus a later `VALIDATE CONSTRAINT`.
+
 Example:
 
 ```sql
