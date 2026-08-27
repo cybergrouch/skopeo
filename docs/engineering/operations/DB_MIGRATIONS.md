@@ -120,10 +120,12 @@ because only the first is a pattern to copy:
 
 Two adjacent observations from the sweep, neither a landmine:
 
-- **`events.club_id` is `NOT NULL` (V44) but its FK is `ON DELETE SET NULL` (V6).** A hard `DELETE FROM clubs`
-  would now fail with `23502` instead of orphaning the events. Unreachable through the app — `ClubRepository`
-  soft-deletes (`is_active = false`) and never issues a `DELETE` — but the FK action and the column constraint
-  now disagree, and a future hard delete would hit it.
+- **`events.club_id` was `NOT NULL` (V44) while its FK was still `ON DELETE SET NULL` (V6)** — a hard
+  `DELETE FROM clubs` would have failed with `23502` on `events` instead of orphaning them. Unreachable through
+  the app (`ClubRepository` soft-deletes via `is_active = false` and never issues a `DELETE`), but the FK action
+  and the column constraint disagreed. **Fixed in `V45__events_club_fk_restrict.sql` (#800)**: the FK is now
+  `ON DELETE RESTRICT`, so the delete is refused on `clubs` and names the dependent events. RESTRICT rather than
+  CASCADE, because cascading would silently destroy the match and rating history hanging off those events.
 - **`V38` retired the `LEAGUE` event type and the `LEAGUE_PLAY`/`LEAGUE_PLAYOFFS` match types by `UPDATE`, but
   narrowed no `CHECK`** (neither column has one). The data is clean; the database still accepts the retired
   values. That is the safe direction to be wrong in, but it is the exact shape that needs a backfill-first

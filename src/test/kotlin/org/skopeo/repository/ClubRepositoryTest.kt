@@ -3,11 +3,14 @@
 
 package org.skopeo.repository
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldHaveLength
+import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -15,14 +18,18 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.domain.mapper.entity.club.toDomain
+import org.skopeo.domain.mapper.entity.event.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.CreateClubCommand
+import org.skopeo.domain.model.CreateEventCommand
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.ProvisionUserCommand
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.sql.SQLException
+import java.time.LocalDate
 import java.util.UUID
 
 class ClubRepositoryTest {
@@ -36,6 +43,7 @@ class ClubRepositoryTest {
 
     private val users = UserRepository()
     private val clubs = ClubRepository()
+    private val events = EventRepository()
 
     @BeforeEach
     fun reset() {
@@ -107,5 +115,41 @@ class ClubRepositoryTest {
         transaction { UsersTable.deleteWhere { UsersTable.id eq admin } }
 
         clubs.findById(id = club.id)!!.toDomain().createdBy.shouldBeNull()
+    }
+
+    @Test
+    fun `a hard club delete with dependent events is refused, not turned into a null club_id (#800)`() {
+        val admin = newUser(uid = "admin")
+        val club = clubs.create(command = CreateClubCommand(name = "Riverside", createdBy = admin)).toDomain()
+        val event =
+            events.create(
+                command =
+                    CreateEventCommand(
+                        clubId = club.id,
+                        name = "Riverside Open",
+                        startDate = LocalDate.parse("2026-06-01"),
+                        endDate = LocalDate.parse("2026-06-02"),
+                        participantIds = emptyList(),
+                        createdBy = admin,
+                    ),
+            ).toDomain()
+
+        // No service ever hard-deletes a club — ClubService.disable soft-deletes it and its events — so
+        // reach past the service and delete the row, the way a console or a cleanup script would.
+        val failure =
+            shouldThrow<ExposedSQLException> {
+                transaction { ClubsTable.deleteWhere { ClubsTable.id eq club.id } }
+            }
+
+        // 23503 foreign_key_violation raised on `clubs`: the delete itself is refused, and names the
+        // dependent events. Before V45 (#800) the FK was ON DELETE SET NULL against a column V44 had made
+        // NOT NULL, so the same delete instead surfaced as 23502 (not_null_violation) on `events` — a
+        // failure on the wrong table that says nothing about the club being undeletable.
+        (failure.cause as? SQLException)?.sqlState shouldBe "23503"
+        failure.cause?.message.shouldNotBeNull() shouldContain "events_club_id_fkey"
+
+        // Nothing was destroyed or blanked by the attempt.
+        clubs.findById(id = club.id).shouldNotBeNull()
+        events.findById(id = event.id).shouldNotBeNull().toDomain().clubId shouldBe club.id
     }
 }
