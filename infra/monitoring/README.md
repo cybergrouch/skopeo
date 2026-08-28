@@ -114,7 +114,25 @@ idempotent — it looks each resource up by display name and updates rather than
 ```
 
 Override anything per-run: `--project`, `--region`, `--service`, `--alert-email`, `--api-host`.
-Precedence is flag > environment > default.
+
+For values you want pinned on your own machine, copy the example to a gitignored local file:
+
+```bash
+cp infra/monitoring/.env.local.example infra/monitoring/.env.local
+```
+
+Precedence is **flag > `.env.local` > exported environment > built-in default**.
+
+### This repository is public
+
+The built-in defaults are safe to publish — a project id, a region, a service name, a group address.
+Anything you would rather not commit belongs in `.env.local` instead.
+
+The same reasoning applies to the runbook's environment table: values that can be *derived* are recorded
+as the command that derives them rather than as literals. The Cloud SQL private IP and the Cloud Run
+hostname were briefly written out as literals and have been replaced with `gcloud … describe` commands.
+Deriving beats storing twice over — nothing to leak, and nothing to go stale when a resource is
+recreated.
 
 ### The `beta` component, and the capture hazard
 

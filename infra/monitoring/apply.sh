@@ -9,7 +9,7 @@
 #     ./infra/monitoring/apply.sh               # apply
 #
 # Every value defaults to this project's real setting, so no exports are needed. Flags override;
-# precedence is flag > environment > default.
+# precedence is flag > .env.local > environment > default. See .env.local.example for the overrides.
 #
 # Idempotent: each resource is looked up and updated in place rather than duplicated. That matters here
 # specifically — a duplicated alert policy pages twice, the exact noise #751's two-alert budget avoids.
@@ -22,6 +22,14 @@ set -euo pipefail
 # command's result — which is how an earlier version of this script ended up passing
 # "/Applications/Xcode.app/Contents/Developer" as a notification channel id.
 export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+
+# Optional local overrides, gitignored — a private place for anything you would rather not publish in
+# what is a public repository. See .env.local.example. Sourced before the defaults are resolved, so a
+# value set here is picked up by the ${VAR:-default} expansions below and can still be beaten by a flag.
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/.env.local" ]]; then
+  # shellcheck disable=SC1091  # path is resolved at runtime
+  source "$(dirname "${BASH_SOURCE[0]}")/.env.local"
+fi
 
 DEFAULT_PROJECT="skopeo-prod"
 DEFAULT_REGION="asia-southeast1"
