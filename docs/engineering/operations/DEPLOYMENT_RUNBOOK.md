@@ -261,8 +261,10 @@ Alerts go to a team-managed group, never a personal address (#190).
 
 ### API returning 5xx
 
-1. **Confirm the blast radius.** Cloud Logging, `severity>=ERROR`, last 30 minutes. Group by the `route`
-   field: one endpoint failing is a code path, every endpoint failing is the database or a dependency.
+1. **Confirm the blast radius.** Open the **Skopeo API** dashboard (#809) and read the *per-endpoint
+   request rate* and *4xx by status code* panels: one endpoint failing is a code path, every endpoint
+   failing is the database or a dependency. Failing that, Cloud Logging with `severity>=ERROR` over the
+   last 30 minutes, grouped by the `route` field.
 2. **Get a request id.** Every 5xx carries one in its body and in `X-Request-Id` (#805). If a user
    reported it, their screenshot has it — query `requestId="…"` for the full trace.
 3. **Check the stack trace.** Cloud Error Reporting groups backend exceptions automatically (#804), so
@@ -350,6 +352,7 @@ Verified against the repo's Actions variables, DNS and the GitHub environment AP
 | **API custom domain** | **none.** `api.skopeo.co` has no DNS record; the SPA calls the `*.run.app` URL directly | ☐ not mapped |
 | Deploy service account | `github-deployer@skopeo-prod.iam.gserviceaccount.com` | ✅ |
 | Uptime check + alerts | `infra/monitoring/` (#808) | ☐ not applied |
+| Dashboard + per-endpoint metrics | `infra/monitoring/` (#809) | ☐ not applied |
 | **`production` approval gate** | **no protection rules configured** — see below | ⚠️ **not set** |
 
 ### ⚠️ Deploys are not gated by a reviewer

@@ -2,45 +2,55 @@
 # SPDX-FileCopyrightText: 2026 Lange Pantoja
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Apply the Cloud Monitoring config in this directory (#808).
+# Apply the Skopeo Cloud Monitoring config (#808/#809): uptime check, two paging alert policies,
+# two log-based per-endpoint metrics, and the dashboard.
 #
-# Every value defaults to this project's real setting, so the common case is:
-#
-#     ./infra/monitoring/apply.sh --dry-run     # show what would change
+#     ./infra/monitoring/apply.sh --dry-run     # show what would change; validates the dashboard schema
 #     ./infra/monitoring/apply.sh               # apply
 #
-# Anything can be overridden per-run; see --help. Precedence is flag > environment > default, so
-# existing `export GCP_PROJECT_ID=…` usage keeps working and a flag always wins.
+# Every value defaults to this project's real setting, so no exports are needed. Flags override;
+# precedence is flag > environment > default.
 #
-# Idempotent: every resource is looked up by display name and updated in place. That matters more than
-# usual here — a duplicated alert policy pages twice, which is exactly the noise #751's two-alert budget
-# exists to prevent.
+# Idempotent: each resource is looked up and updated in place rather than duplicated. That matters here
+# specifically — a duplicated alert policy pages twice, the exact noise #751's two-alert budget avoids.
 #
-# Needs roles/monitoring.editor on the project.
+# Needs roles/monitoring.editor and roles/logging.configWriter.
 set -euo pipefail
 
-# --- Defaults: the real values for this project, so no exports are needed ------------------------
+# Never let gcloud stop to ask a question. Without this, a missing component triggers an interactive
+# installer *inside a command substitution*, and its progress output gets captured as if it were the
+# command's result — which is how an earlier version of this script ended up passing
+# "/Applications/Xcode.app/Contents/Developer" as a notification channel id.
+export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+
 DEFAULT_PROJECT="skopeo-prod"
 DEFAULT_REGION="asia-southeast1"
 DEFAULT_SERVICE="skopeo"
-# A team-managed group, never a personal address (#190) — an alerting path that depends on one person's
-# inbox is a single point of failure by construction.
+# A team-managed group, never a personal address (#190).
 DEFAULT_ALERT_EMAIL="skopeo-alerts@googlegroups.com"
+
+# Uptime check parameters. These live here rather than in a JSON file because `gcloud monitoring uptime
+# create` is flag-based — unlike policies, dashboards and log metrics, it has no --config-from-file.
+UPTIME_NAME="skopeo-api-health"
+UPTIME_PATH="/health"
+UPTIME_PERIOD="1"                                    # minutes; allowed: 1, 5, 10, 15
+UPTIME_TIMEOUT="10"                                  # seconds
+UPTIME_REGIONS="asia-pacific,europe,usa-oregon"      # >=3 required; asia-pacific is nearest the service
 
 PROJECT="${GCP_PROJECT_ID:-$DEFAULT_PROJECT}"
 REGION="${GCP_REGION:-$DEFAULT_REGION}"
 SERVICE="${CLOUD_RUN_SERVICE:-$DEFAULT_SERVICE}"
 ALERT_EMAIL="${ALERT_EMAIL:-$DEFAULT_ALERT_EMAIL}"
-# Deliberately NOT defaulted to a hostname. There is no custom domain for the API today
-# (api.skopeo.co has no DNS record; the web SPA calls the *.run.app URL directly), and the run.app
-# hostname carries a per-service hash — deriving it from the deployed service cannot drift, whereas a
-# hardcoded copy silently rots if the service is ever recreated.
+# Not defaulted to a hostname: there is no custom domain for the API today (api.skopeo.co has no DNS
+# record; the SPA calls the *.run.app URL), and the run.app host carries a per-service hash, so deriving
+# it cannot drift the way a hardcoded copy would.
 API_HOST="${API_HOST:-}"
 DRY_RUN="${DRY_RUN:-}"
 
 usage() {
   cat <<USAGE
-Apply the Skopeo Cloud Monitoring config: one uptime check and two paging alert policies.
+Apply the Skopeo Cloud Monitoring config: uptime check, two paging alert policies,
+two log-based per-endpoint metrics, and the dashboard.
 
 Usage: $(basename "$0") [options]
 
@@ -49,17 +59,17 @@ Options:
   -r, --region REGION     Cloud Run region       (default: $DEFAULT_REGION)
   -s, --service NAME      Cloud Run service      (default: $DEFAULT_SERVICE)
   -e, --alert-email ADDR  Notification recipient (default: $DEFAULT_ALERT_EMAIL)
-  -H, --api-host HOST     Hostname for the uptime check
+  -H, --api-host HOST     Host for the uptime check
                           (default: derived from the deployed service)
-  -n, --dry-run           Print what would change; modify nothing
+  -n, --dry-run           Print what would change; modify nothing. Still performs read-only
+                          lookups, and validates the dashboard schema server-side.
   -h, --help              This message
 
 Notes:
-  * --api-host matters once a custom domain is mapped. A check against *.run.app stays green through a
-    DNS, TLS or domain-mapping failure, which is a full outage for every browser client. There is no
-    custom domain today, so the derived default is currently the host users actually reach.
-  * Cloud Monitoring does not verify an email channel on creation, and sends from
-    alerting-noreply@google.com. Verify delivery after applying — see the runbook.
+  * --api-host matters once a custom domain is mapped: a check against *.run.app stays green through a
+    DNS, TLS or domain-mapping failure, which is a full outage for every browser client.
+  * Cloud Monitoring does not verify an email channel on creation and sends from
+    alerting-noreply@google.com, so verify delivery afterwards — see the runbook.
 USAGE
 }
 
@@ -88,34 +98,73 @@ run() {
   fi
 }
 
+# Keep only lines that actually look like a Monitoring resource name. Any other stdout — a component
+# installer, a pip log, a warning — is discarded rather than used as an id.
+only_resource_name() { grep -E '^projects/[A-Za-z0-9_.-]+/[A-Za-z]+/[A-Za-z0-9_.-]+$' | head -1 || true; }
+
+# --- Preflight ----------------------------------------------------------------------------------
+# `gcloud monitoring policies|uptime|dashboards` and `gcloud logging metrics` are all GA. Only channels
+# still needs beta, so that is the one component to insist on — and we check rather than let gcloud
+# install it mid-run (see the CLOUDSDK_CORE_DISABLE_PROMPTS note above).
+if ! gcloud components list --format='value(id,state.name)' 2>/dev/null \
+     | grep -qE '^beta[[:space:]]+Installed'; then
+  cat >&2 <<'MSG'
+The gcloud "beta" component is required (only for `gcloud beta monitoring channels`) and is not
+installed. Install it first, so it cannot install itself in the middle of this script:
+
+    gcloud components install beta
+
+MSG
+  exit 1
+fi
+
 echo "project=$PROJECT region=$REGION service=$SERVICE alerts=$ALERT_EMAIL${DRY_RUN:+ (DRY RUN)}"
 
 if [[ -z "$API_HOST" ]]; then
   echo "==> deriving the uptime-check host from the deployed service"
   API_URL="$(gcloud run services describe "$SERVICE" \
-    --project "$PROJECT" --region "$REGION" --format='value(status.url)')"
+    --project "$PROJECT" --region "$REGION" --format='value(status.url)' 2>/dev/null || true)"
   API_HOST="${API_URL#https://}"
+  if [[ -z "$API_HOST" ]]; then
+    echo "could not resolve the Cloud Run URL for '$SERVICE' in $REGION; pass --api-host" >&2
+    exit 1
+  fi
 fi
 echo "    host: $API_HOST"
 
 # --- Notification channel -----------------------------------------------------------------------
+# Matched locally from the full JSON rather than with a server-side --filter: the filter keys for
+# channels are not what they look like (`type`/`labels.email_address` produced "filter keys were not
+# present in any resource" warnings and matched nothing), and a silently-empty match here is what let
+# garbage through before.
 echo "==> notification channel for $ALERT_EMAIL"
-CHANNEL="$(gcloud beta monitoring channels list \
-  --project "$PROJECT" \
-  --filter="type=email AND labels.email_address=$ALERT_EMAIL" \
-  --format='value(name)' | head -1)"
+CHANNEL="$(gcloud beta monitoring channels list --project "$PROJECT" --format=json 2>/dev/null \
+  | python3 -c '
+import json, sys
+want = sys.argv[1]
+try:
+    channels = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for c in channels if isinstance(channels, list) else []:
+    labels = c.get("labels") or {}
+    if labels.get("email_address") == want:
+        print(c.get("name", ""))
+        break
+' "$ALERT_EMAIL" | only_resource_name)"
 
 if [[ -z "$CHANNEL" ]]; then
   if [[ -n "$DRY_RUN" ]]; then
     echo "  [dry-run] would create an email channel for $ALERT_EMAIL"
-    CHANNEL="projects/$PROJECT/notificationChannels/DRY_RUN"
+    CHANNEL="projects/$PROJECT/notificationChannels/DRY-RUN"
   else
     CHANNEL="$(gcloud beta monitoring channels create \
       --project "$PROJECT" \
       --display-name="Skopeo alerts (team group)" \
       --type=email \
       --channel-labels="email_address=$ALERT_EMAIL" \
-      --format='value(name)')"
+      --format='value(name)' 2>/dev/null | only_resource_name)"
+    [[ -n "$CHANNEL" ]] || { echo "failed to create the notification channel" >&2; exit 1; }
     echo "    created: $CHANNEL"
   fi
 else
@@ -123,32 +172,46 @@ else
 fi
 
 # --- Uptime check -------------------------------------------------------------------------------
-echo "==> uptime check 'skopeo-api-health'"
-sed -e "s|PROJECT_ID_PLACEHOLDER|$PROJECT|g" \
-    -e "s|API_HOST_PLACEHOLDER|$API_HOST|g" \
-    "$HERE/uptime-check-health.json" > "$WORK/uptime.json"
+echo "==> uptime check '$UPTIME_NAME'"
+UPTIME_FULL="$(gcloud monitoring uptime list-configs --project "$PROJECT" \
+  --format='value(name)' --filter="displayName=$UPTIME_NAME" 2>/dev/null | only_resource_name)"
 
-EXISTING_CHECK="$(gcloud monitoring uptime list-configs \
-  --project "$PROJECT" \
-  --filter="displayName='skopeo-api-health'" \
-  --format='value(name)' | head -1)"
+uptime_flags=(
+  --project "$PROJECT"
+  --resource-type=uptime-url
+  --resource-labels="host=$API_HOST,project_id=$PROJECT"
+  --protocol=https
+  --port=443
+  --path="$UPTIME_PATH"
+  --request-method=get
+  --status-classes=2xx
+  --validate-ssl=true
+  --period="$UPTIME_PERIOD"
+  --timeout="$UPTIME_TIMEOUT"
+  --regions="$UPTIME_REGIONS"
+)
 
-if [[ -z "$EXISTING_CHECK" ]]; then
-  run gcloud monitoring uptime create-config-from-file "$WORK/uptime.json" --project "$PROJECT"
+if [[ -z "$UPTIME_FULL" ]]; then
+  run gcloud monitoring uptime create "$UPTIME_NAME" "${uptime_flags[@]}"
 else
-  echo "    exists, updating: $EXISTING_CHECK"
-  run gcloud monitoring uptime update-config-from-file "$EXISTING_CHECK" \
-    --config-from-file "$WORK/uptime.json" --project "$PROJECT"
+  echo "    exists, updating: $UPTIME_FULL"
+  # `update` takes the check's id and rejects --resource-type/--resource-labels, which are immutable.
+  run gcloud monitoring uptime update "$UPTIME_FULL" \
+    --project "$PROJECT" \
+    --path="$UPTIME_PATH" \
+    --status-classes=2xx \
+    --period="$UPTIME_PERIOD" \
+    --timeout="$UPTIME_TIMEOUT" \
+    --regions="$UPTIME_REGIONS"
 fi
 
 # The uptime alert filters on the check's generated id, which only exists once the check does.
-CHECK_ID="$(gcloud monitoring uptime list-configs \
-  --project "$PROJECT" \
-  --filter="displayName='skopeo-api-health'" \
-  --format='value(name)' | head -1 | awk -F/ '{print $NF}')"
+CHECK_ID="$(gcloud monitoring uptime list-configs --project "$PROJECT" \
+  --format='value(name)' --filter="displayName=$UPTIME_NAME" 2>/dev/null \
+  | only_resource_name | awk -F/ '{print $NF}' | grep -E '^[A-Za-z0-9_-]+$' || true)"
 if [[ -z "$CHECK_ID" ]]; then
   if [[ -n "$DRY_RUN" ]]; then
-    CHECK_ID="DRY_RUN_CHECK_ID"
+    CHECK_ID="dry-run-check-id"
   else
     echo "could not resolve the uptime check id after creating it" >&2
     exit 1
@@ -157,6 +220,7 @@ fi
 echo "    check id: $CHECK_ID"
 
 # --- Alert policies -----------------------------------------------------------------------------
+# `gcloud monitoring policies` is GA; the alpha surface an earlier version used is unnecessary.
 for policy in alert-uptime-failure alert-sustained-5xx; do
   echo "==> alert policy '$policy'"
   sed -e "s|UPTIME_CHECK_ID_PLACEHOLDER|$CHECK_ID|g" \
@@ -164,36 +228,83 @@ for policy in alert-uptime-failure alert-sustained-5xx; do
       "$HERE/$policy.json" > "$WORK/$policy.json"
 
   DISPLAY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["displayName"])' "$WORK/$policy.json")"
-  EXISTING="$(gcloud alpha monitoring policies list \
-    --project "$PROJECT" \
-    --filter="displayName='$DISPLAY'" \
-    --format='value(name)' | head -1)"
+  EXISTING="$(gcloud monitoring policies list --project "$PROJECT" \
+    --format='value(name)' --filter="displayName=\"$DISPLAY\"" 2>/dev/null | only_resource_name)"
 
   if [[ -z "$EXISTING" ]]; then
-    run gcloud alpha monitoring policies create \
-      --project "$PROJECT" \
-      --policy-from-file "$WORK/$policy.json" \
-      --notification-channels "$CHANNEL"
+    run gcloud monitoring policies create --project "$PROJECT" \
+      --policy-from-file "$WORK/$policy.json" --notification-channels "$CHANNEL"
   else
     echo "    exists, updating: $EXISTING"
-    run gcloud alpha monitoring policies update "$EXISTING" \
-      --project "$PROJECT" \
+    run gcloud monitoring policies update "$EXISTING" --project "$PROJECT" \
       --policy-from-file "$WORK/$policy.json"
-    run gcloud alpha monitoring policies update "$EXISTING" \
-      --project "$PROJECT" \
+    run gcloud monitoring policies update "$EXISTING" --project "$PROJECT" \
       --set-notification-channels "$CHANNEL"
   fi
 done
 
+# --- Log-based metrics --------------------------------------------------------------------------
+# These are what make per-endpoint monitoring possible: Cloud Run's own request_count and
+# request_latencies have NO path/route label, so natively you can see "the service returned 40 5xx" but
+# never which endpoint. They extract the route pattern from the access line (#805).
+#
+# They do NOT backfill — a log-based metric counts from creation — so applying early is what gives the
+# two-week alert-budget review (#751 decision 4) a baseline to judge against.
+for metric in skopeo_requests skopeo_request_latency; do
+  echo "==> log-based metric '$metric'"
+  sed -e "s|CLOUD_RUN_SERVICE_PLACEHOLDER|$SERVICE|g" \
+      "$HERE/log-metrics/$metric.json" > "$WORK/$metric.json"
+
+  if gcloud logging metrics describe "$metric" --project "$PROJECT" >/dev/null 2>&1; then
+    echo "    exists, updating"
+    run gcloud logging metrics update "$metric" --project "$PROJECT" \
+      --config-from-file "$WORK/$metric.json"
+  else
+    run gcloud logging metrics create "$metric" --project "$PROJECT" \
+      --config-from-file "$WORK/$metric.json"
+  fi
+done
+
+# --- Dashboard ----------------------------------------------------------------------------------
+echo "==> dashboard 'Skopeo API'"
+sed -e "s|CLOUD_RUN_SERVICE_PLACEHOLDER|$SERVICE|g" \
+    -e "s|UPTIME_CHECK_ID_PLACEHOLDER|$CHECK_ID|g" \
+    "$HERE/dashboard.json" > "$WORK/dashboard.json"
+
+if [[ -n "$DRY_RUN" ]]; then
+  # --validate-only is a real server-side schema check, so a dry run genuinely catches a malformed
+  # widget rather than only echoing the command.
+  echo "  [dry-run] validating the dashboard schema server-side"
+  gcloud monitoring dashboards create --project "$PROJECT" \
+    --config-from-file "$WORK/dashboard.json" --validate-only \
+    && echo "    schema OK"
+else
+  EXISTING_DASH="$(gcloud monitoring dashboards list --project "$PROJECT" \
+    --format='value(name)' --filter="displayName='Skopeo API'" 2>/dev/null | only_resource_name)"
+  if [[ -z "$EXISTING_DASH" ]]; then
+    gcloud monitoring dashboards create --project "$PROJECT" --config-from-file "$WORK/dashboard.json"
+  else
+    echo "    exists, updating: $EXISTING_DASH"
+    gcloud monitoring dashboards update "$EXISTING_DASH" --project "$PROJECT" \
+      --config-from-file "$WORK/dashboard.json"
+  fi
+fi
+
 cat <<DONE
 
-Done. Two paging alerts are configured, and nothing else interrupts (#751 decision 4).
+Done. Two paging alerts and nothing else interrupts (#751 decision 4), plus the log-based per-endpoint
+metrics and the dashboard.
+
+Dashboard: https://console.cloud.google.com/monitoring/dashboards?project=$PROJECT
+
+The per-endpoint panels stay EMPTY until traffic accumulates — log-based metrics do not backfill, so
+they only count from the moment they were created.
 
 NOW VERIFY DELIVERY — this is not optional. Cloud Monitoring does not verify an email channel when it is
-created, and it sends from alerting-noreply@google.com. A group whose posting policy rejects non-members
+created, and sends from alerting-noreply@google.com. A group whose posting policy rejects non-members
 shows a perfectly healthy channel and delivers nothing.
 
   1. Email $ALERT_EMAIL from an address that is NOT a member of the group. Confirm it arrives.
-  2. Force a real alert and confirm it lands:
+  2. Force a real alert:
      docs/engineering/operations/DEPLOYMENT_RUNBOOK.md#testing-the-alerts
 DONE

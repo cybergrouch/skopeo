@@ -70,8 +70,9 @@ The design/decision records above, with status:
   Logging, the severity mapping, and why there is no `/metrics` endpoint.
 - [GIT_HOOKS.md](engineering/operations/GIT_HOOKS.md) — pre-commit hook setup.
 - [DEPLOYMENT_RUNBOOK.md](engineering/operations/DEPLOYMENT_RUNBOOK.md) — step-by-step release/deploy runbook.
-- [infra/monitoring/](../infra/monitoring/README.md) — Cloud Monitoring as code: the uptime check and
-  the two launch alert policies, with the apply script (#808).
+- [infra/monitoring/](../infra/monitoring/README.md) — Cloud Monitoring as code: the uptime check, the
+  two launch alert policies, the log-based per-endpoint metrics and the dashboard, with one apply
+  script (#808/#809).
 - [LOCAL_DEMO_AND_TEST_DATA.md](engineering/operations/LOCAL_DEMO_AND_TEST_DATA.md) — seeding a local demo + test data.
 
 ### `quality/` — testing & code style

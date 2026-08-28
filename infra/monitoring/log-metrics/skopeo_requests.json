@@ -1,0 +1,24 @@
+{
+  "description": "One data point per HTTP request, from the access line emitted by the RequestLog plugin (#805). Labelled by matched route pattern, method and status, which is what makes per-endpoint volume and error rate answerable at all -- Cloud Run's own request_count metric has NO path label, so it can say 'the service returned 40 5xx' but never which endpoint.",
+  "filter": "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"CLOUD_RUN_SERVICE_PLACEHOLDER\" AND jsonPayload.logger=\"org.skopeo.access\"",
+  "metricDescriptor": {
+    "metricKind": "DELTA",
+    "valueType": "INT64",
+    "unit": "1",
+    "displayName": "Skopeo requests",
+    "labels": [
+      {
+        "key": "route",
+        "valueType": "STRING",
+        "description": "Matched route PATTERN, e.g. /api/v1/matches/{id}. Never a concrete path -- raw URIs would make this label unbounded. Unrouted traffic collapses into '(unmatched)'."
+      },
+      { "key": "method", "valueType": "STRING", "description": "HTTP method" },
+      { "key": "status", "valueType": "STRING", "description": "HTTP status code" }
+    ]
+  },
+  "labelExtractors": {
+    "route": "EXTRACT(jsonPayload.route)",
+    "method": "EXTRACT(jsonPayload.method)",
+    "status": "EXTRACT(jsonPayload.status)"
+  }
+}
