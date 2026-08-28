@@ -17,6 +17,7 @@ import {
 import { getGetApiV1StandingsQueryKey } from '@/api/generated/standings/standings'
 import type { SetStandingsSourceRequestSource } from '@/api/generated/model'
 import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 
 // The setting enum + human labels. RATING orders standings by current rating; POINTS by the ranking-points ledger.
 const SOURCE_OPTIONS: ReadonlyArray<{
@@ -60,8 +61,8 @@ export function StandingsSourceSection() {
           queryKey: getGetApiV1StandingsQueryKey(),
         })
       },
-      onError: () =>
-        toast.error('Could not set the standings source. Try again.', { duration: 8000 }),
+      onError: (error) =>
+        toastError('Could not set the standings source. Try again.', { cause: error, duration: 8000 }),
     },
   })
 

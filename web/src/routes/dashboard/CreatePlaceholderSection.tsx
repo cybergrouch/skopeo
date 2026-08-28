@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -75,9 +76,9 @@ export function CreatePlaceholderSection({
       setSex("");
       setDateOfBirth("");
       setInitialRating("");
-    } catch {
+    } catch (error) {
       // Errors linger longer (and can be dismissed) so the reason isn't missed.
-      toast.error("Could not create the placeholder player. Please try again.", {
+      toastError("Could not create the placeholder player. Please try again.", { cause: error,
         duration: 8000,
       });
     }

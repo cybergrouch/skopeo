@@ -7,6 +7,7 @@ import { RequireAuth } from "@/auth/RequireAuth";
 import { RequireProfile } from "@/auth/RequireProfile";
 import { ThemeProvider, LocalThemeApplier } from "@/theme/ThemeProvider";
 import { NewVersionBanner } from "@/components/NewVersionBanner";
+import { ErrorBoundary } from "@/observability/ErrorBoundary";
 
 // Route components are code-split (#277): each becomes its own chunk, loaded on demand behind the
 // <Suspense> boundary below, so the initial bundle no longer carries every page. React.lazy needs a
@@ -83,7 +84,11 @@ function App() {
               keep rendering options the server has since started rejecting. */}
           <NewVersionBanner />
           <BrowserRouter>
-            <Suspense fallback={<PageFallback />}>
+            {/* Outside <Suspense> deliberately (#807): a code-split route whose chunk fails to load
+                throws during render, and only a boundary above Suspense sees it. Inside <BrowserRouter>
+                so the fallback's "go home" is a real navigation rather than a hard bounce. */}
+            <ErrorBoundary>
+              <Suspense fallback={<PageFallback />}>
               <Routes>
                 <Route path="/signup" element={<SignUpPage />} />
                 <Route path="/login" element={<LoginPage />} />
@@ -126,7 +131,8 @@ function App() {
                   element={<Navigate to="/dashboard" replace />}
                 />
               </Routes>
-            </Suspense>
+              </Suspense>
+            </ErrorBoundary>
           </BrowserRouter>
         </AuthProvider>
       </ThemeProvider>

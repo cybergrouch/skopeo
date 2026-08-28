@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import {
   Card,
   CardContent,
@@ -148,10 +149,10 @@ export function NewEventForm({
         },
       },
       {
-        onError: () =>
-          toast.error(
+        onError: (error) =>
+          toastError(
             "Could not create the event. Check the name and dates.",
-            { duration: 8000 },
+            { cause: error, duration: 8000 },
           ),
       },
     );

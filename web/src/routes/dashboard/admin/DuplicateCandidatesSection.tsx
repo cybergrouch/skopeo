@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -62,8 +62,8 @@ export function DuplicateCandidatesSection() {
       setUserB(null)
       setReason('')
       invalidate()
-    } catch {
-      toast.error('Could not flag the pair (they must be two different users).', { duration: 8000 })
+    } catch (error) {
+      toastError('Could not flag the pair (they must be two different users).', { cause: error, duration: 8000 })
     }
   }
 

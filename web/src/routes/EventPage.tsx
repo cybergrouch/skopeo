@@ -1,6 +1,6 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,8 +44,8 @@ function JoinCard({
           queryKey: getGetApiV1EventsCodeCodeQueryKey(code),
         });
       },
-      onError: () =>
-        toast.error("Could not sign up for this event. Please try again.", {
+      onError: (error) =>
+        toastError("Could not sign up for this event. Please try again.", { cause: error,
           duration: 8000,
         }),
     },

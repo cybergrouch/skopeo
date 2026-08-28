@@ -363,6 +363,75 @@ split out of the Admin tab (#698):
 - **Standings Source** / **Feature Flags** / **Theme** — app-wide settings.
 - **API Clients** / **Build Info**.
 
+## Error handling and observability
+
+Three layers, all routed through one vendor-neutral port (#807).
+
+### The reporter seam
+
+`src/observability/reporter.ts` defines `ErrorReporter` (`captureException` / `captureMessage` /
+`setUser`) with two implementations: `noopReporter` in production and `consoleReporter` in dev, selected
+once in `main.tsx`.
+
+Everything that produces an error signal talks to `reporter()`, never to an SDK. #751 defers the
+error-tracking vendor until the cost question is settled, and unlike the backend — where every candidate
+integrates as a Logback appender, so adding one is a dependency plus XML — a browser SDK is a code
+dependency. The port keeps that to **one adapter file** (#811); no call site changes.
+
+`ErrorContext` is deliberately `Record<string, string>`, not `unknown`. Same reasoning as the backend's
+MDC allowlist (#806): whatever is attached is published to whatever sink is installed, so a signature
+accepting an arbitrary object would let a caller pass a whole user profile without noticing. `setUser`
+takes an **opaque id only** — never an email or display name.
+
+### The error boundary
+
+`ErrorBoundary` wraps the router in `App.tsx`, **outside** `<Suspense>`: a code-split route whose chunk
+fails to load throws during render, and only a boundary above Suspense sees it. It is **inside**
+`<BrowserRouter>` so the fallback's "go home" is a real navigation.
+
+The fallback is deliberately plain — one UI primitive, no hooks, no context, no data. A fallback that
+needs the theme provider or a query client can fail for the same reason as the page it replaced. Its
+primary action is a **full reload**, not a router navigation: React has unmounted a broken tree, and the
+most likely cause is a long-lived tab requesting a chunk a newer deploy replaced (#752/#277).
+
+### Global handlers
+
+`installGlobalErrorHandlers()` covers the two classes a boundary cannot see, which between them are most
+of what actually goes wrong in a browser:
+
+- `error` — a throw from an event handler or a `setTimeout`, i.e. anything outside the render pass.
+- `unhandledrejection` — a forgotten `mutateAsync` catch, or a failed dynamic `import()`.
+
+### Toasts: `toastError`, not `toast.error`
+
+`toastError(message, { cause, ...toastOptions })` replaces bare `toast.error` at every call site. Pass
+`cause` wherever a caught error is in scope; omit it for purely client-side validation ("each set needs
+two whole game counts"), which describes the form rather than a failure.
+
+Whether a reported failure is *unexpected* is `isUnexpected`'s decision, not the call site's — so no call
+site has to remember the rule. It follows #751's outage definition so the frontend and the dashboard
+agree:
+
+| Shape | Reported? | Why |
+| --- | --- | --- |
+| 5xx | yes | #751's definition of an outage |
+| No response at all | yes | network, CORS, DNS, dead revision — all worth knowing |
+| Unrecognised thrown value | yes | an unknown shape is the case we have not thought about |
+| 4xx | **no** | deliberate 4xx are this API's normal contract — 409 "not rated yet", 404 for a mistyped QR code, 400 form validation |
+| 401 especially | **no** | every anonymous visit to a public page produces one by design: `ClubPage`/`MatchPage`/`PlayerProfilePage` call `useGetApiV1UsersMe()` unguarded to spot a manager while still rendering for a logged-out visitor |
+| Firebase config/provider fault | yes | `auth/operation-not-allowed`, `auth/unauthorized-domain`, `auth/network-request-failed`, … |
+| Firebase user outcome | **no** | wrong password, cancelled popup — a steady drip would exhaust a quota and bury the above |
+
+The Firebase split exists because of **#647**, the Facebook-login outage: users could not sign in and
+nothing alerted. Worth being precise about why no backend metric would have caught it — **a failing
+federated sign-in never reaches our API.** The SDK talks to Google directly, so there is no request to
+produce a 401 and the per-endpoint 4xx panel (#809) would show nothing. The browser is the only place
+that failure is observable, and `auth/operation-not-allowed` is exactly its shape (a provider disabled
+in the console).
+
+Reported level is `warning`, not `error` — these are failures the app *handled*, and keeping them
+distinguishable from an uncaught crash is the point of #751's "handled but wrong" category.
+
 ## CORS
 
 CORS is **shipped** in the Ktor app (`Application.configureCORS()`). Because the SPA is deployed on

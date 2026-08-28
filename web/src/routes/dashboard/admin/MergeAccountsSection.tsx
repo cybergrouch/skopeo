@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 import {
   Card,
   CardContent,
@@ -108,8 +109,8 @@ export function MergeAccountsSection() {
       })
       toast.success('Accounts merged.')
       resetForm()
-    } catch {
-      toast.error('Could not merge the accounts.', { duration: 8000 })
+    } catch (error) {
+      toastError('Could not merge the accounts.', { cause: error, duration: 8000 })
     }
   }
 

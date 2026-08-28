@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import {
   Card,
   CardContent,
@@ -60,8 +60,8 @@ export function ApiClientsSection() {
       await create.mutateAsync({ data: { name: trimmed } });
       setName("");
       invalidate();
-    } catch {
-      toast.error("Could not create the client.", { duration: 8000 });
+    } catch (error) {
+      toastError("Could not create the client.", { cause: error, duration: 8000 });
     }
   }
 
@@ -154,8 +154,8 @@ function ApiClientRow({
       setScopes([]);
       setExpiresInDays("");
       onChange();
-    } catch {
-      toast.error("Could not issue the key.", { duration: 8000 });
+    } catch (error) {
+      toastError("Could not issue the key.", { cause: error, duration: 8000 });
     }
   }
 
@@ -163,8 +163,8 @@ function ApiClientRow({
     try {
       await revoke.mutateAsync({ clientId: client.id, keyId });
       onChange();
-    } catch {
-      toast.error("Could not revoke the key.", { duration: 8000 });
+    } catch (error) {
+      toastError("Could not revoke the key.", { cause: error, duration: 8000 });
     }
   }
 
@@ -175,8 +175,8 @@ function ApiClientRow({
     try {
       await setLimit.mutateAsync({ id: client.id, data: { rateLimitPerMin } });
       onChange();
-    } catch {
-      toast.error("Could not update the rate limit.", { duration: 8000 });
+    } catch (error) {
+      toastError("Could not update the rate limit.", { cause: error, duration: 8000 });
     }
   }
 

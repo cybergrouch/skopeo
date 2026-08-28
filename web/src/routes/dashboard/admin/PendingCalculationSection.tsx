@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   DndContext,
@@ -287,7 +288,7 @@ export function PendingCalculationSection() {
           queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey(PENDING_FILTER) })
         }
       },
-      onError: (e) => toast.error(errorMessage(e, 'Calculation failed.'), { duration: 8000 }),
+      onError: (e) => toastError(errorMessage(e, 'Calculation failed.'), { cause: e, duration: 8000 }),
     },
   })
 

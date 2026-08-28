@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { NTRP_LEVELS } from '@/lib/ntrp'
@@ -29,8 +29,8 @@ export function SetRatingForm({
     try {
       await setRating.mutateAsync({ userId, data: { band } })
       onSaved?.()
-    } catch {
-      toast.error('Could not set the rating. Check the value and try again.', { duration: 8000 })
+    } catch (error) {
+      toastError('Could not set the rating. Check the value and try again.', { cause: error, duration: 8000 })
     }
   }
 

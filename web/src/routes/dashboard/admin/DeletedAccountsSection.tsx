@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -41,7 +41,7 @@ function DeletedAccountRow({
     mutation: {
       onSuccess: onReactivated,
       onError: (e) =>
-        toast.error(errorMessage(e, "Could not re-allow login."), { duration: 8000 }),
+        toastError(errorMessage(e, "Could not re-allow login."), { cause: e, duration: 8000 }),
     },
   });
 

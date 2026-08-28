@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -133,8 +133,8 @@ export function SeedingTab() {
     try {
       await saveOrder.mutateAsync({ id: listId, data: { userIds } })
       invalidateSeeding(listId)
-    } catch {
-      toast.error("Couldn't save the seeding order.", { duration: 8000 })
+    } catch (error) {
+      toastError("Couldn't save the seeding order.", { cause: error, duration: 8000 })
     }
   }
 
@@ -171,8 +171,8 @@ export function SeedingTab() {
       await Promise.all(chosen.map((u) => addMember.mutateAsync({ id: listId, data: { userId: u.id } })))
       setCheckedIds(new Set())
       invalidateDetail(listId)
-    } catch {
-      toast.error("Couldn't add the selected players.", { duration: 8000 })
+    } catch (error) {
+      toastError("Couldn't add the selected players.", { cause: error, duration: 8000 })
     }
   }
 

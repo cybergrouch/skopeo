@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import { PublicPageLink } from "@/components/PublicPageLink";
 import {
   Card,
@@ -73,8 +73,8 @@ export function ClubsSection() {
       await create.mutateAsync({ data: { name: trimmed } });
       setName("");
       invalidate();
-    } catch {
-      toast.error("Could not create the club.", { duration: 8000 });
+    } catch (error) {
+      toastError("Could not create the club.", { cause: error, duration: 8000 });
     }
   }
 
@@ -153,8 +153,8 @@ function ClubRow({
     try {
       await sanction.mutateAsync({ id: club.id, data: { sanctioned } });
       onChange();
-    } catch {
-      toast.error("Could not update the sanction setting.", { duration: 8000 });
+    } catch (error) {
+      toastError("Could not update the sanction setting.", { cause: error, duration: 8000 });
     }
   }
 
@@ -184,8 +184,8 @@ function ClubRow({
       await rename.mutateAsync({ id: club.id, data: { name: trimmed } });
       setEditing(false);
       onChange();
-    } catch {
-      toast.error("Could not rename the club.", { duration: 8000 });
+    } catch (error) {
+      toastError("Could not rename the club.", { cause: error, duration: 8000 });
     }
   }
 
@@ -200,8 +200,8 @@ function ClubRow({
     try {
       await del.mutateAsync({ id: club.id });
       onChange();
-    } catch {
-      toast.error("Could not delete the club.", { duration: 8000 });
+    } catch (error) {
+      toastError("Could not delete the club.", { cause: error, duration: 8000 });
       setConfirmingDelete(false);
     }
   }

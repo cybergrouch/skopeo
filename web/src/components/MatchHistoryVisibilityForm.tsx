@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import {
   getGetApiV1UsersIdQueryKey,
   getGetApiV1UsersMeQueryKey,
@@ -37,9 +38,9 @@ function Controls({
         }),
       ]);
       toast.success("Saved");
-    } catch {
+    } catch (error) {
       setHidden(!next);
-      toast.error("Could not save. Please try again.", { duration: 8000 });
+      toastError("Could not save. Please try again.", { cause: error, duration: 8000 });
     }
   }
 

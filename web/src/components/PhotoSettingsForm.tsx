@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,10 +56,10 @@ function Controls({
         }),
       ]);
       toast.success("Saved");
-    } catch {
-      toast.error(
+    } catch (error) {
+      toastError(
         "Could not save your photo settings. Check the URL and try again.",
-        { duration: 8000 },
+        { cause: error, duration: 8000 },
       );
     }
   }

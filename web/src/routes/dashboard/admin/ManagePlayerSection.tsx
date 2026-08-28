@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -62,8 +63,8 @@ function RatingForm({ userId, initialValue }: { userId: string; initialValue: st
     event.preventDefault()
     try {
       await setRating.mutateAsync({ userId, data: { value } })
-    } catch {
-      toast.error('Could not set the rating. Check the value and try again.', { duration: 8000 })
+    } catch (error) {
+      toastError('Could not set the rating. Check the value and try again.', { cause: error, duration: 8000 })
     }
   }
 
@@ -114,14 +115,14 @@ function CapabilitiesEditor({ userId }: { userId: string }) {
   const grant = usePostApiV1UsersUserIdCapabilities({
     mutation: {
       onSuccess: invalidate,
-      onError: (e) => toast.error(errorMessage(e, 'Could not grant the role.'), { duration: 8000 }),
+      onError: (e) => toastError(errorMessage(e, 'Could not grant the role.'), { cause: e, duration: 8000 }),
     },
   })
   const revoke = useDeleteApiV1UsersUserIdCapabilitiesCapability({
     mutation: {
       onSuccess: invalidate,
       onError: (e) =>
-        toast.error(errorMessage(e, 'Could not revoke the role.'), { duration: 8000 }),
+        toastError(errorMessage(e, 'Could not revoke the role.'), { cause: e, duration: 8000 }),
     },
   })
   const busy = grant.isPending || revoke.isPending
@@ -223,7 +224,7 @@ function PointAdjustmentForm({ userId }: { userId: string }) {
         setValidUntil('')
       },
       onError: (e) =>
-        toast.error(errorMessage(e, 'Could not apply the adjustment.'), { duration: 8000 }),
+        toastError(errorMessage(e, 'Could not apply the adjustment.'), { cause: e, duration: 8000 }),
     },
   })
 
@@ -360,7 +361,7 @@ function DeleteAccountForm({
     mutation: {
       onSuccess: onDeleted,
       onError: (e) =>
-        toast.error(errorMessage(e, 'Could not delete the account.'), { duration: 8000 }),
+        toastError(errorMessage(e, 'Could not delete the account.'), { cause: e, duration: 8000 }),
     },
   })
 
