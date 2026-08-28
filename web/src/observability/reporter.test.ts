@@ -50,4 +50,18 @@ describe("reporter", () => {
     );
     expect(info).toHaveBeenCalledWith("[reporter] setUser", "u1");
   });
+
+  it("consoleReporter tolerates a missing context", () => {
+    // Most call sites pass context, but the global handlers and a bare captureException do not — the
+    // `?? {}` fallback keeps the dev output readable instead of printing `undefined`.
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const boom = new Error("boom");
+    consoleReporter.captureException(boom);
+    consoleReporter.captureMessage("bare", "error");
+
+    expect(error).toHaveBeenCalledWith("[reporter] captureException", boom, {});
+    expect(warn).toHaveBeenCalledWith("[reporter] captureMessage(error)", "bare", {});
+  });
 })
