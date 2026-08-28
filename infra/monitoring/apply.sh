@@ -283,12 +283,21 @@ sed -e "s|CLOUD_RUN_SERVICE_PLACEHOLDER|$SERVICE|g" \
     "$HERE/dashboard.json" > "$WORK/dashboard.json"
 
 if [[ -n "$DRY_RUN" ]]; then
-  # --validate-only is a real server-side schema check, so a dry run genuinely catches a malformed
-  # widget rather than only echoing the command.
-  echo "  [dry-run] validating the dashboard schema server-side"
-  gcloud monitoring dashboards create --project "$PROJECT" \
-    --config-from-file "$WORK/dashboard.json" --validate-only \
-    && echo "    schema OK"
+  # --validate-only is a real server-side schema check ("validate the dashboard but do not save it"),
+  # so a dry run genuinely catches a malformed widget rather than only echoing the command.
+  #
+  # Its output is captured rather than shown, because gcloud prints "Created [<uuid>]" from the object
+  # the API echoes back — which reads alarmingly like a dry run having mutated something. Nothing is
+  # persisted; the id belongs to a response, not a saved dashboard.
+  echo "  [dry-run] validating the dashboard schema server-side (validate-only: nothing is saved)"
+  if validate_out="$(gcloud monitoring dashboards create --project "$PROJECT" \
+      --config-from-file "$WORK/dashboard.json" --validate-only 2>&1)"; then
+    echo "    schema OK — nothing saved"
+  else
+    echo "$validate_out" >&2
+    echo "    schema INVALID: the dashboard would be rejected" >&2
+    exit 1
+  fi
 else
   EXISTING_DASH="$(gcloud monitoring dashboards list --project "$PROJECT" \
     --format='value(name)' --filter="displayName='Skopeo API'" 2>/dev/null | only_resource_name)"

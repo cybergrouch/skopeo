@@ -145,11 +145,23 @@ was in fact installed. The script instead fails with a clear message at the poin
 cannot run — which also distinguishes "no channel exists yet" from "the command didn't run at all",
 two states that otherwise look identical on a first apply.
 
-### `--dry-run` does validate the dashboard
+### What `--dry-run` does and does not verify
 
-Dry-run echoes the `gcloud` calls rather than running them, but for the dashboard it calls
-`--validate-only`, which is a real server-side schema check. So a malformed widget fails in dry-run
-rather than on first apply.
+| Resource | Dry-run behaviour |
+| --- | --- |
+| **Dashboard** | **Genuinely validated.** `--validate-only` is a real server-side schema check, so a malformed widget fails here rather than on first apply. |
+| Alert policies | Command echoed only — `gcloud monitoring policies create` has no validate flag. |
+| Log-based metrics | Command echoed only. |
+| Uptime check | Command echoed only. |
+
+So dry-run proves the dashboard JSON is acceptable and proves the *shape* of everything else, but the
+first real apply is still where a bad metric filter or an invalid alert condition would surface. Safe to
+retry: every step updates in place rather than duplicating.
+
+One confusing detail worth knowing: `--validate-only` makes gcloud print `Created [<uuid>]`, echoing the
+object the API returns. **Nothing is saved** — the flag is documented as "validate the dashboard but do
+not save it" — but the message reads as though a dry run mutated something, so the script now suppresses
+it and prints "schema OK — nothing saved" instead.
 
 ### Why the uptime check isn't a JSON file
 
