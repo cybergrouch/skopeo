@@ -12,7 +12,7 @@ Skopeo's pilot phase has two defining constraints: **low, bursty traffic** (a ha
 
 | Concern | GCP | AWS |
 |---|---|---|
-| Container hosting fit | **Cloud Run**: runs the existing Docker image, scales to zero when idle, perpetual free tier (2M requests, 180k vCPU-s, 360k GiB-s per month) | **App Runner is in maintenance mode** (no new customers after April 30, 2026). The recommended replacement, ECS Express Mode on Fargate, has no scale-to-zero and provisions an Application Load Balancer (~$16+/month fixed) |
+| Container hosting fit | **Cloud Run**: runs the existing Docker image, can scale to zero when idle (though we run `--min-instances=1` to avoid cold starts), perpetual free tier (2M requests, 180k vCPU-s, 360k GiB-s per month) | **App Runner is in maintenance mode** (no new customers after April 30, 2026). The recommended replacement, ECS Express Mode on Fargate, has no scale-to-zero and provisions an Application Load Balancer (~$16+/month fixed) |
 | Managed PostgreSQL floor | Cloud SQL `db-f1-micro` shared-core: ~$7–11/month + storage | RDS `db.t4g.micro`: ~$12–15/month + storage; 12-month free RDS tier **removed for accounts created after July 15, 2025** (replaced by $100–200 credits expiring in 6 months) |
 | Free tier longevity | Cloud Run free tier **never expires**; ~$300/90-day new-account trial on top | Credits-based free plan, expires after 6 months or when credits run out |
 | Philippines proximity | No PH region; serve from `asia-southeast1` (Singapore), ~30–50 ms from Manila | No PH region either. The Manila **Local Zone** is compute-edge only — no RDS or Fargate — and parents to Singapore (`ap-southeast-1`) anyway |

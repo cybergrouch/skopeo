@@ -158,7 +158,8 @@ a rule.
 
 **There is no `/metrics` endpoint and no Micrometer/Prometheus registry.** Both were removed in #804:
 
-- Nothing scraped it. Cloud Run scales to zero, which suits pull-based scraping badly.
+- Nothing scraped it — and a scrape would have been misleading anyway: the service runs
+  `--max-instances=2`, so one pull reads one instance's counters rather than the service's total.
 - It was registered in `routing { }` with no `authenticate` wrapper, so anyone could read JVM internals
   and the full route list off production.
 
