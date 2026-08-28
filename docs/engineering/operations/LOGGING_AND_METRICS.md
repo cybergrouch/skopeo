@@ -47,13 +47,29 @@ MDC entries are emitted **flat**, as top-level fields. That is what makes them q
 Explorer and usable directly as log-based metric labels; nested under an `mdc` object they would be
 neither.
 
-Two consequences worth internalising:
+MDC carries `requestId` and the trace, and nothing else. The access line's own fields do **not** come
+through MDC — see below for why.
 
-- **MDC is an allowlist, not a scratchpad.** Every appender forwards MDC — a future error tracker would
-  receive it as tags — so anything put there is published. Emails, Firebase UIDs and dates of birth must
-  never go in. See #806.
-- MDC carries `requestId` and the trace. The access line's own fields do **not** come through MDC — see
-  below for why.
+### MDC is an allowlist, not a scratchpad (#806)
+
+MDC is a *publication channel*. Every appender forwards it: the JSON encoder writes it as top-level
+fields, and an error-tracking appender attaches it to every event as searchable tags. So a stray
+`MDC.put("email", …)` anywhere would publish that value on every subsequent line of the request, to every
+sink, with nothing failing.
+
+`logback.xml` therefore enforces an allowlist at the encoder via `<includeMdcKeyName>`; an unlisted key is
+**dropped**, not trusted. `LogFields.ALLOWED_MDC_KEYS` is the single source of truth and a test asserts the
+two do not drift apart — without that, adding a key to one and not the other fails silently, because the
+field simply never appears.
+
+Currently allowed: `requestId`, `logging.googleapis.com/trace`. Note what is deliberately absent — no user
+id, no email, no Firebase UID, no display name. A caller's identity is reachable from the request id if it
+is ever needed, which keeps identity out of every line by default rather than in it by default.
+
+**The limit of that enforcement, stated plainly:** the encoder allowlist protects the *log* sink only. An
+error-tracking appender reads the MDC map directly and never passes through this encoder, so it would see
+an unlisted key. The allowlist is defence in depth; the actual control is not putting personal data in MDC
+in the first place.
 
 ## The request id
 
@@ -166,6 +182,42 @@ infrastructure panels.
 - **Alerting and dashboards.** #808 and #809.
 - **An error-tracking vendor.** Deliberately the last decision (#751); the Logback appender seam means
   adding one is configuration, not code (#810).
+
+## Keeping personal data out of logs (#806)
+
+This is the gate that makes switching on an error tracker safe (#810/#811). Two facts make the *sources*
+the right place to control it rather than a vendor hook:
+
+- **A Logback appender sends only log events** — message, exception, MDC. HTTP request/body/cookie capture
+  comes from web-framework integrations (Spring, servlet), and **Ktor has none**. So the raw request body,
+  the largest single payload, is never captured at all.
+- Which means what reaches a vendor is exactly *what we chose to log*. Clean sources protect every sink,
+  including ones not yet chosen.
+
+### The rules
+
+1. **Never interpolate a domain object.** Every PII-carrying type is a `data class`, so `toString()` covers
+   every field: `logger.info { "provisioned $user" }` publishes an email, a date of birth and a Firebase
+   UID, and nothing in the build objects.
+2. **Never put personal data in an exception or `ServiceError` message.** Those are authored by us and are
+   logged with the throwable, so they land in `stack_trace`. Internal UUIDs are fine —
+   `"User $userId has no rating"` is not personal data.
+3. **Identifiers, not identities.** Where a log line needs to say *which* player or user, use the id. The
+   calculator's audit trail does this deliberately: it reports `playerId`, not the player's name, because
+   `RankingRoutes` logs every audit entry at INFO.
+4. **Credential-shaped values get redacted at the call site.** `redactedJdbcUrl` drops a JDBC URL's query
+   string before it is logged, because `?user=…&password=…` is the conventional Postgres form and that line
+   is emitted on every boot.
+
+### How it is verified
+
+`PiiLeakTest` drives a request carrying an email, a date of birth, a Firebase UID and a bearer token
+through both a 500 and a malformed-JSON 400, then **encodes every captured log event through the shipped
+`logback.xml`** and asserts none of the four appears. Asserting on the message alone would miss the two
+ways a value actually escapes: the MDC map, and an exception's own message inside `stack_trace`.
+
+Deliberately still open: redacting value types in the domain model (**#801**), as defence in depth against
+rule 1 rather than a substitute for it.
 
 ## References
 

@@ -9,6 +9,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.server.application.Application
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.sql.Database
+import org.skopeo.common.logging.redactedJdbcUrl
 import javax.sql.DataSource
 
 private val logger = KotlinLogging.logger {}
@@ -55,7 +56,9 @@ object DatabaseConfig {
             application.environment.config.propertyOrNull(path = "database.pool.maxLifetime")
                 ?.getString()?.toLong() ?: 1800000
 
-        logger.info { "Database URL: $dbUrl" }
+        // Redacted: a JDBC URL is the conventional place to put `?user=…&password=…`, and this line
+        // is emitted on every boot (#806).
+        logger.info { "Database URL: ${redactedJdbcUrl(url = dbUrl)}" }
         logger.info { "Database driver: $dbDriver" }
         logger.info { "Connection pool size: $poolMaxSize (min idle: $poolMinIdle)" }
 

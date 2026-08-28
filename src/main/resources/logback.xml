@@ -35,9 +35,17 @@
                 <threadName>
                     <fieldName>thread</fieldName>
                 </threadName>
-                <!-- Flat, so `requestId`/`route`/`status` are top-level queryable fields. The MDC key set
-                     is an allowlist owned by the application (#806) — anything here reaches every sink. -->
-                <mdc/>
+                <!-- Flat, so the keys below are top-level queryable fields.
+
+                     ALLOWLISTED (#806): MDC is a publication channel, not a scratchpad — every appender
+                     forwards it, and an error tracker would attach it to each event as searchable tags.
+                     An unlisted key is dropped here rather than trusted, so a stray MDC.put elsewhere in
+                     the codebase cannot publish a value on every line of the request. Keep in step with
+                     LogFields.ALLOWED_MDC_KEYS; a test asserts the two agree. -->
+                <mdc>
+                    <includeMdcKeyName>requestId</includeMdcKeyName>
+                    <includeMdcKeyName>logging.googleapis.com/trace</includeMdcKeyName>
+                </mdc>
                 <!-- The access line's fields (#805) arrive as a marker rather than via MDC, because MDC
                      values are always strings: `durationMs` and `status` have to stay JSON *numbers* for
                      a log-based distribution metric to read them (#809). -->
