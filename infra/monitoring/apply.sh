@@ -102,21 +102,19 @@ run() {
 # installer, a pip log, a warning — is discarded rather than used as an id.
 only_resource_name() { grep -E '^projects/[A-Za-z0-9_.-]+/[A-Za-z]+/[A-Za-z0-9_.-]+$' | head -1 || true; }
 
-# --- Preflight ----------------------------------------------------------------------------------
-# `gcloud monitoring policies|uptime|dashboards` and `gcloud logging metrics` are all GA. Only channels
-# still needs beta, so that is the one component to insist on — and we check rather than let gcloud
-# install it mid-run (see the CLOUDSDK_CORE_DISABLE_PROMPTS note above).
-if ! gcloud components list --format='value(id,state.name)' 2>/dev/null \
-     | grep -qE '^beta[[:space:]]+Installed'; then
-  cat >&2 <<'MSG'
-The gcloud "beta" component is required (only for `gcloud beta monitoring channels`) and is not
-installed. Install it first, so it cannot install itself in the middle of this script:
-
-    gcloud components install beta
-
-MSG
-  exit 1
-fi
+# --- Warm up the command groups, OUTSIDE any command substitution --------------------------------
+# `gcloud monitoring policies|uptime|dashboards` and `gcloud logging metrics` are GA; only
+# `gcloud beta monitoring channels` needs a component that may be missing.
+#
+# The hazard is not the install itself — it is installing *inside* `$(...)`, where the installer's
+# progress output is captured as if it were the command's result. So touch the group once here, where
+# stdout goes to the terminal and any first-run noise is harmless and visible.
+#
+# Deliberately NOT a version/state check on `gcloud components list`: its `--format` output differs
+# between gcloud releases, so parsing it produced a false negative that blocked a machine where the
+# component was in fact installed.
+gcloud beta monitoring channels list --project "${GCP_PROJECT_ID:-$DEFAULT_PROJECT}" --limit=1 \
+  >/dev/null 2>&1 || true
 
 echo "project=$PROJECT region=$REGION service=$SERVICE alerts=$ALERT_EMAIL${DRY_RUN:+ (DRY RUN)}"
 
@@ -154,6 +152,19 @@ for c in channels if isinstance(channels, list) else []:
 ' "$ALERT_EMAIL" | only_resource_name)"
 
 if [[ -z "$CHANNEL" ]]; then
+  # Distinguish "no such channel yet" from "the command could not run at all" — otherwise a missing
+  # beta component looks identical to a first-time apply, and the script would cheerfully continue.
+  if ! gcloud beta monitoring channels list --project "$PROJECT" --limit=1 >/dev/null 2>&1; then
+    cat >&2 <<MSG
+
+Cannot list notification channels. \`gcloud beta monitoring channels\` did not run — most likely the
+gcloud "beta" component is unavailable:
+
+    gcloud components install beta
+
+MSG
+    exit 1
+  fi
   if [[ -n "$DRY_RUN" ]]; then
     echo "  [dry-run] would create an email channel for $ALERT_EMAIL"
     CHANNEL="projects/$PROJECT/notificationChannels/DRY-RUN"
