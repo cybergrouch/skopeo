@@ -66,7 +66,8 @@ The design/decision records above, with status:
 - [DB_MIGRATIONS.md](engineering/operations/DB_MIGRATIONS.md) — Flyway conventions + the checklist for constraint-tightening migrations (must carry their own backfill; CI migrates an empty DB, #799), with the V44 post-mortem and an audit of V1–V44.
 - [CICD.md](engineering/operations/CICD.md) — GitHub Actions CI/CD plan.
 - [JVM_COMPATIBILITY.md](engineering/operations/JVM_COMPATIBILITY.md) — Java/Gradle/detekt version strategy.
-- [LOGGING_AND_METRICS.md](engineering/operations/LOGGING_AND_METRICS.md) — logging and Prometheus metrics.
+- [LOGGING_AND_METRICS.md](engineering/operations/LOGGING_AND_METRICS.md) — structured JSON logging for Cloud
+  Logging, the severity mapping, and why there is no `/metrics` endpoint.
 - [GIT_HOOKS.md](engineering/operations/GIT_HOOKS.md) — pre-commit hook setup.
 - [DEPLOYMENT_RUNBOOK.md](engineering/operations/DEPLOYMENT_RUNBOOK.md) — step-by-step release/deploy runbook.
 - [LOCAL_DEMO_AND_TEST_DATA.md](engineering/operations/LOCAL_DEMO_AND_TEST_DATA.md) — seeding a local demo + test data.

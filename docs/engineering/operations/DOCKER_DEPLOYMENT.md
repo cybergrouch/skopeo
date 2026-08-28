@@ -358,9 +358,6 @@ curl http://localhost:8080/
 # Test health endpoint
 curl http://localhost:8080/health
 
-# Test metrics endpoint
-curl http://localhost:8080/metrics
-
 # Test ranking calculation
 curl -X POST http://localhost:8080/api/v1/calculate-ranking \
   -H "Content-Type: application/json" \
@@ -418,8 +415,11 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
    - Monitor with orchestration tools
 
 5. **Enable Monitoring**
-   - Prometheus metrics at `/metrics`
-   - Integrate with monitoring stack
+   - Logs are structured JSON on stdout — point the platform's log collector at it and filter on the
+     `severity` field (see LOGGING_AND_METRICS.md). There is no `/metrics` endpoint; it was removed in
+     #804 along with the Prometheus registry.
+   - Derive per-endpoint volume, latency and error rate from the access line's `route` / `status` /
+     `durationMs` fields.
 
 6. **Use Read-Only Filesystem (Optional)**
    ```bash

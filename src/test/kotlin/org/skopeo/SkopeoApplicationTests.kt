@@ -4,7 +4,6 @@
 package org.skopeo
 
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
@@ -45,17 +44,16 @@ class SkopeoApplicationTests {
         }
 
     @Test
-    fun testMetrics() =
+    fun `the Prometheus metrics endpoint is gone, not merely unadvertised`() =
         testApplication {
             application {
                 module(initDatabase = false)
             }
 
-            val response = client.get(urlString = "/metrics")
-            val body = response.bodyAsText()
-
-            response.status shouldBe HttpStatusCode.OK
-            body shouldNotBe ""
-            (body.contains(other = "jvm") || body.contains(other = "http")) shouldBe true
+            // Removed in #751/#804. It was registered in `routing { }` with no `authenticate` wrapper, so
+            // anyone could scrape JVM internals and the full route list off production — and nothing
+            // consumed it, since Cloud Run scales to zero and suits pull-based scraping badly. Asserting
+            // 404 is what satisfies "no longer anonymously reachable": deletion, not a gate.
+            client.get(urlString = "/metrics").status shouldBe HttpStatusCode.NotFound
         }
 }

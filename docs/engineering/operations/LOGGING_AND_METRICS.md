@@ -1,253 +1,110 @@
 # Logging and Metrics
 
-This document describes the logging and metrics implementation in Skopeo.
+Skopeo logs **structured JSON to stdout**. Cloud Run collects stdout, parses each JSON line into
+`jsonPayload`, and reads two field names specially — which is the entire reason for the format
+(#751/#804).
 
-## Overview
+| Field | Why it is spelled exactly this way |
+| --- | --- |
+| `severity` | Cloud Logging reads it as the entry's severity, so `severity>=ERROR` filtering, saved queries and severity-based alerting work. |
+| `stack_trace` | **Cloud Error Reporting picks this up automatically** and groups exceptions into issues with a readable trace. No agent, no SDK, no vendor — the field name *is* the integration. |
 
-The application uses a comprehensive logging and monitoring setup:
+Everything else in the object (`message`, `logger`, `thread`, `time`, plus MDC) is ordinary payload.
 
-- **kotlin-logging**: Kotlin-idiomatic logging wrapper
-- **Logback**: Backend logging framework (console/stdout output)
-- **Ktor CallLogging**: Automatic HTTP request/response logging
-- **Micrometer + Prometheus**: Performance metrics collection
+## Configuration
 
-## Logging
+`src/main/resources/logback.xml`, using `logstash-logback-encoder`. One appender, console only:
+containers and cloud platforms collect stdout, and a file appender inside a container is invisible to
+the platform and lost when the container is replaced.
 
-### Log Levels
+## The severity trap
 
-The application uses the following log levels:
+Logback's level names are *almost* Cloud Logging's, and that is the hazard. GCP's `LogSeverity` enum is
+`DEBUG, INFO, NOTICE, WARNING, ERROR, CRITICAL, ALERT, EMERGENCY`. Three of Logback's five map by
+identity. Two do not:
 
-- **ERROR**: Critical errors that need immediate attention
-- **WARN**: Warning messages for potentially harmful situations
-- **INFO**: General informational messages (default level)
-- **DEBUG**: Detailed information for debugging purposes
-- **TRACE**: Very detailed diagnostic information
+- **`WARN` is not a LogSeverity.** An unmapped value degrades to `DEFAULT`, which sorts *below* `DEBUG`,
+  so every warning disappears from "everything at WARNING or above".
+- **`TRACE` is not one either** — `DEBUG` is GCP's floor.
 
-### Log Output
+`gcpSeverityOf` in `org.skopeo.common.logging.GcpSeverity.kt` does the mapping; `GcpSeverityConverter`
+wraps it and is registered as the `%gcpSeverity` conversion word. It is a converter rather than a `%replace(%replace(...))` chain in XML precisely because this is
+the part most likely to be silently wrong: `StructuredLogFormatTest` loads the shipped `logback.xml` and
+asserts a `WARN` event encodes as `"severity":"WARNING"`.
 
-Logs are written to the **console (stdout)** only, in the format
-`yyyy-MM-dd HH:mm:ss.SSS [thread] LEVEL logger - message`.
+## Correlating a line with its request
 
-This is intentional: the application is deployed as a container, and container
-platforms (Cloud Run, ECS, Kubernetes) collect stdout and ship it to their
-logging backends. File appenders inside a container are invisible to the
-platform and lose data when the container is replaced.
+`logging.googleapis.com/trace` is set from Cloud Run's inbound `X-Cloud-Trace-Context` header, qualified
+as `projects/<projectId>/traces/<TRACE_ID>` — Cloud Logging ignores a bare trace id, which is why
+`GCP_PROJECT_ID` is required for the field to appear at all. The project id comes from the same repo
+variable the deploy workflow already uses for `--project`; it is unset locally and in tests, and the
+field is then **omitted rather than emitted empty**, since a value Cloud Logging cannot resolve looks
+like a link that goes nowhere.
 
-### Using Logging in Code
+## MDC
+
+MDC entries are emitted **flat**, as top-level fields. That is what makes them queryable in the Logs
+Explorer and usable directly as log-based metric labels; nested under an `mdc` object they would be
+neither.
+
+Two consequences worth internalising:
+
+- **MDC is an allowlist, not a scratchpad.** Every appender forwards MDC — a future error tracker would
+  receive it as tags — so anything put there is published. Emails, Firebase UIDs and dates of birth must
+  never go in. See #806.
+- Request-scoped fields (`requestId`, `route`, `method`, `status`, `durationMs`) arrive with #805.
+
+## Using logging in code
 
 ```kotlin
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
-class MyClass {
-    fun myFunction() {
-        logger.info { "This is an info message" }
-        logger.debug { "Debug information: $details" }
-        logger.error(exception) { "Error occurred while processing" }
-
-        // Lazy evaluation (only evaluated if log level is enabled)
-        logger.debug { "Expensive calculation: ${expensiveOperation()}" }
-    }
-}
+logger.info { "Rating calculation committed for event $eventId" }
+logger.error(throwable = e) { "Failed to persist rating history" }
 ```
 
-### Request Logging
+Pass the exception as `throwable` rather than interpolating it — that is what populates `stack_trace`,
+and therefore what reaches Cloud Error Reporting.
 
-All HTTP requests and responses are automatically logged with the following information:
-
-- HTTP method (GET, POST, etc.)
-- Request URI
-- Response status code
-- User-Agent header
-
-**Example log entry:**
-```
-15:23:45.123 [eventLoopGroupProxy-4-1] INFO  i.k.s.p.calllogging.CallLogging - GET /health - Status: 200 OK - User-Agent: curl/7.64.1
-```
-
-### Configuration
-
-Logging is configured in `src/main/resources/logback.xml`. You can:
-
-- Change log levels per package
-- Modify log format patterns
-- Add custom appenders
-
-**Example: Enable debug logging for your package:**
-
-```xml
-<logger name="org.skopeo" level="DEBUG" />
-```
+**Never interpolate a domain object.** Every PII-carrying type is a `data class` with an auto-generated
+`toString()`, so `logger.info { "provisioned $user" }` publishes an email, a date of birth and a Firebase
+UID in plain text, and nothing in the build objects. #806 makes that structurally hard; until then it is
+a rule.
 
 ## Metrics
 
-### Overview
+**There is no `/metrics` endpoint and no Micrometer/Prometheus registry.** Both were removed in #804:
 
-The application exposes Prometheus-compatible metrics that can be scraped by monitoring systems.
+- Nothing scraped it. Cloud Run scales to zero, which suits pull-based scraping badly.
+- It was registered in `routing { }` with no `authenticate` wrapper, so anyone could read JVM internals
+  and the full route list off production.
 
-### Metrics Endpoint
+Per-endpoint **call volume, latency distribution and error rate** come instead from **Cloud Logging
+log-based metrics** over the access-line fields, grouped by `route`. Two properties this depends on:
 
-**URL:** `http://localhost:8080/metrics`
+- `route` must be the **matched pattern** (`/api/v1/matches/{id}/score-correction`), never the raw URI.
+  Raw URIs would make every match id its own metric series — useless and expensive.
+- The metrics group by a *label*, so a newly added endpoint appears automatically with no metric
+  definition change. See #805 and #809.
 
-**Format:** Prometheus text format
+Cloud Run also publishes `run.googleapis.com/request_latencies`, `request_count` and instance counts with
+no instrumentation at all; Cloud SQL publishes CPU, memory and connections. Those are the dashboard's
+infrastructure panels.
 
-### Available Metrics
+## What this deliberately does not cover
 
-The application automatically tracks:
-
-#### JVM Metrics
-- `jvm_memory_used_bytes` - Memory usage
-- `jvm_memory_max_bytes` - Maximum memory
-- `jvm_gc_pause_seconds` - Garbage collection pauses
-- `jvm_threads_live` - Number of live threads
-- `jvm_classes_loaded` - Number of loaded classes
-
-#### HTTP Metrics
-- `http_server_requests_seconds_count` - Total number of requests
-- `http_server_requests_seconds_sum` - Total time spent processing requests
-- `http_server_requests_seconds_max` - Maximum request duration
-- Request counts by endpoint, method, and status code
-
-#### System Metrics
-- `process_cpu_usage` - CPU usage
-- `process_uptime_seconds` - Application uptime
-- `system_cpu_count` - Number of CPU cores
-
-### Viewing Metrics
-
-**View in browser:**
-```
-http://localhost:8080/metrics
-```
-
-**View with curl:**
-```bash
-curl http://localhost:8080/metrics
-```
-
-**Example output:**
-```
-# HELP jvm_memory_used_bytes The amount of used memory
-# TYPE jvm_memory_used_bytes gauge
-jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.6777216E7
-jvm_memory_used_bytes{area="heap",id="G1 Old Gen",} 1.234567E7
-
-# HELP http_server_requests_seconds
-# TYPE http_server_requests_seconds summary
-http_server_requests_seconds_count{method="GET",status="200",uri="/health",} 42.0
-http_server_requests_seconds_sum{method="GET",status="200",uri="/health",} 0.156
-```
-
-### Integration with Prometheus
-
-To scrape these metrics with Prometheus, add to your `prometheus.yml`:
-
-```yaml
-scrape_configs:
-  - job_name: 'skopeo'
-    static_configs:
-      - targets: ['localhost:8080']
-    metrics_path: '/metrics'
-    scrape_interval: 15s
-```
-
-### Integration with Grafana
-
-1. Add Prometheus as a data source in Grafana
-2. Import a JVM dashboard (recommended: Dashboard ID 4701)
-3. Create custom dashboards for Skopeo specific metrics
-
-### Custom Metrics
-
-To add custom metrics, inject the MeterRegistry:
-
-```kotlin
-import io.micrometer.core.instrument.MeterRegistry
-import io.micrometer.core.instrument.Counter
-
-fun Application.configureRouting() {
-    val meterRegistry = plugin(MicrometerMetrics).registry
-    val rankingCalculations = Counter.builder("tennis.ranking.calculations")
-        .description("Number of ranking calculations performed")
-        .register(meterRegistry)
-
-    routing {
-        post("/calculate-ranking") {
-            rankingCalculations.increment()
-            // ... calculate ranking
-        }
-    }
-}
-```
-
-## Health Check
-
-The `/health` endpoint returns application health status:
-
-**URL:** `http://localhost:8080/health`
-
-**Response:**
-```json
-{
-  "status": "UP",
-  "service": "Skopeo API",
-  "version": "0.0.1-SNAPSHOT"
-}
-```
-
-## Performance Considerations
-
-### Logging
-- Use lazy evaluation with `logger.info { }` syntax
-- Avoid expensive operations in log messages
-- Use appropriate log levels (don't log everything at INFO)
-
-### Metrics
-- Metrics have minimal overhead (<1% CPU)
-- Metrics endpoint is lightweight (no computation, just reporting)
-- Consider rate limiting the /metrics endpoint in production if scraped frequently
-
-## Production Recommendations
-
-1. **Set log level to INFO or WARN** in production
-   ```xml
-   <logger name="org.skopeo" level="INFO" />
-   ```
-
-2. **Rely on the platform's log collection** (Cloud Logging, CloudWatch)
-   - Logs go to stdout; retention and search are handled by the platform
-
-3. **Set up Prometheus + Grafana** for metrics visualization
-
-4. **Configure alerts** for:
-   - Error log entries
-   - High response times (>1s)
-   - Memory usage >80%
-   - CPU usage >80%
-
-5. **Consider centralized logging** (ELK Stack, Splunk, etc.) for production
-
-## Troubleshooting
-
-### Logs not appearing
-- Verify logback.xml is in `src/main/resources/`
-- Check for logback configuration errors at the top of console output
-
-### Metrics endpoint returns empty
-- Ensure Micrometer dependencies are included
-- Check that the application has processed at least one request
-- Verify the /metrics route is configured
-
-### Too much logging
-- Increase log level in logback.xml
-- Reduce Ktor framework logging: `<logger name="io.ktor" level="WARN" />`
-- Disable CallLogging for specific endpoints if needed
+- **Intra-request breakdown.** Log-based metrics see total request time only. Attributing time to a slow
+  DB query needs span instrumentation or an error tracker's auto-instrumentation — not built.
+- **Frontend errors.** #807 adds the boundary and a vendor-neutral reporter seam.
+- **Alerting and dashboards.** #808 and #809.
+- **An error-tracking vendor.** Deliberately the last decision (#751); the Logback appender seam means
+  adding one is configuration, not code (#810).
 
 ## References
 
-- [kotlin-logging](https://github.com/oshai/kotlin-logging)
-- [Logback Documentation](https://logback.qos.ch/manual/)
-- [Ktor CallLogging](https://ktor.io/docs/call-logging.html)
-- [Micrometer Documentation](https://micrometer.io/docs)
-- [Prometheus Documentation](https://prometheus.io/docs/)
+- [Cloud Logging: structured logging](https://cloud.google.com/logging/docs/structured-logging)
+- [Cloud Logging: LogSeverity](https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#logseverity)
+- [Cloud Error Reporting: formatting error messages](https://cloud.google.com/error-reporting/docs/formatting-error-messages)
+- [logstash-logback-encoder](https://github.com/logfellow/logstash-logback-encoder)
