@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import {
   Card,
   CardContent,
@@ -51,8 +51,8 @@ export function CircuitsSection() {
       await create.mutateAsync({ data: { name: trimmed } });
       setName("");
       invalidate();
-    } catch {
-      toast.error("Could not create the circuit.", { duration: 8000 });
+    } catch (error) {
+      toastError("Could not create the circuit.", { cause: error, duration: 8000 });
     }
   }
 
@@ -132,8 +132,8 @@ function CircuitRow({
       await rename.mutateAsync({ id: circuit.id, data: { name: trimmed } });
       setEditing(false);
       onChange();
-    } catch {
-      toast.error("Could not rename the circuit.", { duration: 8000 });
+    } catch (error) {
+      toastError("Could not rename the circuit.", { cause: error, duration: 8000 });
     }
   }
 
@@ -142,8 +142,8 @@ function CircuitRow({
     try {
       await del.mutateAsync({ id: circuit.id });
       onChange();
-    } catch {
-      toast.error("Could not delete the circuit.", { duration: 8000 });
+    } catch (error) {
+      toastError("Could not delete the circuit.", { cause: error, duration: 8000 });
     }
   }
 

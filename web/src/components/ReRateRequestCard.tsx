@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 import {
   Card,
   CardContent,
@@ -81,8 +81,8 @@ export function ReRateRequestCard() {
                 create.mutate(
                   { data: { justification: justification.trim() } },
                   {
-                    onError: () =>
-                      toast.error('Could not submit your request. Please try again.', { duration: 8000 }),
+                    onError: (error) =>
+                      toastError('Could not submit your request. Please try again.', { cause: error, duration: 8000 }),
                   },
                 )
               }}

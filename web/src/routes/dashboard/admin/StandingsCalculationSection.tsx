@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -52,8 +53,8 @@ export function StandingsCalculationSection({
           });
         }
       },
-      onError: () =>
-        toast.error("Could not run the standings calculation. Try again.", {
+      onError: (error) =>
+        toastError("Could not run the standings calculation. Try again.", { cause: error,
           duration: 8000,
         }),
     },

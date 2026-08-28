@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import {
   getGetApiV1MatchesCodeCodeQueryKey,
   usePostApiV1MatchesIdScoreCorrection,
@@ -143,7 +144,7 @@ function Editor({
   async function submit(dryRun: boolean) {
     const requestSets = toRequestSets(sets);
     if (!requestSets) {
-      toast.error("Each set needs two whole, non-negative game counts.");
+      toastError("Each set needs two whole, non-negative game counts.");
       return;
     }
     try {
@@ -160,12 +161,12 @@ function Editor({
         queryKey: getGetApiV1MatchesCodeCodeQueryKey(match.publicCode),
       });
       toast.success("Score corrected and ratings re-applied.");
-    } catch {
-      toast.error(
+    } catch (error) {
+      toastError(
         dryRun
           ? "Could not preview the correction. Check the score and try again."
           : "Could not apply the correction. Please try again.",
-        { duration: 8000 },
+        { cause: error, duration: 8000 },
       );
     }
   }

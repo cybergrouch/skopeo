@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -80,8 +81,8 @@ function Fields({ userId, initial }: { userId: string; initial: InitialFields })
         queryClient.invalidateQueries({ queryKey: getGetApiV1UsersUserIdNamesQueryKey(userId) }),
       ])
       toast.success('Saved')
-    } catch {
-      toast.error('Could not save the profile. Check the values and try again.', { duration: 8000 })
+    } catch (error) {
+      toastError('Could not save the profile. Check the values and try again.', { cause: error, duration: 8000 })
     }
   }
 

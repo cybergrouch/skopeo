@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import {
   Card,
   CardContent,
@@ -185,10 +185,10 @@ export function EventManagerView({ eventId }: { eventId: string }) {
         { data: fixture },
         {
           onSuccess: () => resolve(true),
-          onError: () => {
-            toast.error(
+          onError: (error) => {
+            toastError(
               "Could not schedule the fixture. Every player must be a participant and already rated.",
-              { duration: 8000 },
+              { cause: error, duration: 8000 },
             );
             resolve(false);
           },
@@ -230,7 +230,7 @@ export function EventManagerView({ eventId }: { eventId: string }) {
         data: { clubId },
       });
     } catch (e) {
-      toast.error(eventErrorMessage(e, "Could not update the club."), {
+      toastError(eventErrorMessage(e, "Could not update the club."), { cause: e,
         duration: 8000,
       });
     }
@@ -242,7 +242,7 @@ export function EventManagerView({ eventId }: { eventId: string }) {
       await renameEvent.mutateAsync({ id: eventId, data: { name } });
       return true;
     } catch (e) {
-      toast.error(eventErrorMessage(e, "Could not rename this event."), {
+      toastError(eventErrorMessage(e, "Could not rename this event."), { cause: e,
         duration: 8000,
       });
       return false;
@@ -267,7 +267,7 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     try {
       await deleteEvent.mutateAsync({ id: eventId });
     } catch (e) {
-      toast.error(eventErrorMessage(e, "Could not delete this event."), {
+      toastError(eventErrorMessage(e, "Could not delete this event."), { cause: e,
         duration: 8000,
       });
     }
@@ -290,7 +290,7 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     try {
       await finalizeEvent.mutateAsync({ id: eventId });
     } catch (e) {
-      toast.error(eventErrorMessage(e, "Could not finalize this event."), {
+      toastError(eventErrorMessage(e, "Could not finalize this event."), { cause: e,
         duration: 8000,
       });
     }
@@ -313,7 +313,7 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     try {
       await unfinalizeEvent.mutateAsync({ id: eventId });
     } catch (e) {
-      toast.error(eventErrorMessage(e, "Could not un-finalize this event."), {
+      toastError(eventErrorMessage(e, "Could not un-finalize this event."), { cause: e,
         duration: 8000,
       });
     }
@@ -340,9 +340,9 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     try {
       await reverseRatings.mutateAsync({ id: eventId });
     } catch (e) {
-      toast.error(
+      toastError(
         eventErrorMessage(e, "Could not reverse this event's ratings."),
-        { duration: 8000 },
+        { cause: e, duration: 8000 },
       );
     }
   }
@@ -366,7 +366,7 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     try {
       await generateSeeding.mutateAsync({ id: eventId });
     } catch (e) {
-      toast.error(eventErrorMessage(e, "Could not generate the seeding."), {
+      toastError(eventErrorMessage(e, "Could not generate the seeding."), { cause: e,
         duration: 8000,
       });
     }
@@ -386,7 +386,7 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     try {
       await saveSeedingOrder.mutateAsync({ id: eventId, data: { userIds } });
     } catch (e) {
-      toast.error(eventErrorMessage(e, "Could not save the seeding order."), {
+      toastError(eventErrorMessage(e, "Could not save the seeding order."), { cause: e,
         duration: 8000,
       });
     }
@@ -453,8 +453,8 @@ export function EventManagerView({ eventId }: { eventId: string }) {
                       addParticipant.mutate(
                         { id: eventId, data: { userId: user.id } },
                         {
-                          onError: () =>
-                            toast.error("Could not add that participant.", {
+                          onError: (error) =>
+                            toastError("Could not add that participant.", { cause: error,
                               duration: 8000,
                             }),
                         },
@@ -546,9 +546,9 @@ export function EventManagerView({ eventId }: { eventId: string }) {
                   { id: eventId, teamId },
                   {
                     onError: (err) =>
-                      toast.error(
+                      toastError(
                         eventErrorMessage(err, "Could not dissolve the team."),
-                        { duration: 8000 },
+                        { cause: err, duration: 8000 },
                       ),
                   },
                 )

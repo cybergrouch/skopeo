@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -89,10 +90,10 @@ function ForCanonical({
       await replace.mutateAsync({ id: canonical.id, duplicateId: id })
       setConfirmingReplaceId(null)
       invalidate()
-    } catch {
-      toast.error(
+    } catch (error) {
+      toastError(
         'Could not replace the account. The canonical must be empty (no rating or matches of its own).',
-        { duration: 8000 },
+        { cause: error, duration: 8000 },
       )
     }
   }
@@ -103,8 +104,8 @@ function ForCanonical({
       setDuplicates([])
       invalidate()
       toast.success('Marked as duplicates.')
-    } catch {
-      toast.error('Could not mark the selected profiles as duplicates.', { duration: 8000 })
+    } catch (error) {
+      toastError('Could not mark the selected profiles as duplicates.', { cause: error, duration: 8000 })
     }
   }
 

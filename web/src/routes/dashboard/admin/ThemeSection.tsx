@@ -16,6 +16,7 @@ import {
 } from '@/api/generated/settings/settings'
 import type { SetThemeRequestTheme } from '@/api/generated/model'
 import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 
 // The setting enum + human labels. AUTO resolves by date on each client; the rest pin a theme.
 const THEME_OPTIONS: ReadonlyArray<{ value: SetThemeRequestTheme; label: string }> = [
@@ -56,7 +57,7 @@ export function ThemeSection() {
         toast.success('Saved')
         queryClient.invalidateQueries({ queryKey: getGetApiV1ThemeQueryKey() })
       },
-      onError: () => toast.error('Could not set the theme. Try again.', { duration: 8000 }),
+      onError: (error) => toastError('Could not set the theme. Try again.', { cause: error, duration: 8000 }),
     },
   })
 

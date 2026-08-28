@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -140,9 +140,9 @@ export function InvitesSection() {
       await invite(email.trim())
       setEmail('')
     } catch (err) {
-      toast.error(
+      toastError(
         existingAccountMessage(err) ?? 'Could not send the invite. Check the email and try again.',
-        { duration: 8000 },
+        { cause: err, duration: 8000 },
       )
     } finally {
       setSending(false)
@@ -154,7 +154,7 @@ export function InvitesSection() {
     try {
       await invite(address)
     } catch (err) {
-      toast.error(existingAccountMessage(err) ?? 'Could not resend the invite. Try again.', {
+      toastError(existingAccountMessage(err) ?? 'Could not resend the invite. Try again.', { cause: err,
         duration: 8000,
       })
     } finally {

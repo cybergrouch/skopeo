@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -56,8 +56,8 @@ function RequestRow({ request }: { request: RatingRequestResponse }) {
               approve.mutate(
                 { id: request.id, data: { rating: rating.trim() } },
                 {
-                  onError: () =>
-                    toast.error('Could not approve. Check the rating value.', { duration: 8000 }),
+                  onError: (error) =>
+                    toastError('Could not approve. Check the rating value.', { cause: error, duration: 8000 }),
                 },
               )
             }}
@@ -82,8 +82,8 @@ function RequestRow({ request }: { request: RatingRequestResponse }) {
               deny.mutate(
                 { id: request.id, data: { reason: reason.trim() } },
                 {
-                  onError: () =>
-                    toast.error('Could not deny the request.', { duration: 8000 }),
+                  onError: (error) =>
+                    toastError('Could not deny the request.', { cause: error, duration: 8000 }),
                 },
               )
             }}

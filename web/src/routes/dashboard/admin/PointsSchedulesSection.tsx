@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -94,8 +95,8 @@ function OpenPlayEditor({ initial }: { initial: OpenPlayPointsConfig }) {
           queryKey: getGetApiV1SettingsPointsOpenPlayQueryKey(),
         });
       },
-      onError: () =>
-        toast.error("Save failed. You need administrator access.", { duration: 8000 }),
+      onError: (error) =>
+        toastError("Save failed. You need administrator access.", { cause: error, duration: 8000 }),
     },
   });
 
@@ -240,8 +241,8 @@ function TournamentEditor({ initial }: { initial: TournamentPointsConfig }) {
           queryKey: getGetApiV1SettingsPointsTournamentQueryKey(),
         });
       },
-      onError: () =>
-        toast.error("Save failed. You need administrator access.", { duration: 8000 }),
+      onError: (error) =>
+        toastError("Save failed. You need administrator access.", { cause: error, duration: 8000 }),
     },
   });
 

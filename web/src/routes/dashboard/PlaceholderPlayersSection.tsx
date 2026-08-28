@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import {
   Card,
   CardContent,
@@ -104,8 +104,8 @@ function PlaceholderRow({
     try {
       const code = await generate.mutateAsync({ id: user.id });
       setResult(code);
-    } catch {
-      toast.error("Could not generate a claim code. Try again.", {
+    } catch (error) {
+      toastError("Could not generate a claim code. Try again.", { cause: error,
         duration: 8000,
       });
     }

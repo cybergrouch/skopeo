@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import {
   Card,
   CardContent,
@@ -65,8 +66,8 @@ function AwardRankingPointsToggle() {
           queryKey: getGetApiV1SettingsAwardRankingPointsQueryKey(),
         });
       },
-      onError: () =>
-        toast.error("Could not update the setting. Try again.", { duration: 8000 }),
+      onError: (error) =>
+        toastError("Could not update the setting. Try again.", { cause: error, duration: 8000 }),
     },
   });
 
@@ -112,8 +113,8 @@ function FacebookLoginToggle() {
           queryKey: getGetApiV1SettingsFacebookLoginQueryKey(),
         });
       },
-      onError: () =>
-        toast.error("Could not update the setting. Try again.", { duration: 8000 }),
+      onError: (error) =>
+        toastError("Could not update the setting. Try again.", { cause: error, duration: 8000 }),
     },
   });
 
@@ -168,8 +169,8 @@ function RawRatingsToggle() {
         void queryClient.invalidateQueries({ queryKey: getGetApiV1UsersMeQueryKey() });
         void queryClient.invalidateQueries();
       },
-      onError: () =>
-        toast.error("Could not update the setting. Try again.", { duration: 8000 }),
+      onError: (error) =>
+        toastError("Could not update the setting. Try again.", { cause: error, duration: 8000 }),
     },
   });
 

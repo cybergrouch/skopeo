@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/observability/toastError";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -53,8 +54,8 @@ function Controls({ initialTheme }: { initialTheme: string }) {
         queryKey: getGetApiV1UsersMeThemeQueryKey(),
       });
       toast.success("Saved");
-    } catch {
-      toast.error("Could not save your theme. Please try again.", {
+    } catch (error) {
+      toastError("Could not save your theme. Please try again.", { cause: error,
         duration: 8000,
       });
     }
