@@ -339,13 +339,21 @@ nobody has measured yet.
 
 Verified against the repo's Actions variables, DNS and the GitHub environment API on 2026-08-28.
 
+**This repository is public.** Values that are *derivable* are shown as the command to derive them rather
+than as literals — the private database IP and the Cloud Run hostname especially. Deriving beats storing
+twice over: there is nothing to leak, and nothing to go stale when a resource is recreated. Please don't
+paste the literals back in.
+
+For a value you want pinned on your own machine, `infra/monitoring/.env.local` is gitignored — see
+`infra/monitoring/.env.local.example`.
+
 | Item | Value | Status |
 |---|---|---|
 | GCP project id | `skopeo-prod` | ✅ live |
 | Region | `asia-southeast1` | ✅ |
 | Cloud Run service | `skopeo` — `--min-instances=1 --max-instances=2` (does **not** scale to zero) | ✅ live |
-| Cloud Run URL | `https://skopeo-lljnrq2m2q-as.a.run.app` | ✅ |
-| Cloud SQL instance | `skopeo-prod:asia-southeast1:skopeo-db`, private IP `10.82.0.3` | ✅ live |
+| Cloud Run URL | _derive:_ `gcloud run services describe skopeo --region asia-southeast1 --format='value(status.url)'` | ✅ |
+| Cloud SQL instance | `skopeo-prod:asia-southeast1:skopeo-db` — private IP only; _derive:_ `gcloud sql instances describe skopeo-db --format='value(ipAddresses[0].ipAddress)'` | ✅ live |
 | DB backup bucket | `gs://skopeo-prod-db-backups` | ✅ |
 | Firebase project | `skopeo-prod` | ✅ |
 | Web apex domain | `skopeo.co` → Firebase Hosting | ✅ mapped |

@@ -9,7 +9,7 @@
 #     ./infra/monitoring/apply.sh               # apply
 #
 # Every value defaults to this project's real setting, so no exports are needed. Flags override;
-# precedence is flag > environment > default.
+# precedence is flag > .env.local > environment > default. See .env.local.example for the overrides.
 #
 # Idempotent: each resource is looked up and updated in place rather than duplicated. That matters here
 # specifically — a duplicated alert policy pages twice, the exact noise #751's two-alert budget avoids.
@@ -22,6 +22,14 @@ set -euo pipefail
 # command's result — which is how an earlier version of this script ended up passing
 # "/Applications/Xcode.app/Contents/Developer" as a notification channel id.
 export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+
+# Optional local overrides, gitignored — a private place for anything you would rather not publish in
+# what is a public repository. See .env.local.example. Sourced before the defaults are resolved, so a
+# value set here is picked up by the ${VAR:-default} expansions below and can still be beaten by a flag.
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/.env.local" ]]; then
+  # shellcheck disable=SC1091  # path is resolved at runtime
+  source "$(dirname "${BASH_SOURCE[0]}")/.env.local"
+fi
 
 DEFAULT_PROJECT="skopeo-prod"
 DEFAULT_REGION="asia-southeast1"
@@ -102,21 +110,19 @@ run() {
 # installer, a pip log, a warning — is discarded rather than used as an id.
 only_resource_name() { grep -E '^projects/[A-Za-z0-9_.-]+/[A-Za-z]+/[A-Za-z0-9_.-]+$' | head -1 || true; }
 
-# --- Preflight ----------------------------------------------------------------------------------
-# `gcloud monitoring policies|uptime|dashboards` and `gcloud logging metrics` are all GA. Only channels
-# still needs beta, so that is the one component to insist on — and we check rather than let gcloud
-# install it mid-run (see the CLOUDSDK_CORE_DISABLE_PROMPTS note above).
-if ! gcloud components list --format='value(id,state.name)' 2>/dev/null \
-     | grep -qE '^beta[[:space:]]+Installed'; then
-  cat >&2 <<'MSG'
-The gcloud "beta" component is required (only for `gcloud beta monitoring channels`) and is not
-installed. Install it first, so it cannot install itself in the middle of this script:
-
-    gcloud components install beta
-
-MSG
-  exit 1
-fi
+# --- Warm up the command groups, OUTSIDE any command substitution --------------------------------
+# `gcloud monitoring policies|uptime|dashboards` and `gcloud logging metrics` are GA; only
+# `gcloud beta monitoring channels` needs a component that may be missing.
+#
+# The hazard is not the install itself — it is installing *inside* `$(...)`, where the installer's
+# progress output is captured as if it were the command's result. So touch the group once here, where
+# stdout goes to the terminal and any first-run noise is harmless and visible.
+#
+# Deliberately NOT a version/state check on `gcloud components list`: its `--format` output differs
+# between gcloud releases, so parsing it produced a false negative that blocked a machine where the
+# component was in fact installed.
+gcloud beta monitoring channels list --project "${GCP_PROJECT_ID:-$DEFAULT_PROJECT}" --limit=1 \
+  >/dev/null 2>&1 || true
 
 echo "project=$PROJECT region=$REGION service=$SERVICE alerts=$ALERT_EMAIL${DRY_RUN:+ (DRY RUN)}"
 
@@ -154,6 +160,19 @@ for c in channels if isinstance(channels, list) else []:
 ' "$ALERT_EMAIL" | only_resource_name)"
 
 if [[ -z "$CHANNEL" ]]; then
+  # Distinguish "no such channel yet" from "the command could not run at all" — otherwise a missing
+  # beta component looks identical to a first-time apply, and the script would cheerfully continue.
+  if ! gcloud beta monitoring channels list --project "$PROJECT" --limit=1 >/dev/null 2>&1; then
+    cat >&2 <<MSG
+
+Cannot list notification channels. \`gcloud beta monitoring channels\` did not run — most likely the
+gcloud "beta" component is unavailable:
+
+    gcloud components install beta
+
+MSG
+    exit 1
+  fi
   if [[ -n "$DRY_RUN" ]]; then
     echo "  [dry-run] would create an email channel for $ALERT_EMAIL"
     CHANNEL="projects/$PROJECT/notificationChannels/DRY-RUN"
@@ -272,12 +291,21 @@ sed -e "s|CLOUD_RUN_SERVICE_PLACEHOLDER|$SERVICE|g" \
     "$HERE/dashboard.json" > "$WORK/dashboard.json"
 
 if [[ -n "$DRY_RUN" ]]; then
-  # --validate-only is a real server-side schema check, so a dry run genuinely catches a malformed
-  # widget rather than only echoing the command.
-  echo "  [dry-run] validating the dashboard schema server-side"
-  gcloud monitoring dashboards create --project "$PROJECT" \
-    --config-from-file "$WORK/dashboard.json" --validate-only \
-    && echo "    schema OK"
+  # --validate-only is a real server-side schema check ("validate the dashboard but do not save it"),
+  # so a dry run genuinely catches a malformed widget rather than only echoing the command.
+  #
+  # Its output is captured rather than shown, because gcloud prints "Created [<uuid>]" from the object
+  # the API echoes back — which reads alarmingly like a dry run having mutated something. Nothing is
+  # persisted; the id belongs to a response, not a saved dashboard.
+  echo "  [dry-run] validating the dashboard schema server-side (validate-only: nothing is saved)"
+  if validate_out="$(gcloud monitoring dashboards create --project "$PROJECT" \
+      --config-from-file "$WORK/dashboard.json" --validate-only 2>&1)"; then
+    echo "    schema OK — nothing saved"
+  else
+    echo "$validate_out" >&2
+    echo "    schema INVALID: the dashboard would be rejected" >&2
+    exit 1
+  fi
 else
   EXISTING_DASH="$(gcloud monitoring dashboards list --project "$PROJECT" \
     --format='value(name)' --filter="displayName='Skopeo API'" 2>/dev/null | only_resource_name)"

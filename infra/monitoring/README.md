@@ -114,29 +114,72 @@ idempotent — it looks each resource up by display name and updates rather than
 ```
 
 Override anything per-run: `--project`, `--region`, `--service`, `--alert-email`, `--api-host`.
-Precedence is flag > environment > default.
 
-### Prerequisite: the `beta` component
+For values you want pinned on your own machine, copy the example to a gitignored local file:
+
+```bash
+cp infra/monitoring/.env.local.example infra/monitoring/.env.local
+```
+
+Precedence is **flag > `.env.local` > exported environment > built-in default**.
+
+### This repository is public
+
+The built-in defaults are safe to publish — a project id, a region, a service name, a group address.
+Anything you would rather not commit belongs in `.env.local` instead.
+
+The same reasoning applies to the runbook's environment table: values that can be *derived* are recorded
+as the command that derives them rather than as literals. The Cloud SQL private IP and the Cloud Run
+hostname were briefly written out as literals and have been replaced with `gcloud … describe` commands.
+Deriving beats storing twice over — nothing to leak, and nothing to go stale when a resource is
+recreated.
+
+### The `beta` component, and the capture hazard
 
 `gcloud monitoring policies`, `uptime`, `dashboards` and `gcloud logging metrics` are all GA. Only
-`gcloud beta monitoring channels` is not, so install it **before** running the script:
+`gcloud beta monitoring channels` is not. If it's missing:
 
 ```bash
 gcloud components install beta
 ```
 
-The script checks for it and refuses to start otherwise, deliberately. Left to itself, gcloud offers to
-install a missing component mid-run — and it does so *inside a command substitution*, so the installer's
-progress output gets captured as if it were the command's result. An earlier version of this script
-consequently passed `/Applications/Xcode.app/Contents/Developer` as a notification channel id. Prompts
-are disabled (`CLOUDSDK_CORE_DISABLE_PROMPTS=1`) and every captured value is now checked against the
-shape of a Monitoring resource name, so unrecognised stdout is discarded rather than used.
+**The hazard was never the install — it was installing inside `$(...)`.** gcloud offers to install a
+missing component on demand, and when that happens within a command substitution its progress output is
+captured as if it were the command's result. An earlier version of this script consequently passed
+`/Applications/Xcode.app/Contents/Developer` as a notification channel id and
+`Collecting cryptography==42.0.7` as a policy id.
 
-### `--dry-run` does validate the dashboard
+Three defences, since any one of them can be defeated:
 
-Dry-run echoes the `gcloud` calls rather than running them, but for the dashboard it calls
-`--validate-only`, which is a real server-side schema check. So a malformed widget fails in dry-run
-rather than on first apply.
+1. Prompts are disabled (`CLOUDSDK_CORE_DISABLE_PROMPTS=1`).
+2. The `beta` group is touched once **outside** any substitution, so first-run noise lands on the
+   terminal where it is visible and harmless.
+3. Every captured value must match the shape of a Monitoring resource name
+   (`projects/<p>/<kind>/<id>`); anything else is discarded rather than used.
+
+There is deliberately **no** check against `gcloud components list`. Its `--format` output differs
+between gcloud releases, and parsing it produced a false negative that blocked a machine where `beta`
+was in fact installed. The script instead fails with a clear message at the point the command actually
+cannot run — which also distinguishes "no channel exists yet" from "the command didn't run at all",
+two states that otherwise look identical on a first apply.
+
+### What `--dry-run` does and does not verify
+
+| Resource | Dry-run behaviour |
+| --- | --- |
+| **Dashboard** | **Genuinely validated.** `--validate-only` is a real server-side schema check, so a malformed widget fails here rather than on first apply. |
+| Alert policies | Command echoed only — `gcloud monitoring policies create` has no validate flag. |
+| Log-based metrics | Command echoed only. |
+| Uptime check | Command echoed only. |
+
+So dry-run proves the dashboard JSON is acceptable and proves the *shape* of everything else, but the
+first real apply is still where a bad metric filter or an invalid alert condition would surface. Safe to
+retry: every step updates in place rather than duplicating.
+
+One confusing detail worth knowing: `--validate-only` makes gcloud print `Created [<uuid>]`, echoing the
+object the API returns. **Nothing is saved** — the flag is documented as "validate the dashboard but do
+not save it" — but the message reads as though a dry run mutated something, so the script now suppresses
+it and prints "schema OK — nothing saved" instead.
 
 ### Why the uptime check isn't a JSON file
 
