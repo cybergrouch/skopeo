@@ -30,9 +30,11 @@ is the composition root and runs, in order:
 1. **`DatabaseConfig.init()`** — HikariCP pool + Flyway migrate + Exposed `Database.connect` (skipped
    when `initDatabase = false`, so integration tests can run without a live DB init); registers an
    `ApplicationStopped` hook to close the pool.
-2. **`configureMonitoring()`** — `CallLogging` (INFO), plus the `logging.googleapis.com/trace` MDC
-   entry so a log line links to its request. Logs are structured JSON (#804); there is no metrics
-   registry and no `GET /metrics` — see
+2. **`configureMonitoring()`** — `CallId` (`X-Request-Id`, generated when absent, echoed on the
+   response), `CallLogging` as the MDC vehicle only (request id + `logging.googleapis.com/trace`), the
+   `RequestLog` plugin emitting one structured access line per request (`method`/`route`/`status`/
+   `durationMs`), and `StatusPages` as the backstop for exceptions that escape a route. Logs are
+   structured JSON (#804/#805); there is no metrics registry and no `GET /metrics` — see
    [LOGGING_AND_METRICS.md](../operations/LOGGING_AND_METRICS.md).
 3. **`configurePlugins()`** — `ContentNegotiation { json() }` (kotlinx.serialization).
 4. **`configureCORS()`** — always allows the Vite dev origin (`localhost:5173`) plus the

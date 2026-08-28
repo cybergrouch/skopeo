@@ -10,6 +10,7 @@ import io.ktor.server.application.call
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.callid.callId
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.response.respond
@@ -22,10 +23,24 @@ import java.util.UUID
 @Suppress("TopLevelPropertyNaming") // matches the `logger` convention used across the codebase
 private val logger = KotlinLogging.logger {}
 
+/**
+ * The error response shape. [requestId] is included only where it is actionable — on a 500, where the
+ * caller has nothing to go on and we want them to quote a reference (#805).
+ *
+ * It is deliberately not added to every 4xx: those are the API's normal contract (a validation message,
+ * "match not rated yet", a mistyped public code), and the id is already on the response *header* for
+ * every request via the CallId plugin. Header for machines, body for the human reading a 500.
+ */
 internal fun errorBody(
     error: String,
     message: String?,
-): Map<String, String> = mapOf("error" to error, "message" to (message ?: error))
+    requestId: String? = null,
+): Map<String, String> =
+    listOfNotNull(
+        "error" to error,
+        "message" to (message ?: error),
+        requestId?.let { "requestId" to it },
+    ).toMap()
 
 /** Lift the verified Firebase identity out of the JWT claims (the only place that touches the token shape). */
 internal fun RoutingContext.verifiedToken(): VerifiedFirebaseToken = call.principal<JWTPrincipal>()!!.toVerifiedToken()
@@ -130,9 +145,16 @@ internal suspend fun RoutingContext.respondMappingErrors(block: suspend () -> Un
         call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Validation error", message = rootCause.message))
     } catch (e: Exception) {
         logger.error(throwable = e) { "Unexpected error handling request" }
+        // This catch is why StatusPages rarely fires: it swallows the exception. 28 of 31 route files
+        // route through here, so without the request id on THIS path most 500s would carry none (#805).
         call.respond(
             status = HttpStatusCode.InternalServerError,
-            message = errorBody(error = "Internal server error", message = "An unexpected error occurred"),
+            message =
+                errorBody(
+                    error = "Internal server error",
+                    message = "An unexpected error occurred",
+                    requestId = call.callId,
+                ),
         )
     }
 }

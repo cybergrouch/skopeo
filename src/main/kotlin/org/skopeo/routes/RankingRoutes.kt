@@ -7,6 +7,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.callid.callId
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.post
@@ -52,9 +53,17 @@ fun Application.configureRankingRoutes() {
                 call.respond(status = HttpStatusCode.BadRequest, message = badRequestErrorBody(e = e))
             } catch (e: Exception) {
                 logger.error(throwable = e) { "Error processing ranking calculation request" }
+                // This route predates `respondMappingErrors` and keeps its own catch, so it needs the
+                // request id threading through here too, or the one endpoint most likely to be called
+                // by an external integration returns a 500 with nothing to quote (#805).
                 call.respond(
                     status = HttpStatusCode.InternalServerError,
-                    message = mapOf("error" to "Internal server error", "message" to "An unexpected error occurred"),
+                    message =
+                        errorBody(
+                            error = "Internal server error",
+                            message = "An unexpected error occurred",
+                            requestId = call.callId,
+                        ),
                 )
             }
         }

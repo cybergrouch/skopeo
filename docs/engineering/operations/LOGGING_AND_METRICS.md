@@ -52,7 +52,72 @@ Two consequences worth internalising:
 - **MDC is an allowlist, not a scratchpad.** Every appender forwards MDC — a future error tracker would
   receive it as tags — so anything put there is published. Emails, Firebase UIDs and dates of birth must
   never go in. See #806.
-- Request-scoped fields (`requestId`, `route`, `method`, `status`, `durationMs`) arrive with #805.
+- MDC carries `requestId` and the trace. The access line's own fields do **not** come through MDC — see
+  below for why.
+
+## The request id
+
+`X-Request-Id`, via Ktor's `CallId` plugin (#805): accepted from the caller when supplied, generated as a
+UUID when not, and **echoed on the response**. Echoing is what makes it useful to a human — a user's
+screenshot of an error is enough to find the log line.
+
+It appears in three places: the `requestId` MDC field on every line the request emits, the response
+header, and the body of a 500. Deliberately not in 4xx bodies: those are the API's normal contract, and
+the header already covers every response.
+
+Inbound values are length-capped and rejected if blank, so a caller cannot push an unbounded string into
+every log line the request produces.
+
+### Both 500 paths carry it
+
+There are two, and this is easy to get wrong. `respondMappingErrors` (`RouteSupport.kt`) ends in
+`catch (e: Exception)` that logs at ERROR and responds 500 — and **28 of 31 route files go through it**.
+Because it swallows the exception, `StatusPages` never sees those. So:
+
+| Path | Covers |
+| --- | --- |
+| `respondMappingErrors` | the large majority of routes |
+| `RankingRoutes`' own catch | that one route, which predates the helper |
+| `StatusPages` | the remainder — `OpenGraphRoutes` (no handling at all), plugin and authentication failures, response-serialization errors |
+
+Treating `StatusPages` as "where 500s are handled" would leave most 500s without a request id, and nothing
+would fail.
+
+## The access line
+
+One structured line per request, emitted by the `RequestLog` plugin: `method`, `route`, `status`,
+`durationMs`.
+
+**Why a plugin and not `CallLogging`.** Three of those four fields are unavailable where `CallLogging`
+would put them:
+
+- its `mdc { }` providers resolve at call *start*, before routing — so there is no matched route yet, and
+  no status or duration;
+- its `format { }` runs after the response, but the result is the log *message*, a single string. Fields
+  inside a message are not queryable and cannot be a metric label.
+
+`CallLogging` is still installed, purely as the MDC vehicle — it is what propagates `requestId` and the
+trace into the coroutine context so application logs inside a handler carry them. Its own access line is
+emitted at DEBUG and suppressed by the `INFO` threshold on `io.ktor`, so there is exactly one access line
+per request. Raising `io.ktor` to DEBUG will produce two.
+
+**Why a marker and not MDC.** MDC values are always strings. `status` and `durationMs` must stay JSON
+*numbers* so a Cloud Logging distribution metric can compute latency percentiles over them;
+`Markers.appendEntries` preserves the type, and `logback.xml` carries the matching `<logstashMarkers/>`
+provider.
+
+**Why the route pattern.** `route` is the matched pattern (`/api/v1/matches/{id}`), never the concrete
+path. Raw URIs would give it unbounded cardinality — one metric series per match id, useless and
+expensive — and it is also the string a future error tracker uses as its `transaction` name, so the two
+have to agree for a metric to link to a trace.
+
+One wrinkle worth knowing: the `ResponseSent` hook receives the application-level call, **not** the
+`RoutingCall`, so reading the route there always yields `(unmatched)`. The pattern is captured on
+`RoutingCallStarted` and read back at response time.
+
+Requests that matched nothing collapse into a single `(unmatched)` bucket rather than logging their raw
+path. Scanner traffic, typos and stale QR links are unbounded and attacker-controlled; one bucket answers
+the useful question ("how much traffic is hitting nothing") and stays bounded.
 
 ## Using logging in code
 

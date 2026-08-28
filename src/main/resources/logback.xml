@@ -38,6 +38,10 @@
                 <!-- Flat, so `requestId`/`route`/`status` are top-level queryable fields. The MDC key set
                      is an allowlist owned by the application (#806) — anything here reaches every sink. -->
                 <mdc/>
+                <!-- The access line's fields (#805) arrive as a marker rather than via MDC, because MDC
+                     values are always strings: `durationMs` and `status` have to stay JSON *numbers* for
+                     a log-based distribution metric to read them (#809). -->
+                <logstashMarkers/>
                 <!-- Must stay `stack_trace`: it is what Cloud Error Reporting keys on. -->
                 <stackTrace>
                     <fieldName>stack_trace</fieldName>
