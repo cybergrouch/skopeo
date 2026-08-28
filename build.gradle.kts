@@ -98,6 +98,11 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.5.16")
     implementation("io.github.oshai:kotlin-logging-jvm:7.0.7")
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
+    // Request id in the MDC and echoed on the response, so a user's screenshot reaches a log line (#805).
+    implementation("io.ktor:ktor-server-call-id-jvm:$ktorVersion")
+    // Backstop for exceptions that escape a route's own handling — without it they are a bare Ktor 500
+    // that reaches no logger at all (#805).
+    implementation("io.ktor:ktor-server-status-pages-jvm:$ktorVersion")
     // Structured JSON logs for Cloud Logging (#751). Micrometer/Prometheus was removed with the
     // /metrics endpoint: nothing scraped it (Cloud Run scales to zero, which suits pull-based scraping
     // badly), and per-endpoint metrics now come from log-based metrics over these fields.

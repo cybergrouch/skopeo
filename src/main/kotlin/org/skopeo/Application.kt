@@ -13,6 +13,9 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.netty.EngineMain
+import io.ktor.server.plugins.callid.CallId
+import io.ktor.server.plugins.callid.callId
+import io.ktor.server.plugins.callid.callIdMdc
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
@@ -20,15 +23,17 @@ import io.ktor.server.plugins.origin
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.RateLimiter
+import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.plugins.swagger.swaggerUI
-import io.ktor.server.request.httpMethod
-import io.ktor.server.request.uri
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import org.skopeo.common.logging.CLOUD_TRACE_HEADER
 import org.skopeo.common.logging.CLOUD_TRACE_MDC_KEY
+import org.skopeo.common.logging.REQUEST_ID_HEADER
+import org.skopeo.common.logging.REQUEST_ID_MDC_KEY
+import org.skopeo.common.logging.RequestLog
 import org.skopeo.common.logging.cloudTraceField
 import org.skopeo.config.DatabaseConfig
 import org.skopeo.domain.service.capability.CapabilityService
@@ -62,7 +67,9 @@ import org.skopeo.routes.configureStandingsRoutes
 import org.skopeo.routes.configureStandingsSourceRoutes
 import org.skopeo.routes.configureThemeRoutes
 import org.skopeo.routes.configureUserRoutes
+import org.skopeo.routes.errorBody
 import org.slf4j.event.Level
+import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 
 private val logger = KotlinLogging.logger {}
@@ -183,8 +190,25 @@ fun Application.configureMonitoring() {
     // Read config on the Application receiver — `environment` isn't reachable inside the install lambda.
     val gcpProjectId = environment.config.propertyOrNull(path = "gcp.projectId")?.getString()
 
+    // Accept a caller-supplied request id, generate one when absent, and echo it on the response (#805).
+    // Echoing is what makes a user's screenshot enough to find the log line: the id is visible to them.
+    install(plugin = CallId) {
+        header(headerName = REQUEST_ID_HEADER)
+        generate { UUID.randomUUID().toString() }
+        // Without a verifier Ktor accepts any inbound value, including one crafted to collide with
+        // another request's id or to inject noise into a log field.
+        verify { candidate -> candidate.isNotBlank() && candidate.length <= MAX_REQUEST_ID_LENGTH }
+        replyToHeader(headerName = REQUEST_ID_HEADER)
+    }
+
+    // CallLogging earns its place purely as the MDC vehicle: it is what propagates these entries into
+    // the coroutine context so *application* logs inside a handler carry them. Its own access line is
+    // emitted at DEBUG and therefore suppressed by the INFO threshold on `io.ktor` in logback.xml —
+    // RequestLog below emits the real one, because the fields that matter (route, status, duration) do
+    // not exist yet at the point CallLogging resolves its MDC. See RequestLog's KDoc.
     install(plugin = CallLogging) {
-        level = Level.INFO
+        level = Level.DEBUG
+        callIdMdc(name = REQUEST_ID_MDC_KEY)
         // Cloud Logging joins a line to its request through this field, so it belongs in the MDC — on
         // every line the request emits, not just the access line. It resolves at call start because it
         // comes straight off an inbound header. A null return omits the field entirely, which is what
@@ -192,16 +216,38 @@ fun Application.configureMonitoring() {
         mdc(name = CLOUD_TRACE_MDC_KEY) { call ->
             cloudTraceField(header = call.request.headers[CLOUD_TRACE_HEADER], projectId = gcpProjectId)
         }
-        format { call ->
-            val status = call.response.status()
-            val method = call.request.httpMethod.value
-            val uri = call.request.uri
-            val userAgent = call.request.headers["User-Agent"] ?: "Unknown"
-            "$method $uri - Status: $status - User-Agent: $userAgent"
+    }
+
+    install(plugin = RequestLog)
+
+    // The backstop for anything that escapes a route's own handling (#805). Most routes wrap their body
+    // in `respondMappingErrors`, whose `catch (e: Exception)` both logs at ERROR and swallows — so this
+    // will rarely fire. What it does cover is the remainder: OpenGraphRoutes has no handling at all,
+    // plus failures in plugins, authentication, and response serialization. Before this, those were a
+    // bare Ktor 500 that reached no logger.
+    install(plugin = StatusPages) {
+        exception<Throwable> { call, cause ->
+            logger.error(throwable = cause) { "Unhandled exception escaped the route" }
+            call.respond(
+                status = HttpStatusCode.InternalServerError,
+                message =
+                    errorBody(
+                        error = "Internal server error",
+                        message = "An unexpected error occurred",
+                        requestId = call.callId,
+                    ),
+            )
         }
     }
-    logger.info { "Request logging configured (structured JSON)" }
+
+    logger.info { "Request logging configured (structured JSON, request id, unhandled-exception backstop)" }
 }
+
+/**
+ * Cap on an inbound `X-Request-Id`. A UUID is 36 characters; the slack allows a caller's own correlation
+ * id while keeping an unbounded header out of every log line this request emits.
+ */
+private const val MAX_REQUEST_ID_LENGTH = 128
 
 fun Application.configurePlugins() {
     install(plugin = ContentNegotiation) {
