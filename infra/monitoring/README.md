@@ -5,13 +5,12 @@ so it is reviewable, reproducible, and survives someone clicking around.
 
 | File | What it is |
 | --- | --- |
-| `uptime-check-health.json` | Uptime check against `GET /health` from multiple regions |
 | `alert-uptime-failure.json` | **Paging.** The uptime check failing from more than one region |
 | `alert-sustained-5xx.json` | **Paging.** Any 5xx sustained over a short window |
 | `log-metrics/skopeo_requests.json` | Per-endpoint request counter, labelled by route/method/status |
 | `log-metrics/skopeo_request_latency.json` | Per-endpoint latency distribution over `durationMs` |
 | `dashboard.json` | The dashboard: 10 panels, no alerts attached |
-| `apply.sh` | Applies all of the above; idempotent, and `--dry-run` prints what it would change |
+| `apply.sh` | Applies all of the above **plus the uptime check**; idempotent, and `--dry-run` prints what it would change |
 
 Everything defaults to this project's real settings, so the usual invocation takes no arguments:
 
@@ -117,12 +116,36 @@ idempotent — it looks each resource up by display name and updates rather than
 Override anything per-run: `--project`, `--region`, `--service`, `--alert-email`, `--api-host`.
 Precedence is flag > environment > default.
 
-### ⚠️ `--dry-run` cannot validate the dashboard schema
+### Prerequisite: the `beta` component
 
-Dry-run prints the `gcloud` calls without executing them, which catches a bad filter string or a missing
-file — but **only a real apply proves the Monitoring API accepts the dashboard JSON.** Widget schemas are
-fiddly and there is no offline validator. Expect the first real apply to be where a schema error, if any,
-surfaces; it is safe to retry because the script updates in place.
+`gcloud monitoring policies`, `uptime`, `dashboards` and `gcloud logging metrics` are all GA. Only
+`gcloud beta monitoring channels` is not, so install it **before** running the script:
+
+```bash
+gcloud components install beta
+```
+
+The script checks for it and refuses to start otherwise, deliberately. Left to itself, gcloud offers to
+install a missing component mid-run — and it does so *inside a command substitution*, so the installer's
+progress output gets captured as if it were the command's result. An earlier version of this script
+consequently passed `/Applications/Xcode.app/Contents/Developer` as a notification channel id. Prompts
+are disabled (`CLOUDSDK_CORE_DISABLE_PROMPTS=1`) and every captured value is now checked against the
+shape of a Monitoring resource name, so unrecognised stdout is discarded rather than used.
+
+### `--dry-run` does validate the dashboard
+
+Dry-run echoes the `gcloud` calls rather than running them, but for the dashboard it calls
+`--validate-only`, which is a real server-side schema check. So a malformed widget fails in dry-run
+rather than on first apply.
+
+### Why the uptime check isn't a JSON file
+
+`gcloud monitoring uptime create` is flag-based — unlike policies, dashboards and log metrics, it has no
+`--config-from-file`. Its parameters (path, period, timeout, regions) are therefore named variables at
+the top of `apply.sh`, which is still one reviewable place, just not the same shape as the rest.
+
+Note the CLI's enums differ from the API's: `--period` is in **minutes** (`1`, `5`, `10`, `15`) and
+regions are lowercase (`asia-pacific`, `europe`, `usa-oregon`), not the API's `ASIA_PACIFIC`.
 
 ## ⚠️ Verify delivery, do not assume it
 
