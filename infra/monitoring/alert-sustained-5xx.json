@@ -1,0 +1,32 @@
+{
+  "displayName": "Skopeo API returning 5xx",
+  "documentation": {
+    "content": "The API is serving 5xx responses -- it is answering, and answering wrongly. This is #751's definition of an outage.\n\nNo threshold tuning is needed because 5xx should sit at zero; the `duration` is what distinguishes a sustained fault from a single blip. 4xx is deliberately NOT here: those are the API's normal contract, and every anonymous visit to a public page produces a 401 by design.\n\nRunbook: docs/engineering/operations/DEPLOYMENT_RUNBOOK.md#api-returning-5xx",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "5xx responses sustained for 5 minutes",
+      "conditionThreshold": {
+        "filter": "metric.type=\"run.googleapis.com/request_count\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=\"CLOUD_RUN_SERVICE_PLACEHOLDER\" AND metric.label.response_code_class=\"5xx\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "60s",
+            "perSeriesAligner": "ALIGN_RATE",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0,
+        "duration": "300s",
+        "trigger": { "count": 1 }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "1800s"
+  },
+  "severity": "CRITICAL",
+  "enabled": true
+}

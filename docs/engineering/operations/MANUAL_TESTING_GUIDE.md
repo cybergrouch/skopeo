@@ -596,7 +596,7 @@ Target architecture (see `DEPLOYMENT_GCP.md` for full detail):
 | Component   | GCP service        | Container? | Notes                                              |
 |-------------|--------------------|-----------|----------------------------------------------------|
 | PostgreSQL  | Cloud SQL          | managed    | `db-f1-micro`, DB `SkopeoDb`, password in Secret Manager |
-| Ktor API    | Cloud Run          | ✅ Docker  | built from the repo `Dockerfile`, scales to zero   |
+| Ktor API    | Cloud Run          | ✅ Docker  | built from the repo `Dockerfile`, min-instances=1  |
 | React web   | Firebase Hosting   | ❌ static  | SPA from `web/dist`, deployed by `deploy-web.yml`  |
 
 **The web UI is a static SPA on Firebase Hosting — there is no web container or server in

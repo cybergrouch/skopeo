@@ -181,10 +181,11 @@ fun Application.configureRateLimit(
  * Request logging (#751). Logs are structured JSON — see `logback.xml` for the field contract.
  *
  * There is deliberately no metrics registry here any more. `/metrics` and the Micrometer/Prometheus
- * registry were removed: nothing scraped them (Cloud Run scales to zero, which suits pull-based
- * scraping badly) and the endpoint was anonymously reachable, so it handed route names and JVM
- * internals to anyone who asked. Per-endpoint volume, latency and error rate now come from Cloud
- * Logging log-based metrics over the fields on the access line.
+ * registry were removed: nothing scraped them, and a scrape would have been misleading anyway — the
+ * service runs `--max-instances=2`, so a single pull sees one instance's counters, not the service's.
+ * The endpoint was also anonymously reachable, handing route names and JVM internals to anyone who
+ * asked. Per-endpoint volume, latency and error rate now come from Cloud Logging log-based metrics
+ * over the fields on the access line, which aggregate across instances by construction.
  */
 fun Application.configureMonitoring() {
     // Read config on the Application receiver — `environment` isn't reachable inside the install lambda.

@@ -1,0 +1,33 @@
+{
+  "displayName": "Skopeo API unreachable (uptime check failing)",
+  "documentation": {
+    "content": "The /health uptime check is failing from more than one region, which means the API cannot answer at all -- as distinct from answering wrongly, which the sustained-5xx policy covers.\n\nThis is the shape the v2.0.8 boot failure took: Flyway failed, the revision never passed readiness, and no 5xx was ever recorded.\n\nRunbook: docs/engineering/operations/DEPLOYMENT_RUNBOOK.md#api-unreachable",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "uptime check failing from 2 or more regions",
+      "conditionThreshold": {
+        "filter": "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.type=\"uptime_url\" AND metric.label.check_id=\"UPTIME_CHECK_ID_PLACEHOLDER\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_NEXT_OLDER",
+            "crossSeriesReducer": "REDUCE_COUNT_FALSE",
+            "groupByFields": ["resource.label.host"]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 1,
+        "duration": "60s",
+        "trigger": { "count": 1 }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "1800s"
+  },
+  "severity": "CRITICAL",
+  "enabled": true
+}
