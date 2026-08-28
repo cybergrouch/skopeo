@@ -56,7 +56,7 @@ jobs:
             --min-instances=1 --max-instances=2 \
             --network=default --subnet=default \
             --add-cloudsql-instances "${{ vars.CLOUDSQL_INSTANCE }}" \
-            --set-env-vars "^##^FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}##DATABASE_URL=${{ vars.DATABASE_URL }}##DATABASE_USER=${{ vars.DATABASE_USER }}##WEB_ORIGINS=${{ vars.WEB_ORIGINS }}" \
+            --set-env-vars "^##^FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}##GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}##DATABASE_URL=${{ vars.DATABASE_URL }}##DATABASE_USER=${{ vars.DATABASE_USER }}##WEB_ORIGINS=${{ vars.WEB_ORIGINS }}" \
             --set-secrets "DATABASE_PASSWORD=skopeo-db-password:latest,ADMIN_EMAILS=skopeo-admin-emails:latest" \
             --quiet
 

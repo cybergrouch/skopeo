@@ -128,14 +128,16 @@ in [RATING_SMOOTHING.md](../../product/RATING_SMOOTHING.md).
 ## Health & monitoring
 
 - `GET /health` — liveness/version JSON.
-- `GET /metrics` — Prometheus metrics (JVM, HTTP, application). See
-  [LOGGING_AND_METRICS.md](../operations/LOGGING_AND_METRICS.md).
+
+There is no `/metrics` endpoint: it was removed in #804 along with the Prometheus registry. Logs are
+structured JSON and per-endpoint metrics are derived from them — see
+[LOGGING_AND_METRICS.md](../operations/LOGGING_AND_METRICS.md).
 
 ---
 
 ## Authentication
 
-The persistent API (everything except `/api/v1/calculate-ranking`, `/health`, `/metrics`) requires
+The persistent API (everything except `/api/v1/calculate-ranking` and `/health`) requires
 a **Firebase ID token** (`Authorization: Bearer <token>`) and capability-based authorization. See
 [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) and
 [CAPABILITIES_API.md](CAPABILITIES_API.md).

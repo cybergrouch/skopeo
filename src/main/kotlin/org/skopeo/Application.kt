@@ -12,7 +12,6 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.application.install
-import io.ktor.server.metrics.micrometer.MicrometerMetrics
 import io.ktor.server.netty.EngineMain
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
@@ -28,8 +27,9 @@ import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import io.micrometer.prometheusmetrics.PrometheusConfig
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry
+import org.skopeo.common.logging.CLOUD_TRACE_HEADER
+import org.skopeo.common.logging.CLOUD_TRACE_MDC_KEY
+import org.skopeo.common.logging.cloudTraceField
 import org.skopeo.config.DatabaseConfig
 import org.skopeo.domain.service.capability.CapabilityService
 import org.skopeo.domain.service.client.ApiClientService
@@ -170,10 +170,28 @@ fun Application.configureRateLimit(
     logger.info { "Partner rate limiting configured (default $partnerRateLimit/min per client)" }
 }
 
+/**
+ * Request logging (#751). Logs are structured JSON — see `logback.xml` for the field contract.
+ *
+ * There is deliberately no metrics registry here any more. `/metrics` and the Micrometer/Prometheus
+ * registry were removed: nothing scraped them (Cloud Run scales to zero, which suits pull-based
+ * scraping badly) and the endpoint was anonymously reachable, so it handed route names and JVM
+ * internals to anyone who asked. Per-endpoint volume, latency and error rate now come from Cloud
+ * Logging log-based metrics over the fields on the access line.
+ */
 fun Application.configureMonitoring() {
-    // Request/Response logging
+    // Read config on the Application receiver — `environment` isn't reachable inside the install lambda.
+    val gcpProjectId = environment.config.propertyOrNull(path = "gcp.projectId")?.getString()
+
     install(plugin = CallLogging) {
         level = Level.INFO
+        // Cloud Logging joins a line to its request through this field, so it belongs in the MDC — on
+        // every line the request emits, not just the access line. It resolves at call start because it
+        // comes straight off an inbound header. A null return omits the field entirely, which is what
+        // happens locally (no header) and in tests (no project).
+        mdc(name = CLOUD_TRACE_MDC_KEY) { call ->
+            cloudTraceField(header = call.request.headers[CLOUD_TRACE_HEADER], projectId = gcpProjectId)
+        }
         format { call ->
             val status = call.response.status()
             val method = call.request.httpMethod.value
@@ -182,22 +200,7 @@ fun Application.configureMonitoring() {
             "$method $uri - Status: $status - User-Agent: $userAgent"
         }
     }
-
-    // Performance metrics
-    val prometheusRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
-    install(plugin = MicrometerMetrics) {
-        registry = prometheusRegistry
-    }
-    logger.info { "Metrics monitoring configured (Prometheus)" }
-
-    // Expose metrics endpoint
-    routing {
-        get(path = "/metrics") {
-            logger.debug { "Metrics endpoint accessed" }
-            call.respond(message = prometheusRegistry.scrape())
-        }
-    }
-    logger.info { "Metrics endpoint available at /metrics" }
+    logger.info { "Request logging configured (structured JSON)" }
 }
 
 fun Application.configurePlugins() {
@@ -254,8 +257,7 @@ fun Application.configureCORS() {
 fun Application.configureOpenAPI() {
     // The interactive docs (Swagger UI + raw spec) are unauthenticated. They default to exposed, but can
     // be turned off in a hardened deployment via `docs.exposed=false` (env DOCS_EXPOSED) before opening
-    // the API to external clients (#599). The Prometheus /metrics scrape endpoint stays open — it's an
-    // infra-internal concern on Cloud Run — and is not governed by this flag.
+    // the API to external clients (#599).
     val docsExposed = environment.config.propertyOrNull(path = "docs.exposed")?.getString()?.toBoolean() ?: true
     if (!docsExposed) {
         logger.info { "API documentation endpoints are disabled (docs.exposed=false)" }
@@ -297,7 +299,7 @@ fun Application.configureRouting() {
             )
         }
     }
-    logger.info { "Routing configured with endpoints: /, /health, /metrics, /api/v1/calculate-ranking" }
+    logger.info { "Routing configured with endpoints: /, /health, /api/v1/calculate-ranking" }
 }
 
 /**

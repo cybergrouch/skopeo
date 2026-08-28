@@ -39,7 +39,6 @@ Production-ready HTTP API built with Ktor 3.0.3.
   - Returns updated ratings with published levels
   - Percentage changes and level change indicators
 - **Health Check**: GET `/health` - Service status and version
-- **Metrics**: GET `/metrics` - Prometheus metrics for monitoring
 - **Error Handling**: Comprehensive error responses with clear messages
 
 #### 3. **API Documentation**
@@ -170,7 +169,7 @@ Skopeo has grown from a stateless rating calculator into a capability-gated rank
 - **Code Quality**: ktlint + Detekt
 - **Testing**: JUnit 5 + Kotest assertions
 - **Coverage**: JaCoCo
-- **Monitoring**: Micrometer + Prometheus
+- **Logging**: Logback with structured JSON output for Cloud Logging
 - **API Docs**: Swagger UI + OpenAPI 3.0
 
 ### Planned
@@ -309,7 +308,6 @@ See `scripts/README.md` for detailed documentation.
 |--------|----------|-------------|----------|
 | GET | `/` | Root endpoint | `Skopeo API` |
 | GET | `/health` | Health check | JSON with status and version |
-| GET | `/metrics` | Prometheus metrics | Metrics in Prometheus format |
 | GET | `/swagger` | Swagger UI | Interactive API documentation |
 | GET | `/openapi.yaml` | OpenAPI specification | Raw OpenAPI spec (YAML) |
 | POST | `/api/v1/calculate-ranking` | Stateless "what-if" ranking calculation | JSON with updated ratings |

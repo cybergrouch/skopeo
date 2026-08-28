@@ -28,8 +28,15 @@ web:
 docs:
   # Whether the unauthenticated interactive API docs (Swagger UI at /swagger + raw spec at
   # /openapi.yaml) are served (#599). Defaults to true; set DOCS_EXPOSED=false to disable them in a
-  # hardened/externally-exposed deployment. Does not affect the Prometheus /metrics endpoint.
+  # hardened/externally-exposed deployment.
   exposed: "$DOCS_EXPOSED:true"
+
+gcp:
+  # GCP project id, used only to qualify the `logging.googleapis.com/trace` field so a log line links
+  # to its request in Cloud Logging (#751). Cloud Logging ignores a bare trace id, so without this the
+  # field is omitted rather than emitted unusable. Unset locally and in tests — the trace field is then
+  # simply absent. Supplied in production from the same repo variable the deploy workflow already uses.
+  projectId: "$GCP_PROJECT_ID:"
 
 admin:
   # Comma-separated allowlist of emails auto-granted ADMINISTRATOR on sign-up/login, but ONLY when

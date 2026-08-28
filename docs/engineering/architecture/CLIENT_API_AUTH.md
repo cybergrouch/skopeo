@@ -130,8 +130,9 @@ recorded; for M2M only the client. Keys themselves are never written to the audi
 
 - Add an `apiKey` security scheme (header `X-Api-Key`) to `documentation.yaml`, applied to the
   endpoints that accept client auth; keep `OpenAPIIntegrationTest` green.
-- Before external exposure, reconsider the currently-public infrastructure endpoints (`/metrics`,
-  `/swagger`, `/openapi.yaml`).
+- Before external exposure, reconsider the currently-public infrastructure endpoints (`/swagger`,
+  `/openapi.yaml`). `/metrics` is no longer one of them — it was removed in #804, which is why the
+  anonymous-scrape concern it raised here is closed rather than deferred.
 
 ## Phased plan
 

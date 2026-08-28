@@ -98,10 +98,10 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.5.16")
     implementation("io.github.oshai:kotlin-logging-jvm:7.0.7")
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
-
-    // Metrics
-    implementation("io.ktor:ktor-server-metrics-micrometer-jvm:$ktorVersion")
-    implementation("io.micrometer:micrometer-registry-prometheus:1.15.0")
+    // Structured JSON logs for Cloud Logging (#751). Micrometer/Prometheus was removed with the
+    // /metrics endpoint: nothing scraped it (Cloud Run scales to zero, which suits pull-based scraping
+    // badly), and per-endpoint metrics now come from log-based metrics over these fields.
+    implementation("net.logstash.logback:logstash-logback-encoder:8.1")
 
     // Testing
     testImplementation("io.ktor:ktor-server-test-host-jvm:$ktorVersion")
