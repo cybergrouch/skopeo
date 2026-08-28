@@ -1,0 +1,28 @@
+{
+  "description": "Request duration in milliseconds, as a distribution, from the access line's durationMs field (#805). Labelled by route only: a distribution is the expensive metric kind, so method and status are deliberately left off to keep the series count down -- use skopeo_requests for those breakdowns.",
+  "filter": "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"CLOUD_RUN_SERVICE_PLACEHOLDER\" AND jsonPayload.logger=\"org.skopeo.access\" AND jsonPayload.durationMs>=0",
+  "metricDescriptor": {
+    "metricKind": "DELTA",
+    "valueType": "DISTRIBUTION",
+    "unit": "ms",
+    "displayName": "Skopeo request latency",
+    "labels": [
+      {
+        "key": "route",
+        "valueType": "STRING",
+        "description": "Matched route pattern; see skopeo_requests."
+      }
+    ]
+  },
+  "valueExtractor": "EXTRACT(jsonPayload.durationMs)",
+  "labelExtractors": {
+    "route": "EXTRACT(jsonPayload.route)"
+  },
+  "bucketOptions": {
+    "exponentialBuckets": {
+      "numFiniteBuckets": 20,
+      "growthFactor": 1.5,
+      "scale": 5
+    }
+  }
+}

@@ -40,7 +40,8 @@ DRY_RUN="${DRY_RUN:-}"
 
 usage() {
   cat <<USAGE
-Apply the Skopeo Cloud Monitoring config: one uptime check and two paging alert policies.
+Apply the Skopeo Cloud Monitoring config: uptime check, two paging alert policies,
+two log-based per-endpoint metrics, and the dashboard.
 
 Usage: $(basename "$0") [options]
 
@@ -185,9 +186,56 @@ for policy in alert-uptime-failure alert-sustained-5xx; do
   fi
 done
 
+# --- Log-based metrics ---------------------------------------------------------------------------
+# These are what make per-endpoint monitoring possible at all: Cloud Run's own request_count and
+# request_latencies have NO path/route label, so natively you can see "the service returned 40 5xx" but
+# never which endpoint. These extract the route pattern from the access line (#805) instead.
+#
+# They do NOT backfill — a log-based metric starts counting when it is created. So the sooner these
+# exist, the sooner there is a baseline for the two-week alert-budget review (#751 decision 4).
+for metric in skopeo_requests skopeo_request_latency; do
+  echo "==> log-based metric '$metric'"
+  sed -e "s|CLOUD_RUN_SERVICE_PLACEHOLDER|$SERVICE|g" \
+      "$HERE/log-metrics/$metric.json" > "$WORK/$metric.json"
+
+  if gcloud logging metrics describe "$metric" --project "$PROJECT" >/dev/null 2>&1; then
+    echo "    exists, updating"
+    run gcloud logging metrics update "$metric" \
+      --project "$PROJECT" --config-from-file "$WORK/$metric.json"
+  else
+    run gcloud logging metrics create "$metric" \
+      --project "$PROJECT" --config-from-file "$WORK/$metric.json"
+  fi
+done
+
+# --- Dashboard ----------------------------------------------------------------------------------
+echo "==> dashboard 'Skopeo API'"
+sed -e "s|CLOUD_RUN_SERVICE_PLACEHOLDER|$SERVICE|g" \
+    -e "s|UPTIME_CHECK_ID_PLACEHOLDER|$CHECK_ID|g" \
+    "$HERE/dashboard.json" > "$WORK/dashboard.json"
+
+EXISTING_DASH="$(gcloud monitoring dashboards list \
+  --project "$PROJECT" \
+  --filter="displayName='Skopeo API'" \
+  --format='value(name)' | head -1)"
+
+if [[ -z "$EXISTING_DASH" ]]; then
+  run gcloud monitoring dashboards create --project "$PROJECT" --config-from-file "$WORK/dashboard.json"
+else
+  echo "    exists, updating: $EXISTING_DASH"
+  run gcloud monitoring dashboards update "$EXISTING_DASH" \
+    --project "$PROJECT" --config-from-file "$WORK/dashboard.json"
+fi
+
 cat <<DONE
 
-Done. Two paging alerts are configured, and nothing else interrupts (#751 decision 4).
+Done. Two paging alerts are configured and nothing else interrupts (#751 decision 4), plus the
+log-based per-endpoint metrics and the dashboard.
+
+Dashboard: https://console.cloud.google.com/monitoring/dashboards?project=$PROJECT
+
+The per-endpoint panels will be EMPTY until traffic accumulates — log-based metrics do not backfill,
+so they only count from the moment they were created. Give it a few minutes of real requests.
 
 NOW VERIFY DELIVERY — this is not optional. Cloud Monitoring does not verify an email channel when it is
 created, and it sends from alerting-noreply@google.com. A group whose posting policy rejects non-members
