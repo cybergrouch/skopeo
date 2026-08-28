@@ -60,7 +60,7 @@ class StructuredLogFormatTest {
                     throwable,
                     emptyArray(),
                 )
-            return Json.parseToJsonElement(string = String(appender.encoder.encode(event))).jsonObject
+            return Json.parseToJsonElement(string = appender.encoder.encode(event).decodeToString()).jsonObject
         } finally {
             MDC.clear()
             context.stop()
@@ -85,12 +85,12 @@ class StructuredLogFormatTest {
 
     @Test
     fun `an exception lands in stack_trace, the field Cloud Error Reporting keys on`() {
-        val line = encode(level = Level.ERROR, message = "boom", throwable = IllegalStateException("kaboom"))
+        val line = encode(level = Level.ERROR, message = "boom", throwable = ProbeFailure(message = "kaboom"))
 
         line.getValue(key = "severity").jsonPrimitive.content shouldBe "ERROR"
         val trace = line["stack_trace"].shouldNotBeNull().jsonPrimitive.content
-        // The class name and our own frame both have to survive, or the trace is not actionable.
-        (trace.contains(other = "IllegalStateException") && trace.contains(other = "kaboom")) shouldBe true
+        // The class name and the message both have to survive, or the trace is not actionable.
+        (trace.contains(other = "ProbeFailure") && trace.contains(other = "kaboom")) shouldBe true
     }
 
     @Test
@@ -116,3 +116,9 @@ class StructuredLogFormatTest {
         encode(level = Level.INFO, message = "fine").keys shouldNotContain "stack_trace"
     }
 }
+
+/**
+ * A Kotlin-declared exception so the test can name the constructor argument, which the repo's
+ * `NamedArguments` rule requires and a Java constructor cannot accept.
+ */
+private class ProbeFailure(message: String) : IllegalStateException(message)
