@@ -35,7 +35,7 @@ abstract class AbstractMatchTypeHandler(
         val ratingAfter: BigDecimal,
     )
 
-    /** Suffix after the player name in the audit message (e.g. " (doubles)"); blank for singles. */
+    /** Suffix after the player id in the audit message (e.g. " (doubles)"); blank for singles. */
     protected open val auditLabel: String get() = ""
 
     protected fun playersOf(teamId: String): List<PlayerProfile> = request.teams.getValue(key = teamId).players
@@ -116,9 +116,13 @@ abstract class AbstractMatchTypeHandler(
                 "delta" to delta,
                 "ratingAfter" to ratingAfter,
             )
+        // playerId, not player.name (#806): this message is logged at INFO on every /calculate-ranking
+        // call, so a name here would be published to Cloud Logging — and, once an error-tracking appender
+        // is attached (#810), to a third party's breadcrumbs. The id identifies the player well enough for
+        // an audit whose job is explaining arithmetic, and it is already in `context` below.
         return AuditEntry(
             message =
-                "Set ${index + 1} - ${result.player.name}$auditLabel: $scoreLabel, " +
+                "Set ${index + 1} - ${result.player.playerId}$auditLabel: $scoreLabel, " +
                     "dominance ${step.dominance.toStringPrecise()}, scale ${step.scale.toStringPrecise()} -> Δ $delta, rating $ratingAfter",
             context = if (appliedHandicap == null) baseContext else baseContext + ("appliedHandicap" to appliedHandicap),
         )

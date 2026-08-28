@@ -94,19 +94,23 @@ class StructuredLogFormatTest {
     }
 
     @Test
-    fun `MDC entries are emitted flat as top-level fields, not nested under mdc`() {
+    fun `allowlisted MDC entries are emitted flat as top-level fields, not nested under mdc`() {
         // Flatness is what makes them queryable in the Logs Explorer and usable as log-based metric
         // labels (#809) — nested under an `mdc` object they would need a different query and could not
         // be used as labels directly.
+        //
+        // Only allowlisted keys survive (#806), and `route` is deliberately NOT one: it travels on the
+        // access line as a logstash marker (#805) so it can stay a typed field alongside numeric
+        // `status`/`durationMs`. PiiLeakTest covers the dropping of an unlisted key.
         val line =
             encode(
                 level = Level.INFO,
                 message = "handled",
-                mdc = mapOf("requestId" to "probe-1", "route" to "/api/v1/matches/{id}"),
+                mdc = mapOf(LogFields.REQUEST_ID to "probe-1", LogFields.TRACE to "projects/p/traces/t"),
             )
 
-        line.getValue(key = "requestId").jsonPrimitive.content shouldBe "probe-1"
-        line.getValue(key = "route").jsonPrimitive.content shouldBe "/api/v1/matches/{id}"
+        line.getValue(key = LogFields.REQUEST_ID).jsonPrimitive.content shouldBe "probe-1"
+        line.getValue(key = LogFields.TRACE).jsonPrimitive.content shouldBe "projects/p/traces/t"
         line.keys shouldNotContain "mdc"
     }
 

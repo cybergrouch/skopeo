@@ -64,7 +64,7 @@ There is **no** severity level: entries are not classified as DEBUG/INFO/WARN/ER
 ```kotlin
 data class AuditEntry(
     val message: String,                          // Human-readable message
-    val context: Map<String, Any> = emptyMap()    // Structured data (player names, ratings, etc.)
+    val context: Map<String, Any> = emptyMap()    // Structured data (playerId, ratings, factors)
 )
 ```
 
