@@ -78,12 +78,13 @@ class MatchApiIntegrationTest {
         roles: Set<Capability>,
     ): String {
         UserRepository().provision(
-            ProvisionUserCommand(
-                firebaseUid = uid.asRedactable(),
-                identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
-                capabilities = roles + Capability.PLAYER,
-            ),
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid.asRedactable(),
+                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                    capabilities = roles + Capability.PLAYER,
+                ),
         )
         return TestFirebaseAuth.mintToken(uid = uid)
     }

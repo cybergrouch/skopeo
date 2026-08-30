@@ -68,12 +68,13 @@ class CapabilityApiIntegrationTest {
     /** Seed an ADMINISTRATOR directly (bootstrap) and return its token. */
     private fun seedAdminToken(uid: String = "admin"): String {
         UserRepository().provision(
-            ProvisionUserCommand(
-                firebaseUid = uid.asRedactable(),
-                identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                names = listOf(UserName(type = NameType.DISPLAY, value = "Admin")),
-                capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
-            ),
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid.asRedactable(),
+                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                    names = listOf(element = UserName(type = NameType.DISPLAY, value = "Admin")),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
         )
         return TestFirebaseAuth.mintToken(uid = uid)
     }

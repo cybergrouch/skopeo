@@ -59,12 +59,13 @@ class CapabilityServiceTest {
         roles: Set<Capability> = setOf(Capability.PLAYER),
     ): User =
         users.provision(
-            ProvisionUserCommand(
-                firebaseUid = uid.asRedactable(),
-                identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
-                capabilities = roles,
-            ),
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid.asRedactable(),
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                    capabilities = roles,
+                ),
         ).toDomain()
 
     private fun admin(uid: String = "root"): User = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
