@@ -277,7 +277,9 @@ data class ClaimCode(
  * never re-derivable) plus the stored [code] record. Only the plaintext leaves the service to the admin.
  */
 data class GeneratedClaimCode(
-    val plaintext: String,
+    // A bearer credential: whoever holds it can adopt the placeholder account, so it is shown once and
+    // stored only as a hash. Same treatment as an API key (#822).
+    val plaintext: Redactable<String>,
     val code: ClaimCode,
     // The placeholder's shareable public code, so the caller can render which account the code adopts.
     val placeholderPublicCode: String,

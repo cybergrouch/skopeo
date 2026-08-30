@@ -8,7 +8,8 @@ import org.skopeo.domain.model.GeneratedClaimCode
 
 fun GeneratedClaimCode.toResponse(): ClaimCodeResponse =
     ClaimCodeResponse(
-        code = plaintext,
+        // Show-once delivery: the admin has to be able to pass the code to the player.
+        code = plaintext.revealed,
         expiresAt = code.expiresAt.toString(),
         placeholderPublicCode = placeholderPublicCode,
     )

@@ -3,6 +3,8 @@
 
 package org.skopeo.domain.service.client
 
+import org.skopeo.common.redaction.Redactable
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.domain.model.ApiKeyEnvironment
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -28,7 +30,10 @@ internal object ApiKeyCrypto {
 
     /** A freshly-generated key: the one-time [plaintext], its [hash], and the non-secret [displayPrefix]. */
     data class GeneratedKey(
-        val plaintext: String,
+        // The generated key itself. Wrapped for the same reason as IssuedApiKey.plaintext: this is the
+        // only moment the credential exists in the clear, and interpolating this object would print a
+        // working key. #801 wrapped the destination and missed the source; #822's guard caught it.
+        val plaintext: Redactable<String>,
         val hash: String,
         val displayPrefix: String,
     )
@@ -39,7 +44,7 @@ internal object ApiKeyCrypto {
         val withoutChecksum = environment.prefix + body
         val plaintext = withoutChecksum + checksum(input = withoutChecksum)
         return GeneratedKey(
-            plaintext = plaintext,
+            plaintext = plaintext.asRedactable(),
             hash = hash(plaintext = plaintext),
             displayPrefix = environment.prefix + body.take(n = PREFIX_DISPLAY_CHARS),
         )
