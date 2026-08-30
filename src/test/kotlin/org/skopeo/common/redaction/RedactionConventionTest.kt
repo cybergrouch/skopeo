@@ -3,6 +3,7 @@
 
 package org.skopeo.common.redaction
 
+import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
@@ -154,7 +155,7 @@ class RedactionConventionTest {
                 .map { it.groupValues[1] }
                 .toSet()
 
-        seen.shouldContain("dateOfBirth")
+        seen shouldContain "dateOfBirth"
         (seen.size > 50) shouldBe true
     }
 
@@ -169,9 +170,10 @@ class RedactionConventionTest {
                     "  ${it.type}.${it.field}: ${it.declared}   (${it.file})"
                 }
             println(
-                "Sensitive fields declared with a raw type (#822):\n$detail\n\n" +
-                    "Either wrap the field as Redactable<...> (see LOGGING_AND_METRICS.md), or add an " +
-                    "entry to RedactionConventionTest.ALLOWED with the reason it is not a defect.",
+                message =
+                    "Sensitive fields declared with a raw type (#822):\n$detail\n\n" +
+                        "Either wrap the field as Redactable<...> (see LOGGING_AND_METRICS.md), or add an " +
+                        "entry to RedactionConventionTest.ALLOWED with the reason it is not a defect.",
             )
         }
 
@@ -182,17 +184,7 @@ class RedactionConventionTest {
     fun `every allowlist entry carries a reason`() {
         // An allowlist whose entries have no justification is a blocklist with extra steps.
         ALLOWED.forEach { (key, reason) ->
-            withClue(key) { (reason.length > 20) shouldBe true }
+            withClue(clue = key) { (reason.length > 20) shouldBe true }
         }
     }
 }
-
-private fun <T> withClue(
-    clue: Any?,
-    block: () -> T,
-): T =
-    try {
-        block()
-    } catch (e: AssertionError) {
-        throw AssertionError("$clue: ${e.message}", e)
-    }
