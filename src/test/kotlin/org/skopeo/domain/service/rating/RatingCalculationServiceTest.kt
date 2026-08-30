@@ -24,6 +24,7 @@ import org.skopeo.common.dto.RankingCalculationResponse
 import org.skopeo.common.dto.match.MatchResultRequest
 import org.skopeo.common.dto.match.SetScoreRequest
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.rating.toResponse
 import org.skopeo.domain.mapper.entity.event.toDomain
@@ -103,7 +104,7 @@ class RatingCalculationServiceTest {
         return user
     }
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
 
     /** Create + complete a fixture where [winner] beats [loser]; returns the match id. */
     private fun playedMatch(

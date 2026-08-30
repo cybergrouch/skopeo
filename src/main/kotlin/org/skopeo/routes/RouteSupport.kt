@@ -17,6 +17,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.RoutingContext
 import kotlinx.serialization.SerializationException
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import java.util.UUID
 
@@ -61,12 +62,12 @@ private fun JWTPrincipal.toVerifiedToken(): VerifiedFirebaseToken {
 
     return VerifiedFirebaseToken(
         uid = payload.subject,
-        email = payload.getClaim("email").asString(),
+        email = payload.getClaim("email").asString()?.asRedactable(),
         emailVerified = payload.getClaim("email_verified").asBoolean() ?: false,
         name = payload.getClaim("name").asString(),
         picture = payload.getClaim("picture").asString(),
         signInProvider = signInProvider,
-        providerUid = providerUid,
+        providerUid = providerUid.asRedactable(),
     )
 }
 

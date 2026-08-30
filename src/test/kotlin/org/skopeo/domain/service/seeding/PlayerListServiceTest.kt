@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -58,7 +59,7 @@ class PlayerListServiceTest {
 
     private fun host(uid: String = "host") = provision(uid = uid, roles = setOf(Capability.PLAYER, Capability.HOST))
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
 
     @Test
     fun `a host creates, lists, and reads back a named list`() {

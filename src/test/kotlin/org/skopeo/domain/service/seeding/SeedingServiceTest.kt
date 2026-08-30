@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -86,7 +87,7 @@ class SeedingServiceTest {
                 ),
         ).toDomain()
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
 
     // Confidence is computed (#459) from windowed match sparsity: [matches] in-window completed open-play
     // matches raise a player's confidence (more matches → denser play → higher confidence). `matches` = 0

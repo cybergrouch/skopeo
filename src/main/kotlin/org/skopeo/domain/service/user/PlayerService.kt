@@ -112,7 +112,7 @@ class PlayerService(
         user.contacts
             .filter { it.isActive && it.type == ContactType.EMAIL }
             .let { active -> active.firstOrNull { it.isPrimary } ?: active.firstOrNull() }
-            ?.value
+            ?.value?.revealed
 
     /**
      * A disabled duplicate (#124) renders a "merged" card linking to its canonical account; a

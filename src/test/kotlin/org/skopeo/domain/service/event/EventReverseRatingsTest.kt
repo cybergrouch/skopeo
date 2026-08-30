@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.event.EventResponse
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.event.toDomain
 import org.skopeo.domain.mapper.entity.match.toDomain
@@ -102,7 +103,7 @@ class EventReverseRatingsTest {
                 ),
         ).toDomain()
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
 
     private fun rate(
         userId: UUID,

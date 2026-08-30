@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.event.EventResponse
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.club.toDomain
 import org.skopeo.domain.mapper.entity.event.toDomain
@@ -125,7 +126,7 @@ class EventServiceTest {
         return club.id
     }
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
 
     // A club [owner] is a NAMED OWNER of (#789). `created_by` on a club is provenance, not ownership, so
     // the club_owners row is what event authorization actually reads.

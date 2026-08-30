@@ -112,7 +112,7 @@ class ContactService(
         contacts
             .activePhonesOfOtherActiveUsers(excludeUserId = newUserId)
             .map { it.toDomain() }
-            .filter { normalizePhone(raw = it.value) == normalized }
+            .filter { normalizePhone(raw = it.value.revealed) == normalized }
             .map { it.userId }
             .distinct()
             .forEach { otherUserId ->
@@ -155,7 +155,11 @@ class ContactService(
                         action = AuditAction.CONTACT_UPDATED,
                         entityType = AuditEntityType.USER,
                         entityId = userId,
-                        summary = "${if (active) "Enabled" else "Disabled"} ${contact.type.name} ${contact.value}",
+                        // Deliberate unwrap, like InviteService: the audit entry records WHICH contact
+                        // was enabled/disabled, so the address is the content. Our own audit table,
+                        // administrator-only — not a log sink (#801).
+                        summary =
+                            "${if (active) "Enabled" else "Disabled"} ${contact.type.name} ${contact.value.revealed}",
                         details = mapOf("contactId" to contactId.toString(), "active" to active.toString()),
                     ),
             )

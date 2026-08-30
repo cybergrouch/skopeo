@@ -13,7 +13,7 @@ import java.time.LocalDateTime
 fun Invite.toResponse(): InviteResponse =
     InviteResponse(
         id = id.toString(),
-        email = email,
+        email = email.revealed,
         status = if (status == InviteStatus.PENDING && !isOpen(asOf = LocalDateTime.now())) "EXPIRED" else status.name,
         invitedBy = invitedBy?.toString(),
         expiresAt = expiresAt.toString(),

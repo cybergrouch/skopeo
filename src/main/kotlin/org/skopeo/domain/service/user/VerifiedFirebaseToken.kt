@@ -3,6 +3,8 @@
 
 package org.skopeo.domain.service.user
 
+import org.skopeo.common.redaction.Redactable
+
 /**
  * The trustworthy identity carried by a verified Firebase ID token, lifted out of
  * the JWT claims at the route boundary so the service layer never depends on the
@@ -11,10 +13,10 @@ package org.skopeo.domain.service.user
  */
 data class VerifiedFirebaseToken(
     val uid: String,
-    val email: String? = null,
+    val email: Redactable<String>? = null,
     val emailVerified: Boolean = false,
     val name: String? = null,
     val picture: String? = null,
     val signInProvider: String? = null,
-    val providerUid: String,
+    val providerUid: Redactable<String>,
 )

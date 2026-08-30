@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.event.CreateEventRequest
 import org.skopeo.common.dto.event.EventResponse
 import org.skopeo.common.dto.settings.SetAwardRankingPointsRequest
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -332,7 +333,7 @@ class EventFinalizeApiIntegrationTest {
         ratings.setRating(userId = p2.id, rating = BigDecimal("4.0"), level = "4.0")
         val matchRepo = MatchRepository()
         val eventService = EventService()
-        val hostToken = VerifiedFirebaseToken(uid = "host", providerUid = "host")
+        val hostToken = VerifiedFirebaseToken(uid = "host", providerUid = "host".asRedactable())
         val eventId =
             eventService.create(
                 token = hostToken,
@@ -371,7 +372,7 @@ class EventFinalizeApiIntegrationTest {
         )
         eventService.finalize(token = hostToken, id = eventId).getOrNull().shouldNotBeNull()
         RatingCalculationService()
-            .calculate(token = VerifiedFirebaseToken(uid = "admin", providerUid = "admin"), dryRun = false)
+            .calculate(token = VerifiedFirebaseToken(uid = "admin", providerUid = "admin".asRedactable()), dryRun = false)
             .getOrNull().shouldNotBeNull()
         return eventId.toString()
     }

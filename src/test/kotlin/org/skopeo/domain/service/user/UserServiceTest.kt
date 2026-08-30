@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditAction
@@ -63,12 +64,12 @@ class UserServiceTest {
         picture: String? = null,
     ) = VerifiedFirebaseToken(
         uid = uid,
-        email = email,
+        email = email?.asRedactable(),
         emailVerified = emailVerified,
         name = name,
         picture = picture,
         signInProvider = signInProvider,
-        providerUid = uid,
+        providerUid = uid.asRedactable(),
     )
 
     private val request = CreateUserRequest(proposedRating = "4.0", displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male")

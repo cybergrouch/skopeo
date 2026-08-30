@@ -8,6 +8,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.ProfileRequest
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.ContactSource
@@ -28,12 +29,12 @@ class TokenMappingTest {
         signInProvider: String? = "password",
     ) = VerifiedFirebaseToken(
         uid = uid,
-        email = email,
+        email = email?.asRedactable(),
         emailVerified = emailVerified,
         name = name,
         picture = "https://example.com/p.jpg",
         signInProvider = signInProvider,
-        providerUid = uid,
+        providerUid = uid.asRedactable(),
     )
 
     @Test

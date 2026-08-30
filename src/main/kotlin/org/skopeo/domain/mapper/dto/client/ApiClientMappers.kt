@@ -40,7 +40,9 @@ fun ApiClient.toResponse(): ApiClientResponse =
 
 fun IssuedApiKey.toResponse(): IssuedApiKeyResponse =
     IssuedApiKeyResponse(
-        apiKey = plaintext,
+        // The one place the plaintext is legitimately unwrapped: this response IS the show-once
+        // delivery of the key. `.value` here is deliberate and should stay rare enough to notice.
+        apiKey = plaintext.revealed,
         key = key.toResponse(),
     )
 
