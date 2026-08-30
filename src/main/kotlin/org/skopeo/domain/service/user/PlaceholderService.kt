@@ -13,6 +13,7 @@ import org.skopeo.common.dto.user.ClaimCodeResponse
 import org.skopeo.common.dto.user.UserResponse
 import org.skopeo.common.dto.user.UserSummaryResponse
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.user.toResponse
 import org.skopeo.domain.mapper.dto.user.toSummary
@@ -158,7 +159,7 @@ class PlaceholderService(
                     expiresAt = LocalDateTime.now().plusDays(CLAIM_CODE_TTL_DAYS),
                     createdBy = adminId,
                 )
-            GeneratedClaimCode(plaintext = plaintext, code = stored.toDomain(), placeholderPublicCode = target.publicCode)
+            GeneratedClaimCode(plaintext = plaintext.asRedactable(), code = stored.toDomain(), placeholderPublicCode = target.publicCode)
                 .toResponse()
         }
 

@@ -205,7 +205,7 @@ class ApiClientServiceTest {
         service.authenticate(rawKey = "not-a-key") shouldBe ClientAuthResult.Invalid
         // Well-formed but never issued → unknown → Invalid.
         val orphan = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE)
-        service.authenticate(rawKey = orphan.plaintext) shouldBe ClientAuthResult.Invalid
+        service.authenticate(rawKey = orphan.plaintext.revealed) shouldBe ClientAuthResult.Invalid
     }
 
     @Test
@@ -280,7 +280,7 @@ class ApiClientServiceTest {
         service.resolveClientId(rawKey = issued.apiKey) shouldBe UUID.fromString(client.id)
         service.resolveClientId(rawKey = "") shouldBe null
         service.resolveClientId(rawKey = "garbage") shouldBe null
-        service.resolveClientId(rawKey = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE).plaintext) shouldBe null
+        service.resolveClientId(rawKey = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE).plaintext.revealed) shouldBe null
     }
 
     @Test
@@ -333,7 +333,7 @@ class ApiClientServiceTest {
                     expiresAt = LocalDateTime.now().minusDays(1),
                 ),
         )
-        service.authenticate(rawKey = generated.plaintext) shouldBe ClientAuthResult.Forbidden
+        service.authenticate(rawKey = generated.plaintext.revealed) shouldBe ClientAuthResult.Forbidden
     }
 
     @Test

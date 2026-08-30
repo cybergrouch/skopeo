@@ -15,7 +15,6 @@ import org.skopeo.common.dto.client.ClientIdentityResponse
 import org.skopeo.common.dto.client.IssuedApiKeyResponse
 import org.skopeo.common.dto.client.PartnerPlayerResponse
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.common.security.ClientAuthResult
 import org.skopeo.common.security.ClientPrincipal
@@ -143,9 +142,9 @@ class ApiClientService(
                             ),
                     ),
             )
-            // asRedactable only TAGS the key so `"$issued"` cannot print it; the value is untouched and
+            // generated.plaintext is already Redactable (#822), so it passes straight through;
             // `toResponse()` unwraps it, so the caller still receives the real key exactly once.
-            IssuedApiKey(client = client, key = key, plaintext = generated.plaintext.asRedactable()).toResponse()
+            IssuedApiKey(client = client, key = key, plaintext = generated.plaintext).toResponse()
         }
 
     /** Revoke a key. ADMINISTRATOR-only; a missing/already-revoked key is a [ServiceError.NotFound]. */
