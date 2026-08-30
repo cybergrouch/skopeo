@@ -165,7 +165,7 @@ class SeedingService(
                 ntrpBand = rating.currentLevel,
                 rating = rating.currentRating.toPlainString(),
                 sex = user.sex,
-                age = user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = today) },
+                age = user.dateOfBirth?.revealed?.let { ageInYears(dateOfBirth = it, asOf = today) },
                 placeholder = user.placeholder,
                 deleted = user.isDeleted(),
             )

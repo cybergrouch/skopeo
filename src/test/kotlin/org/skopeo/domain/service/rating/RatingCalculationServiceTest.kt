@@ -87,12 +87,13 @@ class RatingCalculationServiceTest {
     ): User {
         val user =
             users.provision(
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid.asRedactable(),
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
             ).toDomain()
         if (rated) {
             ratings.setRating(

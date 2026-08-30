@@ -22,12 +22,14 @@ fun User.toResponse(): UserResponse =
     UserResponse(
         id = id.toString(),
         publicCode = publicCode,
-        firebaseUid = firebaseUid,
+        firebaseUid = firebaseUid?.revealed,
         photoUrl = photoUrl,
         customPhotoUrl = customPhotoUrl,
         photoHidden = photoHidden,
         matchHistoryHidden = matchHistoryHidden,
-        dateOfBirth = dateOfBirth?.toString(),
+        // .revealed, not .toString(): stringifying the wrapper yields "***", which would ship
+        // a redacted placeholder to the client instead of the date (#822).
+        dateOfBirth = dateOfBirth?.revealed?.toString(),
         sex = sex,
         city = city,
         country = country,
@@ -80,7 +82,7 @@ fun User.toSummary(
         displayName = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value,
         photoUrl = photoUrl,
         sex = sex,
-        age = dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
+        age = dateOfBirth?.revealed?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
         rating =
             rating?.let {
                 PublicRatingDto(

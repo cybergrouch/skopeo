@@ -85,7 +85,7 @@ class PlaceholderService(
             val ratingValue = initialRating?.let { validatedRating(caller = actorId, raw = it).bind() }
             val created =
                 users.createPlaceholder(
-                    command = CreatePlaceholderCommand(displayName = name, sex = sex, dateOfBirth = dateOfBirth),
+                    command = CreatePlaceholderCommand(displayName = name, sex = sex, dateOfBirth = dateOfBirth?.asRedactable()),
                 ).toDomain()
             audit.record(
                 write =

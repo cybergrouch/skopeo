@@ -65,7 +65,7 @@ class UserRepositoryTest {
         firebaseUid: String = "firebase-${UUID.randomUUID()}",
         email: String = "${UUID.randomUUID()}@example.com",
     ) = ProvisionUserCommand(
-        firebaseUid = firebaseUid,
+        firebaseUid = firebaseUid.asRedactable(),
         identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "google-sub-123", isPrimary = true),
         names =
             listOf(
@@ -182,12 +182,12 @@ class UserRepositoryTest {
 
         val updated =
             repository
-                .updateProfile(id = created.id, patch = ProfilePatch(city = "Cebu", dateOfBirth = LocalDate.of(1990, 1, 2)))
+                .updateProfile(id = created.id, patch = ProfilePatch(city = "Cebu", dateOfBirth = LocalDate.of(1990, 1, 2).asRedactable()))
                 .shouldBeRight()
                 .toDomain()
 
         updated.city shouldBe "Cebu"
-        updated.dateOfBirth shouldBe LocalDate.of(1990, 1, 2)
+        updated.dateOfBirth?.revealed shouldBe LocalDate.of(1990, 1, 2)
         updated.sex shouldBe "Male" // untouched
     }
 

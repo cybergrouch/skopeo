@@ -106,10 +106,10 @@ class StandingsServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = if (withName) listOf(element = UserName(type = NameType.DISPLAY, value = uid)) else emptyList(),
-                    dateOfBirth = dateOfBirth,
+                    dateOfBirth = dateOfBirth?.asRedactable(),
                     sex = sex,
                     capabilities = capabilities,
                 ),

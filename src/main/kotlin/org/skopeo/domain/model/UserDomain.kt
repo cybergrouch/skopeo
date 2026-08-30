@@ -105,7 +105,7 @@ data class User(
     val id: UUID,
     // Short, human-readable, shareable player code (e.g. "K7Q2MX"); unique. See issue #56.
     val publicCode: String,
-    val firebaseUid: String?,
+    val firebaseUid: Redactable<String>?,
     // The effective profile photo to display (#303) — derived from the fields below via
     // [effectivePhotoUrl]: null when hidden, else the custom URL, else the provider photo.
     val photoUrl: String?,
@@ -117,7 +117,7 @@ data class User(
     // When true, the player's match history is withheld from unprivileged viewers on the public
     // profile (#622); the owner and elevated roles still see it. Default false = visible to all.
     val matchHistoryHidden: Boolean = false,
-    val dateOfBirth: LocalDate?,
+    val dateOfBirth: Redactable<LocalDate>?,
     val sex: String?,
     val city: String?,
     val country: String,
@@ -216,13 +216,13 @@ fun ageInYears(
 
 /** Everything needed to provision a new user in one transaction (e.g. on first sign-in). */
 data class ProvisionUserCommand(
-    val firebaseUid: String,
+    val firebaseUid: Redactable<String>,
     val identity: UserIdentity,
     val names: List<UserName>,
     val photoUrl: String? = null,
     val email: ContactInfo? = null,
     val phone: ContactInfo? = null,
-    val dateOfBirth: LocalDate? = null,
+    val dateOfBirth: Redactable<LocalDate>? = null,
     val sex: String? = null,
     val city: String? = null,
     val country: String? = null,
@@ -232,7 +232,7 @@ data class ProvisionUserCommand(
 
 /** Partial update of mutable profile fields; null means "leave unchanged". */
 data class ProfilePatch(
-    val dateOfBirth: LocalDate? = null,
+    val dateOfBirth: Redactable<LocalDate>? = null,
     val sex: String? = null,
     val city: String? = null,
 )
@@ -245,7 +245,7 @@ data class ProfilePatch(
 data class CreatePlaceholderCommand(
     val displayName: String,
     val sex: String,
-    val dateOfBirth: LocalDate? = null,
+    val dateOfBirth: Redactable<LocalDate>? = null,
 )
 
 /** Lifecycle of a placeholder claim code (#496): ACTIVE (usable) or CONSUMED (claimed or superseded). */

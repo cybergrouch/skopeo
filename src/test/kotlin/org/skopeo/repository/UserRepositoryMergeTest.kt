@@ -10,6 +10,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -57,7 +58,7 @@ class UserRepositoryMergeTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = provider, providerUid = "$provider:$uid", isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     sex = "Male",
@@ -111,7 +112,7 @@ class UserRepositoryMergeTest {
         }
 
         val survivorAfter = users.findById(id = survivor).getOrNull()!!.toDomain()
-        survivorAfter.firebaseUid shouldBe "retired"
+        survivorAfter.firebaseUid?.revealed shouldBe "retired"
         survivorAfter.identities.single().let { identity ->
             identity.provider shouldBe AuthProvider.GOOGLE
             identity.providerUid shouldBe "GOOGLE:retired"
@@ -134,7 +135,7 @@ class UserRepositoryMergeTest {
             users.mergeAccounts(retiredId = retired, survivorId = survivor, transferLogin = true)
         }
 
-        users.findById(id = survivor).getOrNull()!!.toDomain().firebaseUid shouldBe "survivor"
+        users.findById(id = survivor).getOrNull()!!.toDomain().firebaseUid?.revealed shouldBe "survivor"
         users.findById(id = retired).getOrNull()!!.toDomain().firebaseUid.shouldBeNull()
     }
 }

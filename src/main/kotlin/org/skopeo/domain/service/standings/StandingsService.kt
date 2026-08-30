@@ -132,7 +132,7 @@ class StandingsService(
                             displayName = player.user.displayName(),
                             publicCode = player.user.publicCode,
                             sex = player.user.sex,
-                            age = player.user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = today) },
+                            age = player.user.dateOfBirth?.revealed?.let { ageInYears(dateOfBirth = it, asOf = today) },
                             // Revealed only to privileged viewers (#186); read straight from the live rating,
                             // so there is no map miss and no dead null-rating branch.
                             currentRating = if (request.revealRates) player.rating.currentRating.toPlainString() else null,
@@ -227,7 +227,7 @@ class StandingsService(
                     displayName = user.displayName(),
                     publicCode = user.publicCode,
                     sex = user.sex,
-                    age = user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = today) },
+                    age = user.dateOfBirth?.revealed?.let { ageInYears(dateOfBirth = it, asOf = today) },
                     // The POINTS metric shown is the snapshot's ordering value (points), public per #64/#114
                     // (#457). The rating is NOT the served metric here, so it stays null — never leaked.
                     points = entry.orderingValue.toPlainString(),

@@ -28,6 +28,7 @@ import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.UserResponse
 import org.skopeo.common.dto.user.UserSummaryPageResponse
 import org.skopeo.common.dto.user.UserSummaryResponse
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -82,7 +83,7 @@ class UserSearchApiIntegrationTest {
         UserRepository().provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
                     names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles + Capability.PLAYER,
@@ -205,7 +206,7 @@ class UserSearchApiIntegrationTest {
             UserRepository().provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "multi",
+                        firebaseUid = "multi".asRedactable(),
                         identity =
                             UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "multi", isPrimary = true),
                         names =

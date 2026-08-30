@@ -34,6 +34,7 @@ import org.skopeo.common.dto.rating.MatchCalculationDetailResponse
 import org.skopeo.common.dto.rating.SetRatingRequest
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.UserResponse
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.NameType
@@ -77,12 +78,13 @@ class MatchApiIntegrationTest {
         roles: Set<Capability>,
     ): String {
         UserRepository().provision(
-            ProvisionUserCommand(
-                firebaseUid = uid,
-                identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
-                capabilities = roles + Capability.PLAYER,
-            ),
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid.asRedactable(),
+                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                    capabilities = roles + Capability.PLAYER,
+                ),
         )
         return TestFirebaseAuth.mintToken(uid = uid)
     }

@@ -116,13 +116,13 @@ internal fun buildProvisionCommand(
             )
         }
     return ProvisionUserCommand(
-        firebaseUid = token.uid,
+        firebaseUid = token.uid.asRedactable(),
         identity = UserIdentity(provider = provider, providerUid = token.providerUid.revealed, isPrimary = true),
         names = displayName(token = token, request = request),
         photoUrl = token.picture,
         email = email,
         phone = phone,
-        dateOfBirth = parseDateOfBirth(value = request.dateOfBirth),
+        dateOfBirth = parseDateOfBirth(value = request.dateOfBirth)?.asRedactable(),
         sex = validatedSex(value = request.sex),
         city = request.city,
         country = request.country,
@@ -153,7 +153,7 @@ internal fun isBootstrapAdmin(
 
 internal fun ProfileRequest.toProfilePatch(): ProfilePatch =
     ProfilePatch(
-        dateOfBirth = parseDateOfBirth(value = dateOfBirth),
+        dateOfBirth = parseDateOfBirth(value = dateOfBirth)?.asRedactable(),
         sex = validatedSex(value = sex),
         city = city,
     )

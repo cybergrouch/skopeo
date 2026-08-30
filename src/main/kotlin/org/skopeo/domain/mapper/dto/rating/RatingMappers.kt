@@ -54,7 +54,9 @@ fun PendingAssessment.toResponse(): PendingAssessmentResponse =
         displayName = displayName,
         photoUrl = photoUrl,
         sex = sex,
-        dateOfBirth = dateOfBirth?.toString(),
+        // .revealed, not .toString(): stringifying the wrapper yields "***", which would ship
+        // a redacted placeholder to the client instead of the date (#822).
+        dateOfBirth = dateOfBirth?.revealed?.toString(),
         age = age,
         proposedRating = proposedRating,
     )

@@ -77,7 +77,7 @@ class StandingsCalculationServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = org.skopeo.domain.model.UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = org.skopeo.domain.model.UserName(type = NameType.DISPLAY, value = uid)),
                     sex = sex,
@@ -90,7 +90,7 @@ class StandingsCalculationServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = org.skopeo.domain.model.UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = org.skopeo.domain.model.UserName(type = NameType.NICKNAME, value = uid)),
                     sex = "Male",

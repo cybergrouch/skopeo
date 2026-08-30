@@ -27,6 +27,7 @@ import org.skopeo.common.dto.club.AssignOwnerRequest
 import org.skopeo.common.dto.club.ClubPublicResponse
 import org.skopeo.common.dto.club.ClubResponse
 import org.skopeo.common.dto.club.CreateClubRequest
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -71,7 +72,7 @@ class ClubApiIntegrationTest {
         UserRepository().provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
