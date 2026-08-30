@@ -65,4 +65,19 @@ class UserRedactionTest {
         user().dateOfBirth?.revealed shouldBe dob
         user().firebaseUid?.revealed shouldBe uid
     }
+
+    @Test
+    fun `stringifying the wrapper instead of revealing it would ship a placeholder to the client`() {
+        // The bug this pins down was real and reached production code: two DTO mappers did
+        // `dateOfBirth?.toString()`, which on a Redactable yields "***" — so the API would have
+        // returned a redacted placeholder instead of the date, and it compiled fine because
+        // toString() exists on everything.
+        //
+        // This is the same blind spot as string interpolation, and it is why wrapping a field needs the
+        // full suite rather than a clean compile: neither the type checker nor detekt can see it.
+        val wrapped = dob.asRedactable()
+
+        wrapped.toString() shouldBe "***"
+        wrapped.revealed.toString() shouldBe "1979-04-11"
+    }
 }

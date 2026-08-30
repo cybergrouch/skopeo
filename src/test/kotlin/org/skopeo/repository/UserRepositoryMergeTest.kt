@@ -112,7 +112,7 @@ class UserRepositoryMergeTest {
         }
 
         val survivorAfter = users.findById(id = survivor).getOrNull()!!.toDomain()
-        survivorAfter.firebaseUid shouldBe "retired"
+        survivorAfter.firebaseUid?.revealed shouldBe "retired"
         survivorAfter.identities.single().let { identity ->
             identity.provider shouldBe AuthProvider.GOOGLE
             identity.providerUid shouldBe "GOOGLE:retired"
@@ -135,7 +135,7 @@ class UserRepositoryMergeTest {
             users.mergeAccounts(retiredId = retired, survivorId = survivor, transferLogin = true)
         }
 
-        users.findById(id = survivor).getOrNull()!!.toDomain().firebaseUid shouldBe "survivor"
+        users.findById(id = survivor).getOrNull()!!.toDomain().firebaseUid?.revealed shouldBe "survivor"
         users.findById(id = retired).getOrNull()!!.toDomain().firebaseUid.shouldBeNull()
     }
 }

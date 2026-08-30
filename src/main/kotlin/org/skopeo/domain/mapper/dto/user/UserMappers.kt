@@ -27,7 +27,9 @@ fun User.toResponse(): UserResponse =
         customPhotoUrl = customPhotoUrl,
         photoHidden = photoHidden,
         matchHistoryHidden = matchHistoryHidden,
-        dateOfBirth = dateOfBirth?.toString(),
+        // .revealed, not .toString(): stringifying the wrapper yields "***", which would ship
+        // a redacted placeholder to the client instead of the date (#822).
+        dateOfBirth = dateOfBirth?.revealed?.toString(),
         sex = sex,
         city = city,
         country = country,

@@ -187,7 +187,7 @@ class UserRepositoryTest {
                 .toDomain()
 
         updated.city shouldBe "Cebu"
-        updated.dateOfBirth shouldBe LocalDate.of(1990, 1, 2)
+        updated.dateOfBirth?.revealed shouldBe LocalDate.of(1990, 1, 2)
         updated.sex shouldBe "Male" // untouched
     }
 

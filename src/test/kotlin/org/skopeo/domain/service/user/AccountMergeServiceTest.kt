@@ -197,7 +197,7 @@ class AccountMergeServiceTest {
 
         val survivorAfter = users.findById(id = survivor.id).shouldBeRight().toDomain()
         // The survivor now logs in with the retired account's Firebase uid + provider (uniqueness respected).
-        survivorAfter.firebaseUid shouldBe "retired"
+        survivorAfter.firebaseUid?.revealed shouldBe "retired"
         survivorAfter.linkStatus() shouldBe AccountLinkStatus.FACEBOOK
         // The retired account has been freed of its login.
         val retiredAfter = users.findById(id = retired.id).shouldBeRight().toDomain()
@@ -219,7 +219,7 @@ class AccountMergeServiceTest {
             .shouldBeRight()
 
         val survivorAfter = users.findById(id = survivor.id).shouldBeRight().toDomain()
-        survivorAfter.firebaseUid shouldBe "retired"
+        survivorAfter.firebaseUid?.revealed shouldBe "retired"
         survivorAfter.linkStatus() shouldBe AccountLinkStatus.GOOGLE
         survivorAfter.placeholder.shouldBeFalse()
         users.findByFirebaseUid(firebaseUid = "retired").shouldNotBeNull().user.id shouldBe survivor.id
@@ -252,7 +252,7 @@ class AccountMergeServiceTest {
             .shouldBeRight()
 
         val survivorAfter = users.findById(id = survivor.id).shouldBeRight().toDomain()
-        survivorAfter.firebaseUid shouldBe "survivor"
+        survivorAfter.firebaseUid?.revealed shouldBe "survivor"
         survivorAfter.linkStatus() shouldBe AccountLinkStatus.GOOGLE
     }
 
