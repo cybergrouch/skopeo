@@ -17,6 +17,7 @@ import org.skopeo.common.contract.OpenPlayMarginPoints
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.common.contract.TournamentPointsConfig
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -62,7 +63,7 @@ class PointsConfigServiceTest {
                 ),
         ).toDomain()
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
 
     private fun sampleOpenPlay(validityDays: Int = 90): OpenPlayPointsConfig =
         OpenPlayPointsConfig(

@@ -3,6 +3,7 @@
 
 package org.skopeo.domain.model
 
+import org.skopeo.common.redaction.Redactable
 import org.skopeo.common.security.Capability
 import java.time.LocalDateTime
 import java.util.UUID
@@ -75,7 +76,14 @@ data class InsertApiKeyCommand(
 data class IssuedApiKey(
     val client: ApiClient,
     val key: ApiKey,
-    val plaintext: String,
+    /**
+     * The plaintext key, shown to the caller exactly once at issuance.
+     *
+     * [Redactable] because this is a live credential, not merely personal data: only the SHA-256 hash is
+     * persisted, so interpolating this object into a log line would put a *working* API key into Cloud
+     * Logging, where it would outlive the request by the retention period.
+     */
+    val plaintext: Redactable<String>,
 )
 
 /** A key resolved together with its owning client's status, so the resolver can reject a suspended client. */

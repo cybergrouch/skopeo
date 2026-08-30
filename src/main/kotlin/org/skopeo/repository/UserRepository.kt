@@ -93,7 +93,7 @@ class UserRepository {
                 ContactInformationTable.insert {
                     it[ContactInformationTable.userId] = userId
                     it[ContactInformationTable.contactType] = contact.type.name
-                    it[ContactInformationTable.value] = contact.value
+                    it[ContactInformationTable.value] = contact.value.revealed
                     it[ContactInformationTable.isPrimary] = contact.isPrimary
                     it[ContactInformationTable.contactSource] = contact.source.name
                     it[ContactInformationTable.verificationStatus] = contact.status.name

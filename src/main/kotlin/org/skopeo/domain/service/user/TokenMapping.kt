@@ -5,6 +5,7 @@ package org.skopeo.domain.service.user
 
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.ProfileRequest
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.ContactInfo
@@ -108,7 +109,7 @@ internal fun buildProvisionCommand(
         request.phone?.let { number ->
             ContactInfo(
                 type = ContactType.PHONE,
-                value = number,
+                value = number.asRedactable(),
                 source = ContactSource.MANUAL,
                 status = VerificationStatus.PENDING,
                 isPrimary = true,
@@ -116,7 +117,7 @@ internal fun buildProvisionCommand(
         }
     return ProvisionUserCommand(
         firebaseUid = token.uid,
-        identity = UserIdentity(provider = provider, providerUid = token.providerUid, isPrimary = true),
+        identity = UserIdentity(provider = provider, providerUid = token.providerUid.revealed, isPrimary = true),
         names = displayName(token = token, request = request),
         photoUrl = token.picture,
         email = email,
@@ -148,7 +149,7 @@ internal fun buildProvisionCommand(
 internal fun isBootstrapAdmin(
     token: VerifiedFirebaseToken,
     adminEmails: Set<String>,
-): Boolean = token.emailVerified && token.email?.trim()?.lowercase() in adminEmails
+): Boolean = token.emailVerified && token.email?.revealed?.trim()?.lowercase() in adminEmails
 
 internal fun ProfileRequest.toProfilePatch(): ProfilePatch =
     ProfilePatch(

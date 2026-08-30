@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -76,7 +77,7 @@ class UserRepositoryTest {
         email =
             ContactInfo(
                 type = ContactType.EMAIL,
-                value = email,
+                value = email.asRedactable(),
                 source = ContactSource.GOOGLE,
                 status = VerificationStatus.VERIFIED,
                 method = VerificationMethod.OAUTH_PROVIDER,
@@ -100,7 +101,7 @@ class UserRepositoryTest {
         created.identities.single().provider shouldBe AuthProvider.GOOGLE
         created.contacts.single().let {
             it.type shouldBe ContactType.EMAIL
-            it.value shouldBe "juan@example.com"
+            it.value.revealed shouldBe "juan@example.com"
             it.status shouldBe VerificationStatus.VERIFIED
         }
         created.capabilities shouldBe setOf(Capability.PLAYER)
@@ -163,7 +164,7 @@ class UserRepositoryTest {
                 phone =
                     ContactInfo(
                         type = ContactType.PHONE,
-                        value = "+639170000000",
+                        value = "+639170000000".asRedactable(),
                         source = ContactSource.MANUAL,
                         status = VerificationStatus.PENDING,
                     ),

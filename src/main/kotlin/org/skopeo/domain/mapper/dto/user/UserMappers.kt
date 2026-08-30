@@ -48,7 +48,7 @@ fun User.toResponse(): UserResponse =
                 ContactDto(
                     id = it.id.toString(),
                     type = it.type.name,
-                    value = it.value,
+                    value = it.value.revealed,
                     source = it.source.name,
                     status = it.status.name,
                     method = it.method?.name,

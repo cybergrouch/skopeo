@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditAction
@@ -68,7 +69,7 @@ class CapabilityServiceTest {
 
     private fun admin(uid: String = "root"): User = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
 
     @Test
     fun `only an administrator may use the API`() {
@@ -188,7 +189,7 @@ class CapabilityServiceTest {
                     email =
                         ContactInfo(
                             type = ContactType.EMAIL,
-                            value = email,
+                            value = email.asRedactable(),
                             source = ContactSource.GOOGLE,
                             status = status,
                             isPrimary = true,
@@ -252,7 +253,7 @@ class CapabilityServiceTest {
                         phone =
                             ContactInfo(
                                 type = ContactType.PHONE,
-                                value = "+639170000000",
+                                value = "+639170000000".asRedactable(),
                                 source = ContactSource.MANUAL,
                                 status = VerificationStatus.VERIFIED,
                                 isPrimary = true,

@@ -159,7 +159,7 @@ class CapabilityService(
                 contact.isActive &&
                     contact.type == ContactType.EMAIL &&
                     contact.status == VerificationStatus.VERIFIED &&
-                    contact.value.trim().lowercase() in adminEmails
+                    contact.value.revealed.trim().lowercase() in adminEmails
             }
 
     /** Every capability operation requires the caller to be an ADMINISTRATOR; returns their id. */

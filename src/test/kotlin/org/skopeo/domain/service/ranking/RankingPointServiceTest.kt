@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.ranking.AdjustRankingPointsRequest
 import org.skopeo.common.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditAction
@@ -72,7 +73,7 @@ class RankingPointServiceTest {
                 ),
         ).toDomain()
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
 
     private fun grantRequest(
         points: String = "100",

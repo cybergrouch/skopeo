@@ -562,7 +562,7 @@ private fun requireInviteForManualSignup(
     token: VerifiedFirebaseToken,
 ): Either<ServiceError, String?> {
     val isManual = authProviderOf(signInProvider = token.signInProvider) == AuthProvider.PASSWORD
-    val email = token.email?.trim()?.lowercase()
+    val email = token.email?.revealed?.trim()?.lowercase()
     if (!isManual || email == null) return null.right()
     return if (invites.findOpenByEmail(email = email, asOf = LocalDateTime.now()) == null) {
         ServiceError.Forbidden(message = "An invitation is required to register $email").left()

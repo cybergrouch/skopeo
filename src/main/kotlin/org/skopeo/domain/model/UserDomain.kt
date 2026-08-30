@@ -3,6 +3,7 @@
 
 package org.skopeo.domain.model
 
+import org.skopeo.common.redaction.Redactable
 import org.skopeo.common.security.Capability
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -66,7 +67,7 @@ data class Name(
 /** A contact to be written (provisioning input); identity is assigned by the database. */
 data class ContactInfo(
     val type: ContactType,
-    val value: String,
+    val value: Redactable<String>,
     val source: ContactSource,
     val status: VerificationStatus,
     val method: VerificationMethod? = null,
@@ -82,7 +83,7 @@ data class Contact(
     val id: UUID,
     val userId: UUID,
     val type: ContactType,
-    val value: String,
+    val value: Redactable<String>,
     val source: ContactSource,
     val status: VerificationStatus,
     val method: VerificationMethod? = null,
