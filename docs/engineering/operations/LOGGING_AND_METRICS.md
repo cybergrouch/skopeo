@@ -220,6 +220,102 @@ ways a value actually escapes: the MDC map, and an exception's own message insid
 Deliberately still open: redacting value types in the domain model (**#801**), as defence in depth against
 rule 1 rather than a substitute for it.
 
+## `Redactable<T>`: keeping a value out of every `toString()` (#801)
+
+Some values must never reach a log line, and the realistic way they get there is not a deliberate
+`logger.info { user.email }` — it is interpolating a whole object: `logger.info { "provisioned $user" }`.
+Every model here is a `data class`, so Kotlin's generated `toString()` covers **every** field, and one such
+line publishes whatever the object holds, forever, with nothing in the build objecting.
+
+```kotlin
+@JvmInline
+value class Redactable<out T : Any>(val revealed: T) {
+    override fun toString(): String = "***"
+}
+```
+
+### Why the wrapper, and not a `toString()` override per model
+
+Kotlin generates a data class's `toString()` from its constructor properties, and that generated method
+calls `toString()` on each field. So **making the field's type redact protects every containing model
+automatically** — no per-model code, and nothing to forget when a model is added later.
+
+Overriding `toString()` on each of the ~29 PII-carrying classes would work too, but it is ongoing
+boilerplate that fails silently the moment someone adds a class without knowing the convention.
+
+**One trap:** a `value class` inherits a generated `toString()` that prints the wrapped value. The override
+is load-bearing, not decorative, and `RedactableTest` asserts exactly that.
+
+### Using it
+
+```kotlin
+// declare
+data class Invite(val email: Redactable<String>, /* … */)
+
+// wrap at the boundary where the value enters the domain
+email = row[InviteTable.email].asRedactable()
+
+// unwrap only where the value is genuinely needed
+apiKey = plaintext.revealed
+```
+
+`asRedactable()` is named `as…` (like `asSequence`) because **the value is not changed** — it is only
+tagged. At a call site whose purpose is handing the value to a caller, "redact this" would be exactly the
+wrong thing to suggest.
+
+The accessor is `revealed`, not `value`, for two reasons: `contact.value.value` is unreadable, and
+`\.revealed` greps out every place a protected value is deliberately exposed — which is the list a
+reviewer actually wants. There are currently 14, across 11 files.
+
+### What is wrapped
+
+| Target | Holds |
+| --- | --- |
+| `IssuedApiKey.plaintext` | a **working partner API key** — only its SHA-256 hash is persisted |
+| `VerifiedFirebaseToken.email` / `.providerUid` | raw verified identity, built on every authenticated request |
+| `Contact.value` and `ContactInfo.value` | email/phone, stored and incoming forms |
+| `Invite.email` | invitee address |
+
+Both contact forms are wrapped deliberately: covering one leaves the other leaking, and services handle
+`Contact` far more often than `ContactInfo`.
+
+### What is deliberately **not** wrapped
+
+| Excluded | Occurrences | Why |
+| --- | --- | --- |
+| `User.dateOfBirth` | ~126 | Cost/benefit. The rules above and `PiiLeakTest` already cover it, and a date of birth in a log is a materially smaller problem than a live credential. |
+| `User.firebaseUid` | ~238 | Same, more so. |
+| `UserName.value` | — | Display names are shown publicly on player pages anyway. |
+| `UserIdentity.providerUid` | — | It is the join key the repository looks up by. |
+
+### Two limits, stated so they are not mistaken for guarantees
+
+**It stops `"$user"`. It does not stop `"${user.email.revealed}"`.** Reading the value out and logging it
+directly is beyond anything a type can prevent; that is what the clean-sources rules above and
+`PiiLeakTest` are for. This is layer 2 — it removes the *accidental* leak, which is the one that happens.
+
+**The type system does not catch string interpolation.** Wrapping `Contact.value` silently turned an
+audit-log summary into `"Enabled EMAIL ***"` with **no compile error** — only `ContactServiceTest` caught
+it. `ContactService` and `InviteService` both legitimately record the address in the audit table (our own
+database, administrator-only), so both are explicit `.revealed` unwraps with a comment. **If you wrap
+another field, run the full suite rather than trusting a clean compile.**
+
+### Nothing enforces adoption yet
+
+A new sensitive field added as a plain `String` will not fail the build. That guard is **#822**, which
+needs a decision between a source scan, a reflective test, and a logger-interpolation scan.
+
+### The better end state
+
+The [Redacted compiler plugin](https://github.com/ZacSweers/redacted-compiler-plugin) does this with a
+property annotation and **zero** call-site churn. It does not work on Kotlin 2.2.21 — verified: `1.13.0`
+(stable, targets 2.1.20) fails `compileKotlin` with `AbstractMethodError` in the FIR checker, and
+`1.14.0-alpha01` compiles main but fails `compileTestKotlin` with `NoSuchMethodError`.
+
+Revisit when a stable release targeting 2.2.x ships; the swap is delete-the-wrapper, add-annotations. Not
+worth downgrading Kotlin for — the Gradle daemon is already pinned to Java 21 for detekt, and a second
+toolchain shackle for defence in depth is a poor trade.
+
 ## References
 
 - [Cloud Logging: structured logging](https://cloud.google.com/logging/docs/structured-logging)
