@@ -13,6 +13,7 @@ import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -45,7 +46,7 @@ class CapabilityRepositoryTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = emptySet(),

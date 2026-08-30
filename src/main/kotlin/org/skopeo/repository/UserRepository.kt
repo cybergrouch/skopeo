@@ -65,9 +65,9 @@ class UserRepository {
             val userId =
                 UsersTable.insertAndGetId {
                     it[UsersTable.publicCode] = generateUniquePublicCode()
-                    it[UsersTable.firebaseUid] = command.firebaseUid
+                    it[UsersTable.firebaseUid] = command.firebaseUid.revealed
                     it[UsersTable.providerPhotoUrl] = command.photoUrl
-                    it[UsersTable.dateOfBirth] = command.dateOfBirth
+                    it[UsersTable.dateOfBirth] = command.dateOfBirth?.revealed
                     it[UsersTable.sex] = command.sex
                     it[UsersTable.city] = command.city
                     it[UsersTable.country] = command.country ?: "PH"
@@ -300,7 +300,7 @@ class UserRepository {
         transaction {
             val updated =
                 UsersTable.update(where = { UsersTable.id eq id }) {
-                    patch.dateOfBirth?.let { value -> it[UsersTable.dateOfBirth] = value }
+                    patch.dateOfBirth?.let { value -> it[UsersTable.dateOfBirth] = value.revealed }
                     patch.sex?.let { value -> it[UsersTable.sex] = value }
                     patch.city?.let { value -> it[UsersTable.city] = value }
                 }
@@ -318,7 +318,7 @@ class UserRepository {
         transaction {
             val updated =
                 UsersTable.update(where = { UsersTable.id eq id }) {
-                    it[dateOfBirth] = patch.dateOfBirth
+                    it[dateOfBirth] = patch.dateOfBirth?.revealed
                     it[sex] = patch.sex
                     it[city] = patch.city
                 }
@@ -392,7 +392,7 @@ class UserRepository {
                     it[UsersTable.firebaseUid] = null
                     it[UsersTable.placeholder] = true
                     it[UsersTable.sex] = command.sex
-                    it[UsersTable.dateOfBirth] = command.dateOfBirth
+                    it[UsersTable.dateOfBirth] = command.dateOfBirth?.revealed
                 }
             UserNamesTable.insert {
                 it[UserNamesTable.userId] = userId

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.postgresql.util.PGobject
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.client.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -47,7 +48,7 @@ class AuditRepositoryTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "admin",
+                    firebaseUid = "admin".asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = "Admin")),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),

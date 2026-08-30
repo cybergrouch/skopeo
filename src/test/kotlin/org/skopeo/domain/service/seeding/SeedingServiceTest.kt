@@ -68,7 +68,7 @@ class SeedingServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
@@ -80,7 +80,7 @@ class SeedingServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = emptyList(),
                     capabilities = setOf(element = Capability.PLAYER),

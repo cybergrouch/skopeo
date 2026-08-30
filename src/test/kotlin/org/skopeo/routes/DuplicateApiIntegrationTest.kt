@@ -27,6 +27,7 @@ import org.skopeo.common.dto.user.MarkDuplicatesRequest
 import org.skopeo.common.dto.user.PublicPlayerResponse
 import org.skopeo.common.dto.user.UserResponse
 import org.skopeo.common.dto.user.UserSummaryResponse
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.NameType
@@ -68,7 +69,7 @@ class DuplicateApiIntegrationTest {
         UserRepository().provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = "Admin")),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),

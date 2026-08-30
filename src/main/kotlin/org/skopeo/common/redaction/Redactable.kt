@@ -3,6 +3,8 @@
 
 package org.skopeo.common.redaction
 
+import kotlinx.serialization.Serializable
+
 /**
  * A value that must never appear in a log line, an error report, or anything else built from
  * `toString()` (#801).
@@ -23,12 +25,18 @@ package org.skopeo.common.redaction
  * clean-sources rule and `PiiLeakTest` are for. This is layer 2: it removes the *accidental* leak, which
  * is the one that actually happens.
  *
- * **No wire impact.** None of the PII-carrying domain models are `@Serializable` (the annotated ones in
- * `domain/model` carry no PII), so wrapping a field cannot change a JSON payload and no custom serializer
- * is needed. DTOs keep their plain types.
+ * **No wire impact, and this is verified rather than assumed.** The class is `@Serializable`, and kotlinx
+ * serialises a `@JvmInline value class` *transparently as its wrapped value* — so a wrapped field emits
+ * exactly the JSON the raw field did, with no custom serializer and no `revealed` key. That was probed by
+ * wrapping a real DTO field and asserting the emitted JSON was byte-identical (#822).
+ *
+ * The practical consequence: DTOs **can** be wrapped when there is a reason to. They are not, yet — no
+ * DTO or entity is currently interpolated into any log line, so the exposure is prospective. The
+ * annotation is here so that decision stays cheap rather than blocked.
  *
  * A `value class`, so there is no allocation: at runtime this is the underlying reference.
  */
+@Serializable
 @JvmInline
 value class Redactable<out T : Any>(
     /**

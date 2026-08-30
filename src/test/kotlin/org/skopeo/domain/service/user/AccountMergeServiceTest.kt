@@ -79,7 +79,7 @@ class AccountMergeServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = provider, providerUid = "$provider:$uid", isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     sex = "Male",

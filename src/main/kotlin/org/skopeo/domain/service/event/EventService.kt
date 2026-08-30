@@ -878,7 +878,7 @@ class EventService(
                     displayName = user.displayName(),
                     publicCode = user.publicCode,
                     sex = user.sex,
-                    age = user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
+                    age = user.dateOfBirth?.revealed?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
                     rating = ratingById[entry.userId],
                     status = entry.status,
                     placeholder = user.placeholder,

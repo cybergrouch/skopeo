@@ -60,7 +60,7 @@ class CapabilityServiceTest {
     ): User =
         users.provision(
             ProvisionUserCommand(
-                firebaseUid = uid,
+                firebaseUid = uid.asRedactable(),
                 identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                 names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                 capabilities = roles,
@@ -183,7 +183,7 @@ class CapabilityServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     email =
@@ -247,7 +247,7 @@ class CapabilityServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "phone",
+                        firebaseUid = "phone".asRedactable(),
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "phone", isPrimary = true),
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = "phone")),
                         phone =

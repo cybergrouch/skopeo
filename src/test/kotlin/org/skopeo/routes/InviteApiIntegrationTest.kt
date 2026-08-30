@@ -26,6 +26,7 @@ import org.skopeo.common.dto.invite.CreateInviteRequest
 import org.skopeo.common.dto.invite.InvitePageResponse
 import org.skopeo.common.dto.invite.InviteResponse
 import org.skopeo.common.dto.user.CreateUserRequest
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.NameType
@@ -67,7 +68,7 @@ class InviteApiIntegrationTest {
         UserRepository().provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,

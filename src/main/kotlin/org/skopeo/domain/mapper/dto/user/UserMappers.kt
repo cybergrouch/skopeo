@@ -22,7 +22,7 @@ fun User.toResponse(): UserResponse =
     UserResponse(
         id = id.toString(),
         publicCode = publicCode,
-        firebaseUid = firebaseUid,
+        firebaseUid = firebaseUid?.revealed,
         photoUrl = photoUrl,
         customPhotoUrl = customPhotoUrl,
         photoHidden = photoHidden,
@@ -80,7 +80,7 @@ fun User.toSummary(
         displayName = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value,
         photoUrl = photoUrl,
         sex = sex,
-        age = dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
+        age = dateOfBirth?.revealed?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
         rating =
             rating?.let {
                 PublicRatingDto(

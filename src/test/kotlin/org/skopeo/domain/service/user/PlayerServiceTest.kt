@@ -81,7 +81,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = names,
                     sex = sex,
@@ -94,7 +94,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = display(name = "Admin"),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
@@ -120,7 +120,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = display(name = name),
                     email = emailContact(value = email),
@@ -134,7 +134,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = display(name = uid),
                     capabilities = capabilities,
@@ -441,7 +441,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "res",
+                    firebaseUid = "res".asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "res", isPrimary = true),
                     names = display(name = "Res"),
                     capabilities = setOf(Capability.PLAYER, Capability.RESEARCHER),
@@ -844,7 +844,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "admin",
+                    firebaseUid = "admin".asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
                     names = display(name = "Admin"),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
@@ -873,7 +873,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "rater",
+                    firebaseUid = "rater".asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "rater", isPrimary = true),
                     names = display(name = "Rater"),
                     capabilities = setOf(Capability.PLAYER, Capability.RATER),
@@ -882,7 +882,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "admin",
+                    firebaseUid = "admin".asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
                     names = display(name = "Admin"),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
@@ -916,7 +916,7 @@ class PlayerServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "admin",
+                        firebaseUid = "admin".asRedactable(),
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
                         names = display(name = "Admin"),
                         capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),

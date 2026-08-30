@@ -56,7 +56,7 @@ class RatingServiceTest {
     ): User =
         users.provision(
             ProvisionUserCommand(
-                firebaseUid = uid,
+                firebaseUid = uid.asRedactable(),
                 identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                 names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                 capabilities = roles,
@@ -237,10 +237,10 @@ class RatingServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "rich",
+                        firebaseUid = "rich".asRedactable(),
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "rich", isPrimary = true),
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = "Rich")),
-                        dateOfBirth = dob,
+                        dateOfBirth = dob.asRedactable(),
                         sex = "Female",
                         capabilities = setOf(element = Capability.PLAYER),
                     ),
@@ -263,7 +263,7 @@ class RatingServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "self",
+                        firebaseUid = "self".asRedactable(),
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "self", isPrimary = true),
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = "Self")),
                         proposedRating = BigDecimal("3.5"),
@@ -309,7 +309,7 @@ class RatingServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "nameless",
+                        firebaseUid = "nameless".asRedactable(),
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "nameless", isPrimary = true),
                         names = listOf(UserName(type = NameType.FIRST, value = "First")),
                         capabilities = setOf(Capability.PLAYER),

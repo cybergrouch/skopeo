@@ -54,7 +54,7 @@ class NameServiceTest {
     ): User =
         users.provision(
             ProvisionUserCommand(
-                firebaseUid = uid,
+                firebaseUid = uid.asRedactable(),
                 identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                 names = listOf(UserName(type = NameType.DISPLAY, value = "Display $uid")),
                 capabilities = capabilities,

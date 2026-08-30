@@ -299,7 +299,7 @@ class UserServiceTest {
         repository.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "root",
+                    firebaseUid = "root".asRedactable(),
                     identity = UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = "root", isPrimary = true),
                     names = listOf(UserName(type = org.skopeo.domain.model.NameType.FIRST, value = "Root")),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
@@ -360,7 +360,7 @@ class UserServiceTest {
         repository.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid,
+                    firebaseUid = uid.asRedactable(),
                     identity = UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.FIRST, value = uid)),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
@@ -561,7 +561,7 @@ class UserServiceTest {
         repository.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "staff",
+                    firebaseUid = "staff".asRedactable(),
                     identity =
                         UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = "staff", isPrimary = true),
                     names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.DISPLAY, value = "Staff")),
@@ -630,7 +630,7 @@ class UserServiceTest {
         repository.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "rater",
+                    firebaseUid = "rater".asRedactable(),
                     identity =
                         UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = "rater", isPrimary = true),
                     names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.DISPLAY, value = "Rater")),
@@ -640,7 +640,7 @@ class UserServiceTest {
         repository.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "plain",
+                    firebaseUid = "plain".asRedactable(),
                     identity =
                         UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = "plain", isPrimary = true),
                     names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.DISPLAY, value = "Plain")),
@@ -661,7 +661,7 @@ class UserServiceTest {
         repository.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "staff3",
+                    firebaseUid = "staff3".asRedactable(),
                     identity =
                         UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = "staff3", isPrimary = true),
                     names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.DISPLAY, value = "Staff3")),
@@ -682,7 +682,7 @@ class UserServiceTest {
         repository.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "staff4",
+                    firebaseUid = "staff4".asRedactable(),
                     identity =
                         UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = "staff4", isPrimary = true),
                     names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.DISPLAY, value = "Staff4")),
@@ -707,7 +707,7 @@ class UserServiceTest {
         repository.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "staff2",
+                    firebaseUid = "staff2".asRedactable(),
                     identity =
                         UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = "staff2", isPrimary = true),
                     names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.DISPLAY, value = "Staff2")),
@@ -728,7 +728,7 @@ class UserServiceTest {
         repository.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "res",
+                    firebaseUid = "res".asRedactable(),
                     identity =
                         UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = "res", isPrimary = true),
                     names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.DISPLAY, value = "Res")),
@@ -743,7 +743,7 @@ class UserServiceTest {
         repository.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "plain",
+                    firebaseUid = "plain".asRedactable(),
                     identity =
                         UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = "plain", isPrimary = true),
                     names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.DISPLAY, value = "Plain")),

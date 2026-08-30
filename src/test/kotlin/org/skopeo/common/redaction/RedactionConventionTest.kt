@@ -64,17 +64,6 @@ class RedactionConventionTest {
          */
         val ALLOWED: Map<String, String> =
             mapOf(
-                // ~126 occurrences. Cost/benefit: #806's clean-sources rules and PiiLeakTest already
-                // cover it, and a date of birth in a log is a materially smaller problem than a live
-                // credential. Decision recorded on #801.
-                "User.dateOfBirth" to "~126 call sites; covered by #806 rules (see #801)",
-                "ProfilePatch.dateOfBirth" to "same field, patch shape (see #801)",
-                "ProvisionUserCommand.dateOfBirth" to "same field, command shape (see #801)",
-                "CreatePlaceholderCommand.dateOfBirth" to "same field, command shape (see #801)",
-                "PendingAssessment.dateOfBirth" to "admin assessment projection; same decision (see #801)",
-                // ~238 occurrences, and it is the auth path's primary key. Same decision.
-                "User.firebaseUid" to "~238 call sites; covered by #806 rules (see #801)",
-                "ProvisionUserCommand.firebaseUid" to "same field, command shape (see #801)",
                 // The opaque provider subject IS the repository's join key, looked up by value.
                 "UserIdentity.providerUid" to "join key the repository looks up by (see #801)",
                 // Sign-up input, wrapped one hop later when it becomes a ContactInfo.

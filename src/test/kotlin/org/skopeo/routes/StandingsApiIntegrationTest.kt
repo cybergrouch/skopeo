@@ -30,6 +30,7 @@ import org.skopeo.common.dto.standings.StandingsLocateResponse
 import org.skopeo.common.dto.standings.StandingsPageResponse
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.UserResponse
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.NameType
@@ -68,7 +69,7 @@ class StandingsApiIntegrationTest {
         UserRepository().provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "admin",
+                    firebaseUid = "admin".asRedactable(),
                     identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "admin", isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = "Admin")),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
