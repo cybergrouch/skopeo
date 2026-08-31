@@ -59,40 +59,51 @@ data class OpenPlayPointsConfig(
     }
 
     companion object {
-        /** Behaviour-approximating default: current flat winner (equal 3 / favorite 2 / upset 5) and loser
-         *  (equal 0 / favorite 1 / upset −2) values across all margins; the game-margin dimension is present
-         *  but flat, so an admin can dial in dominance/Fibonacci scaling. Open-play validity = 2 months. */
-        val DEFAULT: OpenPlayPointsConfig = defaultConfig()
-
         private const val DEFAULT_MAX_MARGIN = 6
-        private const val DEFAULT_VALIDITY_DAYS = 61
-        private const val EQUAL_WIN = 3
-        private const val FAVORITE_WIN = 2
-        private const val UPSET_WIN = 5
+        private const val DEFAULT_VALIDITY_DAYS = 91
+
+        /** The winner's base for margins 1..[DEFAULT_MAX_MARGIN] — Fibonacci from 5, so dominance pays. */
+        private val MARGIN_BASE = listOf(5, 8, 13, 21, 34, 55)
+
+        /** What a losing underdog earns, by margin: a near-miss pays, a hiding does not. */
+        private val UNDERDOG_CONSOLATION = listOf(2, 1, 0, 0, 0, 0)
+
+        private const val FAVORITE_OFFSET = -1
+        private const val UPSET_OFFSET = 2
         private const val EQUAL_LOSS = 0
-        private const val FAVORITE_LOSS = 1
         private const val UPSET_LOSS = -2
+
+        /** The agreed dominance schedule (#525). The winner's **base** grows with the game margin along
+         *  [MARGIN_BASE]; the band relation then adjusts it — even bands take the base, a favorite deducts
+         *  [FAVORITE_OFFSET], an underdog adds [UPSET_OFFSET]. Those offsets are the same shape as the
+         *  previous flat table (3 / 2 / 5 was a base of 3), so only the base changed. A losing underdog
+         *  keeps a graduated consolation ([UNDERDOG_CONSOLATION]) for a competitive loss and nothing for a
+         *  blowout, and the higher-rated side still loses [UPSET_LOSS] when upset. Validity = 3 months. */
+        val DEFAULT: OpenPlayPointsConfig = defaultConfig()
 
         private fun defaultConfig(): OpenPlayPointsConfig {
             val rows =
                 (1..DEFAULT_MAX_MARGIN).flatMap { margin ->
+                    val base = MARGIN_BASE[margin - 1]
                     listOf(
                         OpenPlayMarginPoints(
                             relation = BandRelation.EQUAL,
                             margin = margin,
-                            winnerPoints = EQUAL_WIN,
+                            winnerPoints = base,
                             loserPoints = EQUAL_LOSS,
                         ),
                         OpenPlayMarginPoints(
                             relation = BandRelation.FAVORITE,
                             margin = margin,
-                            winnerPoints = FAVORITE_WIN,
-                            loserPoints = FAVORITE_LOSS,
+                            winnerPoints = base + FAVORITE_OFFSET,
+                            // The loser here is the underdog, so this is the consolation.
+                            loserPoints = UNDERDOG_CONSOLATION[margin - 1],
                         ),
                         OpenPlayMarginPoints(
                             relation = BandRelation.UPSET,
                             margin = margin,
-                            winnerPoints = UPSET_WIN,
+                            winnerPoints = base + UPSET_OFFSET,
+                            // The loser here is the favorite, so this is the upset deduction.
                             loserPoints = UPSET_LOSS,
                         ),
                     )
@@ -117,11 +128,15 @@ data class TournamentPointsConfig(
     fun schedule(sanctioned: Boolean): List<Int> = if (sanctioned) this.sanctioned else this.unsanctioned
 
     companion object {
-        private val DEFAULT_SANCTIONED = listOf(80, 60, 40, 30)
-        private val DEFAULT_UNSANCTIONED = listOf(40, 30, 20, 15)
+        private val DEFAULT_SANCTIONED = listOf(1000, 800, 600, 500)
+        private val DEFAULT_UNSANCTIONED = listOf(400, 300, 200, 100)
         private const val DEFAULT_VALIDITY_DAYS = 365
 
-        /** Behaviour-preserving default: sanctioned 80/60/40/30, unsanctioned 40/30/20/15, 12-month validity. */
+        /** The agreed schedule (#525): sanctioned is the former table ×10 + 200 (1000/800/600/500);
+         *  unsanctioned is a flat 100-point ladder (400/300/200/100). The tenfold rescale is what makes
+         *  [OpenPlayPointsConfig]'s dominance scaling affordable — a title used to be worth about 1.4
+         *  dominant open-play sets, which forced open-play points to stay flat; it is now worth ~18.
+         *  Sanctioning therefore pays 2.5x an unsanctioned title, widening to 5x at 4th place. */
         val DEFAULT: TournamentPointsConfig =
             TournamentPointsConfig(
                 sanctioned = DEFAULT_SANCTIONED,

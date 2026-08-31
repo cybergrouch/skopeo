@@ -39,19 +39,22 @@ class OpenPlayPointsCalculatorTest {
     ) = OpenPlayPointsCalculator.compute(band1 = band1, band2 = band2, team1Id = t1, sets = sets, config = config)
 
     @Test
-    fun `default schedule - equal bands - the set winner gets 3, the loser 0`() {
+    fun `default schedule - equal bands - the winner gets the margin base, the loser 0`() {
+        // 6-4 is margin 2, whose base is 8; even bands take the base unadjusted.
         val result = compute(band1 = "4.0", band2 = "4.0", sets = listOf(element = set(team1Games = 6, team2Games = 4, winner = t1)))
-        result.team1 shouldBe 3
+        result.team1 shouldBe 8
         result.team2 shouldBe 0
     }
 
     @Test
-    fun `default schedule - favorite wins 2 loser 1, upset wins 5 higher-rated loser -2`() {
+    fun `default schedule - a favorite deducts 1 and the underdog is consoled, an upset adds 2 and costs the favorite 2`() {
+        // 6-4 is margin 2 (base 8): favorite winner 8-1=7, and the losing underdog's margin-2 consolation is 1.
         val favorite = compute(band1 = "4.5", band2 = "4.0", sets = listOf(element = set(team1Games = 6, team2Games = 4, winner = t1)))
-        favorite.team1 shouldBe 2
+        favorite.team1 shouldBe 7
         favorite.team2 shouldBe 1
+        // 6-1 is margin 5 (base 34): upset winner 34+2=36, and the higher-rated loser is docked 2.
         val upset = compute(band1 = "3.5", band2 = "4.5", sets = listOf(element = set(team1Games = 6, team2Games = 1, winner = t1)))
-        upset.team1 shouldBe 5
+        upset.team1 shouldBe 36
         upset.team2 shouldBe -2
     }
 
@@ -65,9 +68,11 @@ class OpenPlayPointsCalculatorTest {
                 set(team1Games = 6, team2Games = 3, winner = t1),
             )
         val result = compute(band1 = "4.5", band2 = "4.0", sets = sets)
-        // S1 favorite: t1 +2, t2 +1. S2 upset (lower t2 wins): t2 +5, t1 −2. S3 favorite: t1 +2, t2 +1.
-        result.team1 shouldBe 2 - 2 + 2
-        result.team2 shouldBe 1 + 5 + 1
+        // S1 favorite, margin 2 (base 8): t1 +7, t2 +1 (consolation).
+        // S2 upset, margin 2 — lower-banded t2 wins: t2 +10, t1 −2.
+        // S3 favorite, margin 3 (base 13): t1 +12, t2 +0 — margin 3 pays the underdog nothing.
+        result.team1 shouldBe 7 - 2 + 12
+        result.team2 shouldBe 1 + 10 + 0
     }
 
     @Test
@@ -108,14 +113,14 @@ class OpenPlayPointsCalculatorTest {
 
     @Test
     fun `a tiebreak-only set uses tiebreak points as games for the margin`() {
-        // A super-tiebreak "set": 0 games each, decided 10-8 → margin 2. Favorite winner (default 2), loser 1.
+        // A super-tiebreak "set": 0 games each, decided 10-8 → margin 2 (base 8). Favorite winner 7, underdog 1.
         val result =
             compute(
                 band1 = "4.5",
                 band2 = "4.0",
                 sets = listOf(element = set(team1Games = 0, team2Games = 0, winner = t1, tb1 = 10, tb2 = 8)),
             )
-        result.team1 shouldBe 2
+        result.team1 shouldBe 7
         result.team2 shouldBe 1
     }
 }
