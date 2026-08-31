@@ -288,17 +288,38 @@ Both contact forms are wrapped deliberately: covering one leaves the other leaki
 | `UserName.value` | — | Display names are shown publicly on player pages anyway. |
 | `UserIdentity.providerUid` | — | It is the join key the repository looks up by. |
 
-### Two limits, stated so they are not mistaken for guarantees
+### Three blind spots, all invisible to the compiler
 
-**It stops `"$user"`. It does not stop `"${user.email.revealed}"`.** Reading the value out and logging it
-directly is beyond anything a type can prevent; that is what the clean-sources rules above and
-`PiiLeakTest` are for. This is layer 2 — it removes the *accidental* leak, which is the one that happens.
+The type checker catches an **assignment** mismatch — passing a `String` where `Redactable<String>` is
+wanted. It catches nothing else, and each of these three cost a real bug:
 
-**The type system does not catch string interpolation.** Wrapping `Contact.value` silently turned an
-audit-log summary into `"Enabled EMAIL ***"` with **no compile error** — only `ContactServiceTest` caught
-it. `ContactService` and `InviteService` both legitimately record the address in the audit table (our own
-database, administrator-only), so both are explicit `.revealed` unwraps with a comment. **If you wrap
-another field, run the full suite rather than trusting a clean compile.**
+**1. Interpolation.** `"$model"` redacts correctly, which is the point — but it also silently redacts a
+reader that legitimately needs the value. Wrapping `Contact.value` turned an audit-log summary into
+`"Enabled EMAIL ***"` with no compile error; only `ContactServiceTest` caught it. `ContactService` and
+`InviteService` both record the address in the audit table on purpose, so both are explicit `.revealed`
+unwraps.
+
+**2. `.toString()` on the wrapper — this one reached production.** Two DTO mappers did
+`dateOfBirth?.toString()`, which yields `"***"`, so `UserResponse.dateOfBirth` and
+`PendingAssessmentResponse.dateOfBirth` would have shipped a redacted placeholder to clients instead of
+the date. It compiled cleanly because `toString()` exists on everything.
+
+`RedactionConventionTest` now scans all of `src/main` for `<wrappedField>?.toString()` without a
+`.revealed`, so this specific mistake fails the build. Note the scan covers the whole main source, not
+just `domain/model` and `domain/service` — the bug was in `domain/mapper`.
+
+**3. kotest `shouldBe` is `Any`-typed.** `wrapped shouldBe rawValue` compiles and fails only at runtime.
+Seven test assertions needed `?.revealed`. Nothing guards this one; the suite is the guard.
+
+**It also stops `"$user"` but not `"${user.dateOfBirth.revealed}"`** — reading the value out and logging
+it is beyond anything a type can prevent. That is what #806's clean-sources rules and `PiiLeakTest` are
+for. This is layer 2: it removes the *accidental* leak, which is the one that happens.
+
+### What this means if you wrap another field
+
+**Run the full suite. A clean compile is not evidence.** All three blind spots above compile without
+complaint, and two of them were found only by tests failing. The compiler makes wrapping look like a
+mechanical refactor; it isn't.
 
 ### Nothing enforces adoption yet
 

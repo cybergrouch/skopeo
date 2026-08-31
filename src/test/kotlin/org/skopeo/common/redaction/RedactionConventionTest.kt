@@ -76,6 +76,16 @@ class RedactionConventionTest {
                 "InsertApiKeyCommand.keyHash" to "a hash, not the secret; not usable to authenticate",
             )
 
+        /** `val <name>: Redactable<…>` — the fields currently protected. */
+        val WRAPPED_DECL = Regex(pattern = """val (\w+): Redactable""")
+
+        /**
+         * Names too common to match bare: `value.toString()` could be any local. For these the scan
+         * requires a receiver (`contact.value.toString()`), which is precise enough to be useful without
+         * crying wolf on every unrelated local variable.
+         */
+        val GENERIC_NAMES_NEEDING_A_RECEIVER = setOf(element = "value")
+
         /** `val <name>: <Type>` — enough to spot a raw declaration without parsing Kotlin. */
         val FIELD = Regex(pattern = """^\s*(?:@\w+\s+)*val\s+(\w+)\s*:\s*([\w<>?.]+)""")
         val DATA_CLASS = Regex(pattern = """^\s*(?:internal\s+|private\s+)?data class (\w+)""")
@@ -163,6 +173,76 @@ class RedactionConventionTest {
                     "Sensitive fields declared with a raw type (#822):\n$detail\n\n" +
                         "Either wrap the field as Redactable<...> (see LOGGING_AND_METRICS.md), or add an " +
                         "entry to RedactionConventionTest.ALLOWED with the reason it is not a defect.",
+            )
+        }
+
+        findings.shouldBeEmpty()
+    }
+
+    // ---- Usage scan: `.toString()` on a wrapped field (#822) -----------------------------------
+    //
+    // A DIFFERENT failure from the declaration scan above, and the one that actually shipped a bug.
+    // Two DTO mappers did `dateOfBirth?.toString()`; on a Redactable that yields "***", so the API
+    // returned a redacted placeholder instead of the date. It compiled cleanly, because `toString()`
+    // exists on everything — neither the type checker nor detekt can see it.
+    //
+    // Note the scope difference: those mappers live in `domain/mapper`, which the declaration scan does
+    // NOT cover. A usage can be anywhere, so this sweeps all of src/main.
+
+    /**
+     * Field names currently declared as `Redactable<…>`, read from the source rather than hardcoded, so
+     * the guard stays correct as fields are wrapped or unwrapped.
+     */
+    private fun wrappedFieldNames(): Set<String> =
+        sourceRoot()
+            .walkTopDown()
+            .filter { it.extension == "kt" }
+            .flatMap { f -> WRAPPED_DECL.findAll(input = f.readText()).map { it.groupValues[1] } }
+            .toSet()
+
+    private fun stringifications(): List<String> {
+        val names = wrappedFieldNames() - GENERIC_NAMES_NEEDING_A_RECEIVER
+        val findings = mutableListOf<String>()
+        sourceRoot().walkTopDown().filter { it.extension == "kt" }.forEach { file ->
+            file.readLines().forEachIndexed { index, line ->
+                // `.revealed` anywhere in the expression means the author unwrapped deliberately.
+                if (line.contains(other = ".revealed")) return@forEachIndexed
+                val bare = names.any { Regex(pattern = """\b$it\??\.toString\(\)""").containsMatchIn(input = line) }
+                val qualified =
+                    GENERIC_NAMES_NEEDING_A_RECEIVER.any {
+                        Regex(pattern = """\.$it\??\.toString\(\)""").containsMatchIn(input = line)
+                    }
+                if (bare || qualified) {
+                    findings.add(element = "${file.name}:${index + 1}  ${line.trim()}")
+                }
+            }
+        }
+        return findings
+    }
+
+    @Test
+    fun `the usage scan discovers the wrapped field names`() {
+        // A scan that resolves no names checks nothing and passes vacuously — which is exactly what an
+        // earlier version of this test did, because it walked a doubled path.
+        val names = wrappedFieldNames()
+
+        names shouldContain "dateOfBirth"
+        names shouldContain "firebaseUid"
+        names shouldContain "plaintext"
+        (names.size >= 5) shouldBe true
+    }
+
+    @Test
+    fun `no wrapped field is stringified instead of revealed`() {
+        val findings = stringifications()
+
+        if (findings.isNotEmpty()) {
+            println(
+                message =
+                    "`.toString()` on a Redactable field yields \"***\" (#822):\n" +
+                        findings.joinToString(separator = "\n") { "  $it" } +
+                        "\n\nUse `?.revealed?.toString()`. Two DTO mappers had exactly this bug and would " +
+                        "have shipped \"***\" to clients as a date of birth.",
             )
         }
 
