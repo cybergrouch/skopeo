@@ -83,9 +83,11 @@ export function NewEventForm({
   const [circuitId, setCircuitId] = useState("");
   // "Award Ranking Points" checkbox (#559): when set, finalizing the event awards ranking points per the
   // global schedules; unticking opts the whole event out of awarding.
-  // TEMPORARY (#567): defaulted OFF during the testing phase so new events don't award points while we
-  // validate finalize behaviour. Revert this default back to `true` once we're ready to go live.
-  const [awardRankingPoints, setAwardRankingPoints] = useState(false);
+  // Defaults ON (#831), so a host must deliberately opt an event out rather than remember to opt in —
+  // forgetting the tick would otherwise cost their players points with no error and nothing to notice.
+  // (This is the revert #567 asked for; it defaulted OFF while finalize behaviour was being validated.)
+  // The submit payload is still gated on the feature flag, so a hidden checkbox cannot send `true`.
+  const [awardRankingPoints, setAwardRankingPoints] = useState(true);
 
   // Clubs to optionally file the event under (#313). Readable by staff; empty when none exist.
   const clubsData = useGetApiV1Clubs().data;
@@ -118,6 +120,7 @@ export function NewEventForm({
         setType("OPEN_PLAY");
         setFormat("SINGLES");
         setCircuitId("");
+        // Back to the default for the next event, matching the initial state (#831).
         setAwardRankingPoints(true);
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
@@ -145,7 +148,10 @@ export function NewEventForm({
           clubId,
           ...(type === "TOURNAMENT" ? { circuitId } : {}),
           // A single "Award Ranking Points" flag (#559) replaces the old per-event points config.
-          awardRankingPoints,
+          // Gated on the feature flag (#641): while it is off the checkbox is not rendered, so the host was
+          // never offered the choice and the event must not claim to award. Gating here rather than in the
+          // initial state avoids depending on the flag query having resolved before mount (#831).
+          awardRankingPoints: awardPointsEnabled && awardRankingPoints,
         },
       },
       {
