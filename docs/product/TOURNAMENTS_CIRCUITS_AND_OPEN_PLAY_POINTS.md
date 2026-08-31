@@ -1,6 +1,11 @@
 # Tournaments, Circuits & Open-Play Points
 
-> **Status:** Proposed — discussion of record for [#525](https://github.com/cybergrouch/skopeo/issues/525). Not yet implemented. All design decisions are resolved (marked **Resolved** below); remaining detail (band matrices) lives in the working sheet referenced on #525.
+> **Status:** Parts A and B are **implemented** — circuits, the club-level sanction flag, computed per-set
+> open-play points, and placement-based tournament points all ship. Part C's **schedule values** are the
+> agreed dominance schedule and are now the shipped code defaults (see [Recommended preset](#recommended-preset-agreed-schedule)).
+> This document remains the discussion of record for [#525](https://github.com/cybergrouch/skopeo/issues/525);
+> sections below marked **Resolved** record decisions as taken. Where a section describes the pre-implementation
+> code, it is labelled as a study.
 
 This document captures the design discussion for two related additions to the competitive model and the ranking-points system:
 
@@ -182,8 +187,8 @@ The existing **global points policy** (`points_policies`, seeded in V16: per-`Ev
 
 Under this design, points are **determined by rules, not designated by a host**:
 
-- **Open play** — computed from the band-difference table (integral values `−2 … 5`).
-- **Tournaments** — fixed placement schedule (80/60/40/30, halved when unsanctioned).
+- **Open play** — computed from the game-margin × band-relation schedule (integral values `−2 … 57` under the shipped defaults).
+- **Tournaments** — fixed placement schedule (see [Recommended preset](#recommended-preset-agreed-schedule); unsanctioned is a separate table, not a halving).
 
 So the designation-plus-policy machinery is **obsolete for both**, and two of the computed values (**0** and **negative**) would actually *violate* the policy's positive `min` and the `points > 0` guard in `RankingPointService.grant`.
 
@@ -199,7 +204,7 @@ The rule-based amounts above started as **code constants**. They are now a **glo
 
 ### Open-play: game-margin dominance brackets (#553)
 
-The former binary ALP (loser took ≥ 4 games → +1) is replaced by **game-margin brackets**: `margin = winner games − loser games` per set (tiebreak points still count as games). The schedule is an editable table indexed by **band relation (EQUAL / FAVORITE / UPSET) × margin bracket**, giving the **winner** and **loser** points per cell. Arbitrary per-cell values are allowed, so the study's **Fibonacci-margin** winner increments (`{2,3,5,8,13,21}` for margins 1..6) can be entered directly. The default is behaviour-approximating (flat winner 3/2/5, loser 0/1/−2 across margins). **Open-play validity days** is part of this schedule.
+The former binary ALP (loser took ≥ 4 games → +1) is replaced by **game-margin brackets**: `margin = winner games − loser games` per set (tiebreak points still count as games). The schedule is an editable table indexed by **band relation (EQUAL / FAVORITE / UPSET) × margin bracket**, giving the **winner** and **loser** points per cell. Arbitrary per-cell values are allowed. The **shipped default** is the agreed dominance schedule below — a winner **base** by margin with band-relation offsets — replacing the former behaviour-approximating flat table (winner 3/2/5, loser 0/1/−2 across every margin). **Open-play validity days** is part of this schedule.
 
 ### Tournaments: extended placement brackets (#552) + configurable table
 
@@ -212,15 +217,61 @@ Placement matches now carry a richer taxonomy (widening `matches.placement_brack
 | **Semi-Finals (with plate)** | advances | → Plate Finals (semi awards nothing directly) |
 | **Plate Finals** | 3rd | 4th |
 
-Rules: a player earns **exactly one** placement award (their best — enforced by processing best-place-first with a guard); a with-plate semi with **no completed Plate Finals** falls back to paying its loser the 3rd rate (no one unpaid); doubles pay each partner the full amount. The sanctioned/unsanctioned tables (default 80/60/40/30 and 40/30/20/15) and **tournament validity days** are configurable.
+Rules: a player earns **exactly one** placement award (their best — enforced by processing best-place-first with a guard); a with-plate semi with **no completed Plate Finals** falls back to paying its loser the 3rd rate (no one unpaid); doubles pay each partner the full amount. The sanctioned/unsanctioned tables and **tournament validity days** are configurable; the shipped defaults are the rescaled schedule in [Recommended preset](#recommended-preset-agreed-schedule) (sanctioned 1000/800/600/500, unsanctioned 400/300/200/100).
 
-### Recommended preset (from the study)
+### Recommended preset (agreed schedule)
 
-To adopt the [simulation study](./POINTS_RANKING_SIMULATION_STUDY.md)'s recommendation with **config edits only** (no code change):
+This is the agreed schedule and is **shipped as the code defaults** in `common/contract/PointsConfigContract.kt`,
+pinned cell-by-cell by `PointsConfigContractTest`. An administrator may still override it at runtime.
 
-- **Validity — "Seasonal":** open-play validity **3 months (~91 days)**, tournament validity **12 months (365 days)** — §13's currency-of-form sweet spot.
-- **Open-play increments — Fibonacci margin:** set the FAVORITE/UPSET winner cells to `{2,3,5,8,13,21}` by margin for diverse (non-noise) increments.
-- Do **not** re-introduce the finer-increment sub-tier or ×100 fixed-point — the study rejects them (Part 4 cons: noise, not merit). Band-scoping + the confidence tie-breaker (#547) already handle residual collisions.
+**Validity — "Seasonal":** open-play **3 months (~91 days)** (was 61 days), tournament **12 months
+(365 days)**, unchanged — §13's currency-of-form sweet spot.
+
+**Open play.** The margin sets a winner **base**; the band relation then adjusts it. The offsets are the
+same ones the old flat table used (3 / 2 / 5 was simply a base of 3), so only the base changed:
+
+| Margin | Example | Even bands W / L | Favourite wins W / L | Underdog wins (upset) W / L |
+|---|---|---|---|---|
+| 1 | 6–5, 5–4 | +5 / 0 | +4 / +2 | +7 / −2 |
+| 2 | 6–4, 7–5 | +8 / 0 | +7 / +1 | +10 / −2 |
+| 3 | 6–3, 5–2 | +13 / 0 | +12 / 0 | +15 / −2 |
+| 4 | 6–2, 5–1 | +21 / 0 | +20 / 0 | +23 / −2 |
+| 5 | 6–1, 5–0 | +34 / 0 | +33 / 0 | +36 / −2 |
+| 6+ | 6–0, 7–0 | +55 / 0 | +54 / 0 | +57 / −2 |
+
+Base = `5 · 8 · 13 · 21 · 34 · 55`; even = base, favourite = base − 1, underdog = base + 2. The matchup
+columns are named from the **winner's** side, so the loser under *Favourite wins* is the underdog (hence a
+positive consolation) and the loser under *Underdog wins* is the favourite (hence the deduction).
+
+- **Losing underdog — graduated consolation:** **+2** at margin 1, **+1** at margin 2, **0** from margin 3 up. Replaces the former flat +1 at every margin, which paid a 6–0 hiding the same as a near-miss.
+- **Upset deduction:** **−2** at every margin, unchanged, always on the higher-rated side.
+- A single progression applied to *both* the FAVORITE and UPSET winner cells — the shape the earlier `{2,3,5,8,13,21}` preset proposed — is **rejected**: it collapses the upset premium, since both relations would pay identically at the same margin. The base + offset form exists precisely to preserve that premium.
+
+**Tournaments.** Placement points are rescaled roughly tenfold, which is what makes the open-play
+dominance scaling affordable: a title at 80 was worth only ~1.4 dominant open-play sets, so open-play
+points had to stay flat. At 1000 it is worth ~18 of them.
+
+| Finish | Sanctioned (was) | Unsanctioned (was) |
+|---|---|---|
+| 1st | **1000** (80) | **400** (40) |
+| 2nd | **800** (60) | **300** (30) |
+| 3rd | **600** (40) | **200** (20) |
+| 4th | **500** (30) | **100** (15) |
+| 5th+ | 0 | 0 |
+
+Sanctioned = the former table `× 10 + 200` at every place. Unsanctioned = a flat 100-point ladder (this
+matches `× 10` at 1st–3rd; 4th is deliberately rounded down from 150 to keep the ladder even). One
+emergent consequence: the sanctioning premium was a flat 2× at every place and is now **2.5× at 1st,
+rising to 5× at 4th** — largest for the players least likely to win, which are the entries that fill a draw.
+
+**Rejected outright.** Do **not** re-introduce the finer-increment sub-tier or ×100 fixed-point — the study
+rejects them (Part 4 cons: noise, not merit). Band-scoping + the confidence tie-breaker (#547) already
+handle residual collisions.
+
+**Open question, non-blocking.** The open-play progression spans ~11× within a single set (5 → 57), so one
+blowout is worth roughly ten hard-fought wins, and the flat −1 / +2 offset falls from 60% of the award at
+margin 1 to ~5% at margin 6. The steepness comes from the growth rate across six margins rather than the
+starting value, so the levers are a shallower progression or a lower `maxMargin` — both configuration.
 
 ---
 
@@ -241,7 +292,12 @@ In short: the new work replaces *how the amount is derived*, and adds a loser ro
 Grounded in a read of the points/band/event code (file references for implementers):
 
 ### Points are awarded at event finalize
-`service/event/EventFinalizeAwarder.kt` (`awardForFinalizedEvent`) is the single choke point. It filters fixtures that are `COMPLETED`, have a `winnerTeamId`, and carry a non-null `designatedPoints`; resolves each winner's **current band** (`ratings.findCurrentRatings`) and sex; maps the event's `pointValidity{Start,End}` to a `PointClass`; and writes one ledger row **per winning-team member** with the host-designated amount.
+> **This subsection is a pre-implementation study** — it describes the code as it stood *before* Part B
+> shipped, and is kept because the surrounding analysis explains why the design fits. It no longer
+> describes current behaviour: open-play amounts are **computed** (`OpenPlayPointsCalculator`) rather than
+> read from `designatedPoints`, and **both** sides of a fixture are paid, not only the winner.
+
+`service/event/EventFinalizeAwarder.kt` (`awardForFinalizedEvent`) is the single choke point. It filtered fixtures that are `COMPLETED`, have a `winnerTeamId`, and carry a non-null `designatedPoints`; resolves each winner's **current band** (`ratings.findCurrentRatings`) and sex; maps the event's `pointValidity{Start,End}` to a `PointClass`; and wrote one ledger row **per winning-team member** with the host-designated amount.
 
 - **Open play (Part B) plugs in here.** Most inputs are available at finalize time: `match.winnerTeamId` (per set), per-set games (`match.sets[].team1Games/team2Games`), `event.type`, `match.matchType`. The one change from today's flow is the band basis: instead of `findCurrentRatings` (finalize-time), the bands must be resolved **as of event start** (entry band — see the resolved decision above), e.g. from `user_rating_history` as-of the event start date or an entry snapshot taken at registration. The awarder change: for `EventType.OPEN_PLAY` fixtures, replace "read `designatedPoints`" with `computeOpenPlayPoints(entryBandTeamA, entryBandTeamB, sets)` iterating the sets, and **also emit a loser award** (today only winners are paid) — including zero/negative amounts.
 - **Tournaments (Part A) need a different branch.** Tournaments award **only** by placement (no per-match points). Requires a new per-match input (`isPlacementMatch` + placement bracket `SUPER_FINALS`/`PLATE_FINALS` — a `Match`/`MatchTables` column + DTO/OpenAPI + Event Organizer field). At finalize, the awarder finds the placement matches, maps **Super Finals winner→1st / loser→2nd** and **Plate Finals winner→3rd / loser→4th**, and writes one ledger row per team member with the sanction-selected table amount. Regular tournament fixtures write nothing.
@@ -266,7 +322,20 @@ No `circuit` or `sanction` concept exists (`EventType` / `MatchType` / `WeightCl
 
 ## Rollout
 
-**Going forward only.** The new open-play formula and tournament placement points apply to events finalized **after** the change ships. Already-finalized open-play events are **not** recomputed or re-awarded — their existing ledger rows stand. No historical migration of awards.
+**Going forward only — and no migration is needed.** The schedule applies to events finalized **after** the
+change ships. Already-finalized events are **not** recomputed or re-awarded.
+
+Note *why* no migration is required, because the reason matters: production reward points were **cleared**,
+so there is no old-scale history for the rescaled values to collide with. Two properties make a cleared
+ledger sufficient — revocation is soft (`RankingPointRepository.revoke` flips the row to `REVOKED` and
+appends a marker row), and every aggregation filters `status = ACTIVE`, so revoked rows are invisible to
+standings and to the band races.
+
+**Cutover precondition.** Awards are stamped **at event finalize**, so apply the schedule *before*
+finalizing any further event. An event finalized under the old values would be written at the old scale and
+would then sit alongside new-scale awards for up to the tournament validity window (365 days). Had there
+been old-scale rows to deal with, the correct move would have been to **revoke** rather than convert them:
+a value-based backfill is ambiguous, since 40 was both a sanctioned 3rd and an unsanctioned 1st.
 
 ## Suggested increments (not a commitment)
 

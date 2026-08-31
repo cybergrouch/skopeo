@@ -19,6 +19,9 @@ import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.contract.BandRelation
+import org.skopeo.common.contract.OpenPlayPointsConfig
+import org.skopeo.common.contract.TournamentPointsConfig
 import org.skopeo.common.dto.event.EventResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.redaction.asRedactable
@@ -1576,7 +1579,7 @@ class EventServiceTest {
 
         // Super Finals: winner p1 → 1st (40), loser p2 → 2nd (30).
         val winner = awardRepo.listByUser(userId = p1.id).single()
-        winner.points shouldBe BigDecimal("40.0000")
+        winner.points shouldBe placementRate(place = 1)
         winner.band shouldBe "4.0"
         winner.eventId shouldBe event.id
         winner.sourceId shouldBe event.id.toString()
@@ -1585,10 +1588,11 @@ class EventServiceTest {
         val tvDays = org.skopeo.domain.service.settings.PointsConfigService().getTournament().value.validityDays.toLong()
         winner.validFrom shouldBe event.endDate.atStartOfDay()
         winner.validUntil shouldBe event.endDate.plusDays(tvDays + 1).atStartOfDay()
-        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("30.0000")
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 2)
         // The award summary totals both placements (40 + 30).
         AuditRepository().list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0)
-            .first.single().details["totalPoints"] shouldBe "70"
+            .first.single().details["totalPoints"] shouldBe
+            TournamentPointsConfig.DEFAULT.unsanctioned.take(n = 2).sum().toString()
     }
 
     @Test
@@ -1611,7 +1615,7 @@ class EventServiceTest {
 
         // Winner p1 advances to the final (no direct award); loser p2 gets the flat 3rd rate (unsanctioned 20).
         awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
-        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("20.0000")
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 3)
     }
 
     @Test
@@ -1634,7 +1638,7 @@ class EventServiceTest {
 
         // No completed Plate Finals exists → the semi loser still gets the 3rd rate (fallback), no one unpaid.
         awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
-        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("20.0000")
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 3)
     }
 
     @Test
@@ -1668,8 +1672,8 @@ class EventServiceTest {
 
         // p1 advanced (no award); p2 paid once at 3rd (20) via the plate, not also the semi; p3 at 4th (15).
         awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
-        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("20.0000")
-        awardRepo.listByUser(userId = p3.id).single().points shouldBe BigDecimal("15.0000")
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 3)
+        awardRepo.listByUser(userId = p3.id).single().points shouldBe placementRate(place = 4)
     }
 
     @Test
@@ -1793,7 +1797,7 @@ class EventServiceTest {
         val finalized = service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
         finalized.awardingSuppressedByGlobalFlag.shouldBeFalse()
-        awardRepo.listByUser(userId = p1.id).single().points shouldBe BigDecimal("40.0000")
+        awardRepo.listByUser(userId = p1.id).single().points shouldBe placementRate(place = 1)
         AuditRepository()
             .list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0)
             .first.single().details["suppressedByGlobalFlag"] shouldBe "false"
@@ -1859,14 +1863,14 @@ class EventServiceTest {
         entries.map { it.entityId }.toSet() shouldBe setOf(p1.id, p2.id)
 
         val p1Entry = entries.single { it.entityId == p1.id }
-        p1Entry.details["points"] shouldBe "40"
+        p1Entry.details["points"] shouldBe TournamentPointsConfig.DEFAULT.unsanctioned.first().toString()
         p1Entry.details["matchId"] shouldBe match.id.toString()
         p1Entry.details["matchPublicCode"] shouldBe match.publicCode
         p1Entry.details["eventId"] shouldBe event.id.toString()
         p1Entry.details["band"] shouldBe "4.0"
 
         val p2Entry = entries.single { it.entityId == p2.id }
-        p2Entry.details["points"] shouldBe "30"
+        p2Entry.details["points"] shouldBe TournamentPointsConfig.DEFAULT.unsanctioned[1].toString()
         p2Entry.details["matchId"] shouldBe match.id.toString()
     }
 
@@ -1903,7 +1907,7 @@ class EventServiceTest {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
-        // Equal entry bands (both 4.0): the set winner scores 3, the loser 0 (design table).
+        // Equal entry bands (both 4.0): the set winner takes the margin base, the loser 0.
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
         enableGlobalAwarding(hostUid = "host")
@@ -1917,16 +1921,19 @@ class EventServiceTest {
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // Winner p1 gets 3 (equal bands); loser p2 gets a 0-point row (both participants are recorded).
+        // Equal bands, and the seeded fixture is a margin-2 set, so the winner takes that cell's base;
+        // loser p2 still gets a 0-point row, because both participants are recorded.
         val winner = awardRepo.listByUser(userId = p1.id).single()
-        winner.points shouldBe BigDecimal("3.0000")
+        winner.points shouldBe openPlayWinnerRate(relation = BandRelation.EQUAL, margin = 2)
         winner.band shouldBe "4.0"
         winner.eventId shouldBe event.id
         winner.pointClass shouldBe org.skopeo.domain.model.PointClass.OPEN_PLAY.name
         awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("0.0000")
-        // Validity defaults to [event end, end + 2 months) when no window is configured (#525).
+        // Validity defaults to the schedule's window when the event configures none (#525): the stored
+        // range is half-open, so validUntil sits one day past [validityDays] after the event end.
         winner.validFrom shouldBe event.endDate.atStartOfDay()
-        winner.validUntil shouldBe event.endDate.plusMonths(2).plusDays(1).atStartOfDay()
+        val openPlayDays = OpenPlayPointsConfig.DEFAULT.validityDays.toLong()
+        winner.validUntil shouldBe event.endDate.plusDays(openPlayDays + 1).atStartOfDay()
     }
 
     @Test
@@ -1953,11 +1960,11 @@ class EventServiceTest {
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
         // Both winning-team members get the FULL 1st-place points (two rows of 40, not a split).
-        awardRepo.listByUser(userId = a.id).single().points shouldBe BigDecimal("40.0000")
-        awardRepo.listByUser(userId = b.id).single().points shouldBe BigDecimal("40.0000")
+        awardRepo.listByUser(userId = a.id).single().points shouldBe placementRate(place = 1)
+        awardRepo.listByUser(userId = b.id).single().points shouldBe placementRate(place = 1)
         // Both losing-team members get 2nd-place points.
-        awardRepo.listByUser(userId = c.id).single().points shouldBe BigDecimal("30.0000")
-        awardRepo.listByUser(userId = d.id).single().points shouldBe BigDecimal("30.0000")
+        awardRepo.listByUser(userId = c.id).single().points shouldBe placementRate(place = 2)
+        awardRepo.listByUser(userId = d.id).single().points shouldBe placementRate(place = 2)
     }
 
     @Test
@@ -2084,8 +2091,8 @@ class EventServiceTest {
         )
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
-        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("40.0000")
-        awardRepo.listByUser(userId = p1.id).single().points shouldBe BigDecimal("30.0000")
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 1)
+        awardRepo.listByUser(userId = p1.id).single().points shouldBe placementRate(place = 2)
     }
 
     @Test
@@ -2120,8 +2127,8 @@ class EventServiceTest {
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
         // Sanctioned Super Finals: winner p1 → 1st (80), loser p2 → 2nd (60).
-        awardRepo.listByUser(userId = p1.id).single().points shouldBe BigDecimal("80.0000")
-        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("60.0000")
+        awardRepo.listByUser(userId = p1.id).single().points shouldBe placementRate(place = 1, sanctioned = true)
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 2, sanctioned = true)
     }
 
     @Test
@@ -2143,7 +2150,7 @@ class EventServiceTest {
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
         // Unsanctioned Plate Finals: winner p1 → 3rd (20); the unrated loser p2 is skipped.
-        awardRepo.listByUser(userId = p1.id).single().points shouldBe BigDecimal("20.0000")
+        awardRepo.listByUser(userId = p1.id).single().points shouldBe placementRate(place = 3)
         awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
     }
 
@@ -2165,4 +2172,21 @@ class EventServiceTest {
 
         error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "Invalid format"
     }
+
+    /**
+     * The default placement rate for [place] (1-based) at the ledger's scale. Derived from the shipped
+     * schedule rather than hard-coded, so a schedule change is a single edit in
+     * `PointsConfigContractTest` — these tests assert the *awarding* logic (right place, right table),
+     * not the values.
+     */
+    private fun placementRate(
+        place: Int,
+        sanctioned: Boolean = false,
+    ): BigDecimal = BigDecimal(TournamentPointsConfig.DEFAULT.schedule(sanctioned = sanctioned)[place - 1]).setScale(4)
+
+    /** The default open-play winner rate for a [relation] set won by [margin] games, at the ledger's scale. */
+    private fun openPlayWinnerRate(
+        relation: BandRelation,
+        margin: Int,
+    ): BigDecimal = BigDecimal(OpenPlayPointsConfig.DEFAULT.cell(relation = relation, margin = margin).winnerPoints).setScale(4)
 }
