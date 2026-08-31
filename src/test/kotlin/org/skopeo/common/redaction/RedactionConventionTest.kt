@@ -84,7 +84,7 @@ class RedactionConventionTest {
          * requires a receiver (`contact.value.toString()`), which is precise enough to be useful without
          * crying wolf on every unrelated local variable.
          */
-        val GENERIC_NAMES_NEEDING_A_RECEIVER = setOf("value")
+        val GENERIC_NAMES_NEEDING_A_RECEIVER = setOf(element = "value")
 
         /** `val <name>: <Type>` — enough to spot a raw declaration without parsing Kotlin. */
         val FIELD = Regex(pattern = """^\s*(?:@\w+\s+)*val\s+(\w+)\s*:\s*([\w<>?.]+)""")
