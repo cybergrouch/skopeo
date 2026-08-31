@@ -247,10 +247,11 @@ describe("NewEventForm — fixed club (#780)", () => {
       });
     });
 
-    it("defaults award-ranking-points off and only offers it when the flag is on (#567, #641)", async () => {
+    it("hides the award-points checkbox and opts out while the global flag is off (#641, #831)", async () => {
       const user = userEvent.setup();
       renderForm();
-      // Flag off: no checkbox, and the payload opts out.
+      // Flag off: no checkbox, and the payload must still opt out even though the checkbox state now
+      // defaults to true — the submit gate is what guarantees that (#831).
       expect(
         screen.queryByLabelText(/Award Ranking Points/i),
       ).not.toBeInTheDocument();
@@ -273,7 +274,25 @@ describe("NewEventForm — fixed club (#780)", () => {
     });
   });
 
-  it("offers and sends the award-points opt-in when the flag is enabled (#641)", async () => {
+  it("offers the award-points checkbox already ticked and awards by default when the flag is enabled (#641, #831)", async () => {
+    useAwardFlag.mockReturnValue({ data: { enabled: true } });
+    const user = userEvent.setup();
+    renderForm();
+
+    // Pre-ticked: the host has to opt out, not opt in.
+    expect(screen.getByLabelText("Award Ranking Points")).toBeChecked();
+
+    await user.type(screen.getByLabelText("Name"), "Summer Open");
+    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+    await user.type(screen.getByLabelText("End date"), "2026-06-02");
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+
+    expect(createMutate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ awardRankingPoints: true }),
+    });
+  });
+
+  it("lets a host opt the event out by unticking award points (#831)", async () => {
     useAwardFlag.mockReturnValue({ data: { enabled: true } });
     const user = userEvent.setup();
     renderForm();
@@ -281,11 +300,12 @@ describe("NewEventForm — fixed club (#780)", () => {
     await user.type(screen.getByLabelText("Name"), "Summer Open");
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
-        await user.click(screen.getByLabelText("Award Ranking Points"));
+    await user.click(screen.getByLabelText("Award Ranking Points"));
+    expect(screen.getByLabelText("Award Ranking Points")).not.toBeChecked();
     await user.click(screen.getByRole("button", { name: "Create event" }));
 
     expect(createMutate).toHaveBeenCalledWith({
-      data: expect.objectContaining({ awardRankingPoints: true }),
+      data: expect.objectContaining({ awardRankingPoints: false }),
     });
   });
 
