@@ -19,15 +19,16 @@ class PointsConfigContractTest {
     @Test
     fun `the default open-play schedule matches the agreed table cell for cell`() {
         // Columns: margin, even-band winner, favorite winner, underdog winner, losing-underdog consolation.
-        // The winner's base is 5 - 8 - 13 - 21 - 34 - 55; a favorite deducts 1 and an underdog adds 2.
+        // Even bands take the base 5 - 8 - 13 - 21 - 34 - 55 and an underdog adds 2, but a favorite takes a
+        // FLAT 2 at every margin — dominance over a materially weaker opponent is not rewarded (#525).
         val expected =
             listOf(
-                listOf(1, 5, 4, 7, 2),
-                listOf(2, 8, 7, 10, 1),
-                listOf(3, 13, 12, 15, 0),
-                listOf(4, 21, 20, 23, 0),
-                listOf(5, 34, 33, 36, 0),
-                listOf(6, 55, 54, 57, 0),
+                listOf(1, 5, 2, 7, 1),
+                listOf(2, 8, 2, 10, 1),
+                listOf(3, 13, 2, 15, 0),
+                listOf(4, 21, 2, 23, 0),
+                listOf(5, 34, 2, 36, 0),
+                listOf(6, 55, 2, 57, 0),
             )
         val config = OpenPlayPointsConfig.DEFAULT
         config.maxMargin shouldBe 6
@@ -46,10 +47,26 @@ class PointsConfigContractTest {
     }
 
     @Test
+    fun `a favorite's win is flat, so playing down cannot out-earn playing peers`() {
+        // The defect this guards (#525): while the favorite cell tracked the margin base, a 6-0 over a
+        // materially weaker opponent paid 54 against 8 for a hard-fought 7-5 between peers — so a player
+        // could climb their own band race fastest by avoiding it. A flat rate removes that entirely.
+        val config = OpenPlayPointsConfig.DEFAULT
+        val favorite = (1..config.maxMargin).map { config.cell(relation = BandRelation.FAVORITE, margin = it).winnerPoints }
+        favorite.distinct() shouldBe listOf(element = 2)
+        // An even-band win at any margin beats a favorite's most dominant win.
+        (1..config.maxMargin).forEach { margin ->
+            withClue(clue = "margin=$margin") {
+                config.cell(relation = BandRelation.EQUAL, margin = margin).winnerPoints shouldBeGreaterThan
+                    config.cell(relation = BandRelation.FAVORITE, margin = config.maxMargin).winnerPoints
+            }
+        }
+    }
+
+    @Test
     fun `winning always pays the winner more than losing pays the loser`() {
-        // The consolation exists to reward a competitive loss, not to rival a win. This guards the
-        // calibration that made the graduated consolation viable at all: at margin 1 a favorite wins 4
-        // while the losing underdog takes 2, so the premium for actually winning is never eroded.
+        // The consolation rewards a competitive loss without rivalling a win. With the favorite's win now
+        // a flat 2, the margin-1 consolation has to sit at 1 — at 2 it would tie the winner outright.
         val config = OpenPlayPointsConfig.DEFAULT
         (1..config.maxMargin).forEach { margin ->
             BandRelation.entries.forEach { relation ->

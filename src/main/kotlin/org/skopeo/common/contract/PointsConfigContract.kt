@@ -65,20 +65,37 @@ data class OpenPlayPointsConfig(
         /** The winner's base for margins 1..[DEFAULT_MAX_MARGIN] — Fibonacci from 5, so dominance pays. */
         private val MARGIN_BASE = listOf(5, 8, 13, 21, 34, 55)
 
-        /** What a losing underdog earns, by margin: a near-miss pays, a hiding does not. */
-        private val UNDERDOG_CONSOLATION = listOf(2, 1, 0, 0, 0, 0)
+        /**
+         * A favorite's win pays a **flat** rate rather than the margin base (#525). Ranking points are
+         * band-scoped, so points earned against a materially weaker opponent would dilute the band race —
+         * and a dominant scoreline over someone well below your level is not new information anyway. The
+         * rate is not zero because playing the match is still effort, and it mirrors [UPSET_LOSS]: a
+         * favorite gains 2 for winning and loses 2 for being upset by the same opponent, so the matchup is
+         * symmetric from their side. (This is also the value the flat pre-#525 table used.)
+         */
+        private const val FAVORITE_WIN = 2
 
-        private const val FAVORITE_OFFSET = -1
+        /** What a losing underdog earns, by margin: a near-miss pays, a hiding does not. Kept strictly
+         *  below [FAVORITE_WIN] so winning always out-earns losing in the same cell. */
+        private val UNDERDOG_CONSOLATION = listOf(1, 1, 0, 0, 0, 0)
+
         private const val UPSET_OFFSET = 2
         private const val EQUAL_LOSS = 0
         private const val UPSET_LOSS = -2
 
-        /** The agreed dominance schedule (#525). The winner's **base** grows with the game margin along
-         *  [MARGIN_BASE]; the band relation then adjusts it — even bands take the base, a favorite deducts
-         *  [FAVORITE_OFFSET], an underdog adds [UPSET_OFFSET]. Those offsets are the same shape as the
-         *  previous flat table (3 / 2 / 5 was a base of 3), so only the base changed. A losing underdog
-         *  keeps a graduated consolation ([UNDERDOG_CONSOLATION]) for a competitive loss and nothing for a
-         *  blowout, and the higher-rated side still loses [UPSET_LOSS] when upset. Validity = 3 months. */
+        /**
+         * The agreed dominance schedule (#525). Dominance is only rewarded where it is *informative*:
+         *
+         * - **Even bands** take the margin base ([MARGIN_BASE]) — a convincing win over a peer is the
+         *   result the band race exists to measure.
+         * - **A favorite** takes a flat [FAVORITE_WIN] whatever the scoreline; see that constant for why.
+         * - **An underdog** takes the base plus [UPSET_OFFSET], because winning up is the hardest result
+         *   on the table and scaling it with the margin is exactly right.
+         *
+         * On the losing side: even bands take [EQUAL_LOSS], a beaten underdog keeps a graduated
+         * [UNDERDOG_CONSOLATION] for a competitive loss and nothing for a blowout, and a favorite who is
+         * upset is docked [UPSET_LOSS]. Validity = 3 months.
+         */
         val DEFAULT: OpenPlayPointsConfig = defaultConfig()
 
         private fun defaultConfig(): OpenPlayPointsConfig {
@@ -95,7 +112,8 @@ data class OpenPlayPointsConfig(
                         OpenPlayMarginPoints(
                             relation = BandRelation.FAVORITE,
                             margin = margin,
-                            winnerPoints = base + FAVORITE_OFFSET,
+                            // Flat: the margin is deliberately ignored when the winner was the favorite.
+                            winnerPoints = FAVORITE_WIN,
                             // The loser here is the underdog, so this is the consolation.
                             loserPoints = UNDERDOG_CONSOLATION[margin - 1],
                         ),

@@ -47,10 +47,10 @@ class OpenPlayPointsCalculatorTest {
     }
 
     @Test
-    fun `default schedule - a favorite deducts 1 and the underdog is consoled, an upset adds 2 and costs the favorite 2`() {
-        // 6-4 is margin 2 (base 8): favorite winner 8-1=7, and the losing underdog's margin-2 consolation is 1.
+    fun `default schedule - a favorite takes a flat rate, an upset adds 2 to the base and costs the favorite 2`() {
+        // A favorite's win is flat 2 whatever the margin; the losing underdog's margin-2 consolation is 1.
         val favorite = compute(band1 = "4.5", band2 = "4.0", sets = listOf(element = set(team1Games = 6, team2Games = 4, winner = t1)))
-        favorite.team1 shouldBe 7
+        favorite.team1 shouldBe 2
         favorite.team2 shouldBe 1
         // 6-1 is margin 5 (base 34): upset winner 34+2=36, and the higher-rated loser is docked 2.
         val upset = compute(band1 = "3.5", band2 = "4.5", sets = listOf(element = set(team1Games = 6, team2Games = 1, winner = t1)))
@@ -68,10 +68,10 @@ class OpenPlayPointsCalculatorTest {
                 set(team1Games = 6, team2Games = 3, winner = t1),
             )
         val result = compute(band1 = "4.5", band2 = "4.0", sets = sets)
-        // S1 favorite, margin 2 (base 8): t1 +7, t2 +1 (consolation).
+        // S1 favorite (flat 2): t1 +2, t2 +1 (consolation).
         // S2 upset, margin 2 — lower-banded t2 wins: t2 +10, t1 −2.
-        // S3 favorite, margin 3 (base 13): t1 +12, t2 +0 — margin 3 pays the underdog nothing.
-        result.team1 shouldBe 7 - 2 + 12
+        // S3 favorite (flat 2 again): t1 +2, t2 +0 — margin 3 pays the underdog nothing.
+        result.team1 shouldBe 2 - 2 + 2
         result.team2 shouldBe 1 + 10 + 0
     }
 
@@ -113,14 +113,14 @@ class OpenPlayPointsCalculatorTest {
 
     @Test
     fun `a tiebreak-only set uses tiebreak points as games for the margin`() {
-        // A super-tiebreak "set": 0 games each, decided 10-8 → margin 2 (base 8). Favorite winner 7, underdog 1.
+        // A super-tiebreak "set": 0 games each, decided 10-8 → margin 2. Favorite winner 2 (flat), underdog 1.
         val result =
             compute(
                 band1 = "4.5",
                 band2 = "4.0",
                 sets = listOf(element = set(team1Games = 0, team2Games = 0, winner = t1, tb1 = 10, tb2 = 8)),
             )
-        result.team1 shouldBe 7
+        result.team1 shouldBe 2
         result.team2 shouldBe 1
     }
 }
