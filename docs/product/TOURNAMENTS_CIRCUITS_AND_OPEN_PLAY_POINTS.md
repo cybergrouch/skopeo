@@ -188,7 +188,7 @@ The existing **global points policy** (`points_policies`, seeded in V16: per-`Ev
 Under this design, points are **determined by rules, not designated by a host**:
 
 - **Open play** — computed from the game-margin × band-relation schedule (integral values `−2 … 57` under the shipped defaults).
-- **Tournaments** — fixed placement schedule (see [Recommended preset](#recommended-preset-agreed-schedule); unsanctioned is a separate table, not a halving).
+- **Tournaments** — fixed placement schedule for placement fixtures (see [Recommended preset](#recommended-preset-agreed-schedule); unsanctioned is a separate table, not a halving), **plus** the open-play per-set schedule for every other completed fixture (#836).
 
 So the designation-plus-policy machinery is **obsolete for both**, and two of the computed values (**0** and **negative**) would actually *violate* the policy's positive `min` and the `points > 0` guard in `RankingPointService.grant`.
 
@@ -218,6 +218,30 @@ Placement matches now carry a richer taxonomy (widening `matches.placement_brack
 | **Plate Finals** | 3rd | 4th |
 
 Rules: a player earns **exactly one** placement award (their best — enforced by processing best-place-first with a guard); a with-plate semi with **no completed Plate Finals** falls back to paying its loser the 3rd rate (no one unpaid); doubles pay each partner the full amount. The sanctioned/unsanctioned tables and **tournament validity days** are configurable; the shipped defaults are the rescaled schedule in [Recommended preset](#recommended-preset-agreed-schedule) (sanctioned 1000/800/600/500, unsanctioned 400/300/200/100).
+
+#### Non-placement fixtures also pay (#836)
+
+A tournament's payout has **two halves**, and no fixture draws from both:
+
+| Fixture | Pays |
+|---|---|
+| Placement match (bracket set) | its **placement rate**, and nothing else |
+| Every other completed fixture — eliminations, round play, play-offs | the **open-play per-set schedule** |
+
+Before #836 only placement fixtures paid, so an entrant who lost a tight three-setter in round one earned
+nothing, while the same match in an open play would have paid. That also made a tournament entry strictly
+worse than open play for anyone not expecting to reach the last four — i.e. most of a draw.
+
+Three rules govern the per-set half:
+
+- **Amount** — the open-play schedule, read from the *same* `OpenPlayPointsConfig`. There is no second copy of the table, so an admin editing the open-play schedule moves both surfaces together.
+- **Validity and class** — the **tournament** window (`TournamentPointsConfig.validityDays`, 365 days) and `PointClass.ANNUAL_TOURNAMENT`, *not* open play's ~91 days. The schedule decides the amount; the event decides how long it lasts, so a quarter-final does not expire months before the title it fed into.
+- **Sanctioning does not apply** — per-set points are paid at face value, matching the rule already stated in Part A that the sanction flag "does not scale per-match points". It selects the placement table only. The premium survives comfortably regardless, because placement dwarfs the per-set pot: on a 16-player draw the sanctioned advantage moves from 2.90× (placement only) to ~2.2–2.6× with per-set points included.
+
+**Known wrinkle ([#837](https://github.com/cybergrouch/skopeo/issues/837)).** A `SEMI_FINALS_WITH_PLATE`
+fixture awards no placement directly — its losers are paid by the Plate Finals — so under "placement only"
+that match pays its two players nothing. They are still paid overall, via the Final and the Plate Finals,
+but the per-match accounting looks odd. Tracked separately rather than special-cased here.
 
 ### Recommended preset (agreed schedule)
 

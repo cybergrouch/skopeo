@@ -219,6 +219,103 @@ class MatchScoreCorrectionPointsTest {
         p2After.single() shouldBe p1Before
     }
 
+    /** A COMPLETED singles round fixture (no placement bracket) where team1 (p1) beats p2 6-4. */
+    private fun seedRoundFixture(
+        eventId: UUID,
+        host: User,
+        p1: User,
+        p2: User,
+    ): Match {
+        val match =
+            matchRepo.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.TOURNAMENT,
+                        matchDate = LocalDate.now(),
+                        team1UserIds = listOf(element = p1.id),
+                        team2UserIds = listOf(element = p2.id),
+                        team1Name = "r1",
+                        team2Name = "r2",
+                        createdBy = host.id,
+                        eventId = eventId,
+                    ),
+            ).toDomain()
+        matchRepo.addResult(
+            matchId = match.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = match.team1.teamId)),
+            winnerTeamId = match.team1.teamId,
+            recordedBy = host.id,
+            completedAt = LocalDateTime.now(),
+        )
+        return matchRepo.findById(matchId = match.id).shouldBeRight().toDomain()
+    }
+
+    @Test
+    fun `correcting a non-placement tournament fixture re-prices only it and never duplicates placements (#836)`() {
+        // A tournament now pays two halves (#836), and the correction path revokes by MATCH for a
+        // non-placement fixture but by EVENT for a placement one (MatchScoreCorrectionService). The
+        // re-award has to mirror that: recomputing placement here would insert a SECOND placement row for
+        // every player, because those rows were never revoked and award() does not dedupe.
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        ratings.setRating(userId = p1.id, rating = BigDecimal("4.0"), level = "4.0")
+        ratings.setRating(userId = p2.id, rating = BigDecimal("4.0"), level = "4.0")
+        TestAppSettings.setAwardRankingPoints(enabled = true, updatedBy = admin.id)
+        val event =
+            eventService
+                .create(
+                    token = token(uid = "host"),
+                    input =
+                        CreateEventInput(
+                            clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                            name = "Spring Open",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now().plusDays(7),
+                            participantIds = listOf(p1.id, p2.id),
+                            type = EventType.TOURNAMENT.name,
+                            circuitId = seedCircuit(hostUid = "host"),
+                        ),
+                ).shouldBeRight()
+                .domain()
+        seedChampionshipFinal(eventId = event.id, host = host, p1 = p1, p2 = p2)
+        val round = seedRoundFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+        eventService.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+        calc.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
+
+        // Two rows each: a placement from the final, and a per-set row from the round.
+        val p1Before = activePoints(userId = p1.id)
+        val p2Before = activePoints(userId = p2.id)
+        p1Before shouldHaveSize 2
+        p2Before shouldHaveSize 2
+        val p1Placement = p1Before.max()
+        val p2Placement = p2Before.max()
+
+        // Flip the round fixture's winner. The final is untouched.
+        service
+            .correctScore(
+                token = token(uid = "admin"),
+                matchId = round.id,
+                request =
+                    MatchScoreCorrectionRequest(
+                        sets = listOf(element = SetScoreRequest(team1Games = 4, team2Games = 6)),
+                        dryRun = false,
+                    ),
+            ).shouldBeRight()
+
+        // Still exactly two rows each — no duplicated placement — and the placement values are unchanged.
+        val p1After = activePoints(userId = p1.id)
+        val p2After = activePoints(userId = p2.id)
+        p1After shouldHaveSize 2
+        p2After shouldHaveSize 2
+        p1After.max() shouldBe p1Placement
+        p2After.max() shouldBe p2Placement
+        // The per-set half flipped: p2 now holds the round win, p1 the zero row.
+        (p2After.min() > p1After.min()).shouldBeTrue()
+    }
+
     /**
      * A finalized + rated OPEN_PLAY event with one ordinary (non-placement) fixture. Open play pays per
      * match from band difference, so a correction here revokes and re-issues **only that match's** awards —

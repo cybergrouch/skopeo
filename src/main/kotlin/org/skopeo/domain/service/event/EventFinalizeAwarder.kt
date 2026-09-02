@@ -35,9 +35,10 @@ import java.math.RoundingMode
 import java.time.LocalDateTime
 import java.util.UUID
 
-// Both event types award on finalize: TOURNAMENT pays placement points and OPEN_PLAY pays computed
-// per-set points (#525). See the `when` in [awardForFinalizedEvent]. (The LEAGUE type was removed in
-// #669; only OPEN_PLAY and TOURNAMENT remain.)
+// Both event types award on finalize. OPEN_PLAY pays computed per-set points (#525). TOURNAMENT pays
+// placement points for placement fixtures AND the same per-set schedule for every other completed
+// fixture (#836). See the `when` in [awardForFinalizedEvent]. (The LEAGUE type was removed in #669;
+// only OPEN_PLAY and TOURNAMENT remain.)
 
 private const val UNSPECIFIED_SEX = "Unspecified"
 private const val BAND_MEAN_SCALE = 4
@@ -51,10 +52,15 @@ private const val PLACE_FOURTH = 3
 /**
  * Finalize-time points awarding (#403 Phase D; open-play + tournament model #525). A small
  * collaborator of [EventService.finalize] so the awarding logic stays cohesive and testable without
- * bloating EventService. Awarding is by event type: OPEN_PLAY is computed per set from band
- * difference (both winner and loser); TOURNAMENT pays placement points from designated placement
- * matches (Super/Plate Finals), sanction-selected via the event's club. A winner/participant with no
- * current rating has no band to tag and is skipped.
+ * bloating EventService. Awarding is by event type:
+ *
+ * - **OPEN_PLAY** — computed per set from the band relation and game margin, paying both winner and loser.
+ * - **TOURNAMENT** — placement points for designated placement fixtures, sanction-selected via the
+ *   event's club; plus, for every *other* completed fixture (eliminations, round play, play-offs), the
+ *   same per-set schedule open play uses, stamped with the tournament validity window (#836). A
+ *   placement fixture pays its placement and nothing else, so no match draws from two schedules.
+ *
+ * A winner/participant with no current rating has no band to tag and is skipped.
  */
 class EventFinalizeAwarder(
     private val matches: MatchRepository = MatchRepository(),
@@ -75,6 +81,26 @@ class EventFinalizeAwarder(
         // suppressed the payout (#752). Nothing was written; the caller must say so rather than let a
         // host read "finalized" as "points paid".
         val suppressedByGlobalFlag: Boolean = false,
+    ) {
+        /** Merge two payout runs of one finalize (a tournament pays placement AND per-set rounds, #836). */
+        fun combinedWith(other: AwardSummary): AwardSummary =
+            AwardSummary(
+                matchCount = matchCount + other.matchCount,
+                awardCount = awardCount + other.awardCount,
+                totalPoints = totalPoints.add(other.totalPoints),
+                suppressedByGlobalFlag = suppressedByGlobalFlag || other.suppressedByGlobalFlag,
+            )
+    }
+
+    /**
+     * How one per-set payout run is scoped and stamped (#836). The **amount** always comes from the
+     * open-play schedule; this decides which fixtures qualify and how long the rows last, so a tournament
+     * can pay open-play values on a tournament validity window.
+     */
+    private data class PerSetPolicy(
+        val pointClass: PointClass,
+        val validityDays: Int,
+        val includeMatch: (Match) -> Boolean,
     )
 
     /**
@@ -113,18 +139,76 @@ class EventFinalizeAwarder(
             else ->
                 when (event.type) {
                     EventType.OPEN_PLAY ->
-                        awardComputedOpenPlay(event = event, grantedBy = grantedBy, now = now, onlyMatchId = correctedMatchId)
-                    EventType.TOURNAMENT -> awardPlacement(event = event, grantedBy = grantedBy, now = now)
+                        awardComputedPerSet(
+                            event = event,
+                            grantedBy = grantedBy,
+                            now = now,
+                            onlyMatchId = correctedMatchId,
+                            policy =
+                                PerSetPolicy(
+                                    pointClass = PointClass.OPEN_PLAY,
+                                    validityDays = pointsConfig.getOpenPlay().value.validityDays,
+                                    includeMatch = { true },
+                                ),
+                        )
+                    EventType.TOURNAMENT ->
+                        awardTournament(event = event, grantedBy = grantedBy, now = now, correctedMatchId = correctedMatchId)
                 }
         }
     }
 
     /**
-     * Placement-based tournament awarding (#525). Each COMPLETED placement match (Super Finals →
-     * 1st/2nd, Plate Finals → 3rd/4th) pays its winner and loser from the sanction-selected schedule
-     * — the full table if the event's club has tournaments sanctioned, else the halved table (a
-     * tournament with no club is unsanctioned). One full-amount row per team member (doubles: both
-     * partners), tagged with each recipient's current band + sex. Regular fixtures award nothing.
+     * A tournament's payout has two halves (#836): **placement matches** pay the placement schedule and
+     * nothing else, and every **other** completed fixture — eliminations, round play, play-offs — pays the
+     * open-play per-set schedule. The per-set rows carry the *tournament* validity window and
+     * [PointClass.ANNUAL_TOURNAMENT], not open play's: the schedule decides the amount, the event decides
+     * how long it lasts, so a quarter-final does not expire months before the title it fed into.
+     * Sanctioning is deliberately NOT applied to the per-set half — it scales placement only.
+     *
+     * Re-award scoping for a score correction (#776) mirrors what the caller revoked, which differs by
+     * fixture (`MatchScoreCorrectionService`): correcting a **placement** fixture revokes every active row
+     * for the event, so both halves are rebuilt in full; correcting a **non-placement** fixture revokes
+     * only that fixture's rows, so placement is left alone — recomputing it would duplicate rows that were
+     * never revoked — and only that one fixture is re-priced.
+     */
+    private fun awardTournament(
+        event: Event,
+        grantedBy: UUID,
+        now: LocalDateTime,
+        correctedMatchId: UUID?,
+    ): AwardSummary {
+        val correctedIsPlacement =
+            correctedMatchId?.let { matches.findById(matchId = it).getOrNull()?.toDomain()?.isPlacementMatch }
+        val rebuildAll = correctedIsPlacement != false
+        val placement =
+            if (rebuildAll) {
+                awardPlacement(event = event, grantedBy = grantedBy, now = now)
+            } else {
+                AwardSummary(matchCount = 0, awardCount = 0, totalPoints = BigDecimal.ZERO)
+            }
+        val perSet =
+            awardComputedPerSet(
+                event = event,
+                grantedBy = grantedBy,
+                now = now,
+                onlyMatchId = if (rebuildAll) null else correctedMatchId,
+                policy =
+                    PerSetPolicy(
+                        pointClass = PointClass.ANNUAL_TOURNAMENT,
+                        validityDays = pointsConfig.getTournament().value.validityDays,
+                        includeMatch = { !it.isPlacementMatch },
+                    ),
+            )
+        return placement.combinedWith(other = perSet)
+    }
+
+    /**
+     * Placement-based tournament awarding (#525). Each COMPLETED placement match (Championship Finals →
+     * 1st/2nd, Plate Finals → 3rd/4th, semi-finals per their bracket) pays its winner and loser from the
+     * sanction-selected schedule — the full table if the event's club has tournaments sanctioned, else the
+     * reduced table (a tournament with no club is unsanctioned). One full-amount row per team member
+     * (doubles: both partners), tagged with each recipient's current band + sex. Non-placement fixtures
+     * award nothing *here*; since #836 they are paid the per-set schedule by [awardTournament] instead.
      */
     private fun awardPlacement(
         event: Event,
@@ -137,7 +221,12 @@ class EventFinalizeAwarder(
         // Validity runs from the event end for the configured tournament window (#559: no per-event override).
         val start = event.endDate
         val end = event.endDate.plusDays(tournament.validityDays.toLong())
-        val placementMatches = matches.listByEvent(eventId = event.id).map { it.toDomain() }.filter { isAwardablePlacement(match = it) }
+        val placementMatches =
+            matches.listByEvent(eventId = event.id).map {
+                it.toDomain()
+            } // A COMPLETED placement match with a bracket and a winner — the only fixtures that pay placement.
+                .filter { it.status == MatchStatus.COMPLETED && it.isPlacementMatch }
+                .filter { it.placementBracket != null && it.winnerTeamId != null }
         val hasCompletedPlate = placementMatches.any { it.placementBracket == PlacementBracket.PLATE_FINALS }
         val userIds = placementMatches.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
         val ctx =
@@ -181,10 +270,6 @@ class EventFinalizeAwarder(
             }
         return AwardSummary(matchCount = matchCount, awardCount = awardCount, totalPoints = total)
     }
-
-    /** A COMPLETED placement match with a bracket and a winner — the only fixtures that pay placement points. */
-    private fun isAwardablePlacement(match: Match): Boolean =
-        match.status == MatchStatus.COMPLETED && match.isPlacementMatch && match.placementBracket != null && match.winnerTeamId != null
 
     /**
      * The (side, place-index) awards a placement match yields (#552): Championship → winner 1st, loser
@@ -255,30 +340,35 @@ class EventFinalizeAwarder(
     }
 
     /**
-     * Computed open-play awarding (#525). Each completed fixture is scored per set from the two teams'
+     * Computed per-set awarding (#525). Each fixture [policy] admits is scored per set from the two teams'
      * ENTRY bands (their current band at finalize — the event's own matches are not rated until after
      * finalize, so current == entry) and paid to EVERY participant on both sides, winner and loser,
      * including zero and negative totals. Each row is tagged with the recipient's own band + sex. Points
-     * follow the admin-configurable margin-bracket schedule (#553); the validity window is the event's if
-     * set, else defaults to the configured open-play validity from [event end].
+     * follow the admin-configurable margin-bracket schedule (#553).
+     *
+     * Used for a whole OPEN_PLAY event and, since #836, for a tournament's non-placement fixtures — the
+     * amounts are identical, only the scoping and the stamping differ (see [PerSetPolicy]).
      */
-    private fun awardComputedOpenPlay(
+    private fun awardComputedPerSet(
         event: Event,
         grantedBy: UUID,
         now: LocalDateTime,
         // Narrow the payout to a single fixture (#776 score correction); null = the whole event, as on finalize.
-        // No default: the sole caller always passes it, so a default would be dead code.
+        // No default: every caller passes it explicitly, so a default would be dead code.
         onlyMatchId: UUID?,
+        policy: PerSetPolicy,
     ): AwardSummary {
         val config: OpenPlayPointsConfig = pointsConfig.getOpenPlay().value
-        // Validity runs from the event end for the configured open-play window (#559: no per-event override).
+        // Validity runs from the event end for the window [policy] carries (#559: no per-event override) —
+        // the open-play window for an open play, the tournament window for a tournament round (#836).
         val validFrom = event.endDate.atStartOfDay()
-        val validUntil = event.endDate.plusDays(config.validityDays.toLong()).plusDays(1).atStartOfDay()
+        val validUntil = event.endDate.plusDays(policy.validityDays.toLong()).plusDays(1).atStartOfDay()
         val completed =
             matches
                 .listByEvent(eventId = event.id)
                 .map { it.toDomain() }
                 .filter { it.status == MatchStatus.COMPLETED && it.winnerTeamId != null }
+                .filter { policy.includeMatch(it) }
                 .filter { onlyMatchId == null || it.id == onlyMatchId }
         val userIds = completed.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
         val bands = ratings.findCurrentRatings(userIds = userIds)
@@ -291,6 +381,7 @@ class EventFinalizeAwarder(
                 now = now,
                 validFrom = validFrom,
                 validUntil = validUntil,
+                pointClass = policy.pointClass,
             )
 
         var matchCount = 0
@@ -324,6 +415,9 @@ class EventFinalizeAwarder(
         val now: LocalDateTime,
         val validFrom: LocalDateTime,
         val validUntil: LocalDateTime,
+        // What the written rows are classed as: OPEN_PLAY for an open play, ANNUAL_TOURNAMENT for a
+        // tournament's rounds and placements alike (#836).
+        val pointClass: PointClass = PointClass.ANNUAL_TOURNAMENT,
         // Placement only (#552): players already paid, so each earns exactly one placement award (best).
         val awarded: MutableSet<UUID> = mutableSetOf(),
     )
@@ -348,7 +442,7 @@ class EventFinalizeAwarder(
                         points = BigDecimal(teamPoints),
                         band = band,
                         sex = ctx.sexes.getOrDefault(key = userId, defaultValue = UNSPECIFIED_SEX),
-                        pointClass = PointClass.OPEN_PLAY,
+                        pointClass = ctx.pointClass,
                         validFrom = ctx.validFrom,
                         validUntil = ctx.validUntil,
                         grantedBy = ctx.grantedBy,
