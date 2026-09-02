@@ -100,7 +100,7 @@ data class FixtureInput(
     val team2Handicap: BigDecimal? = null,
     /**
      * Tournament placement match (#525): when true this fixture decides a placement, and
-     * [placementBracket] says which (Super/Plate Finals). Regular fixtures leave these default.
+     * [placementBracket] says which (Championship/Plate Finals). Regular fixtures leave these default.
      */
     val isPlacementMatch: Boolean = false,
     val placementBracket: PlacementBracket? = null,

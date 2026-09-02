@@ -227,7 +227,6 @@ class EventFinalizeAwarder(
             } // A COMPLETED placement match with a bracket and a winner — the only fixtures that pay placement.
                 .filter { it.status == MatchStatus.COMPLETED && it.isPlacementMatch }
                 .filter { it.placementBracket != null && it.winnerTeamId != null }
-        val hasCompletedPlate = placementMatches.any { it.placementBracket == PlacementBracket.PLATE_FINALS }
         val userIds = placementMatches.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
         val ctx =
             AwardContext(
@@ -240,8 +239,7 @@ class EventFinalizeAwarder(
             )
 
         // A player earns exactly one placement award — their best (ctx.awarded is the guard). Processing
-        // matches best-place-first (championship → plate → semis) means a semi loser paid 3rd/4th via the
-        // Plate Finals is never also paid the flat semi rate.
+        // matches best-place-first (championship → plate) means a finalist is never also paid a plate rate.
         var matchCount = 0
         var awardCount = 0
         var total = BigDecimal.ZERO
@@ -254,12 +252,10 @@ class EventFinalizeAwarder(
                 when (bracket) {
                     PlacementBracket.CHAMPIONSHIP_FINALS -> PLACE_FIRST
                     PlacementBracket.PLATE_FINALS -> PLACE_SECOND
-                    PlacementBracket.SEMI_FINALS_NO_PLATE -> PLACE_THIRD
-                    PlacementBracket.SEMI_FINALS_WITH_PLATE -> PLACE_FOURTH
                 }
             }.forEach { (match, bracket) ->
                 var rows = 0
-                placementSides(match = match, bracket = bracket, hasCompletedPlate = hasCompletedPlate).forEach { (side, placeIndex) ->
+                placementSides(match = match, bracket = bracket).forEach { (side, placeIndex) ->
                     val written =
                         awardPlacementSide(event = event, match = match, side = side, placePoints = schedule[placeIndex], ctx = ctx)
                     rows += written
@@ -273,13 +269,13 @@ class EventFinalizeAwarder(
 
     /**
      * The (side, place-index) awards a placement match yields (#552): Championship → winner 1st, loser
-     * 2nd; Plate → winner 3rd, loser 4th; Semi (no plate) → loser 3rd (flat); Semi (with plate) → nothing
-     * unless there is no completed Plate Finals, in which case the loser gets the flat 3rd (fallback).
+     * 2nd; Plate → winner 3rd, loser 4th. Those are the only two brackets: a placing is only ever awarded
+     * where a fixture actually decided it (#837), so a semi-final is an ordinary non-placement fixture and
+     * earns the per-set schedule instead (#836).
      */
     private fun placementSides(
         match: Match,
         bracket: PlacementBracket,
-        hasCompletedPlate: Boolean,
     ): List<Pair<MatchSide, Int>> {
         val team1Won = match.winnerTeamId == match.team1.teamId
         val winnerSide = if (team1Won) match.team1 else match.team2
@@ -287,8 +283,6 @@ class EventFinalizeAwarder(
         return when (bracket) {
             PlacementBracket.CHAMPIONSHIP_FINALS -> listOf(winnerSide to PLACE_FIRST, loserSide to PLACE_SECOND)
             PlacementBracket.PLATE_FINALS -> listOf(winnerSide to PLACE_THIRD, loserSide to PLACE_FOURTH)
-            PlacementBracket.SEMI_FINALS_NO_PLATE -> listOf(element = loserSide to PLACE_THIRD)
-            PlacementBracket.SEMI_FINALS_WITH_PLATE -> if (hasCompletedPlate) emptyList() else listOf(element = loserSide to PLACE_THIRD)
         }
     }
 

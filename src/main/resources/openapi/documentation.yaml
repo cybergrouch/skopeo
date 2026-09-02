@@ -6382,8 +6382,8 @@ components:
         placementBracket:
           type: string
           nullable: true
-          enum: [CHAMPIONSHIP_FINALS, SEMI_FINALS_NO_PLATE, SEMI_FINALS_WITH_PLATE, PLATE_FINALS]
-          description: Which placement the match decides (#525) — CHAMPIONSHIP_FINALS (1st/2nd), SEMI_FINALS_NO_PLATE/SEMI_FINALS_WITH_PLATE (3rd), or PLATE_FINALS (3rd/4th).
+          enum: [CHAMPIONSHIP_FINALS, PLATE_FINALS]
+          description: Which placement the match decides (#525) — CHAMPIONSHIP_FINALS (1st/2nd) or PLATE_FINALS (3rd/4th). A placing is awarded only where a fixture decided it (#837); every other fixture earns the open-play per-set schedule (#836).
 
     SetScoreRequest:
       type: object

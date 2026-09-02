@@ -213,11 +213,11 @@ Placement matches now carry a richer taxonomy (widening `matches.placement_brack
 | Placement match | Winner → | Loser(s) → |
 | --- | --- | --- |
 | **Championship Finals** (was Super Finals) | 1st | 2nd |
-| **Semi-Finals (no plate)** | advances | **3rd rate** (flat — both losing semi-finalists, no 4th) |
-| **Semi-Finals (with plate)** | advances | → Plate Finals (semi awards nothing directly) |
 | **Plate Finals** | 3rd | 4th |
 
-Rules: a player earns **exactly one** placement award (their best — enforced by processing best-place-first with a guard); a with-plate semi with **no completed Plate Finals** falls back to paying its loser the 3rd rate (no one unpaid); doubles pay each partner the full amount. The sanctioned/unsanctioned tables and **tournament validity days** are configurable; the shipped defaults are the rescaled schedule in [Recommended preset](#recommended-preset-agreed-schedule) (sanctioned 1000/800/600/500, unsanctioned 400/300/200/100).
+Rules: a player earns **exactly one** placement award (their best — enforced by processing best-place-first with a guard); doubles pay each partner the full amount.
+
+**Those two brackets are the only ones (#837).** A placing is awarded **only where a fixture actually decided it**: Championship Finals decides 1st/2nd, Plate Finals decides 3rd/4th, and if a draw does not play off for third then no 3rd or 4th is awarded. The former `SEMI_FINALS_NO_PLATE` and `SEMI_FINALS_WITH_PLATE` brackets are retired — one paid nothing directly (its losers were paid by the Plate Finals, so under the placement-only rule that fixture earned its players zero), and the other awarded "3rd" to *two* players and 4th to nobody. A semi-final is now an ordinary non-placement fixture and earns the per-set schedule below, so no fixture goes unpaid and no placing is awarded twice. Accepted consequence: semi-finalists in a draw with no plate get per-set points rather than the 3rd rate — materially less, and correct under this model; it also nudges clubs toward running the plate if they want the larger payout. The sanctioned/unsanctioned tables and **tournament validity days** are configurable; the shipped defaults are the rescaled schedule in [Recommended preset](#recommended-preset-agreed-schedule) (sanctioned 1000/800/600/500, unsanctioned 400/300/200/100).
 
 #### Non-placement fixtures also pay (#836)
 
@@ -238,10 +238,10 @@ Three rules govern the per-set half:
 - **Validity and class** — the **tournament** window (`TournamentPointsConfig.validityDays`, 365 days) and `PointClass.ANNUAL_TOURNAMENT`, *not* open play's ~91 days. The schedule decides the amount; the event decides how long it lasts, so a quarter-final does not expire months before the title it fed into.
 - **Sanctioning does not apply** — per-set points are paid at face value, matching the rule already stated in Part A that the sanction flag "does not scale per-match points". It selects the placement table only. The premium survives comfortably regardless, because placement dwarfs the per-set pot: on a 16-player draw the sanctioned advantage moves from 2.90× (placement only) to ~2.2–2.6× with per-set points included.
 
-**Known wrinkle ([#837](https://github.com/cybergrouch/skopeo/issues/837)).** A `SEMI_FINALS_WITH_PLATE`
-fixture awards no placement directly — its losers are paid by the Plate Finals — so under "placement only"
-that match pays its two players nothing. They are still paid overall, via the Final and the Plate Finals,
-but the per-match accounting looks odd. Tracked separately rather than special-cased here.
+**Resolved (#837).** The awkward case here was a `SEMI_FINALS_WITH_PLATE` fixture, which awarded no
+placement directly and so paid its two players nothing. Rather than special-case it, both semi-final
+brackets were retired: a semi-final is a non-placement fixture and earns the per-set schedule like any
+other round. See [Tournament points distribution](#tournament-points-distribution-by-final-placement).
 
 ### Recommended preset (agreed schedule)
 
