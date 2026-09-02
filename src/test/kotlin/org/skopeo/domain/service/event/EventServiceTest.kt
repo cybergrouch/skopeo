@@ -2173,6 +2173,144 @@ class EventServiceTest {
         error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "Invalid format"
     }
 
+    @Test
+    fun `a tournament pays per-set points for non-placement fixtures on the tournament validity window (#836)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        enableGlobalAwarding(hostUid = "host")
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.TOURNAMENT,
+                        participants = listOf(p1.id, p2.id),
+                        circuitId = seedCircuit(hostUid = "host"),
+                    ),
+            ).shouldBeRight().domain()
+        // No placementBracket: an elimination round, which paid nothing before #836.
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // Amount comes from the OPEN-PLAY schedule (equal bands, margin-2 set)...
+        val winner = awardRepo.listByUser(userId = p1.id).single()
+        winner.points shouldBe openPlayWinnerRate(relation = BandRelation.EQUAL, margin = 2)
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("0.0000")
+        // ...but the class and window come from the TOURNAMENT schedule, not open play's. This split is
+        // the whole point of #836: the schedule decides the amount, the event decides how long it lasts.
+        winner.pointClass shouldBe org.skopeo.domain.model.PointClass.ANNUAL_TOURNAMENT.name
+        val tournamentDays = TournamentPointsConfig.DEFAULT.validityDays.toLong()
+        winner.validFrom shouldBe event.endDate.atStartOfDay()
+        winner.validUntil shouldBe event.endDate.plusDays(tournamentDays + 1).atStartOfDay()
+        // Explicitly NOT the open-play window, which is much shorter.
+        val openPlayDays = OpenPlayPointsConfig.DEFAULT.validityDays.toLong()
+        (tournamentDays > openPlayDays) shouldBe true
+    }
+
+    @Test
+    fun `a placement fixture pays its placement only, never per-set points as well (#836)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        enableGlobalAwarding(hostUid = "host")
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.TOURNAMENT,
+                        participants = listOf(p1.id, p2.id),
+                        circuitId = seedCircuit(hostUid = "host"),
+                    ),
+            ).shouldBeRight().domain()
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
+        )
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // Exactly one row each — the placement rate — and no second per-set row for the same fixture.
+        awardRepo.listByUser(userId = p1.id).single().points shouldBe placementRate(place = 1)
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 2)
+    }
+
+    @Test
+    fun `a tournament pays placement and per-set points side by side (#836)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        enableGlobalAwarding(hostUid = "host")
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.TOURNAMENT,
+                        participants = listOf(p1.id, p2.id),
+                        circuitId = seedCircuit(hostUid = "host"),
+                    ),
+            ).shouldBeRight().domain()
+        // A round-robin fixture and the final, same two players.
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
+        )
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // p1 holds two rows: the 1st-place rate for the final, and per-set points for the round fixture.
+        val p1Points = awardRepo.listByUser(userId = p1.id).map { it.points }
+        p1Points shouldContainExactlyInAnyOrder
+            listOf(placementRate(place = 1), openPlayWinnerRate(relation = BandRelation.EQUAL, margin = 2))
+        // p2 holds the 2nd-place rate plus a zero row for losing the round fixture at even bands.
+        awardRepo.listByUser(userId = p2.id).map { it.points } shouldContainExactlyInAnyOrder
+            listOf(placementRate(place = 2), BigDecimal("0.0000"))
+    }
+
+    @Test
+    fun `unfinalizing a tournament revokes its per-set awards as well as its placements (#836)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        enableGlobalAwarding(hostUid = "host")
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.TOURNAMENT,
+                        participants = listOf(p1.id, p2.id),
+                        circuitId = seedCircuit(hostUid = "host"),
+                    ),
+            ).shouldBeRight().domain()
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+        awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 2
+
+        service.unfinalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // The reverser is event-scoped, so the new per-set rows are covered without special handling.
+        awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 0
+    }
+
     /**
      * The default placement rate for [place] (1-based) at the ledger's scale. Derived from the shipped
      * schedule rather than hard-coded, so a schedule change is a single edit in
