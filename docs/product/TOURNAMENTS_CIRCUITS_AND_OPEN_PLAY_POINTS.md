@@ -227,25 +227,33 @@ pinned cell-by-cell by `PointsConfigContractTest`. An administrator may still ov
 **Validity — "Seasonal":** open-play **3 months (~91 days)** (was 61 days), tournament **12 months
 (365 days)**, unchanged — §13's currency-of-form sweet spot.
 
-**Open play.** The margin sets a winner **base**; the band relation then adjusts it. The offsets are the
-same ones the old flat table used (3 / 2 / 5 was simply a base of 3), so only the base changed:
+**Open play.** Dominance is rewarded only where it is *informative*:
 
 | Margin | Example | Even bands W / L | Favourite wins W / L | Underdog wins (upset) W / L |
 |---|---|---|---|---|
-| 1 | 6–5, 5–4 | +5 / 0 | +4 / +2 | +7 / −2 |
-| 2 | 6–4, 7–5 | +8 / 0 | +7 / +1 | +10 / −2 |
-| 3 | 6–3, 5–2 | +13 / 0 | +12 / 0 | +15 / −2 |
-| 4 | 6–2, 5–1 | +21 / 0 | +20 / 0 | +23 / −2 |
-| 5 | 6–1, 5–0 | +34 / 0 | +33 / 0 | +36 / −2 |
-| 6+ | 6–0, 7–0 | +55 / 0 | +54 / 0 | +57 / −2 |
+| 1 | 6–5, 5–4 | +5 / 0 | +2 / +1 | +7 / −2 |
+| 2 | 6–4, 7–5 | +8 / 0 | +2 / +1 | +10 / −2 |
+| 3 | 6–3, 5–2 | +13 / 0 | +2 / 0 | +15 / −2 |
+| 4 | 6–2, 5–1 | +21 / 0 | +2 / 0 | +23 / −2 |
+| 5 | 6–1, 5–0 | +34 / 0 | +2 / 0 | +36 / −2 |
+| 6+ | 6–0, 7–0 | +55 / 0 | +2 / 0 | +57 / −2 |
 
-Base = `5 · 8 · 13 · 21 · 34 · 55`; even = base, favourite = base − 1, underdog = base + 2. The matchup
-columns are named from the **winner's** side, so the loser under *Favourite wins* is the underdog (hence a
-positive consolation) and the loser under *Underdog wins* is the favourite (hence the deduction).
+Base = `5 · 8 · 13 · 21 · 34 · 55`. **Even bands** take the base; **an underdog** takes base + 2; **a
+favourite takes a flat 2** whatever the scoreline. The matchup columns are named from the **winner's**
+side, so the loser under *Favourite wins* is the underdog (hence a positive consolation) and the loser
+under *Underdog wins* is the favourite (hence the deduction).
 
-- **Losing underdog — graduated consolation:** **+2** at margin 1, **+1** at margin 2, **0** from margin 3 up. Replaces the former flat +1 at every margin, which paid a 6–0 hiding the same as a near-miss.
-- **Upset deduction:** **−2** at every margin, unchanged, always on the higher-rated side.
-- A single progression applied to *both* the FAVORITE and UPSET winner cells — the shape the earlier `{2,3,5,8,13,21}` preset proposed — is **rejected**: it collapses the upset premium, since both relations would pay identically at the same margin. The base + offset form exists precisely to preserve that premium.
+- **A favourite's win is flat, deliberately.** Ranking points are **band-scoped**, so points earned against a materially weaker opponent dilute the band race — and a dominant scoreline over someone well below your level is not new information. Letting the favourite cell track the margin base produced the opposite incentive: a 6–0 over a much weaker player paid **54** against **8** for a hard-fought 7–5 between peers, so a player climbed their own band race fastest by *avoiding* it. Over ten weekly sets that was 540 against 40. The flat rate removes it: playing peers now pays roughly **8×** more per set than playing down.
+- **Why 2 and not 0.** Playing the match is still effort, and 2 mirrors the upset deduction — a favourite gains 2 for winning and loses 2 for being upset by the same opponent, so the matchup is symmetric from their side. It is also the value the flat pre-#525 table used, so this cell is unchanged from the schedule that preceded the dominance work.
+- **Upsets keep the full margin scaling**, because winning up is the hardest result on the table and how convincingly you do it is exactly what deserves credit.
+- **Losing underdog — graduated consolation:** **+1** at margins 1–2, **0** from margin 3 up. Replaces the former flat +1 at every margin, which paid a 6–0 hiding the same as a near-miss. It sits at 1 rather than 2 so that a favourite's flat win (2) always out-earns the loss in the same cell.
+- **Upset deduction:** **−2** at every margin, always on the higher-rated side.
+- A single progression applied to *both* the FAVORITE and UPSET winner cells — the shape the earlier `{2,3,5,8,13,21}` preset proposed — is **rejected**: it collapses the upset premium, since both relations would pay identically at the same margin.
+
+**Known edge, accepted.** `BandRelation` is three-valued and carries no gap magnitude: a 4.5 over a 4.0 and
+a 6.0 over a 3.0 are the same cell, as are a 4.0 over a 4.5 and a 3.0 over a 5.0. The flat favourite rate
+makes the band boundary a sharp step (a 6–0 pays 55 between peers and 2 across a band), which is accepted
+in exchange for keeping the table simple; softening it would need a middle tier keyed on gap size.
 
 **Tournaments.** Placement points are rescaled roughly tenfold, which is what makes the open-play
 dominance scaling affordable: a title at 80 was worth only ~1.4 dominant open-play sets, so open-play
@@ -268,10 +276,9 @@ rising to 5× at 4th** — largest for the players least likely to win, which ar
 rejects them (Part 4 cons: noise, not merit). Band-scoping + the confidence tie-breaker (#547) already
 handle residual collisions.
 
-**Open question, non-blocking.** The open-play progression spans ~11× within a single set (5 → 57), so one
-blowout is worth roughly ten hard-fought wins, and the flat −1 / +2 offset falls from 60% of the award at
-margin 1 to ~5% at margin 6. The steepness comes from the growth rate across six margins rather than the
-starting value, so the levers are a shallower progression or a lower `maxMargin` — both configuration.
+**Steepness — settled.** The even-band and upset rows span ~11× within a single set (5 → 57). That is by
+design: next to a sanctioned title at 1000 the whole open-play range is small, and the case that actually
+mattered — a favourite being paid for a predictable blowout — is handled by the flat favourite rate above.
 
 ---
 
