@@ -9,9 +9,11 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -1596,53 +1598,55 @@ class EventServiceTest {
     }
 
     @Test
-    fun `a no-plate semi-final pays the losing semi-finalist the 3rd rate, winner advances (#552)`() {
+    fun `a semi-final is a non-placement fixture and earns per-set points, not a placing (#837)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
-        seedCompletedFixture(
-            eventId = event.id,
-            host = host,
-            p1 = p1,
-            p2 = p2,
-            placementBracket = PlacementBracket.SEMI_FINALS_NO_PLATE,
-        )
+        // A semi-final carries no bracket now: the former SEMI_FINALS_* options are gone (#837), so the
+        // fixture falls into the per-set half of a tournament's payout (#836).
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // Winner p1 advances to the final (no direct award); loser p2 gets the flat 3rd rate (unsanctioned 20).
-        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
-        awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 3)
+        // The winner takes the open-play rate for the set — NOT the 3rd placement rate it used to pay —
+        // and the loser gets a zero row at even bands rather than nothing at all.
+        val winner = awardRepo.listByUser(userId = p1.id).single()
+        winner.points shouldBe openPlayWinnerRate(relation = BandRelation.EQUAL, margin = 2)
+        winner.points shouldNotBe placementRate(place = 3)
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("0.0000")
     }
 
     @Test
-    fun `a with-plate semi with no completed plate falls back to the 3rd rate for the loser (#552)`() {
+    fun `without a Plate Finals no third or fourth place is awarded at all (#837)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        // Only a Championship Finals — the draw never played off for third.
         seedCompletedFixture(
             eventId = event.id,
             host = host,
             p1 = p1,
             p2 = p2,
-            placementBracket = PlacementBracket.SEMI_FINALS_WITH_PLATE,
+            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
         )
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // No completed Plate Finals exists → the semi loser still gets the 3rd rate (fallback), no one unpaid.
-        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
-        awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 3)
+        // A placing is only awarded where a fixture decided it, so 1st and 2nd exist and nothing else.
+        val paid = awardRepo.listActiveByEvent(eventId = event.id).map { it.points }
+        paid shouldContainExactlyInAnyOrder listOf(placementRate(place = 1), placementRate(place = 2))
+        paid shouldNotContain placementRate(place = 3)
+        paid shouldNotContain placementRate(place = 4)
     }
 
     @Test
-    fun `a plate final decides 3rd and 4th while the with-plate semi awards nothing directly (#552)`() {
+    fun `a plate final decides 3rd and 4th, and the semi feeding it pays per-set instead (#837)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
@@ -1651,14 +1655,8 @@ class EventServiceTest {
         rate(userId = p2.id, level = "4.0")
         rate(userId = p3.id, level = "4.0")
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id, p3.id))
-        // Semi (with plate): p1 beats p2 → p1 advances, p2 drops to the plate.
-        seedCompletedFixture(
-            eventId = event.id,
-            host = host,
-            p1 = p1,
-            p2 = p2,
-            placementBracket = PlacementBracket.SEMI_FINALS_WITH_PLATE,
-        )
+        // Semi, unmarked: p1 beats p2 → p1 advances, p2 drops to the plate.
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
         // Plate Finals: p2 beats p3 → p2 is 3rd, p3 is 4th.
         seedCompletedFixture(
             eventId = event.id,
@@ -1670,9 +1668,12 @@ class EventServiceTest {
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // p1 advanced (no award); p2 paid once at 3rd (20) via the plate, not also the semi; p3 at 4th (15).
-        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
-        awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 3)
+        // p1 now earns per-set points for winning the semi, where before it paid them nothing.
+        awardRepo.listByUser(userId = p1.id).single().points shouldBe
+            openPlayWinnerRate(relation = BandRelation.EQUAL, margin = 2)
+        // p2 holds two rows: 3rd from the plate, and a zero row for losing the semi.
+        awardRepo.listByUser(userId = p2.id).map { it.points } shouldContainExactlyInAnyOrder
+            listOf(placementRate(place = 3), BigDecimal("0.0000"))
         awardRepo.listByUser(userId = p3.id).single().points shouldBe placementRate(place = 4)
     }
 

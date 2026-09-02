@@ -93,8 +93,6 @@ export function EventFixtureForm({
   const [isPlacement, setIsPlacement] = useState(false);
   const [placementBracket, setPlacementBracket] = useState<
     | "CHAMPIONSHIP_FINALS"
-    | "SEMI_FINALS_NO_PLATE"
-    | "SEMI_FINALS_WITH_PLATE"
     | "PLATE_FINALS"
   >("CHAMPIONSHIP_FINALS");
 
@@ -432,20 +430,12 @@ export function EventFixtureForm({
                       setPlacementBracket(
                         e.target.value as
                           | "CHAMPIONSHIP_FINALS"
-                          | "SEMI_FINALS_NO_PLATE"
-                          | "SEMI_FINALS_WITH_PLATE"
                           | "PLATE_FINALS",
                       )
                     }
                   >
                     <option value="CHAMPIONSHIP_FINALS">
                       Championship Finals (1st / 2nd)
-                    </option>
-                    <option value="SEMI_FINALS_NO_PLATE">
-                      Semi-Finals — no plate (losers → 3rd)
-                    </option>
-                    <option value="SEMI_FINALS_WITH_PLATE">
-                      Semi-Finals — with plate (→ Plate Finals)
                     </option>
                     <option value="PLATE_FINALS">
                       Plate Finals (3rd / 4th)
