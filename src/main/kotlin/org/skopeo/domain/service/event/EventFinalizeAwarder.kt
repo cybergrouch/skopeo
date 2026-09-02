@@ -221,7 +221,12 @@ class EventFinalizeAwarder(
         // Validity runs from the event end for the configured tournament window (#559: no per-event override).
         val start = event.endDate
         val end = event.endDate.plusDays(tournament.validityDays.toLong())
-        val placementMatches = matches.listByEvent(eventId = event.id).map { it.toDomain() }.filter { isAwardablePlacement(match = it) }
+        val placementMatches =
+            matches.listByEvent(eventId = event.id).map {
+                it.toDomain()
+            } // A COMPLETED placement match with a bracket and a winner — the only fixtures that pay placement.
+                .filter { it.status == MatchStatus.COMPLETED && it.isPlacementMatch }
+                .filter { it.placementBracket != null && it.winnerTeamId != null }
         val hasCompletedPlate = placementMatches.any { it.placementBracket == PlacementBracket.PLATE_FINALS }
         val userIds = placementMatches.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
         val ctx =
@@ -265,10 +270,6 @@ class EventFinalizeAwarder(
             }
         return AwardSummary(matchCount = matchCount, awardCount = awardCount, totalPoints = total)
     }
-
-    /** A COMPLETED placement match with a bracket and a winner — the only fixtures that pay placement points. */
-    private fun isAwardablePlacement(match: Match): Boolean =
-        match.status == MatchStatus.COMPLETED && match.isPlacementMatch && match.placementBracket != null && match.winnerTeamId != null
 
     /**
      * The (side, place-index) awards a placement match yields (#552): Championship → winner 1st, loser
