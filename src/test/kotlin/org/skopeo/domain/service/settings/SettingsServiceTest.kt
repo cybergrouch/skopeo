@@ -6,7 +6,9 @@ package org.skopeo.domain.service.settings
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.assertions.withClue
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -299,5 +301,44 @@ class SettingsServiceTest {
         // "restores consistency" by adding a carve-out: pointsVisibleTo takes no subject, only a viewer.
         service.pointsVisibleTo(viewer = player) shouldBe false
         admin.id shouldNotBe player.id
+    }
+
+    @Test
+    fun `un-ticking the flag restores visibility and says so in the audit (#865)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        service.setHideRankingPoints(token = token(uid = "admin"), hidden = true).shouldBeRight()
+
+        // The recovery path, and the one that matters most: an admin who hid points must be able to
+        // un-hide them, and the audit trail has to record which direction each change went rather than
+        // just that "the flag changed".
+        val restored = service.setHideRankingPoints(token = token(uid = "admin"), hidden = false).shouldBeRight()
+
+        restored.hidden shouldBe false
+        service.pointsVisibleTo(viewer = null) shouldBe true
+        val entries =
+            AuditRepository()
+                .list(actions = listOf(element = AuditAction.SETTINGS_HIDE_RANKING_POINTS_CHANGED), limit = 10, offset = 0)
+        entries.second shouldBe 2L
+        entries.first.map { it.summary } shouldContainExactlyInAnyOrder
+            listOf(
+                "Hid ranking points from players and researchers",
+                "Showed ranking points to players and researchers",
+            )
+    }
+
+    @Test
+    fun `the route-facing response carries the flag and its provenance (#865)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        // Unset: no provenance, and not hidden.
+        service.getHideRankingPointsResponse().hidden shouldBe false
+        service.getHideRankingPointsResponse().updatedBy.shouldBeNull()
+
+        service.setHideRankingPoints(token = token(uid = "admin"), hidden = true).shouldBeRight()
+
+        val response = service.getHideRankingPointsResponse()
+        response.hidden shouldBe true
+        response.updatedBy.shouldNotBeNull()
+        response.updatedAt.shouldNotBeNull()
     }
 }
