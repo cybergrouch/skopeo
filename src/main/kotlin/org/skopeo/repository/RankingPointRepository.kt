@@ -81,6 +81,11 @@ class RankingPointRepository {
                             revokesAwardId = awardId,
                             grantedBy = revokedBy,
                             awardedAt = revokedAt,
+                            // A revocation marker belongs to the same schedule version and matchup as the
+                            // award it cancels (#862) — it is that award negated, not a new judgement.
+                            pointsScheduleVersion = original.pointsScheduleVersion,
+                            teamBand = original.teamBand,
+                            opponentBand = original.opponentBand,
                         ),
                 )
             RankingPointAwardsTable.selectAll().where { RankingPointAwardsTable.id eq markerId }.single().toRankingPointAwardEntity()
@@ -200,6 +205,9 @@ class RankingPointRepository {
             it[awardedAt] = write.awardedAt
             it[eventId] = write.eventId
             it[matchId] = write.matchId
+            it[pointsScheduleVersion] = write.pointsScheduleVersion
+            it[teamBand] = write.teamBand
+            it[opponentBand] = write.opponentBand
         }.value
 }
 
@@ -222,4 +230,7 @@ internal fun ResultRow.toRankingPointAwardEntity(): RankingPointAwardEntity =
         awardedAt = this[RankingPointAwardsTable.awardedAt],
         eventId = this[RankingPointAwardsTable.eventId]?.value,
         matchId = this[RankingPointAwardsTable.matchId]?.value,
+        pointsScheduleVersion = this[RankingPointAwardsTable.pointsScheduleVersion],
+        teamBand = this[RankingPointAwardsTable.teamBand],
+        opponentBand = this[RankingPointAwardsTable.opponentBand],
     )

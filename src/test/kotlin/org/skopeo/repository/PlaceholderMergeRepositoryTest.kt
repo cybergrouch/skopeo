@@ -244,6 +244,8 @@ class PlaceholderMergeRepositoryTest {
                 it[validUntil] = LocalDateTime.now().plusYears(1)
                 it[status] = "ACTIVE"
                 it[awardedAt] = LocalDateTime.now()
+                // v1 is what a freshly migrated database seeds (#862); the column is NOT NULL.
+                it[pointsScheduleVersion] = 1
             }
         }
     }

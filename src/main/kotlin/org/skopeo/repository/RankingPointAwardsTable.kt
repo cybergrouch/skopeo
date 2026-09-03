@@ -43,4 +43,14 @@ internal object RankingPointAwardsTable : UUIDTable(name = "ranking_point_awards
 
     // The specific match (fixture) that granted this award on finalize (#448, V19); null for manual grants.
     val matchId = reference(name = "match_id", foreign = MatchesTable, onDelete = ReferenceOption.SET_NULL).nullable()
+
+    /** The points-schedule version this award was computed under (#862). Backfilled to v1 by V47. */
+    val pointsScheduleVersion = integer(name = "points_schedule_version").references(ref = PointsScheduleVersionsTable.version)
+
+    /**
+     * The two band strings the calculator consumed (#862), so a derivation is reproducible rather than
+     * reconstructed. Null for placement and manual grants, which have no band relation.
+     */
+    val teamBand = varchar(name = "team_band", length = BAND_MAX).nullable()
+    val opponentBand = varchar(name = "opponent_band", length = BAND_MAX).nullable()
 }

@@ -81,11 +81,14 @@ class PointsConfigServiceTest {
         )
 
     @Test
-    fun `open-play defaults to the seeded schedule with no provenance when unset`() {
+    fun `open-play reads the seeded v1 schedule, with no author because nobody edited it (#862)`() {
         val stored = service.getOpenPlay()
         stored.value shouldBe OpenPlayPointsConfig.DEFAULT
+        // Since V47 there is no "unset" state — v1 is seeded from the Kotlin defaults, so a row always
+        // exists and carries the seed's timestamp. `updatedBy` is the signal that nobody has edited it:
+        // an admin write sets both, the migration sets only the time.
         stored.updatedBy.shouldBeNull()
-        stored.updatedAt.shouldBeNull()
+        stored.updatedAt.shouldNotBeNull()
     }
 
     @Test
@@ -123,7 +126,7 @@ class PointsConfigServiceTest {
     @Test
     fun `a corrupt stored open-play schedule falls back to the default`() {
         val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        configs.upsert(key = "open_play", value = "not-json", updatedBy = admin.id)
+        configs.appendVersion(key = "open_play", value = "not-json", actorId = admin.id)
         service.getOpenPlay().value shouldBe OpenPlayPointsConfig.DEFAULT
     }
 

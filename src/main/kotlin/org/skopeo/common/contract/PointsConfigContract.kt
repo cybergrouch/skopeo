@@ -7,11 +7,26 @@ import kotlinx.serialization.Serializable
 
 /*
  * Admin-configurable points schedules (#552/#553) — the scoped, global successor to the points policy
- * removed in V27 (#540). These types are the single source of truth for the reward-point values and
- * validity windows the finalize-time awarders use; they are stored as JSON in `points_config` and
- * edited by an ADMINISTRATOR, so the study recommendations (docs/product/POINTS_RANKING_SIMULATION_STUDY.md
- * — e.g. Seasonal validity 3mo/12mo, Fibonacci-margin increments) are reachable by editing config, not code.
+ * removed in V27 (#540). These types define the reward-point values and validity windows the
+ * finalize-time awarders use; they are stored as JSON in `points_config` and edited by an ADMINISTRATOR,
+ * so the study recommendations (docs/product/POINTS_RANKING_SIMULATION_STUDY.md — e.g. Seasonal validity
+ * 3mo/12mo, Fibonacci-margin increments) are reachable by editing config, not code.
  * All @Serializable so the service can JSON-encode them for storage and expose them over the API.
+ *
+ * ── THE `DEFAULT`s ARE A SEED, NOT A RUNTIME SOURCE (#862) ───────────────────────────────────────────
+ *
+ * Since V47 the **database is authoritative**: awarding reads the schedules belonging to the current
+ * `points_schedule_versions` row, and V47 seeds v1 from the `DEFAULT`s below. Nothing consults these
+ * constants at award time.
+ *
+ * So **editing a value here has no runtime effect on its own.** That is deliberate. Before versioning, a
+ * code change silently produced new rates while awards continued to record the old version number, which
+ * corrupted the audit trail; now the same mistake is merely inert. To actually change a schedule, add a
+ * migration that inserts the next version, seeds its three documents, and moves `is_current`.
+ *
+ * `PointsScheduleSeedTest` fails the build if these and the seeded documents drift apart, so the omission
+ * cannot ship unnoticed. Keeping the numbers here — typed, named and commented — is why the schedule stays
+ * reviewable in a diff rather than becoming JSON in a migration.
  */
 
 /** Which band the set's winner was on, relative to the loser — the axis open-play points key off. */

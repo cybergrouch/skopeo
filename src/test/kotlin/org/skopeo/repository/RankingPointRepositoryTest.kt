@@ -75,6 +75,8 @@ class RankingPointRepositoryTest {
         revokesAwardId = null,
         grantedBy = grantedBy,
         awardedAt = awardedAt,
+        // v1 is what a freshly migrated database seeds (#862).
+        pointsScheduleVersion = 1,
     )
 
     @Test
