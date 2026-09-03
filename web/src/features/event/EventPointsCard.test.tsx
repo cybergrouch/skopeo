@@ -103,6 +103,39 @@ describe('EventPointsCard', () => {
     expect(description).toHaveTextContent('points remain listed here after they expire')
   })
 
+  it('falls back through public code to id when a player has no display name', () => {
+    // A placeholder player (#496) may carry no name at all. Naming a row by its code, or failing that its
+    // id, keeps the row identifiable — an unnamed row in a points list is useless to a reader.
+    useGetApiV1EventsCodeCodePoints.mockReturnValue({
+      data: {
+        rows: [
+          row({ userId: 'u1', displayName: null, publicCode: 'ADA123' }),
+          row({ userId: 'u2', displayName: null, publicCode: null }),
+        ],
+        totalPoints: '24.0000',
+      },
+      isLoading: false,
+    })
+    renderCard()
+
+    expect(screen.getByRole('link', { name: 'ADA123' })).toBeInTheDocument()
+    expect(screen.getByText('u2')).toBeInTheDocument()
+  })
+
+  it('falls back to the raw value when a figure will not format', () => {
+    // formatPoints returns null for anything unparseable. Showing the raw string beats showing nothing:
+    // a blank where a number belongs reads as "zero" or as a broken card, and both are worse than odd
+    // text. Same idiom as the Points Management ledger, so the two surfaces degrade alike.
+    useGetApiV1EventsCodeCodePoints.mockReturnValue({
+      data: { rows: [row({ points: 'not-a-number' })], totalPoints: 'also-not-a-number' },
+      isLoading: false,
+    })
+    renderCard()
+
+    expect(screen.getByRole('listitem')).toHaveTextContent('not-a-number')
+    expect(screen.getByText('Total awarded:').parentElement).toHaveTextContent('also-not-a-number')
+  })
+
   it('does not query without a code', () => {
     useGetApiV1EventsCodeCodePoints.mockReturnValue({ data: undefined, isLoading: false })
     renderCard('')
