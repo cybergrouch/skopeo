@@ -492,10 +492,32 @@ Two variants, and the choice between them is not cosmetic:
 | The term appears as readable text | `<NtrpLabel />`, or `<NtrpLabel value={band} />` to render "NTRP 4.0" |
 | **Beside a `<label>`**, or where a second underlined phrase would be noise | `<NtrpDisclaimerInfo />` (ⓘ only) |
 
-**Never put a trigger inside a `<label>`.** It changes the labelled control's accessible name — a screen
-reader announces the button instead of the field — and the nested button swallows the click that should
-focus the control. Testing Library surfaces this as `getByLabelText` failing or "found multiple elements",
-which is a symptom, not the bug.
+**Never put a trigger inside any interactive element** — a `<button>`, an `<a>`, or anything carrying a
+click handler (#852). Both variants are themselves `<button>`s, so `NtrpDisclaimerInfo` is **not** an escape
+hatch here; the trigger has to leave the clickable region entirely.
+
+Two shipped defects, and note they failed *differently* — invalid nesting is not one symptom:
+
+| Site | What happened |
+|---|---|
+| A suggestion `<button>` in `UserSearchSelect` | **The disclaimer was unreachable.** The click landed on the outer button and picked the player; the popover never opened |
+| An expandable row `<button>` in `RatingHistoryCard` | The disclaimer opened **and** the row expanded — a popover over a row that had just moved |
+
+**The fix is one trigger per region, outside the buttons**: beside the field's `<Label>`
+(`UserSearchSelect`, `PlayerPicker`), in the card header (`RatingHistoryCard`), or in a column header
+(`SeedingTable`). Rows then render the band as plain text. This also reads better than one trigger per row.
+
+**A `<label>` is a special case of the same rule.** A trigger inside one changes the labelled control's
+accessible name — a screen reader announces the button instead of the field — and swallows the click that
+should focus the control. Testing Library surfaces this as `getByLabelText` failing or "found multiple
+elements", which is a symptom, not the bug.
+
+**The suite now fails on invalid DOM nesting** (`src/test/setup.ts`). React reports it as a
+`console.error`, which a passing test swallows — both defects above printed a warning on every CI run and
+stayed green for weeks. The guard collects those warnings and asserts none were emitted, substituting
+React's printf arguments so the failure names the actual elements rather than `%s`. It is thrown in
+`afterEach`, not from inside `console.error`: throwing mid-render derails React's own error handling and
+reports the wrong thing.
 
 **Pass the band through `value`, not alongside.** `<NtrpLabel value={band} />` keeps the label a single
 text node. `<NtrpLabel /> {band}` splits it, and Testing Library's `getNodeText` concatenates only *direct*

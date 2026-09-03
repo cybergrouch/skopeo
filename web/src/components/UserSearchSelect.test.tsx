@@ -138,4 +138,40 @@ describe('UserSearchSelect', () => {
       expect.anything(),
     )
   })
+
+  it('keeps the NTRP disclaimer reachable while a suggestion still picks the player (#852)', async () => {
+    const onSelect = vi.fn()
+    const user = userEvent.setup()
+    useGetApiV1Users.mockReturnValue({
+      data: [{ ...alice, sex: 'Female', age: 34, rating: { level: '4.0', value: '4.000000', confidence: '0.80' } }],
+      isLoading: false,
+    })
+    render(<UserSearchSelect label="Player 1" onSelect={onSelect} />)
+    await user.type(screen.getByLabelText('Player 1'), 'al')
+
+    // The trigger lives beside the field's label, outside the suggestion buttons. Nested inside one it
+    // was unreachable — the click picked the player and the popover never opened.
+    await user.click(screen.getByRole('button', { name: /about the NTRP rating framework/i }))
+    expect(await screen.findByText(/not affiliated with/)).toBeInTheDocument()
+    expect(onSelect).not.toHaveBeenCalled()
+
+    // And the suggestion still does its own job.
+    await user.click(screen.getByRole('button', { name: /Alice/ }))
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }))
+  })
+
+  it('renders the band as plain text inside a suggestion (#852)', async () => {
+    const user = userEvent.setup()
+    useGetApiV1Users.mockReturnValue({
+      data: [{ ...alice, sex: 'Female', age: 34, rating: { level: '4.0', value: '4.000000', confidence: '0.80' } }],
+      isLoading: false,
+    })
+    render(<UserSearchSelect label="Player 1" onSelect={vi.fn()} />)
+    await user.type(screen.getByLabelText('Player 1'), 'al')
+
+    // One trigger for the whole list, not one per row — so the suggestion carries text, not a button.
+    const suggestion = screen.getByRole('button', { name: /Alice/ })
+    expect(suggestion).toHaveTextContent('NTRP 4.0')
+    expect(suggestion.querySelector('button')).toBeNull()
+  })
 })

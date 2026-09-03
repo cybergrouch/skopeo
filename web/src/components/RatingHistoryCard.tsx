@@ -125,7 +125,10 @@ export function RatingHistoryCard({
       collapsible={collapsible}
       title={
         <>
-          Rating history
+          Rating history{" "}
+          {/* The card's single NTRP disclaimer trigger (#852). Rows cannot carry their own — the
+              match-driven ones are buttons. */}
+          <NtrpLabel className="text-sm font-normal" />
           {confidencePct ? (
             <span className="ml-2 text-sm font-normal text-muted-foreground">
               Current confidence: <ConfidenceValue confidence={confidence} />
@@ -181,9 +184,11 @@ export function RatingHistoryCard({
                     {entry.previousRating != null ? (
                       <div className="mt-1">{`${entry.previousRating} → ${entry.newRating}`}</div>
                     ) : null}
-                    <div className="text-muted-foreground">
-                      <NtrpLabel value={`${prevBand} → ${newBand}`} />
-                    </div>
+                    {/* Plain text, not a disclaimer trigger (#852): a match-driven row is itself a
+                        <button>, and nesting the trigger inside it fired both — the popover opened over a
+                        row that had just expanded underneath it. The card carries one trigger in its
+                        header instead. See WEB_UI_ARCHITECTURE.md. */}
+                    <div className="text-muted-foreground">{`NTRP ${prevBand} → ${newBand}`}</div>
                   </>
                 );
                 return (
