@@ -19,6 +19,7 @@ import { EventClubSection } from "@/features/event/EventClubSection";
 import { EventMatchSections } from "@/features/event/EventMatchSections";
 import { EventParticipantList } from "@/features/event/EventParticipantList";
 import { EventManagerView } from "@/features/event/EventManagerView";
+import { EventPointsCard } from "@/features/event/EventPointsCard";
 
 /**
  * The join card (#201): request to join, or the viewer's current standing. Withheld once the event is
@@ -183,6 +184,11 @@ export function EventPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Renders nothing until the event has actually awarded points (#857) — an unfinalized event, or
+              one with "Award ranking points" off (#831), legitimately has none, and an empty card there
+              would read as a fault. */}
+          <EventPointsCard code={event.publicCode} />
 
           <ShareCard
             url={`${window.location.origin}/events/${event.publicCode}`}

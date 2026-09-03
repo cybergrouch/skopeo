@@ -108,3 +108,32 @@ data class AwardedPointsPageResponse(
     val limit: Int,
     val offset: Int,
 )
+
+/**
+ * What one competition awarded, per player (#857) — the payload behind the points card on the public
+ * event page, and the same shape the match page uses (#858); only the filter and the gate differ.
+ *
+ * **Amounts only.** No derivation (margin, band relation) is carried here: these pages are viewable
+ * anonymously, and band relation is rating-adjacent (#583/#654), so explaining *how* an amount was
+ * reached is gated separately. Amounts themselves are already public — a player's points total is public
+ * under the POINTS standings source, and rank/band are public (#64/#114).
+ */
+@Serializable
+data class AwardedPointsSummaryResponse(
+    val rows: List<AwardedPointsPlayerRow>,
+    /** The sum of [rows], assembled server-side so the client never adds points up itself. */
+    val totalPoints: String,
+)
+
+/** One player's total from a single event or match (#857), highest first. */
+@Serializable
+data class AwardedPointsPlayerRow(
+    val userId: String,
+    val publicCode: String? = null,
+    val displayName: String? = null,
+    val points: String,
+    /** A login-less, not-yet-claimed placeholder (#496/#505) — the card tags the name. */
+    val isPlaceholder: Boolean = false,
+    /** An admin-soft-deleted account (#518) — rendered as a dominant chip wherever the name appears. */
+    val isDeleted: Boolean = false,
+)

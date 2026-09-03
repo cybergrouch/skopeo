@@ -11,6 +11,8 @@ import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.dto.ranking.AdjustRankingPointsRequest
 import org.skopeo.common.dto.ranking.AwardedPointsPageResponse
+import org.skopeo.common.dto.ranking.AwardedPointsPlayerRow
+import org.skopeo.common.dto.ranking.AwardedPointsSummaryResponse
 import org.skopeo.common.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.common.dto.ranking.RankingPointAwardResponse
 import org.skopeo.common.error.ServiceError
@@ -42,6 +44,7 @@ import org.skopeo.repository.UserRepository
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.util.UUID
+import org.skopeo.domain.mapper.entity.event.toDomain as toEventDomain
 
 private const val DEFAULT_PAGE_SIZE = 25
 private const val MAX_PAGE_SIZE = 100
@@ -276,11 +279,43 @@ class RankingPointService(
         }
 
     /**
+     * What an event awarded, per player (#857) — the public event page's points card.
+     *
+     * **Public: no token, no gate.** The pages this feeds are viewable anonymously (#193), and amounts are
+     * already public information — a player's points total is public under the POINTS standings source, and
+     * rank/band are public (#64/#114). Only the *derivation* of an amount is gated (#858), and none is
+     * carried here.
+     *
+     * Three deliberate filter choices:
+     * - **ACTIVE only.** A revoked award paid nothing, and every standings query filters the same way. A
+     *   revocation marker carries zero points, so including it would add a phantom row of "+0".
+     * - **Validity is NOT applied**, unlike everywhere else that reads this table. "What did this event
+     *   award" does not stop being true when the points later expire; `countsAsOf` is the right rule for
+     *   standings and the wrong one for a record of what was paid.
+     * - **An event with no awards returns an empty list**, which the client renders as *no card at all*
+     *   rather than an empty one — an event may legitimately have none because it is unfinalized or
+     *   because its `awardRankingPoints` flag is off (#831).
+     */
+    fun awardedForEvent(code: String): Either<ServiceError, AwardedPointsSummaryResponse> =
+        either {
+            // toEventDomain: three entity mappers expose `toDomain`, so the event one is imported aliased.
+            val event =
+                ensureNotNull(value = events.findByPublicCode(code = code)?.toEventDomain()) {
+                    ServiceError.NotFound(message = "Event $code not found")
+                }
+            summarise(
+                awards = awards.listActiveByEvent(eventId = event.id).map { it.toDomain() },
+                players = users,
+            )
+        }
+
+    /**
      * One page of the whole ledger (#472), newest-first, for the Points Management "Points awarded"
      * list. Gated by [requirePointsManager] (POINTS_MANAGER or ADMINISTRATOR), matching the tab. Each
      * row is enriched with the player's display name + public code and the granting source's public
      * code (match, else event; null for a manual / external grant) — all lookups batched to avoid N+1.
      */
+
     fun listAwards(
         token: VerifiedFirebaseToken,
         limit: Int?,
@@ -339,4 +374,43 @@ class RankingPointService(
                 caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.POINTS_MANAGER }
         return if (caller == null || !allowed) ServiceError.Forbidden().left() else caller.id.right()
     }
+}
+
+/**
+ * Fold award rows into one row per player, highest total first, with identities resolved in one lookup
+ * (#857).
+ *
+ * File-scope rather than a member: it is a pure fold plus one repository read, so nothing about it belongs
+ * to the service's state — and keeping it out of the class holds that class under detekt's function ceiling.
+ */
+private fun summarise(
+    awards: List<RankingPointAward>,
+    players: UserRepository,
+): AwardedPointsSummaryResponse {
+    val byUser =
+        awards
+            .groupBy { it.userId }
+            .mapValues { (_, rows) -> rows.fold(initial = BigDecimal.ZERO) { sum, row -> sum.add(row.points) } }
+    val usersById = players.findAllByIds(ids = byUser.keys.toList()).map { it.toDomain() }.associateBy { it.id }
+    val rows =
+        byUser
+            .map { (userId, total) -> userId to total }
+            // Highest first, then by id so the order is stable when two players tie — an unstable order
+            // would make the card reshuffle between renders.
+            .sortedWith(comparator = compareByDescending<Pair<UUID, BigDecimal>> { it.second }.thenBy { it.first.toString() })
+            .map { (userId, total) ->
+                val user = usersById[userId]
+                AwardedPointsPlayerRow(
+                    userId = userId.toString(),
+                    publicCode = user?.publicCode,
+                    displayName = user?.displayName(),
+                    points = total.toPlainString(),
+                    isPlaceholder = user?.placeholder ?: false,
+                    isDeleted = user?.isDeleted() ?: false,
+                )
+            }
+    return AwardedPointsSummaryResponse(
+        rows = rows,
+        totalPoints = byUser.values.fold(initial = BigDecimal.ZERO) { sum, value -> sum.add(value) }.toPlainString(),
+    )
 }

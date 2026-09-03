@@ -2265,6 +2265,39 @@ paths:
         '404':
           description: No active event with that code
 
+  /api/v1/events/code/{code}/points:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: What an event awarded, per player (#857)
+      description: >-
+        Per-player ranking-point totals for one event, highest first, assembled server-side. Public and
+        anonymous, like the event page it feeds: amounts are already public information (a points total is
+        public under the POINTS standings source; rank and band are public per #64/#114). Carries amounts
+        ONLY -- how an amount was derived is gated separately (#858). ACTIVE awards only, since a revoked
+        award paid nothing; validity is deliberately NOT applied, because what an event awarded does not
+        stop being true when the points later expire. An event with no awards returns an empty list, which
+        the client renders as no card rather than an empty one (it may be unfinalized, or have its
+        awardRankingPoints flag off, #831).
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+        - {}
+      responses:
+        '200':
+          description: Per-player totals for the event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AwardedPointsSummaryResponse'
+        '404':
+          description: No event with that code
+
   /api/v1/events/code/{code}/signup:
     parameters:
       - name: code
@@ -9080,6 +9113,49 @@ components:
         isDeleted:
           type: boolean
           description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
+    AwardedPointsSummaryResponse:
+      type: object
+      description: >-
+        What one competition awarded, per player (#857). The same shape backs the event page and the match
+        page (#858); only the filter and the gate differ.
+      required:
+        - rows
+        - totalPoints
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AwardedPointsPlayerRow'
+        totalPoints:
+          type: string
+          description: The sum of rows, assembled server-side so the client never adds points up itself.
+
+    AwardedPointsPlayerRow:
+      type: object
+      description: One player's total from a single event or match (#857), highest first.
+      required:
+        - userId
+        - points
+      properties:
+        userId:
+          type: string
+          format: uuid
+        publicCode:
+          type: string
+          nullable: true
+          description: Link the name to /players/{publicCode}.
+        displayName:
+          type: string
+          nullable: true
+        points:
+          type: string
+        isPlaceholder:
+          type: boolean
+          description: A login-less, not-yet-claimed placeholder (#496/#505); the card tags the name.
+        isDeleted:
+          type: boolean
+          description: An admin-soft-deleted account (#518); rendered as a dominant chip.
+
     AwardedPointsPageResponse:
       type: object
       description: One page of the ranking-points ledger (#472) — rows plus the total for the pager.
