@@ -1,4 +1,6 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
+import { NtrpLabel } from "@/components/NtrpLabel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -12,15 +14,27 @@ import type {
 const MIN_QUERY = 2;
 
 /** Secondary suggestion line — sex · age · NTRP band — to disambiguate similar names (#87). */
-function detailLine(user: UserSummaryResponse): string {
-  const parts: string[] = [];
+function detailLine(user: UserSummaryResponse): ReactNode {
+  const parts: ReactNode[] = [];
   if (user.sex) parts.push(user.sex);
   if (user.age != null) parts.push(String(user.age));
   if (user.rating) {
     const pct = formatConfidence(user.rating.confidence);
-    parts.push(`NTRP ${user.rating.level ?? user.rating.value}${pct ? ` · ${pct}` : ""}`);
+    parts.push(
+      <>
+        <NtrpLabel value={user.rating.level ?? user.rating.value} />
+        {pct ? ` · ${pct}` : ""}
+      </>,
+    );
   }
-  return parts.join(" · ");
+  // A node since #842 made the NTRP term a disclaimer trigger; null when empty so truthiness still works.
+  if (parts.length === 0) return null;
+  return parts.map((part, i) => (
+    <span key={i}>
+      {i > 0 ? " · " : ""}
+      {part}
+    </span>
+  ));
 }
 
 interface UserSearchSelectProps {

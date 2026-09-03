@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { NtrpDisclaimerInfo } from "@/components/NtrpLabel";
 import { toast } from "sonner";
 import { toastError } from "@/observability/toastError";
 import { useQueryClient } from "@tanstack/react-query";
@@ -142,7 +143,8 @@ export function CreatePlaceholderSection({
           <div className="space-y-1">
             <Label htmlFor="new-placeholder-rating" className="text-xs">
               Initial rating (optional)
-            </Label>
+            </Label>{' '}
+            <NtrpDisclaimerInfo />
             {/* A band dropdown (#579): the backend stores the chosen band at its midpoint. */}
             <select
               id="new-placeholder-rating"

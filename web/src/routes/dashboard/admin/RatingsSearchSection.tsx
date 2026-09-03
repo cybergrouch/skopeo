@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { NtrpLabel } from '@/components/NtrpLabel'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -56,7 +57,7 @@ export function RatingsSearchSection() {
       <CardHeader>
         <CardTitle>Search &amp; rate</CardTitle>
         <CardDescription>
-          Find any player by name, sex, age, or NTRP rating, then set or override their rating.
+          Find any player by name, sex, age, or <NtrpLabel /> rating, then set or override their rating.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -86,7 +87,7 @@ export function RatingsSearchSection() {
                         </span>
                         {user.rating ? (
                           <span className="shrink-0 text-xs font-medium">
-                            NTRP {user.rating.level ?? user.rating.value}
+                            <NtrpLabel value={user.rating.level ?? user.rating.value} />
                             {formatConfidence(user.rating.confidence) ? (
                               <>
                                 {' · '}

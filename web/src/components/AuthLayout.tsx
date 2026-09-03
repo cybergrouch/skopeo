@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { NtrpLabel } from "@/components/NtrpLabel";
 import {
   Card,
   CardContent,
@@ -43,7 +44,7 @@ export function AuthLayout({
                 Skopeo
               </span>
               <p className="text-sm text-muted-foreground">
-                Skopeo calculates performance-based NTRP tennis ratings from
+                Skopeo calculates performance-based <NtrpLabel /> tennis ratings from
                 your match results.
               </p>
             </div>

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { NtrpLabel, NTRP_DISCLAIMER } from "@/components/NtrpLabel";
 import {
   Card,
   CardContent,
@@ -55,7 +56,9 @@ export function AboutContent({ showAuthActions = true }: AboutContentProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>NTRP</CardTitle>
+          <CardTitle>
+            <NtrpLabel />
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
@@ -74,10 +77,13 @@ export function AboutContent({ showAuthActions = true }: AboutContentProps) {
             </li>
             <li>
               <strong>Not a homegrown scale</strong> — no need to reinvent the
-              wheel. NTRP is proven, and the USTA shows how it&rsquo;s
-              calculated.
+              wheel. NTRP is a well-understood, publicly documented framework, so
+              nobody has to take our word for what a 4.0 means.
             </li>
           </ul>
+          <p className="rounded-md border border-border bg-muted/40 p-3 text-xs">
+            {NTRP_DISCLAIMER}
+          </p>
         </CardContent>
       </Card>
 

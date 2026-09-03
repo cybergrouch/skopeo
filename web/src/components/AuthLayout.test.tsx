@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { fullText } from '@/test/fullText'
 import { render, screen } from '@testing-library/react'
 import { AuthLayout } from './AuthLayout'
 
@@ -26,7 +27,7 @@ describe('AuthLayout', () => {
     expect(logo).toHaveAttribute('src', '/logo-mark.svg')
     expect(
       screen.getByText(
-        /Skopeo calculates performance-based NTRP tennis ratings/i,
+        fullText(/Skopeo calculates performance-based NTRP tennis ratings/i),
       ),
     ).toBeInTheDocument()
   })

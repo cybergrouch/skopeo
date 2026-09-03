@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { fullText } from "@/test/fullText"
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RatingHistoryCard } from "./RatingHistoryCard";
@@ -70,6 +71,17 @@ const detail = (overrides: Record<string, unknown> = {}) => ({
   ],
 });
 
+/**
+ * The expandable history rows only. Every NTRP label is a disclaimer trigger since #842, and Radix
+ * gives those `aria-expanded` too, so a bare getByRole("button") is now ambiguous — and
+ * queryByRole("button") no longer means "this row does not expand". Filter by the disclaimer's
+ * aria-label, which is the one thing that distinguishes them.
+ */
+const rowButtons = () =>
+  screen
+    .queryAllByRole("button")
+    .filter((b) => !/ntrp/i.test(b.getAttribute("aria-label") ?? ""));
+
 describe("RatingHistoryCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -123,10 +135,10 @@ describe("RatingHistoryCard", () => {
     );
     // The "band changes only" hint is shown, and the band change is rendered.
     expect(screen.getByText("Showing band changes only.")).toBeInTheDocument();
-    expect(screen.getByText("NTRP 3.5 → 4.0")).toBeInTheDocument();
+    expect(screen.getByText(fullText("NTRP 3.5 → 4.0"))).toBeInTheDocument();
     // No raw "x → y" value line, and the row is not an expandable button (calc breakdown is admin-only).
     expect(screen.queryByText(/4\.000000/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(rowButtons()).toHaveLength(0);
   });
 
   it("shows the full value and the band, and highlights a band change", () => {
@@ -143,14 +155,14 @@ describe("RatingHistoryCard", () => {
       />,
     );
     expect(screen.getByText("4.000000 → 4.300000")).toBeInTheDocument();
-    expect(screen.getByText("NTRP 4.0 → 4.5")).toBeInTheDocument();
+    expect(screen.getByText(fullText("NTRP 4.0 → 4.5"))).toBeInTheDocument();
     expect(screen.getByText("Band 4.0 → 4.5")).toBeInTheDocument();
     expect(container.querySelector(".border-primary")).not.toBeNull();
   });
 
   it("does not highlight or badge a row without a band change", () => {
     const { container } = render(<RatingHistoryCard entries={[entry()]} />);
-    expect(screen.getByText("NTRP 4.0 → 4.0")).toBeInTheDocument();
+    expect(screen.getByText(fullText("NTRP 4.0 → 4.0"))).toBeInTheDocument();
     expect(screen.queryByText(/^Band /)).not.toBeInTheDocument();
     expect(container.querySelector(".border-primary")).toBeNull();
   });
@@ -161,7 +173,7 @@ describe("RatingHistoryCard", () => {
         entries={[entry({ previousLevel: null, newLevel: null })]}
       />,
     );
-    expect(screen.getByText("NTRP — → —")).toBeInTheDocument();
+    expect(screen.getByText(fullText("NTRP — → —"))).toBeInTheDocument();
   });
 
   it("uses the provided description", () => {
@@ -178,14 +190,14 @@ describe("RatingHistoryCard", () => {
 
   it("an initial-assessment entry (no match) is not clickable", () => {
     render(<RatingHistoryCard entries={[entry()]} />);
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(rowButtons()).toHaveLength(0);
   });
 
   it("expands a match-driven entry to show the result and the calculation", async () => {
     const user = userEvent.setup();
     render(<RatingHistoryCard entries={[entry({ matchId: "m1" })]} />);
 
-    await user.click(screen.getByRole("button"));
+    await user.click(rowButtons()[0]);
 
     expect(useGetApiV1MatchesIdCalculation).toHaveBeenCalledWith(
       "m1",
@@ -208,7 +220,7 @@ describe("RatingHistoryCard", () => {
   it("collapses an expanded entry again", async () => {
     const user = userEvent.setup();
     render(<RatingHistoryCard entries={[entry({ matchId: "m1" })]} />);
-    const button = screen.getByRole("button");
+    const button = rowButtons()[0];
 
     await user.click(button);
     expect(screen.getByText(/dominance 0\.200000/)).toBeInTheDocument();
@@ -247,7 +259,7 @@ describe("RatingHistoryCard", () => {
     const user = userEvent.setup();
     render(<RatingHistoryCard entries={[entry({ matchId: "m1" })]} />);
 
-    await user.click(screen.getByRole("button"));
+    await user.click(rowButtons()[0]);
     expect(
       screen.getByText("2026-06-01 · 6-4 6-3 · Winner: Bob"),
     ).toBeInTheDocument();
@@ -278,7 +290,7 @@ describe("RatingHistoryCard", () => {
     const user = userEvent.setup();
     render(<RatingHistoryCard entries={[entry({ matchId: "m1" })]} />);
 
-    await user.click(screen.getByRole("button"));
+    await user.click(rowButtons()[0]);
     // The detail's match date (distinct from the entry's own date) renders without scores/winner.
     expect(screen.getByText("2026-05-20")).toBeInTheDocument();
     expect(screen.queryByText(/Winner:/)).not.toBeInTheDocument();
@@ -328,7 +340,7 @@ describe("RatingHistoryCard", () => {
     const { rerender } = render(
       <RatingHistoryCard entries={[entry({ matchId: "m1" })]} />,
     );
-    await user.click(screen.getByRole("button"));
+    await user.click(rowButtons()[0]);
     expect(screen.getByText("Loading…")).toBeInTheDocument();
 
     useGetApiV1MatchesIdCalculation.mockReturnValue({

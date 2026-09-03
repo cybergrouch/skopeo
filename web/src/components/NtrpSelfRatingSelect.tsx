@@ -1,4 +1,5 @@
 import { Label } from '@/components/ui/label'
+import { NtrpDisclaimerInfo } from '@/components/NtrpLabel'
 import { NTRP_LEVELS, NTRP_SELF_RATING_GUIDE_URL } from '@/lib/ntrp'
 
 /**
@@ -17,7 +18,8 @@ export function NtrpSelfRatingSelect({
 }) {
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>NTRP self-rating</Label>
+      <Label htmlFor={id}>NTRP self-rating</Label>{' '}
+      <NtrpDisclaimerInfo />
       <select
         id={id}
         required

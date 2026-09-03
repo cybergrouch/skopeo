@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { NtrpLabel } from '@/components/NtrpLabel'
 import {
   Card,
   CardContent,
@@ -133,7 +134,7 @@ export function StandingsTab() {
           <CardTitle>Standings</CardTitle>
           <CardDescription>
             Interim standings — players are ordered by their current rating within
-            each NTRP band, split into Men's and Women's standings. Pick a band to
+            each <NtrpLabel /> band, split into Men's and Women's standings. Pick a band to
             view one page at a time. A points-based ranking will replace this.
           </CardDescription>
         </CardHeader>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { NtrpLabel } from '@/components/NtrpLabel'
 import { ContentLink } from '@/components/ContentLink'
 import { PlaceholderTag } from '@/components/PlaceholderTag'
 import {
@@ -130,9 +131,9 @@ export function ReportTab() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>NTRP band-hop report</CardTitle>
+          <CardTitle><NtrpLabel /> band-hop report</CardTitle>
           <CardDescription>
-            Over the chosen range, how far players moved from their starting NTRP band — both the
+            Over the chosen range, how far players moved from their starting <NtrpLabel /> band — both the
             farthest excursion they reached and where they ended (net). Most players should end in
             band; excursions and net jumps are the exceptions to review.
           </CardDescription>

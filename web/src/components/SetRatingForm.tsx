@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { NtrpDisclaimerInfo } from '@/components/NtrpLabel'
 import { toastError } from '@/observability/toastError'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -39,7 +40,8 @@ export function SetRatingForm({
       <div className="space-y-1">
         <Label htmlFor={`value-${userId}`} className="text-xs">
           Rating
-        </Label>
+        </Label>{' '}
+        <NtrpDisclaimerInfo />
         <select
           id={`value-${userId}`}
           value={band}

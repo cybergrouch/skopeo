@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { NtrpLabel } from '@/components/NtrpLabel'
 import { Avatar } from '@/components/Avatar'
 import { Link } from 'react-router-dom'
 import { PlaceholderTag } from '@/components/PlaceholderTag'
@@ -65,7 +66,7 @@ export function ResearchTab() {
         <CardHeader>
           <CardTitle>Player research</CardTitle>
           <CardDescription>
-            Find members by name, sex, age, and NTRP rating. Combine any filters.
+            Find members by name, sex, age, and <NtrpLabel /> rating. Combine any filters.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -113,7 +114,7 @@ export function ResearchTab() {
                           <div className="shrink-0 text-right">
                             {user.rating ? (
                               <div className="font-medium">
-                                NTRP {user.rating.level ?? user.rating.value}
+                                <NtrpLabel value={user.rating.level ?? user.rating.value} />
                                 {formatConfidence(user.rating.confidence) ? (
                                   <>
                                     {' · '}

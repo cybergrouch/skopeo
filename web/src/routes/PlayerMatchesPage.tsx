@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { NtrpLabel } from "@/components/NtrpLabel";
 import { useParams } from "react-router-dom";
 import {
   Card,
@@ -49,7 +50,7 @@ export function PlayerMatchesPage() {
           <CardTitle>Match history</CardTitle>
           <CardDescription>
             Every match, newest first. Search by an opponent or partner's name
-            or code. Ratings show only as the NTRP band at the time.
+            or code. Ratings show only as the <NtrpLabel /> band at the time.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

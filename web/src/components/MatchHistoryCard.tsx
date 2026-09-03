@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { NtrpLabel } from '@/components/NtrpLabel'
 import { ContentLink } from '@/components/ContentLink'
 import { useGetApiV1PlayersCodeMatchHistory } from '@/api/generated/users/users'
 import { CollapsibleCard } from '@/components/CollapsibleCard'
@@ -33,7 +34,12 @@ export function MatchHistoryCard({ code, collapsible = false }: MatchHistoryCard
   return (
     <CollapsibleCard
       title="Match history"
-      description="Recent matches, with each player's NTRP band at the time. Bands appear once a match has been rated."
+      description={
+        <>
+          Recent matches, with each player's <NtrpLabel /> band at the time. Bands appear once a match
+          has been rated.
+        </>
+      }
       contentClassName="space-y-3"
       collapsible={collapsible}
     >

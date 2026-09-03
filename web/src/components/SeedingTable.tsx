@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { NtrpLabel } from '@/components/NtrpLabel'
 import {
   DndContext,
   KeyboardSensor,
@@ -200,7 +201,7 @@ export function SeedingTable({
             <th className="p-2">Seed</th>
             <th className="p-2">Name</th>
             <th className="p-2">Code</th>
-            <th className="p-2">NTRP</th>
+            <th className="p-2"><NtrpLabel /></th>
             <th className="p-2">Rating</th>
             <th className="p-2">Sex</th>
             <th className="p-2">Age</th>

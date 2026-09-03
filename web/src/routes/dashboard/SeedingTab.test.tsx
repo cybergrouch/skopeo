@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { fullText } from '@/test/fullText'
 import type { ReactNode } from 'react'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -242,11 +243,11 @@ describe('SeedingTab', () => {
     await user.click(screen.getByRole('button', { name: /Summer Open/ }))
     expect(screen.getByText('Ana')).toBeInTheDocument()
     // The computed confidence (#343) is appended as a percentage.
-    expect(screen.getByText('Female · 30 · NTRP 4.0 · 87%')).toBeInTheDocument()
+    expect(screen.getByText(fullText('Female · 30 · NTRP 4.0 · 87%'))).toBeInTheDocument()
     // No-display-name member falls back to the public code.
     expect(screen.getByText('BBB222')).toBeInTheDocument()
     // A rating without an NTRP level falls back to its raw value (no confidence ⇒ no percentage).
-    expect(screen.getByText('Female · 25 · NTRP 3.500000')).toBeInTheDocument()
+    expect(screen.getByText(fullText('Female · 25 · NTRP 3.500000'))).toBeInTheDocument()
   })
 
   it('searches, multi-selects, and adds the checked players to the list', async () => {

@@ -2,6 +2,7 @@ import type { PlayerMatchHistoryEntry } from '@/api/generated/model'
 import { Avatar } from '@/components/Avatar'
 import { PublicPageLink } from '@/components/PublicPageLink'
 import { PlaceholderTag } from '@/components/PlaceholderTag'
+import { NtrpLabel } from '@/components/NtrpLabel'
 import { Badge } from '@/components/ui/badge'
 import { formatConfidence } from '@/lib/confidence'
 
@@ -90,7 +91,7 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchHistoryEntry }) {
           </div>
           {match.rated ? (
             <div className="mt-1 text-muted-foreground">
-              NTRP{' '}
+              <NtrpLabel />{' '}
               {bandWithConfidence(
                 ratingOrBand(match.playerRatingAtMatch, match.playerLevelAtMatch),
                 match.playerConfidence,

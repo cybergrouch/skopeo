@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { fullText } from '@/test/fullText'
 import type { ReactNode } from 'react'
 import { act, render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import { setupUser } from '@/test/user'
@@ -394,7 +395,7 @@ describe('EventManagerView', () => {
     expect(screen.getByText(/\(AAA111\)/)).toBeInTheDocument()
     expect(screen.getByText(/\(BBB222\)/)).toBeInTheDocument()
     // The roster shows sex · age · NTRP band (with the computed confidence % appended, #343).
-    expect(screen.getByText('Female · 34 · NTRP 4.0 · 87%')).toBeInTheDocument()
+    expect(screen.getByText(fullText('Female · 34 · NTRP 4.0 · 87%'))).toBeInTheDocument()
     expect(screen.getByText('awaiting:e1:false')).toBeInTheDocument()
     expect(screen.getByText('recorded:e1:false')).toBeInTheDocument()
     // The event's share/QR card is surfaced in the dashboard (#179).
@@ -1081,7 +1082,7 @@ describe('EventManagerView', () => {
     expect(within(screen.getByLabelText('Player 1')).queryByRole('option', { name: 'Pat' })).not.toBeInTheDocument()
 
     expect(screen.getByText('Join requests')).toBeInTheDocument()
-    expect(screen.getByText('Male · 30 · NTRP 3.5')).toBeInTheDocument() // request rows show facets too
+    expect(screen.getByText(fullText('Male · 30 · NTRP 3.5'))).toBeInTheDocument() // request rows show facets too
     // Approve/Hold controls live only in the requests section; the pending row (first) is Pat.
     await user.click(screen.getAllByRole('button', { name: 'Approve' })[0])
     expect(decideMutate).toHaveBeenCalledWith({ id: 'e1', userId: 'u6', data: { status: 'APPROVED' } })
