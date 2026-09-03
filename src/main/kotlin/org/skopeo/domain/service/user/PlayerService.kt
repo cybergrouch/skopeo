@@ -24,6 +24,7 @@ import org.skopeo.common.dto.user.ResultsBucket
 import org.skopeo.common.dto.user.ResultsTotals
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.EMAIL_VIEW_ROLES
 import org.skopeo.domain.mapper.dto.event.toResponse
 import org.skopeo.domain.mapper.dto.rating.toResponse
 import org.skopeo.domain.mapper.entity.event.toDomain
@@ -50,7 +51,6 @@ private const val DEFAULT_HISTORY_LIMIT = 20
 private const val MAX_HISTORY_LIMIT = 100
 
 // #630: capabilities that, like the owner, may see a player's registered email on the public profile.
-private val EMAIL_VIEW_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.RATER, Capability.ADMINISTRATOR)
 
 /**
  * Resolves a player's shareable, auth-gated public profile from their [public code] (issue #61).

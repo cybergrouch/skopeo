@@ -14,6 +14,7 @@ import org.skopeo.common.dto.user.UserSummaryPageResponse
 import org.skopeo.common.dto.user.UserSummaryResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.HOST_OR_ADMIN
 import org.skopeo.domain.mapper.dto.user.toResponse
 import org.skopeo.domain.mapper.dto.user.toSummary
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -41,8 +42,6 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
-
-private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
 
 // Player-search pagination. The default page size preserves the historical cap for callers that
 // don't paginate (the typeahead picker); the ceiling guards against oversized client requests.
@@ -528,7 +527,7 @@ private fun requireStaff(
     token: VerifiedFirebaseToken,
 ): Either<ServiceError, Unit> {
     val caller = repository.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-    return if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) {
+    return if (caller == null || caller.capabilities.none { it in HOST_OR_ADMIN }) {
         ServiceError.Forbidden().left()
     } else {
         Unit.right()
@@ -548,7 +547,7 @@ private fun requireResearchAccess(
     val searchRoles = setOf(Capability.RESEARCHER, Capability.RATER)
     val allowed =
         caller != null &&
-            (caller.capabilities.any { it in searchRoles } || caller.capabilities.any { it in STAFF_ROLES })
+            (caller.capabilities.any { it in searchRoles } || caller.capabilities.any { it in HOST_OR_ADMIN })
     return if (allowed) Unit.right() else ServiceError.Forbidden().left()
 }
 

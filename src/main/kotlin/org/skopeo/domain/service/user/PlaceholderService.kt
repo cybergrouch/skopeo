@@ -15,6 +15,7 @@ import org.skopeo.common.dto.user.UserSummaryResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.MATCH_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.user.toResponse
 import org.skopeo.domain.mapper.dto.user.toSummary
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -40,7 +41,6 @@ private const val CLAIM_CODE_TTL_DAYS = 7L
 private val ALLOWED_SEXES = setOf("Male", "Female")
 
 // Match-management roles that may create a placeholder (no invite gate). ADMINISTRATOR also qualifies.
-private val MATCH_MANAGEMENT_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
 /**
  * Placeholder ("dummy") player accounts + claim/adopt (#496). A HOST/CLUB_OWNER/ADMINISTRATOR creates a

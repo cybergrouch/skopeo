@@ -17,7 +17,9 @@ import org.skopeo.common.dto.event.MyEventResponse
 import org.skopeo.common.dto.match.MatchPublicPlayer
 import org.skopeo.common.dto.match.MatchPublicResponse
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.CLUB_OWNER_OR_ADMIN
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.MATCH_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.event.toResponse
 import org.skopeo.domain.mapper.dto.match.toPublicResponse
 import org.skopeo.domain.mapper.entity.club.toDomain
@@ -58,11 +60,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
-private val STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
-
 // Roles that may still enter data on an event after it has ended (#310): administrators and club
 // owners are exempt from the expiry gate, unlike a plain host.
-private val EXPIRY_EXEMPT_ROLES = setOf(Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
 /** Event-creation input, parsed/validated at the route boundary (#116): name, date range, roster, optional club. */
 data class CreateEventInput(
@@ -905,7 +904,11 @@ private fun staffCaller(
     token: VerifiedFirebaseToken,
 ): Either<ServiceError, User> {
     val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-    return if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) ServiceError.Forbidden().left() else caller.right()
+    return if (caller == null || caller.capabilities.none { it in MATCH_MANAGEMENT_ROLES }) {
+        ServiceError.Forbidden().left()
+    } else {
+        caller.right()
+    }
 }
 
 /**
@@ -918,7 +921,7 @@ private fun ensureHostMayEnter(
     caller: User,
 ): Either<ServiceError, Unit> =
     either {
-        val exempt = caller.capabilities.any { it in EXPIRY_EXEMPT_ROLES }
+        val exempt = caller.capabilities.any { it in CLUB_OWNER_OR_ADMIN }
         ensure(condition = exempt || !event.isExpired(asOf = LocalDate.now())) {
             ServiceError.Conflict(message = "This event has ended; only an administrator or club owner can modify it.")
         }

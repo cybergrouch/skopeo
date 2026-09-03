@@ -11,7 +11,8 @@ import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.dto.event.EventTeamResponse
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.security.Capability
+import org.skopeo.common.security.CLUB_OWNER_OR_ADMIN
+import org.skopeo.common.security.MATCH_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.event.toResponse
 import org.skopeo.domain.mapper.entity.event.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -33,14 +34,11 @@ import org.skopeo.repository.UserRepository
 import java.time.LocalDate
 import java.util.UUID
 
-private val TEAM_STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
-
 // A team is primarily a doubles construct: 1 or 2 members, hard-capped at 2 (#734).
 private const val MAX_TEAM_SIZE = 2
 
 // Roles exempt from the expired-event data-entry gate (#310): admins and club owners may still manage
 // teams after an event has ended; a plain host may not.
-private val TEAM_EXPIRY_EXEMPT_ROLES = setOf(Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
 /**
  * Durable, event-scoped teams (#720): purely organizational groupings of an event's APPROVED
@@ -225,7 +223,7 @@ class EventTeamService(
                 ) { ServiceError.NotFound(message = "Event $eventId not found") }
             ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
             // The expiry gate (#310) is a separate axis from club ownership (#789); both apply.
-            val exempt = caller.capabilities.any { it in TEAM_EXPIRY_EXEMPT_ROLES }
+            val exempt = caller.capabilities.any { it in CLUB_OWNER_OR_ADMIN }
             ensure(condition = exempt || !event.isExpired(asOf = LocalDate.now())) {
                 ServiceError.Conflict(message = "This event has ended; only an administrator or club owner can modify it.")
             }
@@ -240,5 +238,9 @@ private fun teamStaffCaller(
     token: VerifiedFirebaseToken,
 ): Either<ServiceError, User> {
     val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-    return if (caller == null || caller.capabilities.none { it in TEAM_STAFF_ROLES }) ServiceError.Forbidden().left() else caller.right()
+    return if (caller == null || caller.capabilities.none { it in MATCH_MANAGEMENT_ROLES }) {
+        ServiceError.Forbidden().left()
+    } else {
+        caller.right()
+    }
 }
