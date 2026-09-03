@@ -27,6 +27,7 @@ import org.skopeo.common.dto.event.UpdateEventRequest
 import org.skopeo.common.dto.seeding.SaveSeedingOrderRequest
 import org.skopeo.domain.service.event.CreateEventInput
 import org.skopeo.domain.service.event.EventService
+import org.skopeo.domain.service.ranking.RankingPointService
 import org.skopeo.domain.service.seeding.SeedingService
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
@@ -39,12 +40,14 @@ import java.util.UUID
 fun Application.configureEventRoutes(
     service: EventService = EventService(),
     seedingService: SeedingService = SeedingService(),
+    pointsService: RankingPointService = RankingPointService(),
 ) {
     routing {
         route(path = "/api/v1/events") {
             // The public event page is viewable anonymously (#193); self-signup + the rest stay required.
             authenticate(FIREBASE_AUTH, optional = true) {
                 publicEventByCode(service = service)
+                eventPointsByCode(points = pointsService)
             }
             authenticate(FIREBASE_AUTH) {
                 listAndCreate(service = service)

@@ -44,6 +44,12 @@ vi.mock("@/api/generated/events/events", () => ({
   useGetApiV1EventsCodeCodeManage: () => ({
     data: state.managedId ? { id: state.managedId } : undefined,
   }),
+  // No awards by default (#857), so the points card renders nothing and this file keeps asserting the
+  // page composition it always did. EventPointsCard.test.tsx covers the card itself.
+  useGetApiV1EventsCodeCodePoints: () => ({
+    data: { rows: [], totalPoints: "0.0000" },
+    isLoading: false,
+  }),
   getGetApiV1EventsCodeCodeQueryKey: (code: string) => ["event", code],
   usePostApiV1EventsCodeCodeSignup: (opts?: {
     mutation?: { onSuccess?: () => void; onError?: () => void };

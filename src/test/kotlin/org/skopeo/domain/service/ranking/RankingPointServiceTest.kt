@@ -5,6 +5,7 @@ package org.skopeo.domain.service.ranking
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -21,22 +22,28 @@ import org.skopeo.domain.model.AuditAction
 import org.skopeo.domain.model.AuditEntityType
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.AwardStatus
+import org.skopeo.domain.model.CreateEventCommand
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.PointClass
 import org.skopeo.domain.model.PointSourceType
 import org.skopeo.domain.model.ProvisionUserCommand
+import org.skopeo.domain.model.RankingPointAwardWrite
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.AuditRepository
+import org.skopeo.repository.EventRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.seedClub
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
+import org.skopeo.domain.mapper.entity.event.toDomain as toEventDomain
 
 class RankingPointServiceTest {
     companion object {
@@ -559,5 +566,114 @@ class RankingPointServiceTest {
         users.deactivate(id = player.id).shouldBeRight()
         service.adjust(token = token(uid = "admin"), userId = player.id, request = adjustRequest())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    /** An event to hang awards off; every event needs a club (#794). */
+    private fun seedEvent(createdBy: UUID) =
+        EventRepository()
+            .create(
+                command =
+                    CreateEventCommand(
+                        name = "Cup",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
+                        participantIds = emptyList(),
+                        createdBy = createdBy,
+                        clubId = seedClub().id,
+                    ),
+            ).toEventDomain()
+
+    /** Write one ACTIVE award for [userId] attributed to [eventId]. */
+    private fun eventAward(
+        userId: UUID,
+        eventId: UUID,
+        points: String,
+        status: AwardStatus = AwardStatus.ACTIVE,
+        validUntil: LocalDateTime = LocalDateTime.now().plusMonths(6),
+    ) = awards.award(
+        write =
+            RankingPointAwardWrite(
+                userId = userId,
+                points = BigDecimal(points),
+                pointClass = PointClass.OPEN_PLAY,
+                sourceType = PointSourceType.INTERNAL,
+                sourceId = eventId.toString(),
+                band = "4.0",
+                sex = "Male",
+                reason = null,
+                validFrom = LocalDateTime.now().minusDays(1),
+                validUntil = validUntil,
+                status = status,
+                revokesAwardId = null,
+                grantedBy = null,
+                awardedAt = LocalDateTime.now(),
+                eventId = eventId,
+            ),
+    )
+
+    @Test
+    fun `an event's awarded points are summed per player, highest first (#857)`() {
+        val host = provision(uid = "host")
+        val winner = provision(uid = "winner")
+        val runnerUp = provision(uid = "runner")
+        val event = seedEvent(createdBy = host.id)
+        // Two awards for the same player must fold into one row — a player earns per set (#836).
+        eventAward(userId = winner.id, eventId = event.id, points = "7")
+        eventAward(userId = winner.id, eventId = event.id, points = "5")
+        eventAward(userId = runnerUp.id, eventId = event.id, points = "2")
+
+        val summary = service.awardedForEvent(code = event.publicCode).shouldBeRight()
+
+        // Points keep the column's scale (NUMERIC(_,4)), as the ledger DTO already does — the client
+        // formats them via formatPoints rather than the server pre-rounding.
+        summary.rows.map { it.displayName to it.points } shouldBe
+            listOf("winner" to "12.0000", "runner" to "2.0000")
+        summary.totalPoints shouldBe "14.0000"
+    }
+
+    @Test
+    fun `a revoked award is excluded, since it paid nothing (#857)`() {
+        val host = provision(uid = "host")
+        val player = provision(uid = "player")
+        val event = seedEvent(createdBy = host.id)
+        eventAward(userId = player.id, eventId = event.id, points = "5")
+        eventAward(userId = player.id, eventId = event.id, points = "9", status = AwardStatus.REVOKED)
+
+        val summary = service.awardedForEvent(code = event.publicCode).shouldBeRight()
+
+        // Only the live row counts, matching every standings query.
+        summary.rows.single().points shouldBe "5.0000"
+        summary.totalPoints shouldBe "5.0000"
+    }
+
+    @Test
+    fun `an expired award is still listed, because the event did award it (#857)`() {
+        val host = provision(uid = "host")
+        val player = provision(uid = "player")
+        val event = seedEvent(createdBy = host.id)
+        eventAward(userId = player.id, eventId = event.id, points = "6", validUntil = LocalDateTime.now().minusDays(1))
+
+        val summary = service.awardedForEvent(code = event.publicCode).shouldBeRight()
+
+        // This is the one read of this table that deliberately ignores validity: "what did this event
+        // award" does not stop being true when the points expire.
+        summary.rows.single().points shouldBe "6.0000"
+    }
+
+    @Test
+    fun `an event with no awards returns an empty list rather than an error (#857)`() {
+        val host = provision(uid = "host")
+        val event = seedEvent(createdBy = host.id)
+
+        val summary = service.awardedForEvent(code = event.publicCode).shouldBeRight()
+
+        // The client renders no card at all — an event may be unfinalized, or have awarding off (#831).
+        summary.rows.shouldBeEmpty()
+        summary.totalPoints shouldBe "0"
+    }
+
+    @Test
+    fun `an unknown event code is a NotFound (#857)`() {
+        service.awardedForEvent(code = "NOPE12").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 }
