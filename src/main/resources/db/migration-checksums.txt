@@ -1,0 +1,59 @@
+# Flyway checksums of every SHIPPED migration (#854). One '<version> <checksum>' per line.
+#
+# These are Flyway's own CRC32 values -- the same numbers a database records in
+# flyway_schema_history -- so this file is also the reference for whether an environment is stale:
+#
+#     SELECT version, checksum FROM flyway_schema_history WHERE success ORDER BY installed_rank;
+#
+# A line here must NEVER change. A migration that has been applied anywhere is immutable: every
+# database holding the old checksum will refuse to boot (this is what happened to V44). To change
+# schema, add a NEW V<n> migration and append its line.
+#
+# Regenerate deliberately: run MigrationChecksumManifestTest and copy the 'Full applied set' it
+# prints on failure. See docs/engineering/operations/DB_MIGRATIONS.md.
+1 1743429400
+2 -751841145
+3 -1095046750
+4 1757974258
+5 -1853087024
+6 -202317160
+7 135964410
+8 -491683050
+9 488935611
+10 1515188780
+11 1766255267
+12 1929420692
+13 -1515271370
+14 -633783314
+15 1375805220
+16 24468885
+17 1048482091
+18 -378214245
+19 599552615
+20 -221513292
+21 -1892688841
+22 1188578687
+23 -237224825
+24 -1310165112
+25 326595399
+26 910417859
+27 -1272777397
+28 -1446223559
+29 1640283645
+30 1764013435
+31 433339380
+32 1651236168
+33 -2051941968
+34 -633965308
+35 -2067234225
+36 -1094194689
+37 -599104067
+38 1657384593
+39 2003180049
+40 1893352532
+41 -1787923635
+42 1138597554
+43 744622274
+44 2112154510
+45 1037060862
+46 570475213
