@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -210,4 +210,127 @@ describe("PointsManagementSection", () => {
     );
     expect(screen.queryByText("Points awarded")).not.toBeInTheDocument();
   });
+
+  /** The cells of the single awarded-points row, in header order. */
+  function rowCells(): string[] {
+    const row = screen.getAllByRole("row")[1];
+    return within(row)
+      .getAllByRole("cell")
+      .map((cell) => cell.textContent ?? "");
+  }
+
+  it("shows the granting event AND match in separate columns (#855)", () => {
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: {
+        rows: [
+          awardRow({
+            source: "M7X2QB",
+            eventPublicCode: "EVT9KD",
+            matchPublicCode: "M7X2QB",
+            pointClass: "OPEN_PLAY",
+          }),
+        ],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      },
+      isLoading: false,
+    });
+    renderSection();
+
+    // The old single "Source" cell showed the match and never the event — and since #836 every
+    // non-placement tournament fixture pays per-match, so that was the common case.
+    expect(screen.getByRole("link", { name: "EVT9KD" })).toHaveAttribute("href", "/events/EVT9KD");
+    expect(screen.getByRole("link", { name: "M7X2QB" })).toHaveAttribute("href", "/matches/M7X2QB");
+  });
+
+  it("shows an em dash for the axis an award has no source on (#855)", () => {
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: {
+        rows: [awardRow({ source: "EVT9KD", eventPublicCode: "EVT9KD", matchPublicCode: null })],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      },
+      isLoading: false,
+    });
+    renderSection();
+
+    // An event-level award has a source; it just is not a match. A blank cell would read as missing data.
+    expect(screen.getByRole("link", { name: "EVT9KD" })).toBeInTheDocument();
+    expect(rowCells()[5]).toBe("—");
+  });
+
+  it("states a manual grant's origin once, not under both headers (#855)", () => {
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: { rows: [awardRow()], total: 1, limit: 25, offset: 0 },
+      isLoading: false,
+    });
+    renderSection();
+
+    // "manual" under an "Event" header is already a stretch; printing it under "Match" as well says it
+    // twice and files it somewhere it does not belong.
+    const cells = rowCells();
+    expect(cells[4]).toBe("manual");
+    expect(cells[5]).toBe("—");
+  });
+
+  it("gives expiry its own column, separate from the awarded date (#855)", () => {
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: {
+        rows: [awardRow({ awardedAt: "2026-06-01T10:00:00", validUntil: "2027-06-01T10:00:00" })],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      },
+      isLoading: false,
+    });
+    renderSection();
+
+    // Expiry is what a manager scans for — what is about to drop out of the standings — and it could not
+    // be skimmed while wrapped in a range beside two other dates.
+    const cells = rowCells();
+    expect(cells[6]).toBe(new Date("2026-06-01T10:00:00").toLocaleDateString());
+    expect(cells[7]).toBe(new Date("2027-06-01T10:00:00").toLocaleDateString());
+    // validFrom is deliberately no longer shown: it is the award date in every real case.
+    expect(cells[6]).not.toContain("–");
+  });
+
+  it("shows the point class, which is what explains the expiry window (#855)", () => {
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: { rows: [awardRow({ pointClass: "OPEN_PLAY" })], total: 1, limit: 25, offset: 0 },
+      isLoading: false,
+    });
+    renderSection();
+
+    // #840: tournament 365 days, Full Match 182, open play 91. Without the class, two rows with
+    // different windows look arbitrary.
+    expect(rowCells()[2]).toBe("OPEN_PLAY");
+  });
+
+  it("keeps the header order the row cells are asserted against (#855)", () => {
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: { rows: [awardRow()], total: 1, limit: 25, offset: 0 },
+      isLoading: false,
+    });
+    renderSection();
+
+    // Pins the contract the positional assertions above rely on — a reordered header would otherwise
+    // silently invalidate them rather than fail.
+    const headers = within(screen.getAllByRole("row")[0])
+      .getAllByRole("columnheader")
+      .map((h) => h.textContent);
+    expect(headers).toEqual([
+      "Player",
+      "Points",
+      "Class",
+      "Band / sex",
+      "Event",
+      "Match",
+      "Awarded",
+      "Expires",
+      "Status",
+    ]);
+  });
+
 });
