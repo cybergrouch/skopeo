@@ -27,6 +27,17 @@
   --link: oklch(0.205 0 0);
   --link-underline: oklch(0.556 0 0);
   --link-hover: oklch(0.145 0 0);
+
+  /* Chart colours (#845). Hue identifies the band relation, lightness the outcome: the `-muted` pair is
+     the SAME hue and chroma at a higher lightness, so wins/losses read as one group. Tokens rather than
+     literals because the app has a dark mode and ~12 club themes; a hard-coded colour breaks in most of
+     them. Red is deliberately avoided — it belongs to --destructive. */
+  --chart-1: oklch(0.55 0.13 250);
+  --chart-1-muted: oklch(0.82 0.06 250);
+  --chart-2: oklch(0.55 0.14 300);
+  --chart-2-muted: oklch(0.82 0.06 300);
+  --chart-3: oklch(0.55 0.12 150);
+  --chart-3-muted: oklch(0.82 0.06 150);
 }
 
 .dark {
@@ -49,6 +60,15 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+
+  /* Chart colours (#845) — same hues, but the pair inverts: on a dark surface the muted shade goes
+     DARKER, not lighter, so "less" still reads as less. */
+  --chart-1: oklch(0.72 0.13 250);
+  --chart-1-muted: oklch(0.42 0.07 250);
+  --chart-2: oklch(0.72 0.14 300);
+  --chart-2-muted: oklch(0.42 0.07 300);
+  --chart-3: oklch(0.72 0.12 150);
+  --chart-3-muted: oklch(0.42 0.07 150);
 }
 
 /*

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
+import type { OpponentBandSeries, OpponentBandSeriesRelation } from '@/api/generated/model'
 import { WinLossCard } from './WinLossCard'
 
 const { useGetApiV1PlayersCodeResultsSummary } = vi.hoisted(() => ({
@@ -14,13 +15,32 @@ function totals(played: number, wins: number, losses: number, winRate: number | 
   return { played, wins, losses, winRate }
 }
 
-/** The three cuts plus the band series, matching the response shape; the series is unrendered here. */
+/** One band relation with its totals and a one-month series, as the server assembles it (#845). */
+function band(
+  relation: OpponentBandSeriesRelation,
+  wins: number,
+  losses: number,
+  winRate: number | null,
+): OpponentBandSeries {
+  return {
+    relation,
+    totals: { played: wins + losses, wins, losses, winRate },
+    monthly: [{ period: '2026-08', wins, losses }],
+  }
+}
+
+/** All three relations, always present and always in SAME → HIGHER → LOWER order. */
+const emptyBands = [band('SAME', 0, 0, null), band('HIGHER', 0, 0, null), band('LOWER', 0, 0, null)]
+
+/** The three cuts plus the band series, matching the response shape. */
 function summary(
   singles: ReturnType<typeof totals>,
   doubles: ReturnType<typeof totals>,
   overall: ReturnType<typeof totals>,
+  opponentBands: OpponentBandSeries[] = emptyBands,
+  monthlyMax = 0,
 ) {
-  return { singles, doubles, overall, opponentBands: [], monthsWindow: 12, monthlyMax: 0 }
+  return { singles, doubles, overall, opponentBands, monthsWindow: 12, monthlyMax }
 }
 
 /** The cells of a labelled table row: [Played, Wins, Losses, Win rate]. */
@@ -86,6 +106,53 @@ describe('WinLossCard', () => {
     expect(rowCells('Doubles')).toEqual(['0', '0', '0', 'n/a'])
     // Overall is driven entirely by singles here.
     expect(rowCells('Overall')).toEqual(['3', '2', '1', '67%'])
+  })
+
+  it('renders the opponent-band charts from the assembled series', () => {
+    useGetApiV1PlayersCodeResultsSummary.mockReturnValue({
+      // 8 rated singles matches split across the three relations; doubles is excluded from this cut,
+      // which is why these do not add up to the Singles row of 10.
+      data: summary(
+        totals(10, 6, 4, 60),
+        totals(2, 1, 1, 50),
+        totals(12, 7, 5, 58),
+        [band('SAME', 3, 1, 75), band('HIGHER', 1, 2, 33), band('LOWER', 1, 0, 100)],
+        4,
+      ),
+      isLoading: false,
+    })
+    const { container } = render(<WinLossCard code="K7Q2MX" />)
+
+    expect(screen.getByRole('heading', { name: 'Singles opponents by band' })).toBeInTheDocument()
+    // The donut plus one sparkline per relation.
+    expect(container.querySelectorAll('svg')).toHaveLength(4)
+    // Every figure is legible as text regardless of whether the shades are distinguishable.
+    expect(screen.getByRole('button', { name: /Same band 3W \/ 1L · 75%/ })).toBeInTheDocument()
+    expect(screen.getByText('Last 12 months, oldest first')).toBeInTheDocument()
+  })
+
+  it('states both exclusions, since the band counts deliberately do not match the singles row', () => {
+    useGetApiV1PlayersCodeResultsSummary.mockReturnValue({
+      data: summary(totals(4, 3, 1, 75), totals(4, 1, 3, 25), totals(8, 4, 4, 50)),
+      isLoading: false,
+    })
+    render(<WinLossCard code="K7Q2MX" />)
+    // Unexplained, the gap between 4 singles and 0 banded matches reads as a bug rather than as a
+    // narrower cut, so the caption has to name both reasons.
+    const caption = screen.getByText(/Singles only/)
+    expect(caption).toHaveTextContent('doubles matches are not counted')
+    expect(caption).toHaveTextContent('only matches that have been rated')
+  })
+
+  it('shows an empty band section for a player with only doubles or unrated matches', () => {
+    useGetApiV1PlayersCodeResultsSummary.mockReturnValue({
+      // Doubles-only: the totals table has real figures but there is no banded singles play at all.
+      data: summary(totals(0, 0, 0, null), totals(4, 2, 2, 50), totals(4, 2, 2, 50)),
+      isLoading: false,
+    })
+    render(<WinLossCard code="K7Q2MX" />)
+    expect(screen.getByText('No rated singles matches yet.')).toBeInTheDocument()
+    expect(screen.getByText('No rated singles matches in the last 12 months.')).toBeInTheDocument()
   })
 
   it('does not query when no code is provided', () => {
