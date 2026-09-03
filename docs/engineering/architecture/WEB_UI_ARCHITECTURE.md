@@ -478,3 +478,34 @@ backend's coverage exclusions. CI emits JUnit XML for a drillable test report.
 - [LAYERED_ARCHITECTURE.md](./LAYERED_ARCHITECTURE.md) — backend layering.
 - [DEPLOYMENT_GCP.md](../operations/DEPLOYMENT_GCP.md) — API + DB on GCP.
 - [API_DOCUMENTATION.md](../api/API_DOCUMENTATION.md) — the JSON API the UI consumes.
+
+## NTRP labels carry a USTA disclaimer (#842)
+
+Every **visible** NTRP label in the app is a disclaimer trigger. The wording lives in exactly one place —
+`NTRP_DISCLAIMER` in `components/NtrpLabel.tsx` — so it cannot drift between screens, and it is legal copy
+pinned by a test.
+
+Two variants, and the choice between them is not cosmetic:
+
+| Use | Component |
+|---|---|
+| The term appears as readable text | `<NtrpLabel />`, or `<NtrpLabel value={band} />` to render "NTRP 4.0" |
+| **Beside a `<label>`**, or where a second underlined phrase would be noise | `<NtrpDisclaimerInfo />` (ⓘ only) |
+
+**Never put a trigger inside a `<label>`.** It changes the labelled control's accessible name — a screen
+reader announces the button instead of the field — and the nested button swallows the click that should
+focus the control. Testing Library surfaces this as `getByLabelText` failing or "found multiple elements",
+which is a symptom, not the bug.
+
+**Pass the band through `value`, not alongside.** `<NtrpLabel value={band} />` keeps the label a single
+text node. `<NtrpLabel /> {band}` splits it, and Testing Library's `getNodeText` concatenates only *direct*
+child text nodes — so `getByText("NTRP 4.0")` silently stops matching.
+
+**Asserting on a sentence that contains a label** needs `fullText()` from `test/fullText.ts`, which matches
+an element's full `textContent` and resolves to the innermost match.
+
+**Deliberately not covered**, recorded so they are not "fixed" later by mistake: the self-rating guide links
+(already external anchors — a trigger inside an `<a>` is invalid HTML), `aria-label`s, the sign-up
+validation toast, the seeding CSV export header, and the confidence tooltip. There is also **no footer or
+global disclaimer line**: a standing USTA notice on every screen would make NTRP *more* prominent, which
+undercuts the point that it is only a borrowed reference framework.

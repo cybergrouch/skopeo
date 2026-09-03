@@ -5,6 +5,7 @@ import { CollapsibleCard } from "@/components/CollapsibleCard";
 import { Badge } from "@/components/ui/badge";
 import { CalculationBreakdownDetail } from "@/components/CalculationBreakdownDetail";
 import { NumberedPager } from "@/components/NumberedPager";
+import { NtrpLabel } from "@/components/NtrpLabel";
 import { formatConfidence } from "@/lib/confidence";
 import { ConfidenceValue } from "@/components/ConfidenceValue";
 
@@ -174,7 +175,9 @@ export function RatingHistoryCard({
                     {entry.previousRating != null ? (
                       <div className="mt-1">{`${entry.previousRating} → ${entry.newRating}`}</div>
                     ) : null}
-                    <div className="text-muted-foreground">{`NTRP ${prevBand} → ${newBand}`}</div>
+                    <div className="text-muted-foreground">
+                      <NtrpLabel value={`${prevBand} → ${newBand}`} />
+                    </div>
                   </>
                 );
                 return (

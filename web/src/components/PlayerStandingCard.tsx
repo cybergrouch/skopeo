@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import { useGetApiV1PlayersCodeStanding } from "@/api/generated/users/users";
+import { NtrpLabel } from "@/components/NtrpLabel";
 import {
   Card,
   CardContent,
@@ -39,13 +41,13 @@ export function PlayerStandingCard({ code, asSection = false }: PlayerStandingCa
 
   // The source-aware metric segment: points (public) under POINTS, the rating (only when revealed) under
   // RATING. Null when RATING and the viewer can't see the rating — the card then shows rank + band only.
-  function metric(): string | null {
+  function metric(): ReactNode {
     if (!data) return null;
     if (data.source === "POINTS") {
       const points = formatPoints(data.points);
       return points ? `${points} pts` : null;
     }
-    return data.rating ? `NTRP ${data.rating}` : null;
+    return data.rating ? <NtrpLabel value={data.rating} /> : null;
   }
 
   const body = isLoading ? (
@@ -57,7 +59,16 @@ export function PlayerStandingCard({ code, asSection = false }: PlayerStandingCa
         {" · "}
         {(() => {
           const m = metric();
-          return m ? `${m} · ${groupLabel(data.band, data.sex)}` : groupLabel(data.band, data.sex);
+          const group = groupLabel(data.band, data.sex);
+          // metric() returns a node now (#842 makes the NTRP term a disclaimer trigger), so compose in
+          // JSX rather than interpolating into a template string.
+          return m ? (
+            <>
+              {m} · {group}
+            </>
+          ) : (
+            group
+          );
         })()}
       </span>
     </p>

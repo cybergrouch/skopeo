@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { fullText } from "@/test/fullText"
 import { render, screen } from '@testing-library/react'
 import { PlayerStandingCard } from './PlayerStandingCard'
 
@@ -34,7 +35,7 @@ describe('PlayerStandingCard', () => {
       isLoading: false,
     })
     render(<PlayerStandingCard code="ABC123" />)
-    expect(screen.getByText(/NTRP 4.200000 · 4.0 Men/)).toBeInTheDocument()
+    expect(screen.getByText(fullText(/NTRP 4.200000 · 4.0 Men/))).toBeInTheDocument()
   })
 
   it('shows rank + band only under RATING when the rating is not revealed (#457, #186)', () => {
@@ -46,7 +47,7 @@ describe('PlayerStandingCard', () => {
     expect(screen.getByText('#1')).toBeInTheDocument()
     expect(screen.getByText(/· 4.0 Men/)).toBeInTheDocument()
     // No rating value is rendered — the response omitted it, so nothing leaks.
-    expect(screen.queryByText(/NTRP 4/)).not.toBeInTheDocument()
+    expect(screen.queryByText(fullText(/NTRP 4/))).not.toBeInTheDocument()
     expect(screen.queryByText(/pts/)).not.toBeInTheDocument()
   })
 

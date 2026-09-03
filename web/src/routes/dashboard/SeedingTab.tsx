@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
+import { NtrpLabel } from '@/components/NtrpLabel'
 import { toastError } from '@/observability/toastError'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -36,15 +37,27 @@ import type {
 const SEXES = ['Male', 'Female'] as const
 
 /** "Female · 34 · NTRP 4.0" — sex, age, NTRP band, omitting whatever is missing. */
-function memberMeta(member: UserSummaryResponse): string {
-  const parts: string[] = []
+function memberMeta(member: UserSummaryResponse): ReactNode {
+  const parts: ReactNode[] = []
   if (member.sex) parts.push(member.sex)
   if (member.age != null) parts.push(String(member.age))
   if (member.rating) {
     const pct = formatConfidence(member.rating.confidence)
-    parts.push(`NTRP ${member.rating.level ?? member.rating.value}${pct ? ` · ${pct}` : ''}`)
+    parts.push(
+      <>
+        <NtrpLabel value={member.rating.level ?? member.rating.value} />
+        {pct ? ` · ${pct}` : ''}
+      </>,
+    )
   }
-  return parts.join(' · ')
+  // A node since #842 made the NTRP term a disclaimer trigger; null when empty so truthiness still works.
+  if (parts.length === 0) return null
+  return parts.map((part, i) => (
+    <span key={i}>
+      {i > 0 ? ' · ' : ''}
+      {part}
+    </span>
+  ))
 }
 
 /** Build inclusive interval notation from optional min/max (e.g. "[3.0,4.0]", "[3.0,)", "(,30]"). */

@@ -25,6 +25,7 @@ import { PointsAuditCard } from "@/components/PointsAuditCard";
 import { RatingBandMeter } from "@/components/RatingBandMeter";
 import { formatConfidence } from "@/lib/confidence";
 import { ConfidenceValue } from "@/components/ConfidenceValue";
+import { NtrpLabel } from "@/components/NtrpLabel";
 import { ShareCard } from "@/components/ShareCard";
 import type { Capability } from "@/auth/capabilities";
 import {
@@ -256,7 +257,7 @@ export function ProfileTab({
                     className="rounded-lg border p-3 text-sm"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium">NTRP</span>
+                      <NtrpLabel className="font-medium" />
                       <span>
                         {rating.level ?? rating.value}
                         {formatConfidence(rating.confidence) ? (

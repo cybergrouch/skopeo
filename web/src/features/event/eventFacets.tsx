@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react'
 import type { EventParticipantResponse } from '@/api/generated/model'
+import { NtrpLabel } from '@/components/NtrpLabel'
 import { formatConfidence } from '@/lib/confidence'
 
 /** Human labels for the event's class (#403). */
@@ -27,18 +29,32 @@ export const EVENT_FORMAT_LABELS: Record<string, string> = {
 
 /**
  * "Female · 34 · NTRP 4.0" — a participant's sex, age, and NTRP band, omitting whatever is missing.
+ * Returns a node, not a string: the NTRP term carries the USTA disclaimer (#842).
  *
  * These facets are for match managers only (#741): the server withholds them from the public event
  * payload entirely, so for a non-manager viewer this returns an empty string and the roster renders
  * the name alone.
  */
-export function participantMeta(p: EventParticipantResponse): string {
-  const parts: string[] = []
+export function participantMeta(p: EventParticipantResponse): ReactNode {
+  const parts: ReactNode[] = []
   if (p.sex) parts.push(p.sex)
   if (p.age != null) parts.push(String(p.age))
   if (p.rating) {
     const pct = formatConfidence(p.rating.confidence)
-    parts.push(`NTRP ${p.rating.level ?? p.rating.value}${pct ? ` · ${pct}` : ''}`)
+    parts.push(
+      <>
+        <NtrpLabel value={p.rating.level ?? p.rating.value} />
+        {pct ? ` · ${pct}` : ''}
+      </>,
+    )
   }
-  return parts.join(' · ')
+  // A node rather than a string since #842 made the NTRP term a disclaimer trigger. Returns null when
+  // empty so callers can keep testing truthiness — an empty array would be truthy.
+  if (parts.length === 0) return null
+  return parts.map((part, i) => (
+    <span key={i}>
+      {i > 0 ? ' · ' : ''}
+      {part}
+    </span>
+  ))
 }

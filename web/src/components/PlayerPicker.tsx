@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { NtrpDisclaimerInfo } from "@/components/NtrpLabel";
 import { toast } from "sonner";
 import { toastError } from "@/observability/toastError";
 import { Button } from "@/components/ui/button";
@@ -185,7 +186,8 @@ export function PlayerPicker({
             <div className="space-y-1">
               <Label htmlFor="placeholder-rating" className="text-xs">
                 Initial rating (optional)
-              </Label>
+              </Label>{' '}
+              <NtrpDisclaimerInfo />
               {/* A band dropdown (#579): the backend stores the chosen band at its midpoint. */}
               <select
                 id="placeholder-rating"

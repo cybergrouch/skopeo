@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { fullText } from '@/test/fullText'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { MatchHistoryRow } from './MatchHistoryRow'
@@ -33,7 +34,7 @@ describe('MatchHistoryRow', () => {
     expect(container.textContent).toContain('vs Ben')
     expect(screen.getByText('Rated')).toBeInTheDocument()
     expect(screen.getByText(/2026-01-01 · WIN · 6-4 6-3/)).toBeInTheDocument()
-    expect(screen.getByText(/NTRP 4.0 vs 3.5 \(at the time\)/)).toBeInTheDocument()
+    expect(screen.getByText(fullText(/NTRP 4.0 vs 3.5 \(at the time\)/))).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Public page (QR)' })).toHaveAttribute('href', '/matches/MATCH1')
     expect(container.querySelector('img')).toHaveAttribute('src', 'https://example.com/ben.jpg')
   })
@@ -56,7 +57,7 @@ describe('MatchHistoryRow', () => {
     })
     // Raw values are shown in place of the bands.
     expect(
-      screen.getByText(/NTRP 4.250000 vs 3.700000 \(at the time\)/),
+      screen.getByText(fullText(/NTRP 4.250000 vs 3.700000 \(at the time\)/)),
     ).toBeInTheDocument()
   })
 
@@ -68,7 +69,7 @@ describe('MatchHistoryRow', () => {
         { publicCode: 'BEN123', displayName: 'Ben', photoUrl: null, levelAtMatch: '3.5', confidence: '0.2' },
       ],
     })
-    expect(screen.getByText(/NTRP 4.0 · 100% vs 3.5 · 20% \(at the time\)/)).toBeInTheDocument()
+    expect(screen.getByText(fullText(/NTRP 4.0 · 100% vs 3.5 · 20% \(at the time\)/))).toBeInTheDocument()
   })
 
   it('renders a scheduled match with initials, no result and no bands', () => {
@@ -110,7 +111,7 @@ describe('MatchHistoryRow', () => {
       opponents: [{ publicCode: 'BEN123', displayName: null, photoUrl: null, levelAtMatch: null }],
       playerLevelAtMatch: null,
     })
-    expect(screen.getByText(/NTRP — vs — \(at the time\)/)).toBeInTheDocument()
+    expect(screen.getByText(fullText(/NTRP — vs — \(at the time\)/))).toBeInTheDocument()
     expect(container.textContent).toContain('vs Player')
   })
 
@@ -125,7 +126,7 @@ describe('MatchHistoryRow', () => {
       ],
     })
     expect(container.textContent).toContain('with Bea · vs Cy, Deb')
-    expect(screen.getByText(/NTRP 4.0 vs 3.0, 3.5 \(at the time\)/)).toBeInTheDocument()
+    expect(screen.getByText(fullText(/NTRP 4.0 vs 3.0, 3.5 \(at the time\)/))).toBeInTheDocument()
   })
 
   it('tags a placeholder opponent as Unclaimed and leaves a normal one untagged (#505)', () => {

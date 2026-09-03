@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { NtrpDisclaimerInfo } from '@/components/NtrpLabel'
 import { toast } from 'sonner'
 import { toastError } from '@/observability/toastError'
 import { useQueryClient } from '@tanstack/react-query'
@@ -74,6 +75,7 @@ function RatingForm({ userId, initialValue }: { userId: string; initialValue: st
         <Label htmlFor="manage-rating" className="text-xs">
           NTRP rating
         </Label>
+        <NtrpDisclaimerInfo />
         <Input
           id="manage-rating"
           value={value}

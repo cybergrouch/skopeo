@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { fullText } from "@/test/fullText"
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { UserSearchSelect } from './UserSearchSelect'
@@ -104,8 +105,8 @@ describe('UserSearchSelect', () => {
     render(<UserSearchSelect label="Player 1" onSelect={vi.fn()} />)
     await user.type(screen.getByLabelText('Player 1'), 'al')
     // The computed confidence (#343) is appended as a percentage; an absent confidence is omitted.
-    expect(screen.getByText('Female · 34 · NTRP 4.0 · 87%')).toBeInTheDocument()
-    expect(screen.getByText('Male · 41 · NTRP 8.500000')).toBeInTheDocument()
+    expect(screen.getByText(fullText('Female · 34 · NTRP 4.0 · 87%'))).toBeInTheDocument()
+    expect(screen.getByText(fullText('Male · 41 · NTRP 8.500000'))).toBeInTheDocument()
   })
 
   it('sends a single unified term so partial codes and names both search incrementally (#86)', async () => {
