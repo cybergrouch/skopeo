@@ -11,8 +11,43 @@ Two consequences follow from that and they shape everything below:
    failed deploy and a manual remediation — not an outage. That is the reason this page is a checklist rather
    than a gate.
 
-Never edit a migration that has shipped; add a new `V<n>` instead. Flyway's checksum on an applied migration
-will reject the edit anyway.
+Never edit a migration that has shipped; add a new `V<n>` instead. **Flyway's checksum does not protect you
+from this** — it is worth being precise about why, because the reassuring reading is wrong. Flyway compares
+checksums when it *starts up against a database that already applied the old version*. So an edit is not
+rejected at the point of the mistake; it is rejected later, by every environment that already ran it, as a
+refusal to boot. The edit does not get prevented — it gets converted into a failed deploy somewhere else.
+
+A [checksum manifest](#the-checksum-manifest) moves that detection to commit time.
+
+## The checksum manifest
+
+`src/main/resources/db/migration-checksums.txt` records Flyway's own checksum for every shipped migration,
+and `MigrationChecksumManifestTest` fails when an existing line changes (#854).
+
+| Condition | Result |
+|---|---|
+| A shipped migration's content changed | **Fail** — "EDITED AFTER SHIPPING", naming the version, with the old and new checksums |
+| A migration was added | **Fail** until its line is appended, so a new migration is a deliberate line in the diff |
+| A migration disappeared | **Fail** |
+
+**Adding a migration**: run the test, copy the `Full applied set` it prints on failure into the manifest.
+That is the only supported way to change the file — hand-editing a number to make the test pass defeats it
+entirely, which is why the failure message says so.
+
+**The values are Flyway's own CRC32**, not a hash of the file bytes. That is deliberate: they are the same
+numbers a database records, so the manifest is also the reference for whether an environment is stale —
+
+```sql
+SELECT version, checksum FROM flyway_schema_history WHERE success ORDER BY installed_rank;
+```
+
+Diff that against the manifest and a mismatch names exactly which migration an environment is holding an old
+copy of. This is the diagnosis that previously had to be done by hand from a boot failure.
+
+**Why this is a separate guard from everything else on this page.** The rest of this document is about
+*backfilling before you tighten* — a migration that is correct in isolation but wrong against existing rows.
+The manifest addresses a different failure: a migration that was correct, shipped, and then changed. V44
+managed both, which is why it appears twice here.
 
 ## Why CI cannot validate a constraint
 
