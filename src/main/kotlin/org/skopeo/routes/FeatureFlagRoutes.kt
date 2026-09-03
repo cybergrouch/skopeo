@@ -9,6 +9,7 @@ import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
@@ -16,6 +17,7 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.common.dto.settings.SetAwardRankingPointsRequest
 import org.skopeo.common.dto.settings.SetFacebookLoginRequest
+import org.skopeo.common.dto.settings.SetHideRankingPointsRequest
 import org.skopeo.domain.service.settings.SettingsService
 
 /**
@@ -25,48 +27,94 @@ import org.skopeo.domain.service.settings.SettingsService
  */
 fun Application.configureFeatureFlagRoutes(service: SettingsService = SettingsService()) {
     routing {
-        // Facebook login kill-switch (#647): the sign-in/sign-up pages read this to decide whether to
-        // render the "Continue with Facebook" buttons, so the GET must be public.
-        route(path = "/api/v1/settings/facebook-login") {
-            authenticate(FIREBASE_AUTH, optional = true) {
-                get {
-                    respondMappingErrors {
-                        call.respond(status = HttpStatusCode.OK, message = service.getFacebookLoginResponse())
-                    }
+        facebookLoginFlag(service = service)
+        awardRankingPointsFlag(service = service)
+        hideRankingPointsFlag(service = service)
+    }
+}
+
+/**
+ * Facebook login kill-switch (#647). The sign-in/sign-up pages read this to decide whether to render the
+ * "Continue with Facebook" buttons, so the GET must be public.
+ */
+private fun Route.facebookLoginFlag(service: SettingsService) {
+    route(path = "/api/v1/settings/facebook-login") {
+        authenticate(FIREBASE_AUTH, optional = true) {
+            get {
+                respondMappingErrors {
+                    call.respond(status = HttpStatusCode.OK, message = service.getFacebookLoginResponse())
                 }
             }
-            authenticate(FIREBASE_AUTH) {
-                put {
-                    respondMappingErrors {
-                        val request = call.receive<SetFacebookLoginRequest>()
-                        respondEither(
-                            result = service.setFacebookLogin(token = verifiedToken(), enabled = request.enabled),
-                        ) { value ->
-                            call.respond(status = HttpStatusCode.OK, message = value)
-                        }
+        }
+        authenticate(FIREBASE_AUTH) {
+            put {
+                respondMappingErrors {
+                    val request = call.receive<SetFacebookLoginRequest>()
+                    respondEither(
+                        result = service.setFacebookLogin(token = verifiedToken(), enabled = request.enabled),
+                    ) { value ->
+                        call.respond(status = HttpStatusCode.OK, message = value)
                     }
                 }
             }
         }
-        // Award-ranking-points checkbox toggle (#641): the event-create form reads this to decide whether
-        // to offer the checkbox; default disabled. Admin-only write.
-        route(path = "/api/v1/settings/award-ranking-points") {
-            authenticate(FIREBASE_AUTH, optional = true) {
-                get {
-                    respondMappingErrors {
-                        call.respond(status = HttpStatusCode.OK, message = service.getAwardRankingPointsResponse())
+    }
+}
+
+/**
+ * Award-ranking-points toggle (#641). The event-create form reads this to decide whether to offer the
+ * checkbox; default disabled. Admin-only write.
+ *
+ * Not to be confused with [hideRankingPointsFlag]: this one governs whether points are **awarded**.
+ */
+private fun Route.awardRankingPointsFlag(service: SettingsService) {
+    route(path = "/api/v1/settings/award-ranking-points") {
+        authenticate(FIREBASE_AUTH, optional = true) {
+            get {
+                respondMappingErrors {
+                    call.respond(status = HttpStatusCode.OK, message = service.getAwardRankingPointsResponse())
+                }
+            }
+        }
+        authenticate(FIREBASE_AUTH) {
+            put {
+                respondMappingErrors {
+                    val request = call.receive<SetAwardRankingPointsRequest>()
+                    respondEither(
+                        result = service.setAwardRankingPoints(token = verifiedToken(), enabled = request.enabled),
+                    ) { value ->
+                        call.respond(status = HttpStatusCode.OK, message = value)
                     }
                 }
             }
-            authenticate(FIREBASE_AUTH) {
-                put {
-                    respondMappingErrors {
-                        val request = call.receive<SetAwardRankingPointsRequest>()
-                        respondEither(
-                            result = service.setAwardRankingPoints(token = verifiedToken(), enabled = request.enabled),
-                        ) { value ->
-                            call.respond(status = HttpStatusCode.OK, message = value)
-                        }
+        }
+    }
+}
+
+/**
+ * Hide-ranking-points toggle (#865). The read is public — a client needs it to know whether to render a
+ * points column at all — while the write is ADMINISTRATOR-only, enforced in the service.
+ *
+ * Not to be confused with [awardRankingPointsFlag]: this one governs whether points are **displayed**, and
+ * its default is the opposite way round (unticked shows).
+ */
+private fun Route.hideRankingPointsFlag(service: SettingsService) {
+    route(path = "/api/v1/settings/hide-ranking-points") {
+        authenticate(FIREBASE_AUTH, optional = true) {
+            get {
+                respondMappingErrors {
+                    call.respond(status = HttpStatusCode.OK, message = service.getHideRankingPointsResponse())
+                }
+            }
+        }
+        authenticate(FIREBASE_AUTH) {
+            put {
+                respondMappingErrors {
+                    val request = call.receive<SetHideRankingPointsRequest>()
+                    respondEither(
+                        result = service.setHideRankingPoints(token = verifiedToken(), hidden = request.hidden),
+                    ) { value ->
+                        call.respond(status = HttpStatusCode.OK, message = value)
                     }
                 }
             }

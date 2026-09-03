@@ -11,6 +11,7 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -44,6 +45,7 @@ import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.domain.model.VerificationStatus
 import org.skopeo.domain.service.rating.RatingAssembler
+import org.skopeo.domain.service.settings.SettingsService
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
@@ -1237,5 +1239,38 @@ class PlayerServiceTest {
         // more than one prior trajectory, and they overlap in time.
         bySource.getValue(key = retired.publicCode).fromMergedAccount shouldBe true
         bySource.getValue(key = survivor.publicCode).fromMergedAccount shouldBe false
+    }
+
+    @Test
+    fun `the points audit is suppressed by the hide-points flag, even for the owner (#865)`() {
+        val admin = newAdmin(uid = "root")
+        val player = newUser(uid = "p", names = display(name = "Ana"))
+        grant(userId = player.id, points = "10")
+        val settings = SettingsService()
+
+        // Visible while the flag is off — the default, so nothing changed by adding it.
+        service.activePoints(token = token(uid = "p"), code = player.publicCode).shouldBeRight().shouldHaveSize(size = 1)
+
+        settings.setHideRankingPoints(token = token(uid = "root"), hidden = true).shouldBeRight()
+
+        // Suppressed for the OWNER of the profile, not merely for strangers. Deliberately unlike #186,
+        // where the owner does see their own precise rating; the rule here is capability-only.
+        service.activePoints(token = token(uid = "p"), code = player.publicCode).shouldBeRight().shouldBeEmpty()
+        // ...and still visible to an administrator, who is exempt.
+        service.activePoints(token = token(uid = "root"), code = player.publicCode).shouldBeRight().shouldHaveSize(size = 1)
+        admin.id shouldNotBe player.id
+    }
+
+    @Test
+    fun `a points manager still sees the audit while the flag is on (#865)`() {
+        newAdmin(uid = "root")
+        SettingsService().setHideRankingPoints(token = token(uid = "root"), hidden = true).shouldBeRight()
+        // POINTS_MANAGER is exempt (#865): managing points while unable to see them is not a usable tool.
+        // activePoints is owner-or-admin gated (#448), so the manager reads their OWN profile — which is
+        // exactly the case that would otherwise be suppressed, since they are not an administrator.
+        val manager = viewerWith(uid = "pm", capabilities = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
+        grant(userId = manager.id, points = "10")
+
+        service.activePoints(token = token(uid = "pm"), code = manager.publicCode).shouldBeRight().shouldHaveSize(size = 1)
     }
 }

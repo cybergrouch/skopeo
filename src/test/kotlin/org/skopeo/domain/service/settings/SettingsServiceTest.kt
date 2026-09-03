@@ -5,8 +5,10 @@ package org.skopeo.domain.service.settings
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.assertions.withClue
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -220,5 +222,82 @@ class SettingsServiceTest {
         service.setAwardRankingPoints(token = token(uid = "host"), enabled = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `hide ranking points defaults to NOT hidden, so the flag has no effect until ticked (#865)`() {
+        // The opposite default from award-ranking-points, deliberately: this flag is opt-in suppression,
+        // so an unseeded database must behave exactly as it did before the flag existed. Shipping it must
+        // change nothing.
+        service.getHideRankingPoints().hidden shouldBe false
+        service.pointsVisibleTo(viewer = null) shouldBe true
+    }
+
+    @Test
+    fun `hide ranking points falls back to not hidden when the stored value is not boolean (#865)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        settings.upsert(key = "hide_ranking_points_from_players", value = "maybe", updatedBy = admin.id)
+        // A corrupt row must not hide points — failing open preserves today's behaviour, and a suppression
+        // flag that engages by accident is worse than one that does not engage.
+        service.getHideRankingPoints().hidden shouldBe false
+    }
+
+    @Test
+    fun `an admin ticks the flag and the read reflects it, with an audit entry (#865)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        val set = service.setHideRankingPoints(token = token(uid = "admin"), hidden = true).shouldBeRight()
+
+        set.hidden shouldBe true
+        service.getHideRankingPoints().hidden shouldBe true
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.SETTINGS_HIDE_RANKING_POINTS_CHANGED), limit = 10, offset = 0)
+            .second shouldBe 1L
+    }
+
+    @Test
+    fun `a non-admin cannot tick the flag (#865)`() {
+        // A points manager may SEE points while it is on, but only an administrator decides whether it is.
+        provision(uid = "pm", roles = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
+        service.setHideRankingPoints(token = token(uid = "pm"), hidden = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `with the flag on, only the five privileged roles see points (#865)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        service.setHideRankingPoints(token = token(uid = "admin"), hidden = true).shouldBeRight()
+
+        // Exempt: match management + rater + points manager.
+        listOf(Capability.HOST, Capability.CLUB_OWNER, Capability.RATER, Capability.POINTS_MANAGER, Capability.ADMINISTRATOR)
+            .forEach { role ->
+                val viewer = provision(uid = "sees-$role", roles = setOf(Capability.PLAYER, role))
+                withClue(clue = "$role should still see points") {
+                    service.pointsVisibleTo(viewer = viewer) shouldBe true
+                }
+            }
+
+        // Suppressed: a plain player, a researcher, and an anonymous visitor.
+        listOf(Capability.PLAYER, Capability.RESEARCHER).forEach { role ->
+            val viewer = provision(uid = "hidden-$role", roles = setOf(element = role))
+            withClue(clue = "$role should NOT see points") {
+                service.pointsVisibleTo(viewer = viewer) shouldBe false
+            }
+        }
+        service.pointsVisibleTo(viewer = null) shouldBe false
+        admin.id shouldNotBe null
+    }
+
+    @Test
+    fun `there is no owner-self exemption - the rule is capability-only (#865)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        service.setHideRankingPoints(token = token(uid = "admin"), hidden = true).shouldBeRight()
+        val player = provision(uid = "player")
+
+        // Deliberately unlike #186, where the owner DOES see their own precise rating. Pinned so nobody
+        // "restores consistency" by adding a carve-out: pointsVisibleTo takes no subject, only a viewer.
+        service.pointsVisibleTo(viewer = player) shouldBe false
+        admin.id shouldNotBe player.id
     }
 }

@@ -37,6 +37,7 @@ import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.canSeeRawRatingOrFalse
 import org.skopeo.domain.service.rating.RatingAssembler
+import org.skopeo.domain.service.settings.SettingsService
 import org.skopeo.domain.service.standings.StandingsService
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
@@ -67,6 +68,8 @@ class PlayerService(
     private val standings: StandingsService = StandingsService(),
     private val awards: RankingPointRepository = RankingPointRepository(),
     private val events: EventRepository = EventRepository(),
+    // Only to read the hide-ranking-points flag (#865).
+    private val settings: SettingsService = SettingsService(),
 ) {
     fun publicProfile(
         code: String,
@@ -375,8 +378,10 @@ class PlayerService(
                     sex = standing.sex,
                     rank = standing.rank,
                     source = standing.source.name,
-                    // POINTS metric is public; RATING metric is reveal-gated.
-                    points = standing.points?.toPlainString(),
+                    // The POINTS metric is public UNLESS the hide-points flag is on (#865), in which case
+                    // an unprivileged viewer gets rank + band only — the same shape the RATING source
+                    // already degrades to, so nothing new had to be invented for the suppressed case.
+                    points = if (settings.pointsVisibleTo(viewer = caller)) standing.points?.toPlainString() else null,
                     rating = if (canSeeRating) standing.rating?.toPlainString() else null,
                 )
             }
@@ -398,6 +403,12 @@ class PlayerService(
             val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
             val allowed = caller != null && (caller.id == user.id || Capability.ADMINISTRATOR in caller.capabilities)
             ensure(condition = allowed) { ServiceError.Forbidden() }
+            // Suppressed by the hide-points flag (#865) even for the profile's own owner — the rule is
+            // capability-only, with no owner-self exemption. An empty list rather than a Forbidden: the
+            // caller is entitled to the endpoint, there is simply nothing to show them.
+            if (!settings.pointsVisibleTo(viewer = caller)) {
+                return@either emptyList()
+            }
 
             val active = awards.listActiveByUser(userId = user.id, asOf = LocalDateTime.now()).map { it.toDomain() }
             val matchCodes = matches.publicRefsByIds(ids = active.mapNotNull { it.matchId }).mapValues { it.value.publicCode }

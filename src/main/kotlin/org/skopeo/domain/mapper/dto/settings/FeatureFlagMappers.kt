@@ -5,8 +5,10 @@ package org.skopeo.domain.mapper.dto.settings
 
 import org.skopeo.common.dto.settings.AwardRankingPointsResponse
 import org.skopeo.common.dto.settings.FacebookLoginResponse
+import org.skopeo.common.dto.settings.HideRankingPointsResponse
 import org.skopeo.domain.model.AwardRankingPointsValue
 import org.skopeo.domain.model.FacebookLoginValue
+import org.skopeo.domain.model.HideRankingPointsValue
 
 fun FacebookLoginValue.toResponse(): FacebookLoginResponse =
     FacebookLoginResponse(
@@ -18,6 +20,14 @@ fun FacebookLoginValue.toResponse(): FacebookLoginResponse =
 fun AwardRankingPointsValue.toResponse(): AwardRankingPointsResponse =
     AwardRankingPointsResponse(
         enabled = enabled,
+        updatedAt = updatedAt?.toString(),
+        updatedBy = updatedBy?.toString(),
+    )
+
+/** The hide-ranking-points flag for the API (#865). */
+fun HideRankingPointsValue.toResponse(): HideRankingPointsResponse =
+    HideRankingPointsResponse(
+        hidden = hidden,
         updatedAt = updatedAt?.toString(),
         updatedBy = updatedBy?.toString(),
     )

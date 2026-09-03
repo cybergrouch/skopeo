@@ -10,9 +10,11 @@ import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.dto.settings.AwardRankingPointsResponse
 import org.skopeo.common.dto.settings.FacebookLoginResponse
+import org.skopeo.common.dto.settings.HideRankingPointsResponse
 import org.skopeo.common.dto.settings.StandingsSourceResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.PLAYER_POINTS_VIEW_ROLES
 import org.skopeo.domain.mapper.dto.settings.toResponse
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditAction
@@ -20,8 +22,10 @@ import org.skopeo.domain.model.AuditEntityType
 import org.skopeo.domain.model.AuditWrite
 import org.skopeo.domain.model.AwardRankingPointsValue
 import org.skopeo.domain.model.FacebookLoginValue
+import org.skopeo.domain.model.HideRankingPointsValue
 import org.skopeo.domain.model.SnapshotSource
 import org.skopeo.domain.model.StandingsSourceValue
+import org.skopeo.domain.model.User
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.AppSettingsRepository
@@ -36,6 +40,11 @@ private const val FACEBOOK_LOGIN_KEY = "facebook_login_enabled"
 
 /** The app_settings key gating ranking-point awarding app-wide (#641); absent ⇒ disabled. */
 private const val AWARD_RANKING_POINTS_KEY = "award_ranking_points_enabled"
+
+// #865. Named for what ticking it DOES, and deliberately unlike AWARD_RANKING_POINTS_KEY above: that one
+// suppresses *awarding*, this one suppresses *display*. Two flags whose names differ by one word, with
+// entirely different consequences, is a mistake waiting to happen.
+private const val HIDE_RANKING_POINTS_KEY = "hide_ranking_points_from_players"
 
 /**
  * Operational app_settings that steer serving behaviour without a redeploy (#146). Mirrors the
@@ -179,6 +188,65 @@ class SettingsService(
                     ),
             )
             AwardRankingPointsValue(enabled = enabled, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
+        }
+
+    /**
+     * Whether ranking-point figures are hidden from players and researchers (#865). Defaults to **not
+     * hidden** when the row is absent or non-boolean — the opposite default from
+     * [getAwardRankingPoints], and deliberately so: this flag is opt-in *suppression*, so an unseeded
+     * database behaves exactly as it did before the flag existed. Public read — no auth.
+     */
+    fun getHideRankingPoints(): HideRankingPointsValue {
+        val row = settings.get(key = HIDE_RANKING_POINTS_KEY)
+        val hidden = row?.value?.toBooleanStrictOrNull() ?: false
+        return HideRankingPointsValue(hidden = hidden, updatedBy = row?.updatedBy, updatedAt = row?.updatedAt)
+    }
+
+    /** The hide-points flag as its response DTO — the route-facing form of [getHideRankingPoints]. */
+    fun getHideRankingPointsResponse(): HideRankingPointsResponse = getHideRankingPoints().toResponse()
+
+    /**
+     * Whether [viewer] may see ranking-point figures (#865).
+     *
+     * The **one** place the rule lives, so the five surfaces that show points cannot drift apart. Visible
+     * when the flag is off, or when the viewer holds any of [PLAYER_POINTS_VIEW_ROLES].
+     *
+     * Note there is **no owner-self exemption**: a plain player's own points are suppressed on their own
+     * profile too. That diverges from #186, where the owner does see their own precise rating — recorded
+     * here so it is not "corrected" later. The rule is capability-only; the viewer's relationship to the
+     * profile is irrelevant, which also makes it simpler than #186's shape would suggest.
+     */
+    fun pointsVisibleTo(viewer: User?): Boolean =
+        !getHideRankingPoints().hidden || viewer?.capabilities?.any { it in PLAYER_POINTS_VIEW_ROLES } == true
+
+    /**
+     * Hide or show ranking-point figures for players and researchers (ADMINISTRATOR only, #865). Ticking
+     * hides; the audit summary says which way it went.
+     */
+    fun setHideRankingPoints(
+        token: VerifiedFirebaseToken,
+        hidden: Boolean,
+    ): Either<ServiceError, HideRankingPointsResponse> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            val row = settings.upsert(key = HIDE_RANKING_POINTS_KEY, value = hidden.toString(), updatedBy = adminId)
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = adminId,
+                        action = AuditAction.SETTINGS_HIDE_RANKING_POINTS_CHANGED,
+                        entityType = AuditEntityType.SETTING,
+                        entityId = null,
+                        summary =
+                            if (hidden) {
+                                "Hid ranking points from players and researchers"
+                            } else {
+                                "Showed ranking points to players and researchers"
+                            },
+                        details = buildMap { put(key = "hideRankingPointsFromPlayers", value = hidden.toString()) },
+                    ),
+            )
+            HideRankingPointsValue(hidden = hidden, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
         }
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */

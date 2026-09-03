@@ -3,6 +3,7 @@ import { ContentLink } from "@/components/ContentLink";
 import { CollapsibleCard } from "@/components/CollapsibleCard";
 import { Badge } from "@/components/ui/badge";
 import { formatPoints } from "@/lib/points";
+import { useGetApiV1SettingsHideRankingPoints } from "@/api/generated/settings/settings";
 
 interface PointsAuditCardProps {
   /** The player's shareable public code (#448). */
@@ -25,8 +26,19 @@ export function PointsAuditCard({ code, enabled, collapsible = false }: PointsAu
   const { data, isLoading } = useGetApiV1PlayersCodePoints(code, {
     query: { enabled: enabled && Boolean(code) },
   });
+  // The hide-ranking-points flag (#865). The server returns an empty list to a suppressed viewer, which is
+  // indistinguishable from genuinely having none — so without this the card would tell a player "No active
+  // ranking points" when they have some and simply may not see them. That is a false statement, not a
+  // cosmetic gap, and a player could act on it by asking why they were not awarded.
+  //
+  // Reading the flag rather than re-deriving the whole rule client-side: the capability half stays
+  // server-side where it is enforced, and duplicating it here would be a second copy free to drift.
+  const hideFlag = useGetApiV1SettingsHideRankingPoints({ query: { retry: false } });
+  const pointsHidden = hideFlag.data?.hidden === true;
 
   if (!enabled) return null;
+  // Absent rather than empty while the flag is on — the #857 pattern: say nothing rather than claim zero.
+  if (pointsHidden && (data?.length ?? 0) === 0) return null;
 
   const awards = data ?? [];
 

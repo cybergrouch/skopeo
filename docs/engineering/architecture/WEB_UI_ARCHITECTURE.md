@@ -479,6 +479,39 @@ backend's coverage exclusions. CI emits JUnit XML for a drillable test report.
 - [DEPLOYMENT_GCP.md](../operations/DEPLOYMENT_GCP.md) — API + DB on GCP.
 - [API_DOCUMENTATION.md](../api/API_DOCUMENTATION.md) — the JSON API the UI consumes.
 
+## Hiding ranking points from players (#865)
+
+A global admin flag (`hide_ranking_points_from_players`) suppresses point **figures** for viewers who are
+not ADMINISTRATOR, HOST, CLUB_OWNER, RATER or POINTS_MANAGER. Three things about it are easy to get wrong:
+
+**It is opt-in suppression, and the default is off.** Ticking hides; unticked is the original behaviour. So
+merging it changed nothing. Note that is the **opposite** default from `award_ranking_points_enabled`
+(#641), which starts off and must be turned *on* to do anything — and note the two flags suppress different
+things: that one stops **awarding**, this one stops **display**. The names are deliberately unalike.
+
+**Enforcement is server-side, in one place.** `SettingsService.pointsVisibleTo(viewer)` is the whole rule,
+and the four surfaces call it: the standings page, a player's standing card, a player's points audit, and
+an event's points card. The figures are **omitted from the payload**, not hidden in the client — three of
+those surfaces are viewable anonymously, and a UI-only hide would leave the numbers in the JSON.
+
+**There is no owner-self exemption.** A plain player's own points are hidden on their own profile. That
+deliberately diverges from #186, where the owner *does* see their own precise rating — so do not "restore
+consistency" by adding a carve-out. It also makes the check simpler: one capability test, no
+viewer-versus-subject comparison.
+
+### What a suppressed viewer sees
+
+**Rank and band, no number** — which needed no new UI, because the RATING source already degrades exactly
+that way for an unprivileged viewer (#186). `StandingsTab`, `PlayerStandingCard` and `EventPointsCard` all
+already guarded on a falsy points value.
+
+`PointsAuditCard` was the exception and needed a change: the server returns an empty list to a suppressed
+viewer, which is indistinguishable from genuinely having no awards — so the card would have told a player
+*"No active ranking points"* when they have some and merely may not see them. That is a false statement a
+player could act on, so the card reads the flag and renders **nothing** rather than claiming zero (the
+"absent, not empty" pattern from #857). It reads the flag rather than re-deriving the rule, so the
+capability half stays server-side where it is enforced.
+
 ## NTRP labels carry a USTA disclaimer (#842)
 
 Every **visible** NTRP label in the app is a disclaimer trigger. The wording lives in exactly one place —

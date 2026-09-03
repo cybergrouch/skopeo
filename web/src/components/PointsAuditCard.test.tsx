@@ -3,10 +3,16 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PointsAuditCard } from './PointsAuditCard'
 
-const { useGetApiV1PlayersCodePoints } = vi.hoisted(() => ({
+const { useGetApiV1PlayersCodePoints, useHideFlag } = vi.hoisted(() => ({
   useGetApiV1PlayersCodePoints: vi.fn(),
+  useHideFlag: vi.fn(),
 }))
 vi.mock('@/api/generated/users/users', () => ({ useGetApiV1PlayersCodePoints }))
+// The hide-ranking-points flag (#865). Off by default here, so every pre-existing assertion below still
+// describes the ordinary case.
+vi.mock('@/api/generated/settings/settings', () => ({
+  useGetApiV1SettingsHideRankingPoints: useHideFlag,
+}))
 
 function renderCard(enabled: boolean) {
   return render(
@@ -36,7 +42,10 @@ const eventAward = {
 }
 
 describe('PointsAuditCard', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useHideFlag.mockReturnValue({ data: { hidden: false } })
+  })
 
   it('renders nothing and does not enable the fetch when the viewer cannot see the audit', () => {
     useGetApiV1PlayersCodePoints.mockReturnValue({ data: undefined, isLoading: false })
@@ -87,4 +96,29 @@ describe('PointsAuditCard', () => {
     renderCard(true)
     expect(screen.getByText('Manual grant')).toBeInTheDocument()
   })
+
+  it('renders nothing rather than claiming zero when points are hidden (#865)', () => {
+    // The server returns an empty list to a suppressed viewer, which is indistinguishable from genuinely
+    // having none. Saying "No active ranking points" to a player who HAS points is a false statement they
+    // could act on — so the card is absent instead (the #857 pattern).
+    useHideFlag.mockReturnValue({ data: { hidden: true } })
+    useGetApiV1PlayersCodePoints.mockReturnValue({ data: [], isLoading: false })
+
+    const { container } = renderCard(true)
+
+    expect(container).toBeEmptyDOMElement()
+    expect(screen.queryByText('No active ranking points.')).not.toBeInTheDocument()
+  })
+
+  it('still lists awards for an exempt viewer while the flag is on (#865)', () => {
+    // An exempt viewer (admin, host, club owner, rater, points manager) gets a populated list from the
+    // server even with the flag on, so the card must render it rather than suppressing on the flag alone.
+    useHideFlag.mockReturnValue({ data: { hidden: true } })
+    useGetApiV1PlayersCodePoints.mockReturnValue({ data: [matchAward], isLoading: false })
+
+    renderCard(true)
+
+    expect(screen.getByText(/30/)).toBeInTheDocument()
+  })
+
 })

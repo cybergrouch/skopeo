@@ -4,7 +4,20 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { FeatureFlagsSection } from "./FeatureFlagsSection";
 
-const { useMe, usePutRaw, rawMutate, useFbFlag, usePutFb, fbMutate, useAwardFlag, usePutAward, awardMutate } =
+const {
+  useMe,
+  usePutRaw,
+  rawMutate,
+  useFbFlag,
+  usePutFb,
+  fbMutate,
+  useAwardFlag,
+  usePutAward,
+  awardMutate,
+  useHideFlag,
+  usePutHide,
+  hideMutate,
+} =
   vi.hoisted(() => ({
     useMe: vi.fn(),
     usePutRaw: vi.fn(),
@@ -15,6 +28,9 @@ const { useMe, usePutRaw, rawMutate, useFbFlag, usePutFb, fbMutate, useAwardFlag
     useAwardFlag: vi.fn(),
     usePutAward: vi.fn(),
     awardMutate: vi.fn(),
+    useHideFlag: vi.fn(),
+    usePutHide: vi.fn(),
+    hideMutate: vi.fn(),
   }));
 
 const { toastSuccess, toastError } = vi.hoisted(() => ({
@@ -35,6 +51,9 @@ vi.mock("@/api/generated/settings/settings", () => ({
   useGetApiV1SettingsAwardRankingPoints: useAwardFlag,
   usePutApiV1SettingsAwardRankingPoints: usePutAward,
   getGetApiV1SettingsAwardRankingPointsQueryKey: () => ["award"],
+  useGetApiV1SettingsHideRankingPoints: useHideFlag,
+  usePutApiV1SettingsHideRankingPoints: usePutHide,
+  getGetApiV1SettingsHideRankingPointsQueryKey: () => ["hide"],
 }));
 
 type MutationOpts = { mutation: { onSuccess: () => void; onError?: (e: unknown) => void } };
@@ -57,6 +76,14 @@ describe("FeatureFlagsSection", () => {
       isPending: false,
       mutate: (vars: unknown) => {
         awardMutate(vars);
+        options.mutation.onSuccess();
+      },
+    }));
+    useHideFlag.mockReturnValue({ data: { hidden: false }, isLoading: false });
+    usePutHide.mockImplementation((options: MutationOpts) => ({
+      isPending: false,
+      mutate: (vars: unknown) => {
+        hideMutate(vars);
         options.mutation.onSuccess();
       },
     }));
@@ -182,4 +209,69 @@ describe("FeatureFlagsSection", () => {
       }),
     );
   });
+
+  it("surfaces an error when saving the hide-ranking-points flag fails (#865)", async () => {
+    usePutHide.mockImplementation((options: MutationOpts) => ({
+      isPending: false,
+      mutate: () => options.mutation.onError?.(new Error("boom")),
+    }));
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(screen.getByLabelText("Hide ranking points from players"));
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not update the setting. Try again.", {
+        duration: 8000,
+      }),
+    );
+  });
+
+  it("shows the hide-ranking-points flag unticked by default (#865)", () => {
+    renderSection();
+    // Opt-in suppression: unticked is the default and preserves the original behaviour, so shipping the
+    // flag changes nothing until an admin ticks it.
+    const box = screen.getByLabelText("Hide ranking points from players");
+    expect(box).not.toBeChecked();
+  });
+
+  it("ticking it sends hidden true (#865)", async () => {
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByLabelText("Hide ranking points from players"));
+
+    expect(hideMutate).toHaveBeenCalledWith({ data: { hidden: true } });
+    expect(toastSuccess).toHaveBeenCalledWith("Saved");
+  });
+
+  it("unticking it sends hidden false (#865)", async () => {
+    useHideFlag.mockReturnValue({ data: { hidden: true }, isLoading: false });
+    const user = userEvent.setup();
+    renderSection();
+
+    expect(screen.getByLabelText("Hide ranking points from players")).toBeChecked();
+    await user.click(screen.getByLabelText("Hide ranking points from players"));
+
+    expect(hideMutate).toHaveBeenCalledWith({ data: { hidden: false } });
+  });
+
+  it("says who is unaffected, and that a player's own points are hidden too (#865)", () => {
+    renderSection();
+    // The two surprising parts of the rule: rank and band survive, and there is no owner-self exemption.
+    // An admin ticking this without knowing the second would be misled about what they are doing.
+    const description = screen.getByText(/point figures are hidden/);
+    expect(description).toHaveTextContent("including a player's own points");
+    expect(description).toHaveTextContent("Rank and band stay visible");
+    expect(description).toHaveTextContent(
+      "Administrators, hosts, club owners, raters and points managers are unaffected",
+    );
+  });
+
+  it("keeps the two points flags distinguishable (#865)", () => {
+    renderSection();
+    // award-ranking-points suppresses AWARDING; hide-ranking-points suppresses DISPLAY. Two checkboxes
+    // whose labels differ by one word would be a trap, so assert they read differently.
+    expect(screen.getByLabelText("Enable award ranking points")).toBeInTheDocument();
+    expect(screen.getByLabelText("Hide ranking points from players")).toBeInTheDocument();
+  });
+
 });

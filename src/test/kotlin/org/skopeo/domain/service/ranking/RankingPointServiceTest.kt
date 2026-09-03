@@ -5,6 +5,7 @@ package org.skopeo.domain.service.ranking
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -32,6 +33,7 @@ import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.domain.service.rating.RatingAssembler
+import org.skopeo.domain.service.settings.SettingsService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.EventRepository
@@ -677,5 +679,55 @@ class RankingPointServiceTest {
     @Test
     fun `an unknown event code is a NotFound (#857)`() {
         service.awardedForEvent(code = "NOPE12").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `the event points card is suppressed for an unprivileged viewer while the flag is on (#865)`() {
+        val host = provision(uid = "host")
+        val player = provision(uid = "player")
+        val event = seedEvent(createdBy = host.id)
+        eventAward(userId = player.id, eventId = event.id, points = "7")
+        provision(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val settings = SettingsService()
+
+        // Visible to everyone while the flag is off — including anonymously, which is the default.
+        service.awardedForEvent(code = event.publicCode).shouldBeRight().rows.shouldHaveSize(size = 1)
+
+        settings.setHideRankingPoints(token = token(uid = "root"), hidden = true).shouldBeRight()
+
+        // Anonymous and plain-player viewers get an empty summary. Not a Forbidden: the endpoint is public
+        // and the event is real — there is simply nothing this viewer may see, and the client renders no
+        // card for an empty list exactly as it does for an event that awarded nothing.
+        service.awardedForEvent(code = event.publicCode).shouldBeRight().rows.shouldBeEmpty()
+        service.awardedForEvent(code = event.publicCode, token = token(uid = "player"))
+            .shouldBeRight().rows.shouldBeEmpty()
+        // ...while an administrator still sees it.
+        service.awardedForEvent(code = event.publicCode, token = token(uid = "root"))
+            .shouldBeRight().rows.shouldHaveSize(size = 1)
+    }
+
+    @Test
+    fun `each exempt role still sees the event points card while the flag is on (#865)`() {
+        val host = provision(uid = "host")
+        val player = provision(uid = "player")
+        val event = seedEvent(createdBy = host.id)
+        eventAward(userId = player.id, eventId = event.id, points = "7")
+        provision(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        SettingsService().setHideRankingPoints(token = token(uid = "root"), hidden = true).shouldBeRight()
+
+        // All five of PLAYER_POINTS_VIEW_ROLES, so the flag's exemption cannot silently narrow.
+        listOf(
+            Capability.HOST,
+            Capability.CLUB_OWNER,
+            Capability.RATER,
+            Capability.POINTS_MANAGER,
+            Capability.ADMINISTRATOR,
+        ).forEach { role ->
+            provision(uid = "sees-$role", roles = setOf(Capability.PLAYER, role))
+            withClue(clue = "$role should still see the card") {
+                service.awardedForEvent(code = event.publicCode, token = token(uid = "sees-$role"))
+                    .shouldBeRight().rows.shouldHaveSize(size = 1)
+            }
+        }
     }
 }
