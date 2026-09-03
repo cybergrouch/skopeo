@@ -46,8 +46,10 @@ export function PointsManagementSection({
 /**
  * Points awarded (#472): a paginated, newest-first view of the whole ranking-points ledger for points
  * managers. Server-side pagination via {@link NumberedPager} (25/page); player links wear the themed
- * {@link ContentLink}; points render as a signed integer via {@link formatPoints}. The source is the
- * granting match/event public code, else "manual"/"EXTERNAL".
+ * {@link ContentLink}; points render as a signed integer via {@link formatPoints}.
+ *
+ * The granting event and match are separate columns and expiry is its own (#855) — see
+ * {@link AwardedPointsRow}. Every field was already on the DTO, so this needed no backend change.
  */
 function AwardedPointsCard() {
   const [page, setPage] = useState(0);
@@ -77,12 +79,22 @@ function AwardedPointsCard() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-muted-foreground">
-                    <th className="py-1 pr-2">Player</th>
-                    <th className="py-1 pr-2">Points</th>
-                    <th className="py-1 pr-2">Band / sex</th>
-                    <th className="py-1 pr-2">Source</th>
-                    <th className="py-1 pr-2">Awarded / validity</th>
-                    <th className="py-1 pr-2">Status</th>
+                    <th scope="col" className="py-1 pr-2">Player</th>
+                    <th scope="col" className="py-1 pr-2">Points</th>
+                    <th scope="col" className="py-1 pr-2">Class</th>
+                    <th scope="col" className="py-1 pr-2">Band / sex</th>
+                    {/* Event and match are separate columns (#855). Collapsing them into one "Source"
+                        cell meant a match-granted award showed its match and NEVER its event — and since
+                        #836 every non-placement tournament fixture pays per-match, that is the common
+                        case, leaving "which event did these points come from?" unanswerable here. */}
+                    <th scope="col" className="py-1 pr-2">Event</th>
+                    <th scope="col" className="py-1 pr-2">Match</th>
+                    <th scope="col" className="py-1 pr-2">Awarded</th>
+                    {/* Expiry gets its own column (#855): it is the field a manager scans for — what is
+                        about to drop out of the standings — and it could not be skimmed while wrapped in
+                        a range beside two other dates. */}
+                    <th scope="col" className="py-1 pr-2">Expires</th>
+                    <th scope="col" className="py-1 pr-2">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -105,7 +117,10 @@ function AwardedPointsCard() {
   );
 }
 
-/** One awarded-points row: player link, signed points, band/sex, source, awarded/validity, status. */
+/**
+ * One awarded-points row: player, signed points, class, band/sex, the granting event and match as
+ * separate cells, awarded date, expiry, status (#472/#855).
+ */
 function AwardedPointsRow({ row }: { row: AwardedPointRow }) {
   const player = row.playerDisplayName ?? row.playerPublicCode ?? row.userId;
   return (
@@ -119,31 +134,50 @@ function AwardedPointsRow({ row }: { row: AwardedPointRow }) {
         <PlaceholderTag show={row.isPlaceholder} deleted={row.isDeleted} />
       </td>
       <td className="py-1 pr-2 tabular-nums">{formatPoints(row.points) ?? row.points}</td>
+      {/* The class explains why two awards have different windows (#840: tournament 365 days, Full
+          Match 182, open play 91) — without it the Expires column looks arbitrary. */}
+      <td className="py-1 pr-2 text-xs text-muted-foreground">{row.pointClass}</td>
       <td className="py-1 pr-2">
         {row.band}
         <span className="text-muted-foreground"> · {row.sex}</span>
       </td>
-      <td className="py-1 pr-2">{awardSource(row)}</td>
-      <td className="py-1 pr-2 text-xs text-muted-foreground">
-        <div>{formatAwardDate(row.awardedAt)}</div>
-        <div>
-          {formatAwardDate(row.validFrom)} – {formatAwardDate(row.validUntil)}
-        </div>
+      <td className="py-1 pr-2">
+        <AwardSourceCell code={row.eventPublicCode} to="/events" fallback={row.source} />
       </td>
+      <td className="py-1 pr-2">
+        <AwardSourceCell code={row.matchPublicCode} to="/matches" />
+      </td>
+      <td className="py-1 pr-2 text-xs text-muted-foreground">{formatAwardDate(row.awardedAt)}</td>
+      <td className="py-1 pr-2 text-xs text-muted-foreground">{formatAwardDate(row.validUntil)}</td>
       <td className="py-1 pr-2">{row.status}</td>
     </tr>
   );
 }
 
-/** The granting source cell: link a match/event public code, else show "manual"/"EXTERNAL" as text. */
-function awardSource(row: AwardedPointRow) {
-  if (row.matchPublicCode) {
-    return <ContentLink to={`/matches/${row.matchPublicCode}`}>{row.matchPublicCode}</ContentLink>;
+/**
+ * One of the two granting-source cells: a linked public code, or an em dash when this axis has none.
+ *
+ * Only the Event cell passes a [fallback]. A manual or external grant has neither code, and an empty pair
+ * of cells would read as missing data rather than "not granted by a fixture" — but printing "manual" under
+ * *both* headers says it twice and, worse, files it under "Event", which it is not. So the origin is
+ * stated once, on the left, and the Match cell simply has nothing to show.
+ */
+function AwardSourceCell({
+  code,
+  to,
+  fallback,
+}: {
+  code?: string | null;
+  to: string;
+  fallback?: string;
+}) {
+  if (code) {
+    return <ContentLink to={`${to}/${code}`}>{code}</ContentLink>;
   }
-  if (row.eventPublicCode) {
-    return <ContentLink to={`/events/${row.eventPublicCode}`}>{row.eventPublicCode}</ContentLink>;
-  }
-  return row.source;
+  const noFixtureAtAll = fallback === "manual" || fallback === "EXTERNAL";
+  return (
+    <span className="text-muted-foreground">{noFixtureAtAll && fallback ? fallback : "—"}</span>
+  );
 }
 
 /** Render an ISO date-time as a locale date; fall back to the raw string if it does not parse. */
