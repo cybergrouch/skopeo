@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { NtrpLabel } from "@/components/NtrpLabel";
+import { NtrpDisclaimerInfo } from "@/components/NtrpLabel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -13,28 +13,25 @@ import type {
 
 const MIN_QUERY = 2;
 
-/** Secondary suggestion line — sex · age · NTRP band — to disambiguate similar names (#87). */
+/**
+ * Secondary suggestion line — sex · age · NTRP band — to disambiguate similar names (#87).
+ *
+ * The NTRP band is **plain text here, deliberately** (#852). Each suggestion is a `<button>`, and the
+ * disclaimer trigger is also a `<button>` — nesting them made the disclaimer unreachable: the click landed
+ * on the outer button and picked the player instead. The trigger lives once beside the field's label, which
+ * covers every suggestion in the list. See WEB_UI_ARCHITECTURE.md.
+ */
 function detailLine(user: UserSummaryResponse): ReactNode {
-  const parts: ReactNode[] = [];
+  const parts: string[] = [];
   if (user.sex) parts.push(user.sex);
   if (user.age != null) parts.push(String(user.age));
   if (user.rating) {
     const pct = formatConfidence(user.rating.confidence);
-    parts.push(
-      <>
-        <NtrpLabel value={user.rating.level ?? user.rating.value} />
-        {pct ? ` · ${pct}` : ""}
-      </>,
-    );
+    const band = user.rating.level ?? user.rating.value;
+    parts.push(pct ? `NTRP ${band} · ${pct}` : `NTRP ${band}`);
   }
-  // A node since #842 made the NTRP term a disclaimer trigger; null when empty so truthiness still works.
   if (parts.length === 0) return null;
-  return parts.map((part, i) => (
-    <span key={i}>
-      {i > 0 ? " · " : ""}
-      {part}
-    </span>
-  ));
+  return parts.join(" · ");
 }
 
 interface UserSearchSelectProps {
@@ -75,7 +72,10 @@ export function UserSearchSelect({
 
   return (
     <div className="space-y-1">
-      <Label htmlFor={`search-${label}`}>{label}</Label>
+      <Label htmlFor={`search-${label}`}>{label}</Label>{" "}
+      {/* The one disclaimer trigger for this field (#852/#842). It sits OUTSIDE the suggestion buttons —
+          and outside the <Label>, which would otherwise capture the control's accessible name. */}
+      <NtrpDisclaimerInfo />
       <Input
         id={`search-${label}`}
         value={term}

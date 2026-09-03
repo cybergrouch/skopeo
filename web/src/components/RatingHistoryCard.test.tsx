@@ -402,4 +402,38 @@ describe("RatingHistoryCard", () => {
       screen.getByText(/Calculation details aren’t available/),
     ).toBeInTheDocument();
   });
+
+  it("keeps the disclaimer in the header, reachable without toggling a row (#852)", async () => {
+    useGetApiV1MatchesIdCalculation.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    render(<RatingHistoryCard entries={[entry({ matchId: "m1" })]} />);
+
+    // Nested inside the row button, this fired both: the popover opened over a row that had just
+    // expanded underneath it. The header trigger is outside every row.
+    await user.click(
+      screen.getByRole("button", { name: /NTRP — about this rating framework/ }),
+    );
+    expect(await screen.findByText(/not affiliated with/)).toBeInTheDocument();
+    // The row did not expand.
+    expect(
+      screen.queryByText(/Calculation details aren’t available/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders a row's band as plain text, not a nested trigger (#852)", () => {
+    useGetApiV1MatchesIdCalculation.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    });
+    render(<RatingHistoryCard entries={[entry({ matchId: "m1" })]} />);
+
+    // The row is itself a button, so it cannot host one.
+    const row = rowButtons()[0];
+    expect(row).toHaveTextContent("NTRP 4.0 → 4.0");
+    expect(row.querySelector("button")).toBeNull();
+  });
+
 });
