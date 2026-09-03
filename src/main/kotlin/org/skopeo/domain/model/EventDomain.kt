@@ -13,7 +13,7 @@ import java.util.UUID
  * Phase A only records it. The former LEAGUE type was removed (#669) so event type aligns 1:1 with
  * [MatchType]; existing LEAGUE rows reclassify to OPEN_PLAY.
  */
-enum class EventType { OPEN_PLAY, TOURNAMENT }
+enum class EventType { OPEN_PLAY, FULL_MATCH, TOURNAMENT }
 
 /**
  * A participant's standing in an event (#201). APPROVED is a full roster member (eligible for

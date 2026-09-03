@@ -4,6 +4,7 @@
 package org.skopeo.common.dto.settings
 
 import kotlinx.serialization.Serializable
+import org.skopeo.common.contract.FullMatchPointsConfig
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.common.contract.TournamentPointsConfig
 
@@ -14,6 +15,18 @@ import org.skopeo.common.contract.TournamentPointsConfig
 @Serializable
 data class OpenPlayConfigResponse(
     val config: OpenPlayPointsConfig,
+    val updatedAt: String? = null,
+    val updatedBy: String? = null,
+)
+
+/**
+ * The Full Match points window (#840) with provenance. [config] carries only the validity — Full Match
+ * earns the open-play amounts, so there is no separate amount table here. Provenance is null while the
+ * seeded default is in effect.
+ */
+@Serializable
+data class FullMatchConfigResponse(
+    val config: FullMatchPointsConfig,
     val updatedAt: String? = null,
     val updatedBy: String? = null,
 )

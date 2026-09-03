@@ -9,11 +9,22 @@ const { toastSuccess, toastError } = vi.hoisted(() => ({
 }));
 vi.mock("sonner", () => ({ toast: { success: toastSuccess, error: toastError } }));
 
-const { useGetOpenPlay, useGetTournament, putOpenPlay, putTournament, shouldFail, pendingSave } = vi.hoisted(() => ({
+const {
+  useGetOpenPlay,
+  useGetTournament,
+  useGetFullMatch,
+  putOpenPlay,
+  putTournament,
+  putFullMatch,
+  shouldFail,
+  pendingSave,
+} = vi.hoisted(() => ({
   useGetOpenPlay: vi.fn(),
   useGetTournament: vi.fn(),
+  useGetFullMatch: vi.fn(),
   putOpenPlay: vi.fn(),
   putTournament: vi.fn(),
+  putFullMatch: vi.fn(),
   shouldFail: { value: false },
   pendingSave: { value: false },
 }));
@@ -23,6 +34,7 @@ const { useGetOpenPlay, useGetTournament, putOpenPlay, putTournament, shouldFail
 vi.mock("@/api/generated/settings/settings", () => ({
   useGetApiV1SettingsPointsOpenPlay: useGetOpenPlay,
   useGetApiV1SettingsPointsTournament: useGetTournament,
+  useGetApiV1SettingsPointsFullMatch: useGetFullMatch,
   usePutApiV1SettingsPointsOpenPlay: (opts: { mutation: { onSuccess: () => void; onError: () => void } }) => ({
     isPending: pendingSave.value,
     mutate: (vars: unknown) => {
@@ -43,8 +55,19 @@ vi.mock("@/api/generated/settings/settings", () => ({
       }
     },
   }),
+  usePutApiV1SettingsPointsFullMatch: (opts: { mutation: { onSuccess: () => void; onError: () => void } }) => ({
+    isPending: pendingSave.value,
+    mutate: (vars: unknown) => {
+      if (shouldFail.value) opts.mutation.onError();
+      else {
+        putFullMatch(vars);
+        opts.mutation.onSuccess();
+      }
+    },
+  }),
   getGetApiV1SettingsPointsOpenPlayQueryKey: () => ["open-play"],
   getGetApiV1SettingsPointsTournamentQueryKey: () => ["tournament"],
+  getGetApiV1SettingsPointsFullMatchQueryKey: () => ["full-match"],
 }));
 
 // A small 2-margin open-play config (3 relations × 2 margins) mirroring the current defaults.
@@ -75,7 +98,8 @@ function renderSection() {
   );
 }
 
-// The two Save buttons in DOM order: [0] = open-play card, [1] = tournament card.
+// The Save buttons in DOM order, which follows the cards' ascending scale:
+// [0] = open-play, [1] = full-match (#840), [2] = tournament.
 const saveButtons = () => screen.getAllByRole("button", { name: "Save" });
 
 describe("PointsSchedulesSection", () => {
@@ -85,6 +109,7 @@ describe("PointsSchedulesSection", () => {
     pendingSave.value = false;
     useGetOpenPlay.mockReturnValue({ data: { config: openPlayConfig }, isLoading: false });
     useGetTournament.mockReturnValue({ data: { config: tournamentConfig }, isLoading: false });
+    useGetFullMatch.mockReturnValue({ data: { config: { validityDays: 182 } }, isLoading: false });
   });
 
   it("renders the open-play margin grid and tournament schedule from config", () => {
@@ -121,7 +146,7 @@ describe("PointsSchedulesSection", () => {
     fireEvent.change(screen.getByLabelText("sanctioned 1st points"), { target: { value: "100" } });
     fireEvent.change(screen.getByLabelText("unsanctioned 4th points"), { target: { value: "18" } });
     fireEvent.change(screen.getByLabelText("tournament validity days"), { target: { value: "180" } });
-    fireEvent.click(saveButtons()[1]);
+    fireEvent.click(saveButtons()[2]);
 
     expect(putTournament).toHaveBeenCalledTimes(1);
     const sent = putTournament.mock.calls[0][0].data;
@@ -134,7 +159,7 @@ describe("PointsSchedulesSection", () => {
     shouldFail.value = true;
     renderSection();
     fireEvent.click(saveButtons()[0]); // open-play → onError
-    fireEvent.click(saveButtons()[1]); // tournament → onError
+    fireEvent.click(saveButtons()[2]); // tournament → onError
     await waitFor(() => expect(toastError).toHaveBeenCalledTimes(2));
     expect(toastError).toHaveBeenCalledWith(
       expect.stringMatching(/administrator access/i),
@@ -169,8 +194,23 @@ describe("PointsSchedulesSection", () => {
     pendingSave.value = true;
     renderSection();
     const saving = screen.getAllByRole("button", { name: "Saving…" });
-    expect(saving.length).toBe(2);
+    expect(saving.length).toBe(3);
     saving.forEach((b) => expect(b).toBeDisabled());
+  });
+
+  it("saves the full-match validity window on its own, without touching the shared amounts (#840)", () => {
+    renderSection();
+    // The card offers only a window — a full match earns the open-play amounts, so there is no second
+    // amount table to edit here. Guards against a Full Match schedule creeping back in.
+    const window = screen.getByLabelText("full-match validity days") as HTMLInputElement;
+    expect(window.value).toBe("182");
+
+    fireEvent.change(window, { target: { value: "200" } });
+    fireEvent.click(saveButtons()[1]);
+
+    expect(putFullMatch).toHaveBeenCalledWith({ data: { validityDays: 200 } });
+    // And the shared open-play amounts were not resaved as a side effect.
+    expect(putOpenPlay).not.toHaveBeenCalled();
   });
 
   it("shows a loading state until config arrives", () => {

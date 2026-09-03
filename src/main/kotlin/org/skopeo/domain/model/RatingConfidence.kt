@@ -16,6 +16,10 @@ private const val WINDOW_DAYS = 30.0
 private const val TARGET_MIDPOINT_GAP = 35.0
 private const val DECAY_SHAPE = 2.5
 private const val W_TOURNAMENT = 3.0
+
+// Full Match (#840) carries the same weight as tournament play — an invite-limited best-of-3/5 is firm
+// evidence. Its own constant so it can be tuned without touching tournaments.
+private const val W_FULL_MATCH = 3.0
 private const val W_OPEN_PLAY = 0.5
 
 /** The shared log-logistic decay f(x) = 1 / (1 + (x / 35)^2.5): 1.0 at x=0, ~0.5 at the 35-day midpoint. */
@@ -25,6 +29,7 @@ private fun decay(days: Double): Double = 1.0 / (1.0 + (days / TARGET_MIDPOINT_G
 private fun WeightClass.weight(): Double =
     when (this) {
         WeightClass.TOURNAMENT -> W_TOURNAMENT
+        WeightClass.FULL_MATCH -> W_FULL_MATCH
         WeightClass.OPEN_PLAY -> W_OPEN_PLAY
     }
 
@@ -34,7 +39,7 @@ private fun WeightClass.weight(): Double =
  * window. All three factors share the same log-logistic decay `f(x) = 1 / (1 + (x / 35)^2.5)`:
  *
  * ```
- * weightedCount = 3.0·tournaments + 0.5·openPlays                 // over the last 30 days
+ * weightedCount = 3.0·(tournaments + fullMatches) + 0.5·openPlays  // over the last 30 days
  * if (no matches in window) confidence = 0                        // no qualifying play → 0%
  * recency  = f(daysSinceLastMatch)     // freshness of the most recent match
  * sparsity = f(30 / weightedCount)     // weighted density: denser/higher-stakes play → smaller gap

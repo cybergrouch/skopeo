@@ -26,10 +26,13 @@ vi.mock("@/api/generated/standings/standings", () => ({
 vi.mock("@/api/generated/settings/settings", () => ({
   useGetApiV1SettingsPointsOpenPlay: () => ({ data: undefined, isLoading: true }),
   useGetApiV1SettingsPointsTournament: () => ({ data: undefined, isLoading: true }),
+  useGetApiV1SettingsPointsFullMatch: () => ({ data: undefined, isLoading: true }),
   usePutApiV1SettingsPointsOpenPlay: () => ({ isPending: false, mutate: vi.fn() }),
   usePutApiV1SettingsPointsTournament: () => ({ isPending: false, mutate: vi.fn() }),
+  usePutApiV1SettingsPointsFullMatch: () => ({ isPending: false, mutate: vi.fn() }),
   getGetApiV1SettingsPointsOpenPlayQueryKey: () => ["open-play"],
   getGetApiV1SettingsPointsTournamentQueryKey: () => ["tournament"],
+  getGetApiV1SettingsPointsFullMatchQueryKey: () => ["full-match"],
 }));
 
 function renderSection() {

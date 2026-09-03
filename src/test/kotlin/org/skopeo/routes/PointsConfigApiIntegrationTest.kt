@@ -21,8 +21,10 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.contract.FullMatchPointsConfig
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.common.contract.TournamentPointsConfig
+import org.skopeo.common.dto.settings.FullMatchConfigResponse
 import org.skopeo.common.dto.settings.OpenPlayConfigResponse
 import org.skopeo.common.dto.settings.TournamentConfigResponse
 import org.skopeo.common.redaction.asRedactable
@@ -158,6 +160,60 @@ class PointsConfigApiIntegrationTest {
                 header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
                 contentType(type = ContentType.Application.Json)
                 setBody(body = OpenPlayPointsConfig.DEFAULT)
+            }.status shouldBe HttpStatusCode.Forbidden
+        }
+
+    @Test
+    fun `an admin sets the Full Match window and the read reflects it (#840)`() =
+        withApp { client ->
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
+
+            // Unset → the seeded default (182 days), with no provenance recorded yet.
+            val seeded =
+                client.get(urlString = "/api/v1/settings/points/full-match") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }
+            seeded.status shouldBe HttpStatusCode.OK
+            seeded.body<FullMatchConfigResponse>().config.validityDays shouldBe FullMatchPointsConfig.DEFAULT.validityDays
+
+            val updated =
+                client.put(urlString = "/api/v1/settings/points/full-match") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = FullMatchPointsConfig(validityDays = 200))
+                }
+            updated.status shouldBe HttpStatusCode.OK
+            updated.body<FullMatchConfigResponse>().config.validityDays shouldBe 200
+
+            client.get(urlString = "/api/v1/settings/points/full-match") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+            }.body<FullMatchConfigResponse>().config.validityDays shouldBe 200
+        }
+
+    @Test
+    fun `a non-positive Full Match window is rejected (#840)`() =
+        withApp { client ->
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
+
+            client.put(urlString = "/api/v1/settings/points/full-match") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = FullMatchPointsConfig(validityDays = 0))
+            }.status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `a plain player cannot set the Full Match window (#840)`() =
+        withApp { client ->
+            seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
+            val playerToken = TestFirebaseAuth.mintToken(uid = "player")
+
+            client.put(urlString = "/api/v1/settings/points/full-match") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = FullMatchPointsConfig(validityDays = 200))
             }.status shouldBe HttpStatusCode.Forbidden
         }
 }

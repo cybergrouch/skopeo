@@ -14,9 +14,13 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.common.contract.FullMatchPointsConfig
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.common.contract.TournamentPointsConfig
 import org.skopeo.domain.service.settings.PointsConfigService
+import org.skopeo.domain.service.settings.getFullMatchResponse
+import org.skopeo.domain.service.settings.getOpenPlayResponse
+import org.skopeo.domain.service.settings.getTournamentResponse
 
 /**
  * The global, admin-configurable points schedules (#552/#553): the open-play margin-bracket table and
@@ -36,6 +40,21 @@ fun Application.configurePointsConfigRoutes(service: PointsConfigService = Point
                     respondMappingErrors {
                         val request = call.receive<OpenPlayPointsConfig>()
                         respondEither(result = service.setOpenPlay(token = verifiedToken(), config = request)) { value ->
+                            call.respond(status = HttpStatusCode.OK, message = value)
+                        }
+                    }
+                }
+            }
+            route(path = "/api/v1/settings/points/full-match") {
+                get {
+                    respondMappingErrors {
+                        call.respond(status = HttpStatusCode.OK, message = service.getFullMatchResponse())
+                    }
+                }
+                put {
+                    respondMappingErrors {
+                        val request = call.receive<FullMatchPointsConfig>()
+                        respondEither(result = service.setFullMatch(token = verifiedToken(), config = request)) { value ->
                             call.respond(status = HttpStatusCode.OK, message = value)
                         }
                     }

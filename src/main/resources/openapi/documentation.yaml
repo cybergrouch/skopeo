@@ -3741,6 +3741,47 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/settings/points/full-match:
+    get:
+      tags: [Settings]
+      summary: Read the Full Match points window (#840)
+      description: >-
+        The validity window for Full Match awards. Full Match earns the open-play per-set amounts, so
+        there is deliberately no separate amount table here — only how long those awards last (default
+        182 days: longer than open play, shorter than a tournament). updatedAt/updatedBy are null while
+        the seeded default is in effect.
+      security:
+        - firebaseAuth: []
+      responses:
+        "200":
+          description: The current Full Match points window
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FullMatchConfigResponse'
+    put:
+      tags: [Settings]
+      summary: Set the Full Match points window (#840)
+      description: ADMINISTRATOR only. Replaces the Full Match validity window; the write is audit-logged.
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FullMatchPointsConfig'
+      responses:
+        "200":
+          description: The updated Full Match points window
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FullMatchConfigResponse'
+        "400":
+          description: Invalid window (validity must be positive)
+        "403":
+          description: Caller is not an ADMINISTRATOR
   /api/v1/settings/points/tournament:
     get:
       summary: Get the tournament placement points schedule (#552)
@@ -6323,7 +6364,7 @@ components:
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
         matchType:
           type: string
-          enum: [OPEN_PLAY, TOURNAMENT]
+          enum: [OPEN_PLAY, FULL_MATCH, TOURNAMENT]
           description: The competitive context; scales the calculated rating change by a per-match-type factor (#108).
         matchDate:
           type: string
@@ -6601,7 +6642,7 @@ components:
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
         matchType:
           type: string
-          enum: [OPEN_PLAY, TOURNAMENT]
+          enum: [OPEN_PLAY, FULL_MATCH, TOURNAMENT]
           description: The competitive context the match was played under (#108).
         matchDate:
           type: string
@@ -6697,7 +6738,7 @@ components:
         type:
           type: string
           nullable: true
-          enum: [OPEN_PLAY, TOURNAMENT]
+          enum: [OPEN_PLAY, FULL_MATCH, TOURNAMENT]
           description: Event class (#403); omit for the OPEN_PLAY default.
         awardRankingPoints:
           type: boolean
@@ -6940,7 +6981,7 @@ components:
           description: Admin override for calculation processing order (#335); null = order by end date.
         type:
           type: string
-          enum: [OPEN_PLAY, TOURNAMENT]
+          enum: [OPEN_PLAY, FULL_MATCH, TOURNAMENT]
           description: The event's class (#403).
         finalizedAt:
           type: string
@@ -7098,7 +7139,7 @@ components:
           description: The event's organizing format (#720/#741).
         type:
           type: string
-          enum: [OPEN_PLAY, TOURNAMENT]
+          enum: [OPEN_PLAY, FULL_MATCH, TOURNAMENT]
           description: The event's class (#403/#741).
         isFinalized:
           type: boolean
@@ -7806,6 +7847,34 @@ components:
           format: uuid
           nullable: true
 
+    FullMatchPointsConfig:
+      type: object
+      required:
+        - validityDays
+      properties:
+        validityDays:
+          type: integer
+          description: >
+            Full Match award validity window in days (#840). Default 182 — longer than open play (~91)
+            because a full match is a bigger occasion, shorter than a tournament (365) because nothing in
+            it is a season-long achievement. Full Match earns the open-play per-set amounts, so there is
+            no separate amount table.
+
+    FullMatchConfigResponse:
+      type: object
+      required:
+        - config
+      properties:
+        config:
+          $ref: '#/components/schemas/FullMatchPointsConfig'
+        updatedAt:
+          type: string
+          nullable: true
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+
     TournamentPointsConfig:
       type: object
       required:
@@ -8013,7 +8082,7 @@ components:
           format: date
         eventType:
           type: string
-          enum: [OPEN_PLAY, TOURNAMENT]
+          enum: [OPEN_PLAY, FULL_MATCH, TOURNAMENT]
         isFinalized:
           type: boolean
           description: >-

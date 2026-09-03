@@ -12,14 +12,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  getGetApiV1SettingsPointsFullMatchQueryKey,
   getGetApiV1SettingsPointsOpenPlayQueryKey,
   getGetApiV1SettingsPointsTournamentQueryKey,
+  useGetApiV1SettingsPointsFullMatch,
   useGetApiV1SettingsPointsOpenPlay,
   useGetApiV1SettingsPointsTournament,
+  usePutApiV1SettingsPointsFullMatch,
   usePutApiV1SettingsPointsOpenPlay,
   usePutApiV1SettingsPointsTournament,
 } from "@/api/generated/settings/settings";
 import type {
+  FullMatchPointsConfig,
   OpenPlayPointsConfig,
   TournamentPointsConfig,
 } from "@/api/generated/model";
@@ -53,6 +57,7 @@ export function PointsSchedulesSection() {
   return (
     <>
       <OpenPlayPointsCard />
+      <FullMatchPointsCard />
       <TournamentPointsCard />
     </>
   );
@@ -202,6 +207,67 @@ function PointsCellInputs({
         />
       </td>
     </>
+  );
+}
+
+/**
+ * Full Match points (#840). Only a validity window is editable here: a Full Match earns the **open-play**
+ * per-set amounts, deliberately sharing that one table so the two can never drift. What differs is how
+ * long the awards last — longer than open play, shorter than a tournament.
+ */
+function FullMatchPointsCard() {
+  const query = useGetApiV1SettingsPointsFullMatch({ query: { retry: false } });
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Full match points</CardTitle>
+        <CardDescription>
+          A full match earns the same per-set points as open play — the schedule above is shared, so
+          editing it changes both. Only the validity window differs: longer than open play, shorter than
+          a tournament.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {query.isLoading || !query.data ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : (
+          <FullMatchEditor
+            key={query.data.updatedAt ?? "default"}
+            initial={query.data.config}
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function FullMatchEditor({ initial }: { initial: FullMatchPointsConfig }) {
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState<FullMatchPointsConfig>(initial);
+
+  const save = usePutApiV1SettingsPointsFullMatch({
+    mutation: {
+      onSuccess: () => {
+        toast.success("Saved");
+        void queryClient.invalidateQueries({
+          queryKey: getGetApiV1SettingsPointsFullMatchQueryKey(),
+        });
+      },
+      onError: (error) =>
+        toastError("Save failed. You need administrator access.", { cause: error, duration: 8000 }),
+    },
+  });
+
+  return (
+    <ValidityAndSave
+      scope="full-match"
+      validityDays={draft.validityDays}
+      onValidity={(v) => {
+        setDraft({ validityDays: v });
+      }}
+      onSave={() => save.mutate({ data: draft })}
+      pending={save.isPending}
+    />
   );
 }
 

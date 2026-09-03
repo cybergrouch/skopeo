@@ -91,6 +91,15 @@ class PointsConfigContractTest {
     }
 
     @Test
+    fun `the Full Match window sits between open play and tournament`() {
+        // Full Match earns the OPEN-PLAY amounts (no second table, #840) — only the window differs, and
+        // the ordering is the whole point of the type having its own config.
+        FullMatchPointsConfig.DEFAULT.validityDays shouldBe 182
+        FullMatchPointsConfig.DEFAULT.validityDays shouldBeGreaterThan OpenPlayPointsConfig.DEFAULT.validityDays
+        TournamentPointsConfig.DEFAULT.validityDays shouldBeGreaterThan FullMatchPointsConfig.DEFAULT.validityDays
+    }
+
+    @Test
     fun `sanctioning is worth strictly more at every placing`() {
         val config = TournamentPointsConfig.DEFAULT
         config.sanctioned.zip(other = config.unsanctioned).forEach { (sanctioned, unsanctioned) ->

@@ -819,7 +819,7 @@ class PlayerServiceTest {
             RankingPointAwardWrite(
                 userId = userId,
                 points = BigDecimal(points),
-                pointClass = PointClass.SEASONAL_TOURNAMENT_6M,
+                pointClass = PointClass.FULL_MATCH,
                 sourceType = PointSourceType.INTERNAL,
                 sourceId = eventId?.toString(),
                 band = "4.0",

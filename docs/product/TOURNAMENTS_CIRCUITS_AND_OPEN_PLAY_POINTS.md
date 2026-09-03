@@ -188,6 +188,7 @@ The existing **global points policy** (`points_policies`, seeded in V16: per-`Ev
 Under this design, points are **determined by rules, not designated by a host**:
 
 - **Open play** — computed from the game-margin × band-relation schedule (integral values `−2 … 57` under the shipped defaults).
+- **Full match** — the *same* per-set schedule as open play, on a longer validity window and its own point class (#840).
 - **Tournaments** — fixed placement schedule for placement fixtures (see [Recommended preset](#recommended-preset-agreed-schedule); unsanctioned is a separate table, not a halving), **plus** the open-play per-set schedule for every other completed fixture (#836).
 
 So the designation-plus-policy machinery is **obsolete for both**, and two of the computed values (**0** and **negative**) would actually *violate* the policy's positive `min` and the `points > 0` guard in `RankingPointService.grant`.
@@ -295,6 +296,25 @@ Sanctioned = the former table `× 10 + 200` at every place. Unsanctioned = a fla
 matches `× 10` at 1st–3rd; 4th is deliberately rounded down from 150 to keep the ladder even). One
 emergent consequence: the sanctioning premium was a flat 2× at every place and is now **2.5× at 1st,
 rising to 5× at 4th** — largest for the players least likely to win, which are the entries that fill a draw.
+
+**Full Match (#840).** A Full Match event earns the **open-play per-set amounts above** — deliberately the
+same table, so an admin editing the open-play schedule moves both surfaces and the two can never drift.
+Only three things differ:
+
+| | Open play | Full match | Tournament |
+|---|---|---|---|
+| Validity | ~91 days | **182 days** (configurable) | 365 days |
+| Point class | `OPEN_PLAY` | **`FULL_MATCH`** | `ANNUAL_TOURNAMENT` |
+| Rating factor | 0.5 | **0.8** | 1.2 |
+
+The window is editable at `PUT /api/v1/settings/points/full-match` and in **Points Management → Full match
+points**; it holds only a validity, no amounts. Longer than open play because a full match is a bigger
+occasion; shorter than a tournament because nothing in it is a season-long achievement.
+
+Note the format already pays more per *match* without any change to the table: points are per set and
+summed, so a best-of-3 earns roughly 2× a single social set and a best-of-5 roughly 3×. That is why there
+is no separate Full Match amount schedule — the length expresses the occasion, and raising the per-set
+values on top would pay twice for the same property.
 
 **Rejected outright.** Do **not** re-introduce the finer-increment sub-tier or ×100 fixed-point — the study
 rejects them (Part 4 cons: noise, not merit). Band-scoping + the confidence tie-breaker (#547) already

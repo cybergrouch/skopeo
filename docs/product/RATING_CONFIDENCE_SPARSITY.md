@@ -17,7 +17,7 @@ f(x) = 1 / (1 + (x / 35)^2.5)      // TARGET_MIDPOINT_GAP = 35, DECAY_SHAPE = 2.
 Over a fixed **30-day window** (`WINDOW_DAYS = 30`), for a player's COMPLETED matches:
 
 ```
-weightedCount = 3.0·tournaments + 1.5·leagues + 0.5·openPlays   // matches in the last 30 days
+weightedCount = 3.0·(tournaments + fullMatches) + 0.5·openPlays  // matches in the last 30 days
 if (no matches in window) confidence = 0                        // no qualifying play → 0%
 
 recency  = f(daysSinceLastMatch)   // daysSinceLastMatch = DAYS.between(latest in-window match, now), ≥ 0
@@ -28,23 +28,30 @@ confidence = recency × sparsity × spacing     // result in [0, 1], BigDecimal 
 ```
 
 - **Recency** — freshness of the *most recent* match in the window. A match today gives `f(0) = 1.0`; it decays as the newest match ages.
-- **Sparsity** — weighted **density** (volume + match quality). Higher-stakes matches close the gap faster: a tournament (`W_t = 3.0`) counts 6× an open-play match (`W_o = 0.5`).
+- **Sparsity** — weighted **density** (volume + match quality). Higher-stakes matches close the gap faster: a tournament or full match (`3.0`) counts 6× an open-play match (`W_o = 0.5`).
 - **Spacing** — the biggest **internal** hole: the largest gap in days between *consecutive* match dates. A burst-then-gap month has one big hole → low spacing. With **≤ 1 match there is no internal gap → spacing = 1.0** (recency + sparsity carry the score).
 
 ### 2.1 Why Spacing uses *internal* gaps only (no double-count with Recency)
 Spacing deliberately measures only the gaps **between** matches — never the trailing gap from the last match to `now`. **Recency already covers the trailing gap.** If Spacing also included the trailing gap, a stale record would be penalized twice for the same silence. Keeping Spacing internal-only makes the three factors capture distinct signals: *how fresh* (Recency), *how much/how good* (Sparsity), *how evenly* (Spacing).
 
 ## 3. Match-type weights
-Higher-stakes matches tell us more about true skill, so each class is weighted before summing (`MatchType.weightClass()` in `model/MatchDomain.kt` folds playoffs into their parent class):
+Higher-stakes matches tell us more about true skill, so each class is weighted before summing. `MatchType.weightClass()` in `model/MatchDomain.kt` maps each match type to its class, deliberately **1:1** so a type is never described as something it is not:
 
 | Match type | Weight |
 |---|---|
 | Tournament (`W_t`) | **3.0** — highly competitive; maximum signal |
-| League (`W_l`) | **1.5** — structured/competitive |
+| Full match (`W_f`) | **3.0** — an invite-limited best-of-3/5 played to a conclusion is firm evidence (#840). Same weight as tournament today, but its own constant so it can be tuned without disturbing tournaments |
 | Open play (`W_o`) | **0.5** — casual/practice; high volume, lower reliability |
 
+The former League class (1.5) went with the league match types (#669).
+
+Note this axis is **steeper than the rating-factor axis**: the rating factors span 0.5 → 1.2 (2.4×) while
+these weights span 0.5 → 3.0 (6×). A full match therefore sits mid-ladder for how much it *moves* a rating
+but top-of-ladder for how much that rating is *trusted* — a deliberate asymmetry, since a full match is
+strong evidence even where it is not maximum pressure.
+
 ## 4. Tunables
-`WINDOW_DAYS` (30), `TARGET_MIDPOINT_GAP` (35), `DECAY_SHAPE` (2.5), and the per-type weights (3.0 / 1.5 / 0.5) — all centralized as named consts in `model/RatingConfidence.kt`.
+`WINDOW_DAYS` (30), `TARGET_MIDPOINT_GAP` (35), `DECAY_SHAPE` (2.5), and the per-type weights (3.0 / 3.0 / 0.5) — all centralized as named consts in `model/RatingConfidence.kt`.
 
 ## 5. Worked examples (30-day window; eval on day 30 unless noted; `f` = the log-logistic above)
 
