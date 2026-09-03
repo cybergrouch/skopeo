@@ -14,11 +14,17 @@ class PointClassPolicyTest {
     @Test
     fun `each point class carries its documented default validity horizon`() {
         PointClass.ANNUAL_TOURNAMENT.defaultValidUntil(from = from) shouldBe from.plusMonths(12)
-        PointClass.SEASONAL_TOURNAMENT_1M.defaultValidUntil(from = from) shouldBe from.plusMonths(1)
-        PointClass.SEASONAL_TOURNAMENT_3M.defaultValidUntil(from = from) shouldBe from.plusMonths(3)
-        PointClass.SEASONAL_TOURNAMENT_6M.defaultValidUntil(from = from) shouldBe from.plusMonths(6)
+        PointClass.FULL_MATCH.defaultValidUntil(from = from) shouldBe from.plusMonths(6)
         PointClass.OPEN_PLAY.defaultValidUntil(from = from) shouldBe from.plusMonths(1)
         PointClass.EXTERNAL.defaultValidUntil(from = from) shouldBe from.plusMonths(12)
+    }
+
+    @Test
+    fun `every point class is covered by the horizon test above`() {
+        // Guards the pair above from drifting apart: a new class added without a horizon assertion would
+        // otherwise ship untested, which is how the unused SEASONAL_TOURNAMENT_* values survived so long.
+        PointClass.entries.map { it.name }.toSet() shouldBe
+            setOf("ANNUAL_TOURNAMENT", "FULL_MATCH", "OPEN_PLAY", "EXTERNAL")
     }
 
     @Test

@@ -1353,7 +1353,7 @@ class PointsRankingSimulationReport {
             append(
                 "_Legitimate recipe (Fibonacci-margin, ×1) at the 3-year horizon, band-scoped. Each stance keeps " +
                     "tournaments strictly longer than open play; windows map to the existing PointClass tiers " +
-                    "(open-play / SEASONAL_TOURNAMENT_*M / ANNUAL_TOURNAMENT). All stances run on the SAME seeded draws, " +
+                    "(open-play / FULL_MATCH / ANNUAL_TOURNAMENT). All stances run on the SAME seeded draws, " +
                     "so only the validity window differs. Range = min–max player total (pooled)._\n\n",
             )
             append(

@@ -204,9 +204,11 @@ where `baseScale` is the surprise factor from [§2.3](#23-scale--how-surprising)
 | Match type | Factor | Rationale |
 |---|---|---|
 | `OPEN_PLAY` | 0.5 | Casual; least indicative of true skill |
-| `LEAGUE_PLAY` | 0.8 | Season-long, lower stakes per match |
-| `LEAGUE_PLAYOFFS` | 1.1 | Playoff stakes within a league |
+| `FULL_MATCH` | 0.8 | An invite-limited best-of-3/5 played to a conclusion — firmer than a social set, below tournament pressure (#840) |
 | `TOURNAMENT` | 1.2 | Highest pressure; most indicative (#560: initial-round + playoffs collapsed) |
+
+The table above is the whole ladder — `LEAGUE_PLAY` (0.8) and `LEAGUE_PLAYOFFS` (1.1) were removed with the
+league types (#669). `FULL_MATCH` reuses the vacated 0.8 rather than inventing a value.
 
 Worked example — two identical 6-4 wins between equal 4.0 players (`baseScale = 1.0`, `dominance = 0.2`):
 

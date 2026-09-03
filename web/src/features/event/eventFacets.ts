@@ -4,6 +4,7 @@ import { formatConfidence } from '@/lib/confidence'
 /** Human labels for the event's class (#403). */
 export const EVENT_TYPE_LABELS: Record<string, string> = {
   OPEN_PLAY: 'Open play',
+  FULL_MATCH: 'Full match',
   TOURNAMENT: 'Tournament',
 }
 

@@ -24,16 +24,18 @@ data class WindowMatch(
 )
 
 /** The confidence weight class a [MatchType] maps to (#459) — tournament or open play. */
-enum class WeightClass { TOURNAMENT, OPEN_PLAY }
+enum class WeightClass { TOURNAMENT, FULL_MATCH, OPEN_PLAY }
 
 /**
- * Which confidence weight class (#459) a match's [MatchType] counts toward: tournament play is
- * TOURNAMENT and casual play is OPEN_PLAY. The former LEAGUE class was removed (#669) with the LEAGUE
- * match types.
+ * Which confidence weight class (#459) a match's [MatchType] counts toward. Deliberately 1:1 with
+ * [MatchType] so a type is never described as something it is not: [WeightClass.FULL_MATCH] (#840) is
+ * weighted the same as TOURNAMENT today, but having its own value lets that diverge later without
+ * disturbing tournaments. The former LEAGUE class was removed (#669) with the LEAGUE match types.
  */
 fun MatchType.weightClass(): WeightClass =
     when (this) {
         MatchType.TOURNAMENT -> WeightClass.TOURNAMENT
+        MatchType.FULL_MATCH -> WeightClass.FULL_MATCH
         MatchType.OPEN_PLAY -> WeightClass.OPEN_PLAY
     }
 

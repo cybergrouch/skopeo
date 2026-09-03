@@ -163,3 +163,22 @@ data class TournamentPointsConfig(
             )
     }
 }
+
+/**
+ * The Full Match points window (#840). A Full Match earns the **open-play per-set amounts** — there is
+ * deliberately no second amount table, so an admin editing the open-play schedule moves both surfaces at
+ * once and the two can never drift. The only thing configurable here is how long those awards last:
+ * longer than open play (~91 days) because a full match is a bigger occasion, shorter than a tournament
+ * (365 days) because nothing in it is a season-long achievement.
+ */
+@Serializable
+data class FullMatchPointsConfig(
+    val validityDays: Int,
+) {
+    companion object {
+        /** Six months — between the open-play and tournament windows. */
+        private const val DEFAULT_VALIDITY_DAYS = 182
+
+        val DEFAULT: FullMatchPointsConfig = FullMatchPointsConfig(validityDays = DEFAULT_VALIDITY_DAYS)
+    }
+}

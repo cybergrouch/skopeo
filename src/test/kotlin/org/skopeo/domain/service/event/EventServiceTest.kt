@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.contract.BandRelation
+import org.skopeo.common.contract.FullMatchPointsConfig
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.common.contract.TournamentPointsConfig
 import org.skopeo.common.dto.event.EventResponse
@@ -2310,6 +2311,38 @@ class EventServiceTest {
 
         // The reverser is event-scoped, so the new per-set rows are covered without special handling.
         awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 0
+    }
+
+    @Test
+    fun `a FULL_MATCH event pays open-play amounts on the Full Match window and class (#840)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        enableGlobalAwarding(hostUid = "host")
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input = input(type = EventType.FULL_MATCH, participants = listOf(p1.id, p2.id)),
+            ).shouldBeRight().domain()
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        val winner = awardRepo.listByUser(userId = p1.id).single()
+        // The AMOUNT is the open-play schedule's — there is deliberately no second table (#840).
+        winner.points shouldBe openPlayWinnerRate(relation = BandRelation.EQUAL, margin = 2)
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("0.0000")
+        // The CLASS and WINDOW are Full Match's, so the two are separable in the ledger and the window
+        // can be tuned on its own. This split is the crux of the type; assert both halves of it.
+        winner.pointClass shouldBe org.skopeo.domain.model.PointClass.FULL_MATCH.name
+        val fullMatchDays = FullMatchPointsConfig.DEFAULT.validityDays.toLong()
+        winner.validFrom shouldBe event.endDate.atStartOfDay()
+        winner.validUntil shouldBe event.endDate.plusDays(fullMatchDays + 1).atStartOfDay()
+        // Explicitly NOT the open-play window, even though the amounts came from that schedule.
+        val openPlayDays = OpenPlayPointsConfig.DEFAULT.validityDays.toLong()
+        winner.validUntil shouldNotBe event.endDate.plusDays(openPlayDays + 1).atStartOfDay()
     }
 
     /**

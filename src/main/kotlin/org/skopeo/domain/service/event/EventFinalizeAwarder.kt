@@ -35,10 +35,11 @@ import java.math.RoundingMode
 import java.time.LocalDateTime
 import java.util.UUID
 
-// Both event types award on finalize. OPEN_PLAY pays computed per-set points (#525). TOURNAMENT pays
-// placement points for placement fixtures AND the same per-set schedule for every other completed
-// fixture (#836). See the `when` in [awardForFinalizedEvent]. (The LEAGUE type was removed in #669;
-// only OPEN_PLAY and TOURNAMENT remain.)
+// Every event type awards on finalize. OPEN_PLAY pays computed per-set points (#525). FULL_MATCH pays
+// the same per-set amounts on a longer window and its own point class (#840). TOURNAMENT pays placement
+// points for placement fixtures AND the same per-set schedule for every other completed fixture (#836).
+// So all three share one amount table and differ only in scoping and stamping — see the `when` in
+// [awardForFinalizedEvent]. (The LEAGUE type was removed in #669.)
 
 private const val UNSPECIFIED_SEX = "Unspecified"
 private const val BAND_MEAN_SCALE = 4
@@ -55,6 +56,9 @@ private const val PLACE_FOURTH = 3
  * bloating EventService. Awarding is by event type:
  *
  * - **OPEN_PLAY** — computed per set from the band relation and game margin, paying both winner and loser.
+ * - **FULL_MATCH** — the same per-set schedule as open play, stamped [PointClass.FULL_MATCH] with the
+ *   configurable Full Match window (#840). No separate amount table: an admin editing the open-play
+ *   schedule moves both surfaces, so they cannot drift.
  * - **TOURNAMENT** — placement points for designated placement fixtures, sanction-selected via the
  *   event's club; plus, for every *other* completed fixture (eliminations, round play, play-offs), the
  *   same per-set schedule open play uses, stamped with the tournament validity window (#836). A
@@ -148,6 +152,22 @@ class EventFinalizeAwarder(
                                 PerSetPolicy(
                                     pointClass = PointClass.OPEN_PLAY,
                                     validityDays = pointsConfig.getOpenPlay().value.validityDays,
+                                    includeMatch = { true },
+                                ),
+                        )
+                    EventType.FULL_MATCH ->
+                        // Full Match (#840) pays the SAME per-set amounts as open play — no second table
+                        // to keep in step — but on its own longer window and its own point class, so the
+                        // two are distinguishable in the ledger and the window can be tuned separately.
+                        awardComputedPerSet(
+                            event = event,
+                            grantedBy = grantedBy,
+                            now = now,
+                            onlyMatchId = correctedMatchId,
+                            policy =
+                                PerSetPolicy(
+                                    pointClass = PointClass.FULL_MATCH,
+                                    validityDays = pointsConfig.getFullMatch().value.validityDays,
                                     includeMatch = { true },
                                 ),
                         )

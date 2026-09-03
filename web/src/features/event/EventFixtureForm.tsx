@@ -17,9 +17,10 @@ import {
 import { HandicapField } from "@/components/HandicapField";
 import { playerLabel } from "@/lib/playerLabel";
 
-const MATCH_TYPES = ["OPEN_PLAY", "TOURNAMENT"] as const;
+const MATCH_TYPES = ["OPEN_PLAY", "FULL_MATCH", "TOURNAMENT"] as const;
 const MATCH_TYPE_LABELS: Record<(typeof MATCH_TYPES)[number], string> = {
   OPEN_PLAY: "Open play",
+  FULL_MATCH: "Full match",
   TOURNAMENT: "Tournament",
 };
 

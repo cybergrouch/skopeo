@@ -8,9 +8,12 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.Json
+import org.skopeo.common.contract.FullMatchPointsConfig
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.common.contract.TournamentPointsConfig
+import org.skopeo.common.dto.settings.FullMatchConfigResponse
 import org.skopeo.common.dto.settings.OpenPlayConfigResponse
 import org.skopeo.common.dto.settings.TournamentConfigResponse
 import org.skopeo.common.error.ServiceError
@@ -30,6 +33,7 @@ import java.util.UUID
 /** points_config keys backing the two global schedules (#552/#553). */
 private const val OPEN_PLAY_KEY = "open_play"
 private const val TOURNAMENT_KEY = "tournament"
+private const val FULL_MATCH_KEY = "full_match"
 private const val PLACEMENT_PLACES = 4
 
 private val JSON = Json { ignoreUnknownKeys = true }
@@ -48,48 +52,36 @@ class PointsConfigService(
     private val audit: AuditService = AuditService(),
 ) {
     /** The current open-play schedule, or the seeded default when unset/corrupt. Public — no auth. */
-    fun getOpenPlay(): StoredConfig<OpenPlayPointsConfig> {
-        val row = configs.get(key = OPEN_PLAY_KEY)
-        val decoded =
-            row?.value?.let {
-                runCatching {
-                    JSON.decodeFromString(
-                        deserializer = OpenPlayPointsConfig.serializer(),
-                        string = it,
-                    )
-                }.getOrNull()
-            }
-        return if (decoded != null) {
-            StoredConfig(value = decoded, updatedBy = row.updatedBy, updatedAt = row.updatedAt)
-        } else {
-            StoredConfig(value = OpenPlayPointsConfig.DEFAULT, updatedBy = null, updatedAt = null)
-        }
-    }
-
-    /** The open-play schedule as its response DTO — the route-facing form of [getOpenPlay]. */
-    fun getOpenPlayResponse(): OpenPlayConfigResponse = getOpenPlay().toResponse()
+    fun getOpenPlay(): StoredConfig<OpenPlayPointsConfig> =
+        stored(key = OPEN_PLAY_KEY, deserializer = OpenPlayPointsConfig.serializer(), default = OpenPlayPointsConfig.DEFAULT)
 
     /** The current tournament placement schedule, or the seeded default when unset/corrupt. Public — no auth. */
-    fun getTournament(): StoredConfig<TournamentPointsConfig> {
-        val row = configs.get(key = TOURNAMENT_KEY)
-        val decoded =
-            row?.value?.let {
-                runCatching {
-                    JSON.decodeFromString(
-                        deserializer = TournamentPointsConfig.serializer(),
-                        string = it,
-                    )
-                }.getOrNull()
-            }
-        return if (decoded != null) {
-            StoredConfig(value = decoded, updatedBy = row.updatedBy, updatedAt = row.updatedAt)
-        } else {
-            StoredConfig(value = TournamentPointsConfig.DEFAULT, updatedBy = null, updatedAt = null)
-        }
-    }
+    fun getTournament(): StoredConfig<TournamentPointsConfig> =
+        stored(key = TOURNAMENT_KEY, deserializer = TournamentPointsConfig.serializer(), default = TournamentPointsConfig.DEFAULT)
 
-    /** The tournament schedule as its response DTO — the route-facing form of [getTournament]. */
-    fun getTournamentResponse(): TournamentConfigResponse = getTournament().toResponse()
+    /** The current Full Match window, or the seeded default when unset/corrupt. Public — no auth. */
+    fun getFullMatch(): StoredConfig<FullMatchPointsConfig> =
+        stored(key = FULL_MATCH_KEY, deserializer = FullMatchPointsConfig.serializer(), default = FullMatchPointsConfig.DEFAULT)
+
+    /** Set the Full Match window (ADMINISTRATOR only). Rejects a non-positive validity as [ServiceError.Validation]. */
+    fun setFullMatch(
+        token: VerifiedFirebaseToken,
+        config: FullMatchPointsConfig,
+    ): Either<ServiceError, FullMatchConfigResponse> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            ensure(condition = config.validityDays > 0) {
+                ServiceError.Validation(message = "Full Match schedule needs a positive validity")
+            }
+            val row =
+                configs.upsert(
+                    key = FULL_MATCH_KEY,
+                    value = JSON.encodeToString(serializer = FullMatchPointsConfig.serializer(), value = config),
+                    updatedBy = adminId,
+                )
+            recordChange(adminId = adminId, key = FULL_MATCH_KEY)
+            StoredConfig(value = config, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
+        }
 
     /** Set the open-play schedule (ADMINISTRATOR only). Rejects an invalid schedule as a [ServiceError.Validation]. */
     fun setOpenPlay(
@@ -136,6 +128,28 @@ class PointsConfigService(
             StoredConfig(value = config, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
         }
 
+    /**
+     * The stored value for [key], or [default] when unset **or undecodable**. Falling back on a decode
+     * failure is deliberate: a schedule row corrupted by hand should degrade to the shipped defaults
+     * rather than break every read of the points API.
+     */
+    private fun <T> stored(
+        key: String,
+        deserializer: DeserializationStrategy<T>,
+        default: T,
+    ): StoredConfig<T> {
+        val row = configs.get(key = key)
+        val decoded =
+            row?.value?.let {
+                runCatching { JSON.decodeFromString(deserializer = deserializer, string = it) }.getOrNull()
+            }
+        return if (decoded != null) {
+            StoredConfig(value = decoded, updatedBy = row.updatedBy, updatedAt = row.updatedAt)
+        } else {
+            StoredConfig(value = default, updatedBy = null, updatedAt = null)
+        }
+    }
+
     private fun recordChange(
         adminId: UUID,
         key: String,
@@ -162,3 +176,12 @@ class PointsConfigService(
         }
     }
 }
+
+// Route-facing adaptations (#840): zero-argument one-liners over the public reads, kept at file scope
+// because mapping a domain value to its DTO is not this service's behaviour — and because the
+// `mapper.dto` package is service-only by architecture, so a route cannot call `.toResponse()` itself.
+fun PointsConfigService.getOpenPlayResponse(): OpenPlayConfigResponse = getOpenPlay().toResponse()
+
+fun PointsConfigService.getTournamentResponse(): TournamentConfigResponse = getTournament().toResponse()
+
+fun PointsConfigService.getFullMatchResponse(): FullMatchConfigResponse = getFullMatch().toResponse()

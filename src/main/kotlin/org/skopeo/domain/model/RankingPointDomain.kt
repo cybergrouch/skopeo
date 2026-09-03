@@ -10,7 +10,6 @@ import java.util.UUID
 
 // Validity horizons (in months) per point class (#146, §4.2). Named to avoid magic numbers.
 private const val ONE_MONTH = 1
-private const val THREE_MONTHS = 3
 private const val SIX_MONTHS = 6
 private const val TWELVE_MONTHS = 12
 
@@ -28,14 +27,17 @@ enum class PointClass(
     /** Annual tournament — bridges to next year's edition. */
     ANNUAL_TOURNAMENT(defaultValidity = Period.ofMonths(TWELVE_MONTHS)),
 
-    /** Short seasonal tournament (e.g. a one-month event). */
-    SEASONAL_TOURNAMENT_1M(defaultValidity = Period.ofMonths(ONE_MONTH)),
-
-    /** Seasonal tournament with a three-month horizon. */
-    SEASONAL_TOURNAMENT_3M(defaultValidity = Period.ofMonths(THREE_MONTHS)),
-
-    /** Seasonal tournament with a six-month horizon. */
-    SEASONAL_TOURNAMENT_6M(defaultValidity = Period.ofMonths(SIX_MONTHS)),
+    /**
+     * Full Match (#840) — an invite-limited best-of-3/5 between the invited players. Sits between open
+     * play and tournament on every axis: it earns the open-play per-set amounts, but on a longer window.
+     * Renamed from the never-written `SEASONAL_TOURNAMENT_6M`, whose horizon it keeps; the sibling
+     * `SEASONAL_TOURNAMENT_1M`/`_3M` values went with it, leftovers of the removed league design (#669).
+     *
+     * Note this default applies to a **manual** grant that names no window ([defaultValidUntil], used by
+     * `RankingPointService`). Event awarding reads its window from `FullMatchPointsConfig` instead, so the
+     * two are deliberately kept at the same six months.
+     */
+    FULL_MATCH(defaultValidity = Period.ofMonths(SIX_MONTHS)),
 
     /** Open-play points — short-lived, pegged to dominance/match-up when auto-awarded later. */
     OPEN_PLAY(defaultValidity = Period.ofMonths(ONE_MONTH)),
