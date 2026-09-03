@@ -155,17 +155,22 @@ describe("PointsSchedulesSection", () => {
     expect(sent.validityDays).toBe(180);
   });
 
-  it("shows an error toast when either save is unauthorized", async () => {
+  it("shows an error toast when any of the three saves is unauthorized", async () => {
+    // Every card's save must surface the failure, not just the two original ones. This is a live path
+    // rather than a theoretical one: the tab is visible to POINTS_MANAGER while the write is
+    // ADMINISTRATOR-only, so a points manager sees the fields and gets a 403 on save.
     shouldFail.value = true;
     renderSection();
     fireEvent.click(saveButtons()[0]); // open-play → onError
+    fireEvent.click(saveButtons()[1]); // full-match → onError (#840)
     fireEvent.click(saveButtons()[2]); // tournament → onError
-    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(3));
     expect(toastError).toHaveBeenCalledWith(
       expect.stringMatching(/administrator access/i),
       { duration: 8000 },
     );
     expect(putOpenPlay).not.toHaveBeenCalled();
+    expect(putFullMatch).not.toHaveBeenCalled();
     expect(putTournament).not.toHaveBeenCalled();
   });
 
