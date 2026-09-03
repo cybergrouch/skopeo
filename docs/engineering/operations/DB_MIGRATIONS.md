@@ -19,6 +19,29 @@ refusal to boot. The edit does not get prevented — it gets converted into a fa
 
 A [checksum manifest](#the-checksum-manifest) moves that detection to commit time.
 
+## Changing a points schedule requires a migration (#862)
+
+The points schedules are **append-only and versioned**: `points_schedule_versions` holds one row per
+version with exactly one `is_current` (a partial unique index, not a service invariant), `points_config` is
+keyed `(version, key)`, and every `ranking_point_awards` row records the version that produced it.
+
+**The database is authoritative.** `PointsConfigContract`'s `DEFAULT`s are a *seed* — V47 inserts v1 from
+them — and are not read at award time. Two consequences:
+
+1. **Editing a value in Kotlin has no runtime effect.** That is the desired failure mode. Before
+   versioning, a code change silently produced new rates while awards kept recording the old version
+   number, corrupting the audit trail; now the same mistake is inert.
+2. **To change a schedule, add a migration** that inserts the next version, seeds its three documents, and
+   moves `is_current`. All three schedules version together — one global version — so the migration must
+   carry all three forward even if only one changed.
+
+`PointsScheduleSeedTest` fails the build when the Kotlin defaults and the seeded documents disagree, so
+the missing migration cannot ship unnoticed. It is a **fresh-database** invariant: in a live environment an
+admin edit legitimately moves the current version away from the defaults, which is the point of versioning.
+
+Note this does **not** apply to an admin editing a schedule through the UI — that appends a version at
+runtime via `PointsConfigRepository.appendVersion`. Only a change to the shipped defaults needs a migration.
+
 ## The checksum manifest
 
 `src/main/resources/db/migration-checksums.txt` records Flyway's own checksum for every shipped migration,

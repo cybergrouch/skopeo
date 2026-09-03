@@ -36,4 +36,9 @@ data class RankingPointAwardEntity(
     val awardedAt: LocalDateTime,
     val eventId: UUID?,
     val matchId: UUID?,
+    // The points-schedule version this award was computed under (#862).
+    val pointsScheduleVersion: Int,
+    // The two band strings fed to the calculator (#862); null for placement and manual grants.
+    val teamBand: String?,
+    val opponentBand: String?,
 )

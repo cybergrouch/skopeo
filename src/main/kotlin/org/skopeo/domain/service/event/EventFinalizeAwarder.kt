@@ -256,6 +256,7 @@ class EventFinalizeAwarder(
                 now = now,
                 validFrom = start.atStartOfDay(),
                 validUntil = end.plusDays(1).atStartOfDay(),
+                scheduleVersion = pointsConfig.currentScheduleVersion(),
             )
 
         // A player earns exactly one placement award — their best (ctx.awarded is the guard). Processing
@@ -332,6 +333,8 @@ class EventFinalizeAwarder(
                         validUntil = ctx.validUntil,
                         grantedBy = ctx.grantedBy,
                         now = ctx.now,
+                        scheduleVersion = ctx.scheduleVersion,
+                        // No matchup: a placement award pays for a placing, not for a band relation (#862).
                     ),
             )
             audit.record(
@@ -395,6 +398,7 @@ class EventFinalizeAwarder(
                 now = now,
                 validFrom = validFrom,
                 validUntil = validUntil,
+                scheduleVersion = pointsConfig.currentScheduleVersion(),
                 pointClass = policy.pointClass,
             )
 
@@ -412,13 +416,36 @@ class EventFinalizeAwarder(
                     sets = match.sets,
                     config = config,
                 )
-            awardCount += awardSide(event = event, match = match, side = match.team1, teamPoints = points.team1, ctx = ctx)
-            awardCount += awardSide(event = event, match = match, side = match.team2, teamPoints = points.team2, ctx = ctx)
-            total =
-                total.add(BigDecimal(points.team1 * match.team1.userIds.size + points.team2 * match.team2.userIds.size))
+            awardCount +=
+                awardBothSides(
+                    event = event,
+                    match = match,
+                    points = points,
+                    matchup = Matchup(teamBand = band1, opponentBand = band2),
+                    ctx = ctx,
+                )
+            total = total.add(BigDecimal(points.team1 * match.team1.userIds.size + points.team2 * match.team2.userIds.size))
             matchCount += 1
         }
         return AwardSummary(matchCount = matchCount, awardCount = awardCount, totalPoints = total)
+    }
+
+    /**
+     * The two band strings the calculator consumed for one side of a match (#862), recorded on the award so
+     * its derivation is reproducible rather than reconstructed. Null for placement awards, which have no
+     * matchup.
+     */
+    private data class Matchup(
+        val teamBand: String,
+        val opponentBand: String,
+    ) {
+        /**
+         * The same matchup seen from the other side of the net.
+         *
+         * A member of this type rather than a helper on the awarder: that class already sits at detekt's
+         * function ceiling, and flipping a matchup is the matchup's own business anyway.
+         */
+        fun flipped(): Matchup = Matchup(teamBand = opponentBand, opponentBand = teamBand)
     }
 
     /** The finalize-time invariants shared by every open-play award row (bundled to keep signatures small). */
@@ -434,7 +461,39 @@ class EventFinalizeAwarder(
         val pointClass: PointClass = PointClass.ANNUAL_TOURNAMENT,
         // Placement only (#552): players already paid, so each earns exactly one placement award (best).
         val awarded: MutableSet<UUID> = mutableSetOf(),
+        // The schedule version every row written under this context is stamped with (#862). Read once per
+        // finalize, so a schedule edited mid-run cannot split one event across two versions. Deliberately
+        // has no default — a default would silently attribute new awards to v1 forever.
+        val scheduleVersion: Int,
     )
+
+    /**
+     * Award one match's per-set points to **both** sides, each player tagged with their own band + sex.
+     * Returns rows written.
+     *
+     * Takes both sides rather than one because each side records the matchup from its **own** perspective
+     * (#862) — `matchup` for team1, `matchup.flipped()` for team2 — so an award row explains itself without
+     * needing its opponent's row. Doing that at the call site meant two near-identical seven-line calls,
+     * which pushed the caller past detekt's method-length limit for no gain in clarity.
+     */
+    private fun awardBothSides(
+        event: Event,
+        match: Match,
+        points: OpenPlayPointsCalculator.TeamPoints,
+        matchup: Matchup,
+        ctx: AwardContext,
+    ): Int {
+        var written = 0
+        val sides =
+            listOf(
+                Triple(first = match.team1, second = points.team1, third = matchup),
+                Triple(first = match.team2, second = points.team2, third = matchup.flipped()),
+            )
+        sides.forEach { (side, teamPoints, perspective) ->
+            written += awardSide(event = event, match = match, side = side, teamPoints = teamPoints, ctx = ctx, matchup = perspective)
+        }
+        return written
+    }
 
     /** Award [teamPoints] to every member of [side], each tagged with their own band + sex. Returns rows written. */
     private fun awardSide(
@@ -443,6 +502,7 @@ class EventFinalizeAwarder(
         side: MatchSide,
         teamPoints: Int,
         ctx: AwardContext,
+        matchup: Matchup? = null,
     ): Int {
         var written = 0
         side.userIds.forEach { userId ->
@@ -461,6 +521,8 @@ class EventFinalizeAwarder(
                         validUntil = ctx.validUntil,
                         grantedBy = ctx.grantedBy,
                         now = ctx.now,
+                        scheduleVersion = ctx.scheduleVersion,
+                        matchup = matchup,
                     ),
             )
             audit.record(
@@ -482,17 +544,6 @@ class EventFinalizeAwarder(
         return written
     }
 
-    /** The team's entry band = band of the mean of members' current ratings; null if any member is unrated. */
-    private fun teamBand(
-        userIds: List<UUID>,
-        bands: Map<UUID, UserRating>,
-    ): String? {
-        val ratingValues = userIds.mapNotNull { bands[it]?.currentRating }
-        if (userIds.isEmpty() || ratingValues.size != userIds.size) return null
-        val mean = ratingValues.reduce { a, b -> a.add(b) }.divide(BigDecimal(userIds.size), BAND_MEAN_SCALE, RoundingMode.HALF_UP)
-        return Level.fromValue(value = mean.toPlainString()).value
-    }
-
     @Suppress("LongParameterList")
     private fun awardWrite(
         event: Event,
@@ -506,6 +557,8 @@ class EventFinalizeAwarder(
         validUntil: LocalDateTime,
         grantedBy: UUID,
         now: LocalDateTime,
+        scheduleVersion: Int,
+        matchup: Matchup? = null,
     ): RankingPointAwardWrite =
         RankingPointAwardWrite(
             userId = userId,
@@ -524,6 +577,9 @@ class EventFinalizeAwarder(
             awardedAt = now,
             eventId = event.id,
             matchId = matchId,
+            pointsScheduleVersion = scheduleVersion,
+            teamBand = matchup?.teamBand,
+            opponentBand = matchup?.opponentBand,
         )
 
     /**
@@ -562,4 +618,21 @@ class EventFinalizeAwarder(
                     "validUntil" to validUntil.toString(),
                 ),
         )
+}
+
+/**
+ * The team's entry band = band of the mean of members' current ratings; null if any member is unrated.
+ *
+ * File scope, not a member: it reads nothing but its two arguments. Keeping it (and [pointsAudit]) out of
+ * the class is what leaves room under detekt's per-class function ceiling for the both-sides/one-side split
+ * that #862's per-side matchup needs.
+ */
+private fun teamBand(
+    userIds: List<UUID>,
+    bands: Map<UUID, UserRating>,
+): String? {
+    val ratingValues = userIds.mapNotNull { bands[it]?.currentRating }
+    if (userIds.isEmpty() || ratingValues.size != userIds.size) return null
+    val mean = ratingValues.reduce { a, b -> a.add(b) }.divide(BigDecimal(userIds.size), BAND_MEAN_SCALE, RoundingMode.HALF_UP)
+    return Level.fromValue(value = mean.toPlainString()).value
 }

@@ -201,7 +201,21 @@ So the designation-plus-policy machinery is **obsolete for both**, and two of th
 
 ## Part C — Configurable points schedules ([#552](https://github.com/cybergrouch/skopeo/issues/552) / [#553](https://github.com/cybergrouch/skopeo/issues/553))
 
-The rule-based amounts above started as **code constants**. They are now a **global, admin-configurable schedule** — the scoped successor to the removed global policy — stored as JSON in `points_config` (migration V28) and edited by an ADMINISTRATOR via `GET/PUT /api/v1/settings/points/{open-play,tournament}`. The service returns **behaviour-preserving code defaults** when a key is unset, so a fresh/unedited install behaves exactly as before.
+The rule-based amounts above started as **code constants**. They are now a **global, admin-configurable schedule** — the scoped successor to the removed global policy — stored as JSON in `points_config` (migration V28) and edited by an ADMINISTRATOR via `GET/PUT /api/v1/settings/points/{open-play,tournament}`.
+
+### Schedules are versioned, and an award keeps the rates it was paid under ([#862](https://github.com/cybergrouch/skopeo/issues/862))
+
+Editing a schedule used to **overwrite** the previous one, which destroyed the only record of what earlier awards had been paid under — and since an open-play amount depends on the set margin and the band matchup read from that schedule, an old award became unexplainable. Since V47:
+
+- Schedules are **append-only and versioned**. An edit inserts a **new version** rather than rewriting the current one; no historical rate is ever altered.
+- **One global version** spans open play, Full Match and tournaments. Editing one table advances the version for all three — the version identifies *which document set applied*, not *what changed*, and one number is easier to reason about than three that can drift.
+- **Every award records its version**, so *"what was this paid under?"* is answerable for good. Awards made before V47 are recorded as v1, which is exactly the schedule that was in force.
+- **Historical awards do not change when a schedule does.** A new version affects future awarding only.
+
+Two consequences worth knowing as a reader of this document:
+
+- An event pays the schedule current **when it is finalized**, not when it was played. That was already true; versioning only makes it visible. An event that ran before an edit but is finalized after it pays the new rates.
+- The shipped **code defaults are a seed, not a runtime source**. Changing them in Kotlin alone has no effect; a migration must seed a new version. The build fails if the two disagree, so this cannot be forgotten silently.
 
 ### Open-play: game-margin dominance brackets (#553)
 

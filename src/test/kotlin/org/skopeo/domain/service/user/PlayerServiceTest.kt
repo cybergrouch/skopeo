@@ -909,6 +909,8 @@ class PlayerServiceTest {
                 revokesAwardId = null,
                 grantedBy = null,
                 awardedAt = LocalDateTime.now(),
+                // v1 is what a freshly migrated database seeds (#862).
+                pointsScheduleVersion = 1,
                 eventId = eventId,
                 matchId = matchId,
             ),

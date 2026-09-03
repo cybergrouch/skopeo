@@ -140,4 +140,17 @@ data class RankingPointAwardWrite(
     val eventId: UUID? = null,
     // The specific match (fixture) that granted this award on finalize (#448); null for manual grants.
     val matchId: UUID? = null,
+    /**
+     * The points-schedule version this award was computed under (#862). Required: an award whose rates
+     * cannot be identified cannot be explained, which is the whole reason versioning exists.
+     */
+    val pointsScheduleVersion: Int,
+    /**
+     * The two band strings fed to the calculator (#862) — the awarding side's and the opposing side's.
+     * Null for placement and manual grants, which have no band relation. Recorded rather than
+     * reconstructed: `band` above is the recipient's *own* band, and for doubles the team band is the
+     * banded mean of raw ratings, which cannot be recovered from it.
+     */
+    val teamBand: String? = null,
+    val opponentBand: String? = null,
 )

@@ -39,6 +39,7 @@ import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.PointsConfigRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import java.math.BigDecimal
@@ -66,6 +67,8 @@ class RankingPointService(
     private val matches: MatchRepository = MatchRepository(),
     private val events: EventRepository = EventRepository(),
     private val audit: AuditService = AuditService(),
+    // Only to stamp each award with the schedule version in force (#862).
+    private val configs: PointsConfigRepository = PointsConfigRepository(),
 ) {
     /** Grant an award to a user. ADMINISTRATOR-only; band-tagged, sex from the target, policy validity. */
     fun grant(
@@ -125,6 +128,10 @@ class RankingPointService(
                             revokesAwardId = null,
                             grantedBy = adminId,
                             awardedAt = LocalDateTime.now(),
+                            // A manual grant is not computed from a schedule, but it is still stamped with
+                            // the version in force so the ledger has no unattributed rows (#862). Its
+                            // team/opponent bands stay null — there is no matchup to record.
+                            pointsScheduleVersion = configs.currentVersion(),
                         ),
                 ).toDomain()
             audit.record(write = grantAudit(actorId = adminId, award = award))
@@ -196,6 +203,10 @@ class RankingPointService(
                             revokesAwardId = null,
                             grantedBy = adminId,
                             awardedAt = LocalDateTime.now(),
+                            // A manual grant is not computed from a schedule, but it is still stamped with
+                            // the version in force so the ledger has no unattributed rows (#862). Its
+                            // team/opponent bands stay null — there is no matchup to record.
+                            pointsScheduleVersion = configs.currentVersion(),
                         ),
                 ).toDomain()
             audit.record(write = grantAudit(actorId = adminId, award = award))

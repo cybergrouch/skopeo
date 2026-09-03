@@ -41,8 +41,9 @@ private val JSON = Json { ignoreUnknownKeys = true }
 /**
  * The global, admin-configurable points schedules (#552/#553): the open-play margin-bracket table and
  * the tournament placement table, plus their validity windows — the scoped successor to the points
- * policy removed in V27 (#540). Reads are public and fall back to behaviour-preserving code defaults
- * when unset; writes are ADMINISTRATOR-only (enforced here) and audited.
+ * policy removed in V27 (#540). Reads are public and come from the **current schedule version** (#862),
+ * which V47 seeds from the Kotlin defaults — so there is no "unset" state; writes are ADMINISTRATOR-only
+ * (enforced here), audited, and append a NEW version rather than overwriting the current one.
  *
  * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
@@ -51,17 +52,23 @@ class PointsConfigService(
     private val users: UserRepository = UserRepository(),
     private val audit: AuditService = AuditService(),
 ) {
+    /**
+     * The schedule version new awards are computed under (#862). Read once per finalize so a schedule
+     * edited mid-run cannot split one event's awards across two versions.
+     */
+    fun currentScheduleVersion(): Int = configs.currentVersion()
+
     /** The current open-play schedule, or the seeded default when unset/corrupt. Public — no auth. */
     fun getOpenPlay(): StoredConfig<OpenPlayPointsConfig> =
-        stored(key = OPEN_PLAY_KEY, deserializer = OpenPlayPointsConfig.serializer(), default = OpenPlayPointsConfig.DEFAULT)
+        stored(key = OPEN_PLAY_KEY, deserializer = OpenPlayPointsConfig.serializer(), fallback = OpenPlayPointsConfig.DEFAULT)
 
     /** The current tournament placement schedule, or the seeded default when unset/corrupt. Public — no auth. */
     fun getTournament(): StoredConfig<TournamentPointsConfig> =
-        stored(key = TOURNAMENT_KEY, deserializer = TournamentPointsConfig.serializer(), default = TournamentPointsConfig.DEFAULT)
+        stored(key = TOURNAMENT_KEY, deserializer = TournamentPointsConfig.serializer(), fallback = TournamentPointsConfig.DEFAULT)
 
     /** The current Full Match window, or the seeded default when unset/corrupt. Public — no auth. */
     fun getFullMatch(): StoredConfig<FullMatchPointsConfig> =
-        stored(key = FULL_MATCH_KEY, deserializer = FullMatchPointsConfig.serializer(), default = FullMatchPointsConfig.DEFAULT)
+        stored(key = FULL_MATCH_KEY, deserializer = FullMatchPointsConfig.serializer(), fallback = FullMatchPointsConfig.DEFAULT)
 
     /** Set the Full Match window (ADMINISTRATOR only). Rejects a non-positive validity as [ServiceError.Validation]. */
     fun setFullMatch(
@@ -74,10 +81,10 @@ class PointsConfigService(
                 ServiceError.Validation(message = "Full Match schedule needs a positive validity")
             }
             val row =
-                configs.upsert(
+                configs.appendVersion(
                     key = FULL_MATCH_KEY,
                     value = JSON.encodeToString(serializer = FullMatchPointsConfig.serializer(), value = config),
-                    updatedBy = adminId,
+                    actorId = adminId,
                 )
             recordChange(adminId = adminId, key = FULL_MATCH_KEY)
             StoredConfig(value = config, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
@@ -94,10 +101,10 @@ class PointsConfigService(
                 ServiceError.Validation(message = "Open-play schedule needs maxMargin ≥ 1, non-empty rows, and positive validity")
             }
             val row =
-                configs.upsert(
+                configs.appendVersion(
                     key = OPEN_PLAY_KEY,
                     value = JSON.encodeToString(serializer = OpenPlayPointsConfig.serializer(), value = config),
-                    updatedBy = adminId,
+                    actorId = adminId,
                 )
             recordChange(adminId = adminId, key = OPEN_PLAY_KEY)
             StoredConfig(value = config, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
@@ -119,24 +126,34 @@ class PointsConfigService(
                 ServiceError.Validation(message = "Tournament schedule needs 4 sanctioned + 4 unsanctioned places and positive validity")
             }
             val row =
-                configs.upsert(
+                configs.appendVersion(
                     key = TOURNAMENT_KEY,
                     value = JSON.encodeToString(serializer = TournamentPointsConfig.serializer(), value = config),
-                    updatedBy = adminId,
+                    actorId = adminId,
                 )
             recordChange(adminId = adminId, key = TOURNAMENT_KEY)
             StoredConfig(value = config, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
         }
 
     /**
-     * The stored value for [key], or [default] when unset **or undecodable**. Falling back on a decode
-     * failure is deliberate: a schedule row corrupted by hand should degrade to the shipped defaults
-     * rather than break every read of the points API.
+     * One schedule as of the current version (#862), or [fallback] when the stored document is
+     * **undecodable**. Falling back on a decode failure is deliberate: a schedule row corrupted by hand
+     * should degrade to the shipped defaults rather than break every read of the points API.
+     *
+     * **The database is authoritative.** V47 seeds v1 from the Kotlin defaults, so a row always exists —
+     * and dropping the old "fall back to `X.DEFAULT`" behaviour is what makes a forgotten version bump
+     * *inert* instead of *corrupting*: changing the Kotlin defaults without seeding a new version now has
+     * no runtime effect at all, rather than quietly computing new rates and recording them under the old
+     * version number. `PointsScheduleSeedTest` pins the seed against the defaults so the two cannot drift.
+     *
+     * [fallback] is therefore a **corruption** guard only — an unparseable stored document, which should
+     * not happen — not a "config unset" path. It is reported as `updatedBy`/`updatedAt` = null so a caller
+     * can tell it apart from a real row.
      */
     private fun <T> stored(
         key: String,
         deserializer: DeserializationStrategy<T>,
-        default: T,
+        fallback: T,
     ): StoredConfig<T> {
         val row = configs.get(key = key)
         val decoded =
@@ -146,7 +163,7 @@ class PointsConfigService(
         return if (decoded != null) {
             StoredConfig(value = decoded, updatedBy = row.updatedBy, updatedAt = row.updatedAt)
         } else {
-            StoredConfig(value = default, updatedBy = null, updatedAt = null)
+            StoredConfig(value = fallback, updatedBy = null, updatedAt = null)
         }
     }
 

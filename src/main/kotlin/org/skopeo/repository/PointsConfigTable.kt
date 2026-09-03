@@ -13,10 +13,16 @@ private const val CONFIG_KEY_MAX = 64
  * Exposed mapping over the V28 points_config table (#552/#553): each admin-configurable points
  * schedule stored as a JSON document under a stable key. [updatedBy]/[updatedAt] track provenance for
  * the audit surface. updated_at is DB-defaulted but set explicitly on every write.
+ *
+ * **Append-only since V47 (#862).** The primary key is `(version, key)`, so a schedule change inserts a
+ * new version's documents rather than overwriting the previous ones — which is what makes an old award's
+ * rates still retrievable. There is no update path; the destructive upsert this table used to carry could
+ * not survive the composite key.
  */
 internal object PointsConfigTable : Table(name = "points_config") {
+    val version = integer(name = "version").references(ref = PointsScheduleVersionsTable.version)
     val key = varchar(name = "key", length = CONFIG_KEY_MAX)
-    override val primaryKey = PrimaryKey(firstColumn = key)
+    override val primaryKey = PrimaryKey(firstColumn = version, columns = arrayOf(key))
     val value = text(name = "value")
     val updatedBy = reference(name = "updated_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
     val updatedAt = datetime(name = "updated_at")
