@@ -100,7 +100,9 @@ export function WinLossCard({ code }: WinLossCardProps) {
                     reader who is not told that reads the gap as a bug. */}
                 <p className="text-xs text-muted-foreground">
                   Singles only — doubles matches are not counted — and only matches that have been rated,
-                  since an opponent's band is read as it stood at the match.
+                  since an opponent's band is read as it stood at the match. The ring is all-time; the
+                  monthly rows below it cover the last {summary.monthsWindow} months, so the two are not
+                  meant to agree.
                 </p>
               </div>
               <OpponentBandChart series={summary.opponentBands} />

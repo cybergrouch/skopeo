@@ -141,6 +141,56 @@ describe("RatingHistoryCard", () => {
     expect(rowButtons()).toHaveLength(0);
   });
 
+  it("plots bands only, leaking no raw rating to a non-admin viewer (#845)", () => {
+    // Same non-admin fixture as above: raw fields nulled, band-jump entries only. The chart reads
+    // previousLevel/newLevel and nothing else, so a raw value cannot reach the drawing — but the axis
+    // labels are the one place a "4.000000" would surface if that ever changed.
+    const { container } = render(
+      <RatingHistoryCard
+        entries={[
+          entry({
+            id: "h1",
+            matchId: "m1",
+            previousRating: null,
+            newRating: null,
+            ratingChange: null,
+            previousLevel: "3.5",
+            newLevel: "4.0",
+            levelChanged: true,
+          }),
+        ]}
+      />,
+    );
+    const svg = container.querySelector("svg");
+    expect(svg).toHaveAttribute("aria-hidden", "true");
+    const labels = Array.from(svg?.querySelectorAll("text") ?? []).map(
+      (t) => t.textContent,
+    );
+    // The bands held, at band precision — not the ratings behind them.
+    expect(labels).toContain("3.5");
+    expect(labels).toContain("4.0");
+    expect(labels.join(" ")).not.toMatch(/\d\.\d{3,}/);
+  });
+
+  it("builds the band graph from every entry, not the page being viewed (#845)", async () => {
+    // 26 entries spanning two pages. The chart must describe the player's history, not the pager's
+    // state, so paging must not change what it draws.
+    const entries = Array.from({ length: 26 }, (_, i) =>
+      entry({
+        id: `h${i}`,
+        calculatedAt: `2026-06-${String(i + 1).padStart(2, "0")}T12:00:00`,
+      }),
+    );
+    const user = userEvent.setup();
+    const { container } = render(<RatingHistoryCard entries={entries} />);
+    const before = container.querySelector("path")?.getAttribute("d");
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Showing 26–26 of 26")).toBeInTheDocument();
+    expect(container.querySelector("path")?.getAttribute("d")).toBe(before);
+  });
+
   it("shows the full value and the band, and highlights a band change", () => {
     const { container } = render(
       <RatingHistoryCard

@@ -144,6 +144,19 @@ describe('WinLossCard', () => {
     expect(caption).toHaveTextContent('only matches that have been rated')
   })
 
+  it('says which window each chart covers, so the two are not read as disagreeing', () => {
+    useGetApiV1PlayersCodeResultsSummary.mockReturnValue({
+      data: summary(totals(4, 3, 1, 75), totals(0, 0, 0, null), totals(4, 3, 1, 75)),
+      isLoading: false,
+    })
+    render(<WinLossCard code="K7Q2MX" />)
+    // The donut is all-time and the sparklines are a trailing window. A reader who assumes both cover
+    // the same span reads the mismatch as an error in one of them.
+    expect(screen.getByText(/Singles only/)).toHaveTextContent(
+      'The ring is all-time; the monthly rows below it cover the last 12 months',
+    )
+  })
+
   it('shows an empty band section for a player with only doubles or unrated matches', () => {
     useGetApiV1PlayersCodeResultsSummary.mockReturnValue({
       // Doubles-only: the totals table has real figures but there is no banded singles play at all.
