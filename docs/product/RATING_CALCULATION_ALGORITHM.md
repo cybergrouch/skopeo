@@ -743,6 +743,26 @@ This decision also bounds the "partner-strength farming" concern (issue #266): b
 
 Possible future refinements (historical weighting, time decay, set-depth weighting, surface adjustments, graduated upset multiplier) are intentionally out of scope for v1.
 
+### Opponent band is read *as at the match*, and only for rated matches (#845)
+
+The profile's "Singles opponents by band" split — same band, higher band, lower band — classifies each
+opponent by the band **both players held at the time of that match**, not by the bands they hold today. A
+player who has since climbed from 3.5 to 4.0 does not retroactively turn last year's peers into weaker
+opponents; the history says who they actually were up against then.
+
+Two consequences fall out of that, and both get asked about:
+
+1. **The split covers rated matches only.** The band as at the match comes from the rating-history entry
+   that match produced (`previousLevel`); a match that has not been through a rating calculation has no
+   such entry, so there is no band to compare against. It is therefore excluded rather than guessed at.
+2. **The counts do not sum to the Singles total.** Doubles has no single opponent band and is excluded too,
+   so the split is a strictly narrower cut of the same record. This is by design, and the UI states both
+   exclusions in its caption — unexplained, the gap reads as a defect.
+
+Note this classification is a *different question* from `BandRelation` in the points calculator, which
+labels a result by **who won** (`EQUAL`/`FAVORITE`/`UPSET`). The profile split labels the **matchup**,
+from the viewed player's side, regardless of outcome.
+
 ---
 
 ## 9. Implementation Map

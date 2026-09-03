@@ -7,6 +7,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { OpponentBandChart } from '@/components/OpponentBandChart'
+import { OpponentBandSparklines } from '@/components/OpponentBandSparklines'
 
 interface WinLossCardProps {
   /** The player's shareable public code; the same endpoint serves own- and public-profile views. */
@@ -89,6 +91,27 @@ export function WinLossCard({ code }: WinLossCardProps) {
                 </tbody>
               </table>
             </div>
+            <section className="space-y-3 border-t pt-3">
+              <div>
+                <h3 className="text-sm font-medium">Singles opponents by band</h3>
+                {/* Both exclusions, stated once and up front. This cut is narrower than the table above
+                    it — doubles has no single opponent band, and an unrated match has no band at all to
+                    compare against — so its counts deliberately do not add up to the Singles row. A
+                    reader who is not told that reads the gap as a bug. */}
+                <p className="text-xs text-muted-foreground">
+                  Singles only — doubles matches are not counted — and only matches that have been rated,
+                  since an opponent's band is read as it stood at the match. The ring is all-time; the
+                  monthly rows below it cover the last {summary.monthsWindow} months, so the two are not
+                  meant to agree.
+                </p>
+              </div>
+              <OpponentBandChart series={summary.opponentBands} />
+              <OpponentBandSparklines
+                series={summary.opponentBands}
+                monthsWindow={summary.monthsWindow}
+                monthlyMax={summary.monthlyMax}
+              />
+            </section>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">No completed matches yet.</p>

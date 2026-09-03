@@ -509,3 +509,64 @@ an element's full `textContent` and resolves to the innermost match.
 validation toast, the seeding CSV export header, and the confidence tooltip. There is also **no footer or
 global disclaimer line**: a standing USTA notice on every screen would make NTRP *more* prominent, which
 undercuts the point that it is only a borrowed reference framework.
+
+## Profile charts are hand-rolled (#845)
+
+Three charts sit on the profile: an opponent-band **donut** and three opponent-band **sparklines** in
+`WinLossCard`, and a band-history **step chart** in `RatingHistoryCard`. All three are plain SVG in
+`components/` — no charting library. The last one, Recharts, went with the old `WinLossChart` in #406; the
+coverage exclusion left behind for that deleted file was removed in #845.
+
+**Why hand-rolled.** Each chart is one element with arithmetic: a `<circle>` per donut arc whose
+`stroke-dasharray` is a single dash sized to its share of the circumference (no arc trigonometry), a
+`<rect>` per sparkline bar, one `<path>` of `H`/`V` segments for the step chart. That is less code than
+configuring a library — and for the step chart, a library would have to be *stopped* from interpolating.
+
+**The server does the arithmetic, not the components.** `PlayerResultsSummary` (#845) arrives with totals,
+win rates, gap-filled monthly buckets and `monthlyMax` already computed. The components hold no reducers.
+
+### The shared encoding
+
+`components/opponentBands.ts` owns it, and owns it once: **hue is the band relation, shade is the outcome.**
+The donut and the sparklines import the same map, which is the only reason a reader can carry the legend
+from one chart to the other.
+
+- Theme tokens (`--chart-1`, `--chart-1-muted`, …), never literals — the app has a dark mode and a dozen
+  club themes. The dark variants **invert** the lightness relationship so the muted shade still reads as
+  *less* on a dark surface.
+- Red is deliberately unused. It belongs to `--destructive`, and a loss is not an error.
+- Each relation's win and loss arcs are drawn **adjacently**. Non-adjacent arcs would destroy the
+  three-groups-of-two reading the hue encoding exists to produce.
+
+### Accessibility: the drawing is never the only route
+
+Every drawing is `aria-hidden`, and every one has a text twin:
+
+| Chart | Text alternative |
+|---|---|
+| Donut | The legend — a real `<button>` per band carrying counts and win rate, opening the same popover an arc does |
+| Sparklines | The donut's legend above them (totals) plus the per-row played count |
+| Step chart | The rating-history rows the card already lists, with dates and bands |
+
+Clicking an arc works, but arcs are **not** the accessible route: an SVG shape is a poor focus stop, win and
+loss differ only in lightness — which fails in greyscale and for low-vision readers — and a reader who
+cannot tell two shades apart cannot tell which arc to click either.
+
+### Three traps these charts already fell into
+
+- **Zero-height and zero-length are not empty states.** A `monthlyMax` of 0 draws three flat lines, and a
+  player rated for the first time *today* has no time span to scale against, so a date-scaled path collapses
+  to an invisible point. Both read as a broken renderer. Each has an explicit branch: a sentence for the
+  former, a full-width flat line for the latter.
+- **The step chart reads `entries`, not the card's paginated slice.** A chart that redrew as the reader paged
+  would be showing the pager's state, not the player's history.
+- **The band cut is narrower than the totals table above it** — singles only, and rated matches only, since
+  classifying an opponent needs both bands as they stood at the match. Its counts therefore do *not* sum to
+  the Singles row, **by design**, and the caption states both exclusions. Unexplained, the gap reads as a bug.
+
+### Sloped lines would be a lie
+
+The band chart uses **steps** — horizontal runs joined by vertical jumps — because a band is a discrete state
+a player holds, not a value passed through. A diagonal from 3.0 to 3.5 would draw weeks at a "3.2" that never
+existed. Steps say the true thing (*held this band until this date, then moved*) and make each band's
+duration the length of a line, which is the quantity a reader actually wants.

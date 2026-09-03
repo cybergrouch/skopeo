@@ -8,6 +8,7 @@ import { NumberedPager } from "@/components/NumberedPager";
 import { NtrpLabel } from "@/components/NtrpLabel";
 import { formatConfidence } from "@/lib/confidence";
 import { ConfidenceValue } from "@/components/ConfidenceValue";
+import { BandHistoryChart } from "@/components/BandHistoryChart";
 
 /** Rating history is paginated newest-first, 25 rows per page (#301). */
 const PAGE_SIZE = 25;
@@ -143,6 +144,11 @@ export function RatingHistoryCard({
                 Showing band changes only.
               </p>
             ) : null}
+            {/* Built from every entry, not `pageEntries` — a chart that redrew itself as the reader
+                paged would be showing the pager's state, not the player's history (#845). */}
+            <div className="mb-3">
+              <BandHistoryChart entries={entries} />
+            </div>
             <ul className="space-y-2">
               {pageEntries.map((entry) => {
                 const prevBand = entry.previousLevel ?? "—";
