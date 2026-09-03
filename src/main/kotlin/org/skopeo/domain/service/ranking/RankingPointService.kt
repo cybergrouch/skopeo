@@ -34,6 +34,7 @@ import org.skopeo.domain.model.RankingPointAwardWrite
 import org.skopeo.domain.model.ResolvedAward
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.rating.RatingAssembler
+import org.skopeo.domain.service.settings.SettingsService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
@@ -69,6 +70,8 @@ class RankingPointService(
     private val audit: AuditService = AuditService(),
     // Only to stamp each award with the schedule version in force (#862).
     private val configs: PointsConfigRepository = PointsConfigRepository(),
+    // Only to read the hide-ranking-points flag (#865).
+    private val settings: SettingsService = SettingsService(),
 ) {
     /** Grant an award to a user. ADMINISTRATOR-only; band-tagged, sex from the target, policy validity. */
     fun grant(
@@ -307,13 +310,25 @@ class RankingPointService(
      *   rather than an empty one — an event may legitimately have none because it is unfinalized or
      *   because its `awardRankingPoints` flag is off (#831).
      */
-    fun awardedForEvent(code: String): Either<ServiceError, AwardedPointsSummaryResponse> =
+    fun awardedForEvent(
+        code: String,
+        // Optional: the page is anonymous, and the caller only matters for the hide-points flag (#865).
+        token: VerifiedFirebaseToken? = null,
+    ): Either<ServiceError, AwardedPointsSummaryResponse> =
         either {
             // toEventDomain: three entity mappers expose `toDomain`, so the event one is imported aliased.
             val event =
                 ensureNotNull(value = events.findByPublicCode(code = code)?.toEventDomain()) {
                     ServiceError.NotFound(message = "Event $code not found")
                 }
+            // Suppressed for an unprivileged viewer while the hide-points flag is on (#865). An empty
+            // summary rather than a Forbidden: the endpoint is public and the event is real, there is
+            // simply nothing this viewer may see — and the client renders no card for an empty list, which
+            // is the same thing it does for an event that awarded nothing.
+            val viewer = token?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }
+            if (!settings.pointsVisibleTo(viewer = viewer)) {
+                return@either AwardedPointsSummaryResponse(rows = emptyList(), totalPoints = "0")
+            }
             summarise(
                 awards = awards.listActiveByEvent(eventId = event.id).map { it.toDomain() },
                 players = users,

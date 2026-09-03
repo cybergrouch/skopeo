@@ -3731,6 +3731,57 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/settings/hide-ranking-points:
+    get:
+      summary: Get the hide-ranking-points feature flag (#865)
+      description: >-
+        Whether ranking-point figures are hidden from players and researchers. **Opt-in suppression**:
+        false is the default and preserves the original behaviour, so the flag has no effect until an
+        administrator ticks it. Note the OPPOSITE default from award-ranking-points, and note the two flags
+        do different things -- that one suppresses AWARDING, this one suppresses DISPLAY.
+        While on, point figures are omitted server-side from the standings page, a player's standing card,
+        a player's points audit and an event's points card, for every viewer except ADMINISTRATOR, HOST,
+        CLUB_OWNER, RATER and POINTS_MANAGER. A suppressed viewer still sees rank and band. There is NO
+        owner-self exemption: a plain player's own points are hidden on their own profile too.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+        - {}
+      responses:
+        '200':
+          description: The current hide-ranking-points flag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HideRankingPointsResponse'
+    put:
+      summary: Set the hide-ranking-points feature flag (#865)
+      description: >-
+        ADMINISTRATOR only -- a POINTS_MANAGER may see points while the flag is on but does not decide
+        whether it is. Ticking hides; the write is audit-logged.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetHideRankingPointsRequest'
+      responses:
+        '200':
+          description: The updated hide-ranking-points flag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HideRankingPointsResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/settings/points/open-play:
     get:
       summary: Get the open-play points schedule (#553)
@@ -7902,6 +7953,35 @@ components:
         enabled:
           type: boolean
           description: Show or hide the event "Award Ranking Points" checkbox (#641).
+
+    HideRankingPointsResponse:
+      type: object
+      required:
+        - hidden
+      properties:
+        hidden:
+          type: boolean
+          description: >-
+            Whether ranking-point figures are hidden from players and researchers (#865). Reads as the
+            checkbox does -- ticked hides. False when unset, which preserves the original behaviour.
+        updatedAt:
+          type: string
+          nullable: true
+          description: ISO timestamp of the last change; null when never set.
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+          description: The administrator who last set the flag; null when never set.
+
+    SetHideRankingPointsRequest:
+      type: object
+      required:
+        - hidden
+      properties:
+        hidden:
+          type: boolean
+          description: Hide (true) or show (false) ranking-point figures for players and researchers (#865).
 
     OpenPlayMarginPoints:
       type: object

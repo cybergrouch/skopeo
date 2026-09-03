@@ -41,3 +41,23 @@ data class AwardRankingPointsResponse(
 data class SetAwardRankingPointsRequest(
     val enabled: Boolean,
 )
+
+/**
+ * `GET /api/v1/settings/hide-ranking-points` — whether ranking-point figures are hidden from players and
+ * researchers (#865).
+ *
+ * [hidden] reads as the checkbox does: **ticked hides**. False is the default and preserves the original
+ * behaviour, so the flag has no effect until an admin turns it on.
+ */
+@Serializable
+data class HideRankingPointsResponse(
+    val hidden: Boolean,
+    val updatedAt: String? = null,
+    val updatedBy: String? = null,
+)
+
+/** Body for `PUT /api/v1/settings/hide-ranking-points` (#865). */
+@Serializable
+data class SetHideRankingPointsRequest(
+    val hidden: Boolean,
+)

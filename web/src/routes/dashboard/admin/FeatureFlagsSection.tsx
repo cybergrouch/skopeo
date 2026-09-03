@@ -14,10 +14,13 @@ import {
 } from "@/api/generated/users/users";
 import {
   getGetApiV1SettingsAwardRankingPointsQueryKey,
+  getGetApiV1SettingsHideRankingPointsQueryKey,
   getGetApiV1SettingsFacebookLoginQueryKey,
   useGetApiV1SettingsAwardRankingPoints,
+  useGetApiV1SettingsHideRankingPoints,
   useGetApiV1SettingsFacebookLogin,
   usePutApiV1SettingsAwardRankingPoints,
+  usePutApiV1SettingsHideRankingPoints,
   usePutApiV1SettingsFacebookLogin,
   usePutApiV1UsersMeRatingPreview,
 } from "@/api/generated/settings/settings";
@@ -28,6 +31,10 @@ import {
  *   sign-in/sign-up pages for everyone (interim, while the Meta app is misconfigured).
  * - Award ranking points (#641): a GLOBAL flag — off hides the "Award Ranking Points" checkbox on the
  *   event-create form so hosts can't opt an event into awarding.
+ * - Hide ranking points (#865): a GLOBAL flag — ON hides point FIGURES from players and researchers.
+ *   Note the two points flags are opposites in both direction and default, and suppress different things:
+ *   award-ranking-points is enable-awarding and defaults OFF; this is hide-display and defaults OFF too,
+ *   meaning ticking it is what changes anything.
  * - Hide raw NTRP ratings (#583/#743): a PER-ADMIN preference — lets this admin preview the non-admin
  *   experience on production without affecting anyone else.
  * The Admin tab is already ADMINISTRATOR-gated, so no extra gating here.
@@ -45,6 +52,7 @@ export function FeatureFlagsSection() {
       <CardContent className="space-y-6">
         <FacebookLoginToggle />
         <AwardRankingPointsToggle />
+        <HideRankingPointsToggle />
         <RawRatingsToggle />
       </CardContent>
     </Card>
@@ -156,6 +164,57 @@ function FacebookLoginToggle() {
  * and inverted twice — once on read, once on write — which shipped a default-checked opt-in and made
  * the UI state the opposite polarity to the persisted one.
  */
+/**
+ * Hide ranking points from players and researchers (#865).
+ *
+ * Enforcement is **server-side** — the point figures are omitted from the payloads, not merely hidden
+ * here — because three of the affected surfaces are viewable anonymously. This toggle only decides the
+ * flag.
+ */
+function HideRankingPointsToggle() {
+  const queryClient = useQueryClient();
+  const flagQuery = useGetApiV1SettingsHideRankingPoints({ query: { retry: false } });
+  // Default to NOT hidden while loading / when unset, matching the backend: the flag is opt-in
+  // suppression, so the safe assumption is the original behaviour.
+  const hidden = flagQuery.data?.hidden ?? false;
+
+  const setFlag = usePutApiV1SettingsHideRankingPoints({
+    mutation: {
+      onSuccess: () => {
+        toast.success("Saved");
+        void queryClient.invalidateQueries({
+          queryKey: getGetApiV1SettingsHideRankingPointsQueryKey(),
+        });
+      },
+      onError: (error) =>
+        toastError("Could not update the setting. Try again.", { cause: error, duration: 8000 }),
+    },
+  });
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium">Hide ranking points from players (global)</p>
+      <p className="text-xs text-muted-foreground">
+        When on, point figures are hidden from players and researchers across standings, player profiles
+        and event pages — including a player&apos;s own points. Rank and band stay visible.
+        Administrators, hosts, club owners, raters and points managers are unaffected.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={hidden}
+            disabled={flagQuery.isLoading || setFlag.isPending}
+            onChange={(e) => setFlag.mutate({ data: { hidden: e.target.checked } })}
+            aria-label="Hide ranking points from players"
+          />
+          Hide ranking points from players
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function RawRatingsToggle() {
   const queryClient = useQueryClient();
   const meQuery = useGetApiV1UsersMe({ query: { retry: false } });

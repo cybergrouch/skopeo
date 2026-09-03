@@ -78,7 +78,16 @@ class StandingsService(
             }
         val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
         val pageOffset = (offset ?: 0).coerceAtLeast(minimumValue = 0)
-        val request = PageRequest(band = parsedBand, sex = sex, limit = pageSize, offset = pageOffset, revealRates = revealRates)
+        val viewer = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
+        val request =
+            PageRequest(
+                band = parsedBand,
+                sex = sex,
+                limit = pageSize,
+                offset = pageOffset,
+                revealRates = revealRates,
+                revealPoints = settings.pointsVisibleTo(viewer = viewer),
+            )
         val source = settings.standingsSource()
         val view =
             if (source == SnapshotSource.POINTS) {
@@ -103,6 +112,9 @@ class StandingsService(
         val limit: Int,
         val offset: Int,
         val revealRates: Boolean,
+        // Whether this viewer may see point figures (#865). Resolved once per request rather than per row,
+        // both to avoid re-reading the flag for every entry and so a page cannot be internally inconsistent.
+        val revealPoints: Boolean,
     )
 
     /**
@@ -229,8 +241,10 @@ class StandingsService(
                     sex = user.sex,
                     age = user.dateOfBirth?.revealed?.let { ageInYears(dateOfBirth = it, asOf = today) },
                     // The POINTS metric shown is the snapshot's ordering value (points), public per #64/#114
-                    // (#457). The rating is NOT the served metric here, so it stays null — never leaked.
-                    points = entry.orderingValue.toPlainString(),
+                    // (#457) — unless the hide-points flag suppresses it for this viewer (#865), leaving
+                    // rank + band, which is what the RATING source already shows an unprivileged viewer.
+                    // The rating is NOT the served metric here, so it stays null — never leaked.
+                    points = if (request.revealPoints) entry.orderingValue.toPlainString() else null,
                     placeholder = user.placeholder,
                     deleted = user.isDeleted(),
                 )

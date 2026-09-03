@@ -47,7 +47,7 @@ internal fun Route.eventPointsByCode(points: RankingPointService) {
     get(path = "/code/{code}/points") {
         respondMappingErrors {
             val code = call.parameters["code"].orEmpty()
-            respondEither(result = points.awardedForEvent(code = code)) { summary ->
+            respondEither(result = points.awardedForEvent(code = code, token = optionalVerifiedToken())) { summary ->
                 call.respond(status = HttpStatusCode.OK, message = summary)
             }
         }

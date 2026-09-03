@@ -81,3 +81,15 @@ data class AwardRankingPointsValue(
     val updatedBy: UUID?,
     val updatedAt: LocalDateTime?,
 )
+
+/**
+ * The "hide ranking points from players" flag (#865), with its provenance.
+ *
+ * [hidden] is **opt-in suppression**: false — the default, and what an unseeded database means — leaves
+ * points visible exactly as before, so merging the flag changes nothing until an admin ticks it.
+ */
+data class HideRankingPointsValue(
+    val hidden: Boolean,
+    val updatedBy: UUID?,
+    val updatedAt: LocalDateTime?,
+)
