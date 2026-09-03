@@ -9,6 +9,20 @@ vi.mock('@/api/generated/users/users', () => ({
   useGetApiV1PlayersCodeResultsSummary,
 }))
 
+/** A finished totals object as the server now sends it (#845) — the card does no arithmetic. */
+function totals(played: number, wins: number, losses: number, winRate: number | null) {
+  return { played, wins, losses, winRate }
+}
+
+/** The three cuts plus the band series, matching the response shape; the series is unrendered here. */
+function summary(
+  singles: ReturnType<typeof totals>,
+  doubles: ReturnType<typeof totals>,
+  overall: ReturnType<typeof totals>,
+) {
+  return { singles, doubles, overall, opponentBands: [], monthsWindow: 12, monthlyMax: 0 }
+}
+
 /** The cells of a labelled table row: [Played, Wins, Losses, Win rate]. */
 function rowCells(label: string): string[] {
   const row = screen.getByRole('rowheader', { name: label }).closest('tr')
@@ -29,22 +43,18 @@ describe('WinLossCard', () => {
 
   it('shows an empty state when there are no decided matches', () => {
     useGetApiV1PlayersCodeResultsSummary.mockReturnValue({
-      data: { singles: [], doubles: [] },
+      data: summary(totals(0, 0, 0, null), totals(0, 0, 0, null), totals(0, 0, 0, null)),
       isLoading: false,
     })
     render(<WinLossCard code="K7Q2MX" />)
     expect(screen.getByText('No completed matches yet.')).toBeInTheDocument()
   })
 
-  it('sums the buckets into per-type and overall totals with win rates', () => {
+  it('renders the server-computed per-type and overall totals', () => {
     useGetApiV1PlayersCodeResultsSummary.mockReturnValue({
-      data: {
-        singles: [
-          { period: '2026-01', wins: 2, losses: 1 },
-          { period: '2026-02', wins: 1, losses: 0 },
-        ],
-        doubles: [{ period: '2026-02', wins: 1, losses: 3 }],
-      },
+      // The card no longer sums anything (#845) — it renders what it is given, so these fixtures are
+      // the finished figures rather than monthly buckets.
+      data: summary(totals(4, 3, 1, 75), totals(4, 1, 3, 25), totals(8, 4, 4, 50)),
       isLoading: false,
     })
     render(<WinLossCard code="K7Q2MX" />)
@@ -62,12 +72,11 @@ describe('WinLossCard', () => {
     expect(rowCells('Overall')).toEqual(['8', '4', '4', '50%'])
   })
 
-  it('shows "n/a" for a format with no decided matches instead of 0/0 or NaN', () => {
+  it('renders a null win rate as "n/a" rather than 0%', () => {
     useGetApiV1PlayersCodeResultsSummary.mockReturnValue({
-      data: {
-        singles: [{ period: '2026-01', wins: 2, losses: 1 }],
-        doubles: [],
-      },
+      // "n/a" and "0%" are different claims, and the server decides which — a null winRate means
+      // nothing was decided, so the card must not turn it into a zero.
+      data: summary(totals(3, 2, 1, 67), totals(0, 0, 0, null), totals(3, 2, 1, 67)),
       isLoading: false,
     })
     render(<WinLossCard code="K7Q2MX" />)

@@ -119,14 +119,76 @@ data class OpponentSummary(
 )
 
 /**
- * A player's win–loss record over time (#276), aggregated server-side so it's independent of how
- * match history is listed/paginated. [singles] and [doubles] each hold one bucket per calendar month
- * that has a decided match (a recorded winner), oldest first. MIXED_DOUBLES counts as doubles.
+ * A player's win–loss record (#276), aggregated server-side so it is independent of how match history is
+ * listed or paginated — and, since #845, **fully assembled**: every figure the card renders is computed
+ * here, so the client presents rather than calculates.
+ *
+ * [singles]/[doubles]/[overall] cover every decided match (a recorded winner). [opponentBands] is a
+ * narrower cut — **singles only, and rated matches only** — because classifying an opponent needs both
+ * sides' band *at match time*, which exists only once a match has been rated. Its counts therefore do not
+ * add up to [singles], by design; the UI states both limits rather than implying a discrepancy.
  */
 @Serializable
 data class PlayerResultsSummary(
-    val singles: List<ResultsBucket>,
-    val doubles: List<ResultsBucket>,
+    val singles: ResultsTotals,
+    val doubles: ResultsTotals,
+    val overall: ResultsTotals,
+    /** One entry per [OpponentBand], always all three, in SAME → HIGHER → LOWER order. */
+    val opponentBands: List<OpponentBandSeries>,
+    /** How many trailing months [OpponentBandSeries.monthly] covers, so the UI can label the window. */
+    val monthsWindow: Int,
+    /**
+     * The largest single-month total across every relation — the **shared y-scale** for the sparklines.
+     * Computed here because scaling each panel to its own max would draw 8 matches and 2 the same height
+     * and invert the comparison the layout exists to enable.
+     */
+    val monthlyMax: Int,
+)
+
+/** Finished win–loss figures for one cut of a player's matches (#845): nothing left for the UI to derive. */
+@Serializable
+data class ResultsTotals(
+    val played: Int,
+    val wins: Int,
+    val losses: Int,
+    /**
+     * Whole-percent win rate, or **null** when nothing is decided — the UI renders null as "n/a" rather
+     * than branching on a zero denominator itself.
+     */
+    val winRate: Int?,
+)
+
+/**
+ * The viewed player's band at match time versus their opponent's (#845). Distinct from
+ * `contract.BandRelation`, which classifies a *result* by who won (EQUAL/FAVORITE/UPSET) — this
+ * classifies the *matchup* from the viewed player's side, regardless of outcome.
+ */
+@Serializable
+enum class OpponentBand {
+    /** Opponent in the same band. */
+    SAME,
+
+    /** Opponent in a higher band than the viewed player. */
+    HIGHER,
+
+    /** Opponent in a lower band. */
+    LOWER,
+}
+
+/**
+ * One band relation, carrying both of its visualisations (#845): the totals behind its donut segments and
+ * the monthly series behind its sparkline. Bundled per relation so the client maps one object to one
+ * panel and reshapes nothing.
+ */
+@Serializable
+data class OpponentBandSeries(
+    val relation: OpponentBand,
+    val totals: ResultsTotals,
+    /**
+     * Trailing months, oldest first, **gap-filled** — a month with no play is present with zeroes rather
+     * than absent, so an absence renders as a flat gap instead of silently compressing the timeline.
+     */
+    val monthly: List<ResultsBucket>,
 )
 
 /** Win/loss counts for one calendar month ([period] = "yyyy-MM"), from the viewed player's perspective. */
