@@ -431,6 +431,20 @@ class EventFinalizeAwarder(
     }
 
     /**
+     * One side's share of a match's per-set payout: who, how much, and the matchup from **their**
+     * perspective (#862).
+     *
+     * Bundled rather than passed as three parameters because `awardSide` sits at detekt's parameter
+     * ceiling — and because these three genuinely travel together: there is no case for a side without its
+     * points, or points without the matchup that produced them.
+     */
+    private data class SidePayout(
+        val side: MatchSide,
+        val teamPoints: Int,
+        val matchup: Matchup,
+    )
+
+    /**
      * The two band strings the calculator consumed for one side of a match (#862), recorded on the award so
      * its derivation is reproducible rather than reconstructed. Null for placement awards, which have no
      * matchup.
@@ -484,28 +498,26 @@ class EventFinalizeAwarder(
         ctx: AwardContext,
     ): Int {
         var written = 0
-        val sides =
+        val payouts =
             listOf(
-                Triple(first = match.team1, second = points.team1, third = matchup),
-                Triple(first = match.team2, second = points.team2, third = matchup.flipped()),
+                SidePayout(side = match.team1, teamPoints = points.team1, matchup = matchup),
+                SidePayout(side = match.team2, teamPoints = points.team2, matchup = matchup.flipped()),
             )
-        sides.forEach { (side, teamPoints, perspective) ->
-            written += awardSide(event = event, match = match, side = side, teamPoints = teamPoints, ctx = ctx, matchup = perspective)
+        payouts.forEach { payout ->
+            written += awardSide(event = event, match = match, payout = payout, ctx = ctx)
         }
         return written
     }
 
-    /** Award [teamPoints] to every member of [side], each tagged with their own band + sex. Returns rows written. */
+    /** Award [payout] to every member of its side, each tagged with their own band + sex. Returns rows written. */
     private fun awardSide(
         event: Event,
         match: Match,
-        side: MatchSide,
-        teamPoints: Int,
+        payout: SidePayout,
         ctx: AwardContext,
-        matchup: Matchup? = null,
     ): Int {
         var written = 0
-        side.userIds.forEach { userId ->
+        payout.side.userIds.forEach { userId ->
             val band = ctx.bands[userId]?.currentLevel ?: return@forEach
             awards.award(
                 write =
@@ -513,7 +525,7 @@ class EventFinalizeAwarder(
                         event = event,
                         matchId = match.id,
                         userId = userId,
-                        points = BigDecimal(teamPoints),
+                        points = BigDecimal(payout.teamPoints),
                         band = band,
                         sex = ctx.sexes.getOrDefault(key = userId, defaultValue = UNSPECIFIED_SEX),
                         pointClass = ctx.pointClass,
@@ -522,7 +534,7 @@ class EventFinalizeAwarder(
                         grantedBy = ctx.grantedBy,
                         now = ctx.now,
                         scheduleVersion = ctx.scheduleVersion,
-                        matchup = matchup,
+                        matchup = payout.matchup,
                     ),
             )
             audit.record(
@@ -532,7 +544,7 @@ class EventFinalizeAwarder(
                         matchId = match.id,
                         matchPublicCode = match.publicCode,
                         userId = userId,
-                        points = teamPoints,
+                        points = payout.teamPoints,
                         band = band,
                         grantedBy = ctx.grantedBy,
                         validFrom = ctx.validFrom,
