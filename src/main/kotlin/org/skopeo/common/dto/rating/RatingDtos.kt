@@ -48,6 +48,20 @@ data class RatingHistoryResponse(
     // Per-set calculation steps (#110); empty for v1/initial/pre-#110 rows.
     val setBreakdown: List<SetBreakdownResponse> = emptyList(),
     val calculatedAt: String,
+    /**
+     * The public code of the account this entry was recorded against (#853). Normally the viewed player's
+     * own; for an entry inherited from an account merged into them (#643) it is that account's code.
+     * Null only when the account could not be resolved.
+     */
+    val sourcePublicCode: String? = null,
+    /**
+     * True when this entry came from an account merged into the viewed player (#853).
+     *
+     * Load-bearing, not decorative: the two trajectories do **not** chain. The merged-away account ended
+     * at its own last rating and the survivor keeps its own, so joining them into one line would draw a
+     * band change that never happened to the person. Only the survivor's series is current.
+     */
+    val fromMergedAccount: Boolean = false,
 )
 
 @Serializable

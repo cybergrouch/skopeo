@@ -6287,6 +6287,20 @@ components:
         calculatedAt:
           type: string
           format: date-time
+        sourcePublicCode:
+          type: string
+          nullable: true
+          description: >-
+            The public code of the account this entry was recorded against (#853). Normally the viewed
+            player's own; for an entry inherited from an account merged into them (#643) it is that
+            account's code. Null only when the account could not be resolved.
+        fromMergedAccount:
+          type: boolean
+          description: >-
+            True when this entry came from an account merged into the viewed player (#853). Load-bearing
+            rather than decorative — the merged-away account's trajectory ended at its own last rating
+            while the survivor keeps its own, so the two series must not be joined into one line: that
+            would draw a band change that never happened to the person.
 
     PendingAssessmentResponse:
       type: object

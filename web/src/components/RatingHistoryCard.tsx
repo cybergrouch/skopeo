@@ -189,6 +189,15 @@ export function RatingHistoryCard({
                         row that had just expanded underneath it. The card carries one trigger in its
                         header instead. See WEB_UI_ARCHITECTURE.md. */}
                     <div className="text-muted-foreground">{`NTRP ${prevBand} → ${newBand}`}</div>
+                    {/* Attributed to the account it came from (#853), not merely flagged "pre-merge": a
+                        merge chain can contribute more than one prior trajectory, and they overlap in
+                        time, so the reader needs to know WHICH account rather than just "an older one". */}
+                    {entry.fromMergedAccount ? (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        From merged account{" "}
+                        <span className="font-medium">{entry.sourcePublicCode ?? "unknown"}</span>
+                      </div>
+                    ) : null}
                   </>
                 );
                 return (

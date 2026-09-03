@@ -1137,4 +1137,103 @@ class PlayerServiceTest {
         users.deactivate(id = gone.id)
         service.eventHistory(code = gone.publicCode).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
+
+    @Test
+    fun `band split counts a merged-away account's rated singles for the survivor (#853)`() {
+        val survivor = newUser(uid = "surv", names = display(name = "Survivor"))
+        val retired = newUser(uid = "ret", names = display(name = "Retired"))
+        val peer = newUser(uid = "p", names = display(name = "Peer"))
+
+        // Played under the retired account, at 4.0 against a 4.0 peer, and rated.
+        val before = fixture(u1 = retired.id, u2 = peer.id, date = LocalDate.of(2026, 1, 5))
+        decide(match = before, winnerTeamId = before.team1.teamId, recordedBy = retired.id)
+        matches.markRated(matchId = before.id, ratedAt = LocalDateTime.now(), ratedBy = retired.id)
+        history(userId = retired.id, matchId = before.id, previousLevel = "4.0")
+        history(userId = peer.id, matchId = before.id, previousLevel = "4.0")
+
+        // The merge moves the team membership onto the survivor but deliberately leaves the rating
+        // history on the retired account (#643) — which is precisely what used to lose the match.
+        users.mergeAccounts(retiredId = retired.id, survivorId = survivor.id, transferLogin = false)
+
+        val summary = service.resultsSummary(code = survivor.publicCode).shouldBeRight()
+
+        summary.singles shouldBe ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
+        // Before #853 this was played = 0: the at-match band was keyed by the retired id while the team
+        // named the survivor, so the lookup missed and the match was dropped with no trace.
+        summary.opponentBands.associateBy { it.relation }.getValue(key = OpponentBand.SAME).totals shouldBe
+            ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
+    }
+
+    @Test
+    fun `band split still classifies a match whose opponent was later merged (#853)`() {
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        val survivor = newUser(uid = "surv", names = display(name = "Survivor"))
+        val retired = newUser(uid = "ret", names = display(name = "Retired"))
+
+        // Ana played the retired account while it was still the live one; it was a band above her.
+        val match = fixture(u1 = ana.id, u2 = retired.id, date = LocalDate.of(2026, 1, 6))
+        decide(match = match, winnerTeamId = match.team1.teamId, recordedBy = ana.id)
+        matches.markRated(matchId = match.id, ratedAt = LocalDateTime.now(), ratedBy = ana.id)
+        history(userId = ana.id, matchId = match.id, previousLevel = "4.0")
+        history(userId = retired.id, matchId = match.id, previousLevel = "4.5")
+
+        users.mergeAccounts(retiredId = retired.id, survivorId = survivor.id, transferLogin = false)
+
+        // A merge elsewhere must not silently remove a match from an uninvolved player's own chart: the
+        // orphaned history row breaks BOTH sides, so 25 players were affected by 11 merges.
+        val summary = service.resultsSummary(code = ana.publicCode).shouldBeRight()
+        summary.opponentBands.associateBy { it.relation }.getValue(key = OpponentBand.HIGHER).totals shouldBe
+            ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
+    }
+
+    @Test
+    fun `alias resolution is transitive across a merge chain (#853)`() {
+        val first = newUser(uid = "first", names = display(name = "First"))
+        val middle = newUser(uid = "middle", names = display(name = "Middle"))
+        val last = newUser(uid = "last", names = display(name = "Last"))
+        val peer = newUser(uid = "p", names = display(name = "Peer"))
+
+        val match = fixture(u1 = first.id, u2 = peer.id, date = LocalDate.of(2026, 1, 7))
+        decide(match = match, winnerTeamId = match.team1.teamId, recordedBy = first.id)
+        matches.markRated(matchId = match.id, ratedAt = LocalDateTime.now(), ratedBy = first.id)
+        history(userId = first.id, matchId = match.id, previousLevel = "3.5")
+        history(userId = peer.id, matchId = match.id, previousLevel = "3.5")
+
+        // first -> middle -> last. This chain shape exists in production (6GNWA6 -> P2W8YG -> 1FDXVB),
+        // and a single-hop resolution from `last` finds `middle` but never `first`.
+        users.mergeAccounts(retiredId = first.id, survivorId = middle.id, transferLogin = false)
+        users.mergeAccounts(retiredId = middle.id, survivorId = last.id, transferLogin = false)
+
+        val summary = service.resultsSummary(code = last.publicCode).shouldBeRight()
+        summary.singles shouldBe ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
+        summary.opponentBands.associateBy { it.relation }.getValue(key = OpponentBand.SAME).totals shouldBe
+            ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
+    }
+
+    @Test
+    fun `rating history includes a merged-away account's entries, attributed to it (#853)`() {
+        newAdmin(uid = "root")
+        val survivor = newUser(uid = "surv", names = display(name = "Survivor"))
+        val retired = newUser(uid = "ret", names = display(name = "Retired"))
+        val peer = newUser(uid = "p", names = display(name = "Peer"))
+
+        val underRetired = fixture(u1 = retired.id, u2 = peer.id, date = LocalDate.of(2026, 1, 5))
+        matches.markRated(matchId = underRetired.id, ratedAt = LocalDateTime.now(), ratedBy = retired.id)
+        history(userId = retired.id, matchId = underRetired.id, previousLevel = "3.5")
+
+        val underSurvivor = fixture(u1 = survivor.id, u2 = peer.id, date = LocalDate.of(2026, 2, 5))
+        matches.markRated(matchId = underSurvivor.id, ratedAt = LocalDateTime.now(), ratedBy = survivor.id)
+        history(userId = survivor.id, matchId = underSurvivor.id, previousLevel = "4.0")
+
+        users.mergeAccounts(retiredId = retired.id, survivorId = survivor.id, transferLogin = false)
+
+        val entries = service.ratingHistory(token = token(uid = "root"), code = survivor.publicCode).shouldBeRight()
+
+        entries.size shouldBe 2
+        val bySource = entries.associateBy { it.sourcePublicCode }
+        // Attributed to the account it came from, not merely flagged pre-merge: a chain can contribute
+        // more than one prior trajectory, and they overlap in time.
+        bySource.getValue(key = retired.publicCode).fromMergedAccount shouldBe true
+        bySource.getValue(key = survivor.publicCode).fromMergedAccount shouldBe false
+    }
 }

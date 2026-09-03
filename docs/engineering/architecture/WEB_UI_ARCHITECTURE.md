@@ -586,6 +586,25 @@ cannot tell two shades apart cannot tell which arc to click either.
   classifying an opponent needs both bands as they stood at the match. Its counts therefore do *not* sum to
   the Singles row, **by design**, and the caption states both exclusions. Unexplained, the gap reads as a bug.
 
+### One line per source account (#853)
+
+A player whose duplicate accounts were merged (#643) has history from **several** accounts. `RatingHistoryResponse`
+carries `sourcePublicCode` and `fromMergedAccount` per entry, and the chart draws **one step line per
+account** on shared axes, named in a legend by real public code with the survivor marked *current account*.
+
+Three consequences that are easy to get wrong:
+
+- **Only the survivor's line carries forward to today.** The general rule — a band you still hold is not
+  history that stopped — is exactly false for a retired account, whose band stopped being current at the merge.
+- **The series overlap.** They are not *n* segments of one timeline. Duplicate accounts exist because someone
+  played under both at once, so a single line with breaks cannot express it; two production merges have the
+  retired range nested inside the survivor's.
+- **A one-entry series is a marker, not a line.** Two merged accounts in production hold exactly one rating
+  row. A band at a date has no duration, and a zero-length path renders as nothing at all.
+
+The legend appears **only** when more than one account contributed, so the single-account case — almost
+every player — renders exactly as it did before.
+
 ### Sloped lines would be a lie
 
 The band chart uses **steps** — horizontal runs joined by vertical jumps — because a band is a discrete state

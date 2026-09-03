@@ -166,10 +166,11 @@ class PlayerService(
             // #622: unprivileged viewers of a hidden history get an empty, `hidden`-flagged page (enforced
             // here so the API never leaks the rows); the owner and elevated roles fall through to the real one.
             hiddenMatchHistoryPageOrNull(target = user, token = token)?.let { return@either it }
-            // A canonical account's history also surfaces its disabled duplicates' matches (#124,
-            // display-only — ratings are never consolidated). Each match is oriented from whichever of
-            // these "self" ids actually played it.
-            val selfIds = (listOf(element = user.id) + users.findDuplicatesOf(canonicalId = user.id).map { it.toDomain().id }).toSet()
+            // A canonical account's history also surfaces its duplicates' and merged-away accounts'
+            // matches (#124/#643, display-only — ratings are never consolidated). Each match is oriented
+            // from whichever of these "self" ids actually played it. Transitive since #853: merges chain,
+            // and one hop from the far end of a chain misses the first account.
+            val selfIds = users.aliasIdsOf(canonicalId = user.id)
             val played =
                 selfIds
                     .flatMap { matches.listByUser(userId = it) }
@@ -266,7 +267,7 @@ class PlayerService(
     fun resultsSummary(code: String): Either<ServiceError, PlayerResultsSummary> =
         either {
             val user = resolve(code = code).bind()
-            val selfIds = (listOf(element = user.id) + users.findDuplicatesOf(canonicalId = user.id).map { it.toDomain().id }).toSet()
+            val selfIds = users.aliasIdsOf(canonicalId = user.id)
             val decided =
                 selfIds
                     .flatMap { matches.listByUser(userId = it) }
@@ -336,7 +337,14 @@ class PlayerService(
             val user = resolve(code = code).bind()
             // Everyone who passes the gate above is a raw-rating viewer, so reveal the raw NTRP values —
             // otherwise toResponse() defaults to nulling them and the admin sees bands only (#654).
-            ratings.historyByUser(userId = user.id).map { it.toResponse(revealRawValue = true) }
+            // Includes accounts merged into this one (#853); see RatingAssembler.historyWithProvenance.
+            ratings.historyWithProvenance(canonicalId = user.id).map {
+                it.entry.toResponse(
+                    revealRawValue = true,
+                    sourcePublicCode = it.sourcePublicCode,
+                    fromMergedAccount = it.fromMergedAccount,
+                )
+            }
         }
 
     /**
@@ -556,13 +564,26 @@ class PlayerService(
     private fun atMatchRatings(
         ratedMatchIds: List<UUID>,
         showRaw: Boolean,
-    ): Map<UUID?, AtMatchRatings> =
-        ratings.historyForMatches(matchIds = ratedMatchIds).groupBy { it.matchId }.mapValues { (_, rows) ->
+    ): Map<UUID?, AtMatchRatings> {
+        val rows = ratings.historyForMatches(matchIds = ratedMatchIds)
+        // A history row is keyed by whoever the player was AT THE MATCH (#853). A merge (#643) moves
+        // participation onto the survivor but deliberately leaves rating data behind, so the team now
+        // names the survivor while the row still names the retired account: a lookup by the current
+        // participant misses, and the match vanishes from anything needing an at-match band — silently,
+        // because the caller can only treat a missing band as "not classifiable". Normalising the keys up
+        // to the account the records now belong to makes the lookup work from either side, and repairs
+        // already-merged accounts with no migration.
+        val canonicalOf = users.canonicalIdsFor(ids = rows.map { it.userId })
+
+        fun key(userId: UUID): UUID = canonicalOf[userId] ?: userId
+
+        return rows.groupBy { it.matchId }.mapValues { (_, matchRows) ->
             AtMatchRatings(
-                levels = rows.associate { it.userId to it.previousLevel },
-                raw = if (showRaw) rows.associate { it.userId to it.previousRating.toPlainString() } else null,
+                levels = matchRows.associate { key(userId = it.userId) to it.previousLevel },
+                raw = if (showRaw) matchRows.associate { key(userId = it.userId) to it.previousRating.toPlainString() } else null,
             )
         }
+    }
 }
 
 /** At-the-time NTRP for one match keyed by user id (#654): the band [levels] and the raw [raw] (raw-viewers only). */

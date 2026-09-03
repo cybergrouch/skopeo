@@ -27,7 +27,11 @@ fun UserRating.toResponse(revealRawValue: Boolean): UserRatingResponse =
         lastMatchDate = lastMatchDate?.toString(),
     )
 
-fun RatingHistoryEntry.toResponse(revealRawValue: Boolean = false): RatingHistoryResponse =
+fun RatingHistoryEntry.toResponse(
+    revealRawValue: Boolean = false,
+    sourcePublicCode: String? = null,
+    fromMergedAccount: Boolean = false,
+): RatingHistoryResponse =
     RatingHistoryResponse(
         id = id.toString(),
         matchId = matchId?.toString(),
@@ -45,6 +49,8 @@ fun RatingHistoryEntry.toResponse(revealRawValue: Boolean = false): RatingHistor
         smoothingFactor = if (revealRawValue) smoothingFactor?.toPlainString() else null,
         setBreakdown = if (revealRawValue) setBreakdown.map { it.toResponse() } else emptyList(),
         calculatedAt = calculatedAt.toString(),
+        sourcePublicCode = sourcePublicCode,
+        fromMergedAccount = fromMergedAccount,
     )
 
 fun PendingAssessment.toResponse(): PendingAssessmentResponse =

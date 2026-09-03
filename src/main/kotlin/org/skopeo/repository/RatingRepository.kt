@@ -103,6 +103,25 @@ class RatingRepository {
             UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single().toUserRatingEntity()
         }
 
+    /**
+     * History for several accounts at once (#853) — a survivor plus the accounts merged into it. Same
+     * filters and ordering as [historyByUser]; the caller separates the series by each row's `userId`,
+     * because the trajectories are distinct people-in-the-data even when they are one person.
+     */
+    fun historyByUsers(userIds: Collection<UUID>): List<RatingHistoryEntryEntity> =
+        transaction {
+            if (userIds.isEmpty()) {
+                return@transaction emptyList()
+            }
+            UserRatingHistoryTable
+                .selectAll()
+                .where { (UserRatingHistoryTable.userId inList userIds) and UserRatingHistoryTable.reversedAt.isNull() }
+                .orderBy(
+                    UserRatingHistoryTable.calculatedAt to SortOrder.DESC,
+                    UserRatingHistoryTable.completedAt to SortOrder.DESC_NULLS_LAST,
+                ).map { it.toRatingHistoryEntryEntity() }
+        }
+
     fun historyByUser(userId: UUID): List<RatingHistoryEntryEntity> =
         transaction {
             UserRatingHistoryTable
