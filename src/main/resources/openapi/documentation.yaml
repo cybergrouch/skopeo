@@ -5674,17 +5674,79 @@ components:
           description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
     PlayerResultsSummary:
       type: object
-      description: A player's win–loss record over time (#276), split into singles and doubles; one bucket per month, oldest first.
+      description: >-
+        A player's win–loss record (#276), fully assembled server-side (#845) so the client presents
+        rather than calculates. singles/doubles/overall cover every decided match; opponentBands is a
+        narrower cut — singles only, and rated matches only, since classifying an opponent needs both
+        sides' band as at the match. Its counts therefore do not sum to singles, by design.
       required:
         - singles
         - doubles
+        - overall
+        - opponentBands
+        - monthsWindow
+        - monthlyMax
       properties:
         singles:
-          type: array
-          items:
-            $ref: '#/components/schemas/ResultsBucket'
+          $ref: '#/components/schemas/ResultsTotals'
         doubles:
+          $ref: '#/components/schemas/ResultsTotals'
+        overall:
+          $ref: '#/components/schemas/ResultsTotals'
+        opponentBands:
           type: array
+          description: Always all three relations, in SAME → HIGHER → LOWER order.
+          items:
+            $ref: '#/components/schemas/OpponentBandSeries'
+        monthsWindow:
+          type: integer
+          description: How many trailing months each series' monthly array covers, so the UI can label the window.
+        monthlyMax:
+          type: integer
+          description: >-
+            Largest single-month total across every relation — the shared y-scale for the sparklines.
+            Computed server-side because per-panel scaling would draw 8 matches and 2 the same height.
+
+    ResultsTotals:
+      type: object
+      description: Finished win–loss figures for one cut of a player's matches (#845).
+      required:
+        - played
+        - wins
+        - losses
+      properties:
+        played:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        winRate:
+          type: integer
+          nullable: true
+          description: Whole-percent win rate, or null when nothing is decided — the UI renders null as "n/a".
+
+    OpponentBandSeries:
+      type: object
+      description: >-
+        One band relation with both its visualisations (#845): the totals behind its donut segments and
+        the monthly series behind its sparkline.
+      required:
+        - relation
+        - totals
+        - monthly
+      properties:
+        relation:
+          type: string
+          enum: [SAME, HIGHER, LOWER]
+          description: >-
+            The opponent's band at match time versus the viewed player's. Distinct from BandRelation,
+            which classifies a result by who won.
+        totals:
+          $ref: '#/components/schemas/ResultsTotals'
+        monthly:
+          type: array
+          description: Trailing months, oldest first, gap-filled — a month with no play is present with zeroes.
           items:
             $ref: '#/components/schemas/ResultsBucket'
 

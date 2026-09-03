@@ -11,6 +11,8 @@ import org.skopeo.common.dto.event.MyEventResponse
 import org.skopeo.common.dto.rating.RatingHistoryResponse
 import org.skopeo.common.dto.user.ActivePointsAwardResponse
 import org.skopeo.common.dto.user.MatchHistoryParticipant
+import org.skopeo.common.dto.user.OpponentBand
+import org.skopeo.common.dto.user.OpponentBandSeries
 import org.skopeo.common.dto.user.OpponentSummary
 import org.skopeo.common.dto.user.PlayerMatchHistoryEntry
 import org.skopeo.common.dto.user.PlayerMatchHistoryPage
@@ -19,6 +21,7 @@ import org.skopeo.common.dto.user.PlayerStandingResponse
 import org.skopeo.common.dto.user.PublicPlayerResponse
 import org.skopeo.common.dto.user.PublicRatingDto
 import org.skopeo.common.dto.user.ResultsBucket
+import org.skopeo.common.dto.user.ResultsTotals
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.event.toResponse
@@ -39,6 +42,7 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import java.time.LocalDateTime
+import java.time.YearMonth
 import java.util.UUID
 
 // Match-history pagination (#284): the default page size and the hard cap, mirroring player search (#232).
@@ -263,34 +267,35 @@ class PlayerService(
         either {
             val user = resolve(code = code).bind()
             val selfIds = (listOf(element = user.id) + users.findDuplicatesOf(canonicalId = user.id).map { it.toDomain().id }).toSet()
-            val rows =
+            val decided =
                 selfIds
                     .flatMap { matches.listByUser(userId = it) }
                     .map { it.toDomain() }
                     .distinctBy { it.id }
                     .filter { it.winnerTeamId != null }
-                    .map { match ->
-                        val self = participantOf(match = match, selfIds = selfIds)
-                        val selfTeamId = if (self in match.team1.userIds) match.team1.teamId else match.team2.teamId
-                        ResultRow(
-                            singles = match.matchFormat == TeamType.SINGLES,
-                            period = match.matchDate.toString().take(n = 7),
-                            won = match.winnerTeamId == selfTeamId,
-                        )
-                    }
 
-            // One ResultsBucket per month (oldest first) for a given format's rows.
-            fun bucketsOf(formatRows: List<ResultRow>): List<ResultsBucket> =
-                formatRows
-                    .groupBy { it.period }
-                    .toSortedMap()
-                    .map { (period, monthRows) ->
-                        ResultsBucket(period = period, wins = monthRows.count { it.won }, losses = monthRows.count { !it.won })
-                    }
+            val rows =
+                decided.map { match ->
+                    val self = participantOf(match = match, selfIds = selfIds)
+                    val selfTeamId = if (self in match.team1.userIds) match.team1.teamId else match.team2.teamId
+                    ResultRow(
+                        singles = match.matchFormat == TeamType.SINGLES,
+                        period = match.matchDate.toString().take(n = 7),
+                        won = match.winnerTeamId == selfTeamId,
+                    )
+                }
+            val singles = totalsOf(rows = rows.filter { it.singles })
+            val doubles = totalsOf(rows = rows.filterNot { it.singles })
+
+            val series = opponentBandSeries(decided = decided, selfIds = selfIds)
 
             PlayerResultsSummary(
-                singles = bucketsOf(formatRows = rows.filter { it.singles }),
-                doubles = bucketsOf(formatRows = rows.filterNot { it.singles }),
+                singles = singles,
+                doubles = doubles,
+                overall = totalsOf(rows = rows),
+                opponentBands = series,
+                monthsWindow = RESULTS_MONTHS_WINDOW,
+                monthlyMax = series.flatMap { it.monthly }.maxOfOrNull { it.wins + it.losses } ?: 0,
             )
         }
 
@@ -475,6 +480,75 @@ class PlayerService(
     }
 
     /**
+     * The three band-relation series behind the profile's donut and sparklines (#845).
+     *
+     * Restricted to **rated singles** deliberately: classifying a matchup needs both sides' band *as at
+     * the match*, which only exists once a match is rated, and a doubles result says too little about one
+     * player's level to classify at all. Its counts therefore do not reconcile with the singles totals —
+     * the UI states both limits rather than implying a discrepancy.
+     */
+    private fun opponentBandSeries(
+        decided: List<Match>,
+        selfIds: Set<UUID>,
+    ): List<OpponentBandSeries> {
+        // The band split needs BOTH sides' band as at the match, which only exists once a match has
+        // been rated (#845) — hence singles + rated only, stated in the UI rather than reconciled.
+        val ratedSingles = decided.filter { it.matchFormat == TeamType.SINGLES && it.ratedAt != null }
+        val bandsByMatch = atMatchRatings(ratedMatchIds = ratedSingles.map { it.id }, showRaw = false)
+        val classified =
+            ratedSingles.mapNotNull { match ->
+                val self = participantOf(match = match, selfIds = selfIds)
+                val opponent = (match.team1.userIds + match.team2.userIds).firstOrNull { it != self } ?: return@mapNotNull null
+                val levels = bandsByMatch[match.id]?.levels ?: return@mapNotNull null
+                // Either side missing a band cannot be classified; it falls outside this cut rather
+                // than into a catch-all bucket, which is what the rated-only caption already covers.
+                val selfBand = levels[self]?.toBigDecimalOrNull() ?: return@mapNotNull null
+                val opponentBand = levels[opponent]?.toBigDecimalOrNull() ?: return@mapNotNull null
+                val selfTeamId = if (self in match.team1.userIds) match.team1.teamId else match.team2.teamId
+                BandRow(
+                    relation =
+                        when {
+                            opponentBand.compareTo(other = selfBand) == 0 -> OpponentBand.SAME
+                            opponentBand > selfBand -> OpponentBand.HIGHER
+                            else -> OpponentBand.LOWER
+                        },
+                    period = match.matchDate.toString().take(n = 7),
+                    won = match.winnerTeamId == selfTeamId,
+                )
+            }
+
+        // A fixed trailing window of months, oldest first, every month present (#845): an absence must
+        // render as a gap, so the client is handed zeroes rather than left to infer missing periods.
+        val months = (0 until RESULTS_MONTHS_WINDOW).map { YearMonth.now().minusMonths(it.toLong()).toString() }.reversed()
+        val series =
+            OpponentBand.entries.map { relation ->
+                val forRelation = classified.filter { it.relation == relation }
+                OpponentBandSeries(
+                    relation = relation,
+                    totals = totalsOf(rows = forRelation.map { ResultRow(singles = true, period = it.period, won = it.won) }),
+                    monthly =
+                        months.map { period ->
+                            val inMonth = forRelation.filter { it.period == period }
+                            ResultsBucket(period = period, wins = inMonth.count { it.won }, losses = inMonth.count { !it.won })
+                        },
+                )
+            }
+
+        return OpponentBand.entries.map { relation ->
+            val forRelation = classified.filter { it.relation == relation }
+            OpponentBandSeries(
+                relation = relation,
+                totals = totalsOf(rows = forRelation.map { ResultRow(singles = true, period = it.period, won = it.won) }),
+                monthly =
+                    months.map { period ->
+                        val inMonth = forRelation.filter { it.period == period }
+                        ResultsBucket(period = period, wins = inMonth.count { it.won }, losses = inMonth.count { !it.won })
+                    },
+            )
+        }
+    }
+
+    /**
      * Per-match at-the-time rating lookups by user id (#654): the published [levels] band and — only when
      * the viewer may see raw ratings ([showRaw]) — the [raw] NTRP value. Both come from each match's
      * live rating-history rows; [raw] is null for a non-raw viewer so band-only leaves the API.
@@ -495,6 +569,33 @@ class PlayerService(
 private class AtMatchRatings(
     val levels: Map<UUID, String?>,
     val raw: Map<UUID, String>?,
+)
+
+/** The trailing window the results-summary sparklines cover (#845). */
+private const val RESULTS_MONTHS_WINDOW = 12
+
+/**
+ * Finished totals for a set of rows (#845). The win rate is **null** when nothing is decided rather than
+ * 0 — "n/a" and "0%" are different claims, and deciding that here keeps the branch out of the client.
+ */
+private fun totalsOf(rows: List<ResultRow>): ResultsTotals {
+    val wins = rows.count { it.won }
+    val losses = rows.size - wins
+    return ResultsTotals(
+        played = rows.size,
+        wins = wins,
+        losses = losses,
+        winRate = if (rows.isEmpty()) null else Math.round(wins * PERCENT / rows.size.toDouble()).toInt(),
+    )
+}
+
+private const val PERCENT = 100.0
+
+/** One rated singles match reduced to its band relation, month and outcome (#845). */
+private data class BandRow(
+    val relation: OpponentBand,
+    val period: String,
+    val won: Boolean,
 )
 
 /** One decided match reduced to what the results summary needs (#276): format, month, and outcome. */

@@ -15,7 +15,8 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.common.dto.user.ResultsBucket
+import org.skopeo.common.dto.user.OpponentBand
+import org.skopeo.common.dto.user.ResultsTotals
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
@@ -567,20 +568,97 @@ class PlayerServiceTest {
 
         val summary = service.resultsSummary(code = ana.publicCode.lowercase()).shouldBeRight()
 
-        summary.singles shouldBe
-            listOf(
-                ResultsBucket(period = "2026-01", wins = 1, losses = 1),
-                ResultsBucket(period = "2026-02", wins = 1, losses = 0),
-            )
-        summary.doubles shouldBe listOf(element = ResultsBucket(period = "2026-01", wins = 1, losses = 0))
+        // Finished totals now, not monthly buckets (#845): the server does the summing and the win rate.
+        summary.singles shouldBe ResultsTotals(played = 3, wins = 2, losses = 1, winRate = 67)
+        summary.doubles shouldBe ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
+        summary.overall shouldBe ResultsTotals(played = 4, wins = 3, losses = 1, winRate = 75)
+    }
+
+    @Test
+    fun `results summary classifies rated singles by the opponent's band at match time (#845)`() {
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        val peer = newUser(uid = "p", names = display(name = "Peer"))
+        val stronger = newUser(uid = "s", names = display(name = "Stronger"))
+        val weaker = newUser(uid = "w", names = display(name = "Weaker"))
+
+        // Ana was 4.0 at the time of each of these. One peer (4.0), one above (4.5), one below (3.5).
+        val samed = fixture(u1 = ana.id, u2 = peer.id, date = LocalDate.of(2026, 1, 5))
+        decide(match = samed, winnerTeamId = samed.team1.teamId, recordedBy = ana.id)
+        matches.markRated(matchId = samed.id, ratedAt = LocalDateTime.now(), ratedBy = ana.id)
+        history(userId = ana.id, matchId = samed.id, previousLevel = "4.0")
+        history(userId = peer.id, matchId = samed.id, previousLevel = "4.0")
+
+        val up = fixture(u1 = ana.id, u2 = stronger.id, date = LocalDate.of(2026, 1, 6))
+        decide(match = up, winnerTeamId = up.team2.teamId, recordedBy = ana.id)
+        matches.markRated(matchId = up.id, ratedAt = LocalDateTime.now(), ratedBy = ana.id)
+        history(userId = ana.id, matchId = up.id, previousLevel = "4.0")
+        history(userId = stronger.id, matchId = up.id, previousLevel = "4.5")
+
+        val down = fixture(u1 = ana.id, u2 = weaker.id, date = LocalDate.of(2026, 1, 7))
+        decide(match = down, winnerTeamId = down.team1.teamId, recordedBy = ana.id)
+        matches.markRated(matchId = down.id, ratedAt = LocalDateTime.now(), ratedBy = ana.id)
+        history(userId = ana.id, matchId = down.id, previousLevel = "4.0")
+        history(userId = weaker.id, matchId = down.id, previousLevel = "3.5")
+
+        val summary = service.resultsSummary(code = ana.publicCode).shouldBeRight()
+
+        val byRelation = summary.opponentBands.associateBy { it.relation }
+        byRelation.getValue(key = OpponentBand.SAME).totals shouldBe
+            ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
+        byRelation.getValue(key = OpponentBand.HIGHER).totals shouldBe
+            ResultsTotals(played = 1, wins = 0, losses = 1, winRate = 0)
+        byRelation.getValue(key = OpponentBand.LOWER).totals shouldBe
+            ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
+    }
+
+    @Test
+    fun `an unrated singles match counts in the totals but not in the band split (#845)`() {
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        val ben = newUser(uid = "b", names = display(name = "Ben"))
+        // Decided but never rated, so neither side has a band as at the match.
+        val match = fixture(u1 = ana.id, u2 = ben.id, date = LocalDate.of(2026, 1, 5))
+        decide(match = match, winnerTeamId = match.team1.teamId, recordedBy = ana.id)
+
+        val summary = service.resultsSummary(code = ana.publicCode).shouldBeRight()
+
+        // This asymmetry is the whole reason the UI states both limits instead of reconciling the two.
+        summary.singles shouldBe ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
+        summary.opponentBands.sumOf { it.totals.played } shouldBe 0
+    }
+
+    @Test
+    fun `the monthly series is gap-filled across a fixed window, with a shared max (#845)`() {
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        val peer = newUser(uid = "p", names = display(name = "Peer"))
+        val played = fixture(u1 = ana.id, u2 = peer.id, date = LocalDate.now())
+        decide(match = played, winnerTeamId = played.team1.teamId, recordedBy = ana.id)
+        matches.markRated(matchId = played.id, ratedAt = LocalDateTime.now(), ratedBy = ana.id)
+        history(userId = ana.id, matchId = played.id, previousLevel = "4.0")
+        history(userId = peer.id, matchId = played.id, previousLevel = "4.0")
+
+        val summary = service.resultsSummary(code = ana.publicCode).shouldBeRight()
+
+        // Every relation gets the same number of months, every month present — a quiet month is a zero
+        // row, not an absent one, so an absence renders as a gap rather than compressing the timeline.
+        summary.opponentBands.forEach { it.monthly shouldHaveSize summary.monthsWindow }
+        summary.opponentBands.forEach { series ->
+            series.monthly.map { it.period } shouldBe series.monthly.map { it.period }.sorted()
+        }
+        // Shared y-scale, computed server-side so panels cannot be scaled independently.
+        summary.monthlyMax shouldBe 1
     }
 
     @Test
     fun `results summary is empty for a player with no decided matches`() {
         val user = newUser(uid = "solo", names = display(name = "Solo"))
         val summary = service.resultsSummary(code = user.publicCode).shouldBeRight()
-        summary.singles.shouldBeEmpty()
-        summary.doubles.shouldBeEmpty()
+        // Zero played, and a NULL win rate rather than 0% — "n/a" and "0%" are different claims (#845).
+        summary.singles shouldBe ResultsTotals(played = 0, wins = 0, losses = 0, winRate = null)
+        summary.doubles shouldBe ResultsTotals(played = 0, wins = 0, losses = 0, winRate = null)
+        summary.overall shouldBe ResultsTotals(played = 0, wins = 0, losses = 0, winRate = null)
+        // Every relation is still present, so the client never has to handle a missing panel.
+        summary.opponentBands.map { it.relation } shouldBe listOf(OpponentBand.SAME, OpponentBand.HIGHER, OpponentBand.LOWER)
+        summary.monthlyMax shouldBe 0
     }
 
     @Test
@@ -747,8 +825,8 @@ class PlayerServiceTest {
 
         val summary = service.resultsSummary(code = canonical.publicCode).shouldBeRight()
 
-        summary.singles shouldBe listOf(element = ResultsBucket(period = "2026-01", wins = 1, losses = 0))
-        summary.doubles.shouldBeEmpty()
+        summary.singles shouldBe ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
+        summary.doubles shouldBe ResultsTotals(played = 0, wins = 0, losses = 0, winRate = null)
     }
 
     @Test
