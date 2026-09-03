@@ -608,6 +608,8 @@ class RankingPointServiceTest {
                 grantedBy = null,
                 awardedAt = LocalDateTime.now(),
                 eventId = eventId,
+                // v1 is what a freshly migrated database seeds (#862).
+                pointsScheduleVersion = 1,
             ),
     )
 
