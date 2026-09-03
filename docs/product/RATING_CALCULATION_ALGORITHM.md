@@ -763,6 +763,25 @@ Note this classification is a *different question* from `BandRelation` in the po
 labels a result by **who won** (`EQUAL`/`FAVORITE`/`UPSET`). The profile split labels the **matchup**,
 from the viewed player's side, regardless of outcome.
 
+#### A merged account's rating data stays where it is (#853)
+
+An admin merge (#643) moves *participation* — team memberships, event entries, memberships, seeding — onto
+the survivor, and deliberately leaves *rating* data behind: the survivor keeps its own current rating and
+ranking points, with no recompute.
+
+So a match played under a since-merged account has its team row on the survivor and its at-match band row
+still on the retired account. Reads therefore **resolve merge aliases at read time** rather than moving
+rows: the at-match band lookup normalises history keys up to the account the records now belong to, and
+rating history is read across the survivor plus every account transitively merged into it. Nothing is
+migrated, which also repairs accounts merged before this existed.
+
+**The trajectories do not chain, and must not be drawn as if they did.** Each account ended at its own last
+rating while the survivor keeps its own, so joining them would assert a band change that never happened to
+the person. Worse, they **overlap**: duplicate accounts arise precisely because someone plays under both at
+once, and in production two merge pairs have the retired account's date range nested inside the survivor's.
+The person genuinely held two ratings simultaneously. History entries are therefore attributed to their
+source account and rendered as separate series — never merged into one line.
+
 ---
 
 ## 9. Implementation Map

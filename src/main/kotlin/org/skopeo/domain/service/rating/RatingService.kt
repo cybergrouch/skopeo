@@ -88,11 +88,20 @@ class RatingService(
             requireUserExists(userId = userId).bind()
             val caller = requireSelfOrAdmin(token = token, userId = userId).bind()
             val revealRawValue = caller.canSeeRawRating()
-            val all = ratings.historyByUser(userId = userId)
+            // Includes the accounts merged into this one (#853), each entry tagged with its source. A
+            // survivor's history used to stop dead at the merge, because a merge moves participation but
+            // deliberately leaves rating data on the retired account.
+            val all = ratings.historyWithProvenance(canonicalId = userId)
             // Non-admins (incl. the owner) see band-jump entries only — a same-band change carries no
             // visible info once the raw values are hidden (#583 corollary).
-            val entries = if (revealRawValue) all else all.filter { it.levelChanged }
-            entries.map { it.toResponse(revealRawValue = revealRawValue) }
+            val entries = if (revealRawValue) all else all.filter { it.entry.levelChanged }
+            entries.map {
+                it.entry.toResponse(
+                    revealRawValue = revealRawValue,
+                    sourcePublicCode = it.sourcePublicCode,
+                    fromMergedAccount = it.fromMergedAccount,
+                )
+            }
         }
 
     /**

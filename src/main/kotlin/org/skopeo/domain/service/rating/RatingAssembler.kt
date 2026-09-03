@@ -10,13 +10,16 @@ import org.skopeo.domain.model.MatchRatingWrite
 import org.skopeo.domain.model.PreEventRating
 import org.skopeo.domain.model.RatingHistoryEntry
 import org.skopeo.domain.model.RatingHistoryWrite
+import org.skopeo.domain.model.SourcedRatingHistoryEntry
 import org.skopeo.domain.model.UserRating
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
+import org.skopeo.repository.UserRepository
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
+import org.skopeo.domain.mapper.entity.user.toDomain as toUserDomain
 
 /**
  * Domain-facing facade over [RatingRepository] (#633). The repository is now pure data access returning
@@ -33,6 +36,8 @@ import java.util.UUID
 class RatingAssembler(
     private val ratings: RatingRepository = RatingRepository(),
     private val matches: MatchRepository = MatchRepository(),
+    // Only for merge-alias resolution when reading history (#853); appended so existing callers are unaffected.
+    private val users: UserRepository = UserRepository(),
 ) {
     /** The user's ratings as a list (0 or 1) — the API surfaces a collection. */
     fun findByUser(userId: UUID): List<UserRating> {
@@ -83,6 +88,33 @@ class RatingAssembler(
     }
 
     fun historyByUser(userId: UUID): List<RatingHistoryEntry> = ratings.historyByUser(userId = userId).map { it.toDomain() }
+
+    /** History across a survivor and the accounts merged into it (#853), newest-first. */
+    fun historyByUsers(userIds: Collection<UUID>): List<RatingHistoryEntry> =
+        ratings.historyByUsers(userIds = userIds).map { it.toDomain() }
+
+    /**
+     * [canonicalId]'s full rating history including the accounts merged into it (#853), each entry tagged
+     * with the account it belongs to.
+     *
+     * Assembled here rather than in each caller because both history read paths — the owner's own
+     * (`RatingService.getHistory`) and the admin's by-code (`PlayerService.ratingHistory`) — need exactly
+     * this, and a survivor whose history silently stopped at the merge was the reported bug.
+     */
+    fun historyWithProvenance(canonicalId: UUID): List<SourcedRatingHistoryEntry> {
+        val aliasIds = users.aliasIdsOf(canonicalId = canonicalId)
+        // toUserDomain: both entity mappers expose `toDomain`, so the user one is imported aliased.
+        val codesById =
+            users.findAllByIds(ids = aliasIds.toList()).map { it.toUserDomain() }.associate { it.id to it.publicCode }
+        return historyByUsers(userIds = aliasIds).map { entry ->
+            SourcedRatingHistoryEntry(
+                entry = entry,
+                sourcePublicCode = codesById[entry.userId],
+                // The survivor's own series is the one that is still current; everything else ended at its merge.
+                fromMergedAccount = entry.userId != canonicalId,
+            )
+        }
+    }
 
     fun allHistory(): List<RatingHistoryEntry> = ratings.allHistory().map { it.toDomain() }
 

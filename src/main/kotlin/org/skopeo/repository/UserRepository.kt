@@ -369,6 +369,71 @@ class UserRepository {
             }
         }
 
+    /**
+     * Every id whose records belong to [canonicalId] — itself plus all accounts that point at it,
+     * **transitively** (#853).
+     *
+     * [findDuplicatesOf] is one hop, which is not enough: merges chain. Production already holds
+     * `6GNWA6 → P2W8YG → 1FDXVB`, and a single hop from the far end resolves the middle account but not
+     * the first, so any record still sitting on it is invisible. Walks down the `canonical_user_id`
+     * pointers a level at a time until nothing new appears; the visited set makes a cycle harmless rather
+     * than an infinite loop, since nothing in the schema forbids one.
+     */
+    fun aliasIdsOf(canonicalId: UUID): Set<UUID> =
+        transaction {
+            val seen = mutableSetOf(canonicalId)
+            var frontier = setOf(element = canonicalId)
+            while (frontier.isNotEmpty()) {
+                val next =
+                    UsersTable
+                        .select(columns = listOf(element = UsersTable.id))
+                        .where { UsersTable.canonicalUserId inList frontier }
+                        .map { it[UsersTable.id].value }
+                        .filter { seen.add(element = it) }
+                        .toSet()
+                frontier = next
+            }
+            seen
+        }
+
+    /**
+     * Resolve each of [ids] up to the account its records now belong to — the terminal survivor of its
+     * merge chain (#853). An id that was never merged maps to itself, so callers can normalise
+     * unconditionally.
+     *
+     * The direction matters: [aliasIdsOf] walks *down* from a known survivor, this walks *up* from
+     * arbitrary ids. Reading rating history needs the upward direction, because the ids on a match's
+     * history rows are whoever the players were **then**, not who they are now.
+     */
+    fun canonicalIdsFor(ids: Collection<UUID>): Map<UUID, UUID> =
+        transaction {
+            if (ids.isEmpty()) {
+                return@transaction emptyMap()
+            }
+            // One row per account that has a pointer at all; the walk below is in memory over that map,
+            // so a chain costs no extra round trips.
+            val parents =
+                UsersTable
+                    .select(columns = listOf(UsersTable.id, UsersTable.canonicalUserId))
+                    .where { UsersTable.canonicalUserId.isNotNull() }
+                    .associate { it[UsersTable.id].value to it[UsersTable.canonicalUserId]?.value }
+                    .filterValues { it != null }
+                    .mapValues { (_, parent) -> requireNotNull(value = parent) }
+            ids.toSet().associateWith { id ->
+                var current = id
+                val seen = mutableSetOf(current)
+                // Single-exit walk: stop at the end of the chain, or the moment a pointer revisits
+                // something already seen. Nothing in the schema forbids a cycle, so the visited set is
+                // what makes this terminate rather than spin.
+                var parent = parents[current]
+                while (parent != null && seen.add(element = parent)) {
+                    current = parent
+                    parent = parents[current]
+                }
+                current
+            }
+        }
+
     /** The disabled duplicates pointing at [canonicalId] (#124) — for the history merge and admin list. */
     fun findDuplicatesOf(canonicalId: UUID): List<UserAggregateEntity> =
         transaction {

@@ -50,12 +50,13 @@ function bandOf(level: string | null | undefined): number | null {
  * chart draws. The leading sample is the *previous* band of the oldest entry, so the player's first jump is
  * visible instead of starting mid-air; an initial assessment has no previous band and so contributes none.
  */
-function samplesOf(entries: RatingHistoryResponse[], today: string): Sample[] {
+function samplesOf(entries: RatingHistoryResponse[], today: string, carryToToday: boolean): Sample[] {
   const oldestFirst = [...entries].sort((a, b) => a.calculatedAt.localeCompare(b.calculatedAt))
   const samples: Sample[] = []
+  // Callers only ever pass a non-empty group, so there is no empty-input branch to guard here.
   const first = oldestFirst[0]
-  const firstPrevious = first ? bandOf(first.previousLevel) : null
-  if (first && firstPrevious != null) {
+  const firstPrevious = bandOf(first.previousLevel)
+  if (firstPrevious != null) {
     samples.push({ day: dayOf(first.calculatedAt), band: firstPrevious })
   }
   for (const entry of oldestFirst) {
@@ -66,14 +67,71 @@ function samplesOf(entries: RatingHistoryResponse[], today: string): Sample[] {
   }
   // A band the player still holds is not history that stopped — carry the last run forward to today, which
   // is what turns a lone entry into the horizontal line it should be rather than a single invisible point.
+  //
+  // Only for the account that is still current, though (#853). A merged-away account's band stopped being
+  // current at the merge, so carrying its run to today would claim it still holds that band.
   const last = samples[samples.length - 1]
-  if (last) {
+  if (last && carryToToday) {
     const now = dayOf(today)
     if (now > last.day) {
       samples.push({ day: now, band: last.band })
     }
   }
   return samples
+}
+
+/** One account's series: its own samples, its identity, and the colour that identifies it. */
+interface Series {
+  key: string
+  code: string | null
+  fromMergedAccount: boolean
+  samples: Sample[]
+  colour: string
+}
+
+/**
+ * Colour per series. The survivor takes `--chart-1` because it is the trajectory that leads to the
+ * player's current rating; merged-away accounts take the rest. The tokens also encode band relation in
+ * the opponent-band donut — a different card, so reuse is fine, but this chart's legend carries its own
+ * meaning rather than relying on one learned elsewhere.
+ */
+const SERIES_COLOURS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)']
+
+/**
+ * Split the history into one series per source account (#853).
+ *
+ * Grouping by account rather than by time is the whole point: the trajectories **overlap**. Duplicate
+ * accounts arise precisely because someone plays under both at once — in production two merge pairs have
+ * the retired account's range nested inside the survivor's — so a single line, however many breaks it has,
+ * cannot express it. The survivor is ordered first so it keeps the primary colour; the rest follow oldest
+ * first, so a given account's colour does not shuffle between renders.
+ */
+function seriesOf(entries: RatingHistoryResponse[], today: string): Series[] {
+  const groups = new Map<string, RatingHistoryResponse[]>()
+  for (const entry of entries) {
+    const key = entry.sourcePublicCode ?? ''
+    const bucket = groups.get(key)
+    if (bucket) bucket.push(entry)
+    else groups.set(key, [entry])
+  }
+  const built = [...groups.entries()].map(([key, rows]) => {
+    const fromMergedAccount = rows.every((row) => row.fromMergedAccount === true)
+    return {
+      key,
+      code: rows[0].sourcePublicCode ?? null,
+      fromMergedAccount,
+      samples: samplesOf(rows, today, !fromMergedAccount),
+      colour: '',
+    }
+  })
+  // Drop empty series first, so the sort key below can read samples[0] without a guard.
+  const drawable = built.filter((series) => series.samples.length > 0)
+  return [
+    ...drawable.filter((series) => !series.fromMergedAccount),
+    ...drawable
+      .filter((series) => series.fromMergedAccount)
+      .sort((a, b) => a.samples[0].day - b.samples[0].day),
+  ].map((series, index) => ({ ...series, colour: SERIES_COLOURS[index % SERIES_COLOURS.length] }))
 }
 
 /**
@@ -100,16 +158,20 @@ export function BandHistoryChart({
   today?: string
 }) {
   const now = today ?? new Date().toISOString().slice(0, 10)
-  const samples = samplesOf(entries, now)
-  if (samples.length === 0) {
+  const series = seriesOf(entries, now)
+  if (series.length === 0) {
     return null
   }
 
-  const bands = samples.map((s) => s.band)
+  // Shared axes across every series. Per-series scaling would make two accounts' bands incomparable,
+  // which defeats the reason they are drawn together.
+  const allSamples = series.flatMap((one) => one.samples)
+  const bands = allSamples.map((sample) => sample.band)
   const minBand = Math.min(...bands) - BAND_PADDING
   const maxBand = Math.max(...bands) + BAND_PADDING
-  const firstDay = samples[0].day
-  const lastDay = samples[samples.length - 1].day
+  const days = allSamples.map((sample) => sample.day)
+  const firstDay = Math.min(...days)
+  const lastDay = Math.max(...days)
   const spanDays = lastDay - firstDay
 
   const plotWidth = WIDTH - GUTTER_LEFT - GUTTER_RIGHT
@@ -117,30 +179,15 @@ export function BandHistoryChart({
   const right = WIDTH - GUTTER_RIGHT
   const y = (band: number) =>
     GUTTER_TOP + plotHeight - ((band - minBand) / (maxBand - minBand)) * plotHeight
-
-  // A run needs two endpoints to be drawn at all. When every sample lands on the same day — a player
-  // rated for the first time today, or two changes in one sitting — there is no time span to place them
-  // along, and scaling by date would collapse the whole chart onto one invisible point. Spread them
-  // evenly across the width instead: the ordering is still true, only the spacing is not to scale.
-  const xs =
-    spanDays === 0
-      ? samples.map((_, index) => GUTTER_LEFT + (index / Math.max(samples.length - 1, 1)) * plotWidth)
-      : samples.map((sample) => GUTTER_LEFT + ((sample.day - firstDay) / spanDays) * plotWidth)
-
-  const path =
-    samples.length === 1
-      ? // One band, one day: all that is known is the band held, so draw it as the full-width flat line
-        // it is rather than a dot at the origin.
-        `M ${GUTTER_LEFT} ${y(samples[0].band)} H ${right} V ${y(samples[0].band)}`
-      : samples
-          .map((sample, index) =>
-            index === 0 ? `M ${xs[index]} ${y(sample.band)}` : `H ${xs[index]} V ${y(sample.band)}`,
-          )
-          .join(' ')
+  // Only called when there IS a span. A zero span — everything on one day, e.g. a player rated for the
+  // first time today — would divide by zero, so both zero-span cases are handled in SeriesPath instead:
+  // a lone sample becomes a full-width flat line, several are spread evenly by position.
+  const x = (day: number) => GUTTER_LEFT + ((day - firstDay) / spanDays) * plotWidth
 
   // One gridline per band actually held — discrete data deserves a discrete axis, and there are only ever
   // a handful, so labelling every one costs nothing and beats interpolated tick marks.
   const heldBands = [...new Set(bands)].sort((a, b) => a - b)
+  const multipleAccounts = series.length > 1
 
   return (
     <div className="space-y-1">
@@ -168,13 +215,18 @@ export function BandHistoryChart({
             </text>
           </g>
         ))}
-        <path
-          d={path}
-          fill="none"
-          stroke="var(--chart-1)"
-          strokeWidth={1.6}
-          strokeLinejoin="round"
-        />
+        {series.map((one) => (
+          <SeriesPath
+            key={one.key}
+            series={one}
+            spanDays={spanDays}
+            x={x}
+            y={y}
+            left={GUTTER_LEFT}
+            right={right}
+            plotWidth={plotWidth}
+          />
+        ))}
         <text
           x={GUTTER_LEFT}
           y={HEIGHT - 4}
@@ -195,11 +247,86 @@ export function BandHistoryChart({
           {monthLabel(lastDay)}
         </text>
       </svg>
+      {multipleAccounts ? (
+        /* Only when there is more than one account. A single-account player — almost everyone — sees
+           exactly what they saw before (#853). */
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+          {series.map((one) => (
+            <li key={one.key} className="flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className="inline-block h-0.5 w-3 shrink-0"
+                style={{ background: one.colour }}
+              />
+              <span className="font-medium">{one.code ?? 'this account'}</span>
+              <span className="text-muted-foreground">
+                {one.fromMergedAccount ? 'merged in' : 'current account'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <p className="text-xs text-muted-foreground">
-        {heldBands.length === 1
-          ? 'One band held throughout.'
-          : `${heldBands.length} bands held over this period.`}
+        {multipleAccounts
+          ? 'Separate lines: ratings from merged accounts are not continuous with each other.'
+          : heldBands.length === 1
+            ? 'One band held throughout.'
+            : `${heldBands.length} bands held over this period.`}
       </p>
     </div>
   )
+}
+
+/**
+ * One account's line.
+ *
+ * A series with a single sample is drawn as a **marker, not a line** — a merged-away account with one
+ * rating (two exist in production) has a band at a date and no duration, and a zero-length path is simply
+ * invisible. Widening it into a run would invent a span that was never recorded.
+ */
+function SeriesPath({
+  series,
+  spanDays,
+  x,
+  y,
+  left,
+  right,
+  plotWidth,
+}: {
+  series: Series
+  spanDays: number
+  x: (day: number) => number
+  y: (band: number) => number
+  left: number
+  right: number
+  plotWidth: number
+}) {
+  const { samples, colour } = series
+  if (samples.length === 1) {
+    const only = samples[0]
+    // With no time span at all, the sole sample is the whole chart: draw it as the full-width flat line
+    // it is. Otherwise it is a moment inside a wider span, so it stays a point.
+    return spanDays === 0 ? (
+      <path
+        d={`M ${left} ${y(only.band)} H ${right} V ${y(only.band)}`}
+        fill="none"
+        stroke={colour}
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+      />
+    ) : (
+      <circle cx={x(only.day)} cy={y(only.band)} r={1.8} fill={colour} />
+    )
+  }
+  // Even spacing when several samples share one day: the ordering is still true, only the spacing is not.
+  const xs =
+    spanDays === 0
+      ? samples.map((_, index) => left + (index / Math.max(samples.length - 1, 1)) * plotWidth)
+      : samples.map((sample) => x(sample.day))
+  const path = samples
+    .map((sample, index) =>
+      index === 0 ? `M ${xs[index]} ${y(sample.band)}` : `H ${xs[index]} V ${y(sample.band)}`,
+    )
+    .join(' ')
+  return <path d={path} fill="none" stroke={colour} strokeWidth={1.6} strokeLinejoin="round" />
 }

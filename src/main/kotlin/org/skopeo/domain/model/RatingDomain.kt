@@ -89,6 +89,22 @@ data class RatingHistoryEntry(
 )
 
 /**
+ * One rating-history entry plus **which account it was recorded against** (#853).
+ *
+ * A merge (#643) moves participation onto the survivor but deliberately leaves rating data behind, so a
+ * survivor's history is the union of several accounts' series. Those series are *not* one trajectory: each
+ * ended at its own last rating, and joining them would assert band changes that never happened to the
+ * person. Carrying the provenance per entry is what lets a reader — and the chart — keep them apart.
+ */
+data class SourcedRatingHistoryEntry(
+    val entry: RatingHistoryEntry,
+    /** The public code of the account this entry belongs to; null if that account could not be resolved. */
+    val sourcePublicCode: String?,
+    /** True when the entry came from an account merged into the viewed player, not the survivor itself. */
+    val fromMergedAccount: Boolean,
+)
+
+/**
  * The calculator derivatives behind a single rating change (#89), captured at commit time (#97) so
  * the calculation can be shown faithfully later without recomputation. [dominance] is stored in the
  * pre-existing `dominance_factor` column.

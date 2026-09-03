@@ -195,4 +195,145 @@ describe('BandHistoryChart', () => {
     // put NaN in the path and blank the chart.
     expect(container).toBeEmptyDOMElement()
   })
+
+  describe('merged accounts (#853)', () => {
+    const paths = (c: HTMLElement) => Array.from(c.querySelectorAll('path'))
+    const strokes = (c: HTMLElement) => paths(c).map((p) => p.getAttribute('stroke'))
+
+    it('draws one line per source account, in distinct colours', () => {
+      const { container } = render(
+        <BandHistoryChart
+          today={TODAY}
+          entries={[
+            entry({ id: 's2', sourcePublicCode: 'QCST68', fromMergedAccount: false, previousLevel: '4.0', newLevel: '4.5', levelChanged: true, calculatedAt: '2026-08-20T12:00:00' }),
+            entry({ id: 's1', sourcePublicCode: 'QCST68', fromMergedAccount: false, previousLevel: '3.5', newLevel: '4.0', levelChanged: true, calculatedAt: '2026-07-06T12:00:00' }),
+            entry({ id: 'r2', sourcePublicCode: '9S9PJS', fromMergedAccount: true, previousLevel: '3.0', newLevel: '3.5', levelChanged: true, calculatedAt: '2026-07-26T12:00:00' }),
+            entry({ id: 'r1', sourcePublicCode: '9S9PJS', fromMergedAccount: true, previousLevel: '3.0', newLevel: '3.0', calculatedAt: '2026-07-20T12:00:00' }),
+          ]}
+        />,
+      )
+      // The survivor takes the primary colour — it is the trajectory leading to the current rating.
+      expect(strokes(container)).toEqual(['var(--chart-1)', 'var(--chart-2)'])
+    })
+
+    it('carries only the survivor to today, never a merged account', () => {
+      const { container } = render(
+        <BandHistoryChart
+          today={TODAY}
+          entries={[
+            entry({ id: 's1', sourcePublicCode: 'QCST68', fromMergedAccount: false, previousLevel: '4.0', newLevel: '4.5', levelChanged: true, calculatedAt: '2026-08-20T12:00:00' }),
+            entry({ id: 'r2', sourcePublicCode: '9S9PJS', fromMergedAccount: true, previousLevel: '3.0', newLevel: '3.5', levelChanged: true, calculatedAt: '2026-07-26T12:00:00' }),
+            entry({ id: 'r1', sourcePublicCode: '9S9PJS', fromMergedAccount: true, previousLevel: '3.0', newLevel: '3.0', calculatedAt: '2026-07-20T12:00:00' }),
+          ]}
+        />,
+      )
+      const [survivor, merged] = paths(container).map((p) => p.getAttribute('d') ?? '')
+      const lastX = (d: string) => {
+        const xs = [...d.matchAll(/[MH] ([\d.]+)/g)].map((m) => Number(m[1]))
+        return Math.max(...xs)
+      }
+      // A merged account's band stopped being current at the merge; running its line to today would
+      // claim it still holds that band. The survivor's does reach the right edge.
+      expect(lastX(survivor)).toBeCloseTo(314, 5)
+      expect(lastX(merged)).toBeLessThan(314)
+    })
+
+    it('renders overlapping ranges as concurrent lines rather than flattening them', () => {
+      const { container } = render(
+        <BandHistoryChart
+          today={TODAY}
+          entries={[
+            // The retired range is nested INSIDE the survivor's — the shape two production merges have.
+            entry({ id: 's2', sourcePublicCode: 'QCST68', fromMergedAccount: false, previousLevel: '4.0', newLevel: '4.5', levelChanged: true, calculatedAt: '2026-09-01T12:00:00' }),
+            entry({ id: 's1', sourcePublicCode: 'QCST68', fromMergedAccount: false, previousLevel: '3.5', newLevel: '4.0', levelChanged: true, calculatedAt: '2026-07-06T12:00:00' }),
+            entry({ id: 'r2', sourcePublicCode: '9S9PJS', fromMergedAccount: true, previousLevel: '3.0', newLevel: '3.0', calculatedAt: '2026-07-26T12:00:00' }),
+            entry({ id: 'r1', sourcePublicCode: '9S9PJS', fromMergedAccount: true, previousLevel: '3.0', newLevel: '3.0', calculatedAt: '2026-07-20T12:00:00' }),
+          ]}
+        />,
+      )
+      // Two lines, both present over the same period — the person genuinely held two ratings at once,
+      // and one line with breaks cannot say that.
+      expect(paths(container)).toHaveLength(2)
+      expect(screen.getByText(/ratings from merged accounts are not continuous/)).toBeInTheDocument()
+    })
+
+    it('draws a merged account with a single rating as a marker, not an invisible line', () => {
+      const { container } = render(
+        <BandHistoryChart
+          today={TODAY}
+          entries={[
+            entry({ id: 's1', sourcePublicCode: 'W75HMR', fromMergedAccount: false, previousLevel: '4.0', newLevel: '4.5', levelChanged: true, calculatedAt: '2026-08-27T12:00:00' }),
+            // AVE9MM has exactly one history row in production. A zero-length path renders as nothing.
+            entry({ id: 'r1', sourcePublicCode: 'AVE9MM', fromMergedAccount: true, previousLevel: null, newLevel: '3.5', calculatedAt: '2026-08-13T12:00:00' }),
+          ]}
+        />,
+      )
+      const marker = container.querySelector('circle')
+      expect(marker).toBeInTheDocument()
+      expect(marker).toHaveAttribute('fill', 'var(--chart-2)')
+    })
+
+    it('names each account in the legend with its role', () => {
+      render(
+        <BandHistoryChart
+          today={TODAY}
+          entries={[
+            entry({ id: 's1', sourcePublicCode: 'QCST68', fromMergedAccount: false, previousLevel: '4.0', newLevel: '4.5', levelChanged: true, calculatedAt: '2026-08-20T12:00:00' }),
+            entry({ id: 'r1', sourcePublicCode: '9S9PJS', fromMergedAccount: true, previousLevel: '3.0', newLevel: '3.5', levelChanged: true, calculatedAt: '2026-07-26T12:00:00' }),
+          ]}
+        />,
+      )
+      // Real public codes, with the survivor unmistakable.
+      expect(screen.getByText('QCST68')).toBeInTheDocument()
+      expect(screen.getByText('current account')).toBeInTheDocument()
+      expect(screen.getByText('9S9PJS')).toBeInTheDocument()
+      expect(screen.getByText('merged in')).toBeInTheDocument()
+    })
+
+    it('handles a chain of three accounts', () => {
+      const { container } = render(
+        <BandHistoryChart
+          today={TODAY}
+          entries={[
+            entry({ id: 'c', sourcePublicCode: '1FDXVB', fromMergedAccount: false, previousLevel: '4.0', newLevel: '4.5', levelChanged: true, calculatedAt: '2026-09-01T12:00:00' }),
+            entry({ id: 'b2', sourcePublicCode: 'P2W8YG', fromMergedAccount: true, previousLevel: '3.5', newLevel: '4.0', levelChanged: true, calculatedAt: '2026-08-25T12:00:00' }),
+            entry({ id: 'b1', sourcePublicCode: 'P2W8YG', fromMergedAccount: true, previousLevel: '3.5', newLevel: '3.5', calculatedAt: '2026-08-20T12:00:00' }),
+            entry({ id: 'a2', sourcePublicCode: '6GNWA6', fromMergedAccount: true, previousLevel: '3.0', newLevel: '3.5', levelChanged: true, calculatedAt: '2026-07-10T12:00:00' }),
+            entry({ id: 'a1', sourcePublicCode: '6GNWA6', fromMergedAccount: true, previousLevel: '3.0', newLevel: '3.0', calculatedAt: '2026-07-01T12:00:00' }),
+          ]}
+        />,
+      )
+      // 6GNWA6 -> P2W8YG -> 1FDXVB, which exists in production: three trajectories, three lines.
+      expect(paths(container)).toHaveLength(3)
+      expect(strokes(container)).toEqual(['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)'])
+    })
+
+    it('falls back to a neutral label when an account code could not be resolved', () => {
+      render(
+        <BandHistoryChart
+          today={TODAY}
+          entries={[
+            // sourcePublicCode is nullable: the server could not resolve the account. The legend still
+            // has to name the line, or the reader sees a colour with no referent.
+            entry({ id: 's1', sourcePublicCode: null, fromMergedAccount: false, previousLevel: '4.0', newLevel: '4.5', levelChanged: true, calculatedAt: '2026-08-20T12:00:00' }),
+            entry({ id: 'r1', sourcePublicCode: '9S9PJS', fromMergedAccount: true, previousLevel: '3.0', newLevel: '3.5', levelChanged: true, calculatedAt: '2026-07-26T12:00:00' }),
+          ]}
+        />,
+      )
+      expect(screen.getByText('this account')).toBeInTheDocument()
+      expect(screen.getByText('9S9PJS')).toBeInTheDocument()
+    })
+
+    it('shows no legend for a single-account player', () => {
+      render(
+        <BandHistoryChart
+          today={TODAY}
+          entries={[entry({ sourcePublicCode: 'QCST68', fromMergedAccount: false, previousLevel: '3.0', newLevel: '3.5', levelChanged: true, calculatedAt: '2026-06-01T12:00:00' })]}
+        />,
+      )
+      // Almost every player. Their card must look exactly as it did before #853.
+      expect(screen.queryByText('current account')).not.toBeInTheDocument()
+      expect(screen.getByText(/bands held over this period/)).toBeInTheDocument()
+    })
+  })
 })
