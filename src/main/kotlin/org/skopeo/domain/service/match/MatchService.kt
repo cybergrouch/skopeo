@@ -21,7 +21,9 @@ import org.skopeo.common.dto.match.MatchResultRequest
 import org.skopeo.common.dto.match.UpcomingMatchResponse
 import org.skopeo.common.dto.rating.MatchCalculationDetailResponse
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.CLUB_OWNER_OR_ADMIN
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.MATCH_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.match.toPublicResponse
 import org.skopeo.domain.mapper.dto.match.toResponse
 import org.skopeo.domain.mapper.dto.rating.toResponse
@@ -62,11 +64,8 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeParseException
 import java.util.UUID
 
-private val STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
-
 // Roles exempt from the expired-event data-entry gate (#310): administrators and club owners may
 // still create fixtures / record results after an event has ended; a plain host may not.
-private val EXPIRY_EXEMPT_ROLES = setOf(Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
 /**
  * Fixture-creation input resolved at the route boundary (#116): the match format/type enums are
@@ -510,7 +509,7 @@ class MatchService(
         either {
             val match = matches.findById(matchId = matchId).bind().toDomain()
             val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-            val isStaff = caller != null && caller.capabilities.any { it in STAFF_ROLES }
+            val isStaff = caller != null && caller.capabilities.any { it in MATCH_MANAGEMENT_ROLES }
             val isParticipant = caller != null && caller.id in (match.team1.userIds + match.team2.userIds)
             ensure(condition = isStaff || isParticipant) { ServiceError.Forbidden() }
             match
@@ -812,7 +811,7 @@ class MatchService(
         caller: User,
     ): Either<ServiceError, Unit> =
         either {
-            val exempt = caller.capabilities.any { it in EXPIRY_EXEMPT_ROLES }
+            val exempt = caller.capabilities.any { it in CLUB_OWNER_OR_ADMIN }
             ensure(condition = exempt || !event.isExpired(asOf = LocalDate.now())) {
                 ServiceError.Conflict(message = "This event has ended; only an administrator or club owner can modify it.")
             }
@@ -829,7 +828,11 @@ class MatchService(
 
     private fun staffCaller(token: VerifiedFirebaseToken): Either<ServiceError, User> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-        return if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) ServiceError.Forbidden().left() else caller.right()
+        return if (caller == null || caller.capabilities.none { it in MATCH_MANAGEMENT_ROLES }) {
+            ServiceError.Forbidden().left()
+        } else {
+            caller.right()
+        }
     }
 
     private fun resolveRatedParticipants(ids: List<UUID>): Either<ServiceError, List<User>> =

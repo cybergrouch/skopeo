@@ -11,6 +11,7 @@ import org.skopeo.common.dto.seeding.PlayerListResponse
 import org.skopeo.common.dto.seeding.PlayerListSummaryResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.MATCH_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.seeding.toSummaryResponse
 import org.skopeo.domain.mapper.dto.user.toSummary
 import org.skopeo.domain.mapper.entity.seeding.toDomain
@@ -23,9 +24,6 @@ import org.skopeo.domain.service.user.isDeleted
 import org.skopeo.repository.PlayerListRepository
 import org.skopeo.repository.UserRepository
 import java.util.UUID
-
-/** Roles that may build seeding lists (#111): HOST and CLUB_OWNER, plus ADMINISTRATOR. */
-internal val SEEDING_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
 /**
  * Host-curated player lists (issue #111) — HOST/CLUB_OWNER/ADMINISTRATOR only. Each list is owned by
@@ -119,6 +117,6 @@ class PlayerListService(
 
     private fun requireSeeder(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain() ?: return ServiceError.Forbidden().left()
-        return if (caller.capabilities.any { it in SEEDING_ROLES }) caller.id.right() else ServiceError.Forbidden().left()
+        return if (caller.capabilities.any { it in MATCH_MANAGEMENT_ROLES }) caller.id.right() else ServiceError.Forbidden().left()
     }
 }

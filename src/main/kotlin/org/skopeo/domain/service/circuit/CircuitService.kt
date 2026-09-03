@@ -12,6 +12,7 @@ import arrow.core.right
 import org.skopeo.common.dto.circuit.CircuitResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.MATCH_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.circuit.toResponse
 import org.skopeo.domain.mapper.entity.circuit.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -24,9 +25,6 @@ import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.CircuitRepository
 import org.skopeo.repository.UserRepository
 import java.util.UUID
-
-/** Roles that may read the circuit list (e.g. to pick a circuit when creating a tournament, #525). */
-private val CIRCUIT_STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
 /**
  * Admin-only management of circuits (#525): create, rename, and soft-delete circuits (e.g. NORTH,
@@ -134,7 +132,7 @@ class CircuitService(
     /** Staff (HOST/CLUB_OWNER/ADMINISTRATOR) access, for reads like the circuit list. */
     private fun requireStaff(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-        val isStaff = caller != null && caller.capabilities.any { it in CIRCUIT_STAFF_ROLES }
+        val isStaff = caller != null && caller.capabilities.any { it in MATCH_MANAGEMENT_ROLES }
         return if (caller == null || !isStaff) ServiceError.Forbidden().left() else caller.id.right()
     }
 }

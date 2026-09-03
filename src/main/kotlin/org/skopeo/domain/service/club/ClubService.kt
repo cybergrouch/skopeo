@@ -11,7 +11,9 @@ import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.dto.club.ClubResponse
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.CLUB_OWNER_OR_ADMIN
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.MATCH_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.club.toResponse
 import org.skopeo.domain.mapper.entity.club.toDomain
 import org.skopeo.domain.mapper.entity.event.toDomain
@@ -35,9 +37,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 /** Roles that may read the club list (e.g. to pick a club when creating an event, #313). */
-private val CLUB_STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 private val ADMIN_ONLY = setOf(element = Capability.ADMINISTRATOR)
-private val OWNER_OR_ADMIN = setOf(Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
 /**
  * Admin-only management of clubs (#313): create clubs and assign/remove CLUB_OWNER(s). A club's
@@ -79,7 +79,7 @@ class ClubService(
     /** Readable by staff (HOST/CLUB_OWNER/ADMINISTRATOR) so event creators can pick a club (#313). */
     fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<ClubResponse>> =
         either {
-            requireCapability(token = token, allowed = CLUB_STAFF_ROLES).bind()
+            requireCapability(token = token, allowed = MATCH_MANAGEMENT_ROLES).bind()
             clubs.list().map { toView(club = it.toDomain()).toResponse() }
         }
 
@@ -228,7 +228,7 @@ class ClubService(
         sanctioned: Boolean,
     ): Either<ServiceError, ClubResponse> =
         either {
-            val actorId = requireCapability(token = token, allowed = OWNER_OR_ADMIN).bind()
+            val actorId = requireCapability(token = token, allowed = CLUB_OWNER_OR_ADMIN).bind()
             val updated =
                 ensureNotNull(value = clubs.setSanction(id = clubId, sanctioned = sanctioned)) {
                     ServiceError.NotFound(message = "Club $clubId not found")
