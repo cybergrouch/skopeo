@@ -3,6 +3,7 @@
 
 package org.skopeo.repository
 
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotContain
@@ -346,5 +347,13 @@ class RatingRepositoryTest {
                 BigDecimal("4.100000"),
                 BigDecimal("4.000000"),
             )
+    }
+
+    @Test
+    fun `historyByUsers returns nothing for an empty id set without touching the database (#853)`() {
+        // The guard is not decoration: `inList emptyList()` is not portable SQL, and this is a public
+        // repository method — the service path always passes at least the canonical id, so nothing else
+        // would exercise it.
+        ratings.historyByUsers(userIds = emptyList()).shouldBeEmpty()
     }
 }

@@ -436,4 +436,50 @@ describe("RatingHistoryCard", () => {
     expect(row.querySelector("button")).toBeNull();
   });
 
+
+  it("attributes an entry inherited from a merged account to that account (#853)", () => {
+    useGetApiV1MatchesIdCalculation.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    });
+    render(
+      <RatingHistoryCard
+        entries={[
+          entry({ id: "own", sourcePublicCode: "QCST68", fromMergedAccount: false }),
+          entry({
+            id: "inherited",
+            sourcePublicCode: "9S9PJS",
+            fromMergedAccount: true,
+            calculatedAt: "2026-05-01T12:00:00",
+          }),
+        ]}
+      />,
+    );
+
+    // Named, not merely flagged "pre-merge": a chain can contribute more than one prior trajectory and
+    // they overlap in time, so the reader needs to know WHICH account.
+    expect(screen.getByText(/From merged account/)).toHaveTextContent(
+      "From merged account 9S9PJS",
+    );
+    // The survivor's own entry carries no such note.
+    expect(screen.getAllByText(/From merged account/)).toHaveLength(1);
+  });
+
+  it("says the source is unknown rather than blank when the account could not be resolved (#853)", () => {
+    useGetApiV1MatchesIdCalculation.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    });
+    render(
+      <RatingHistoryCard
+        entries={[entry({ id: "inherited", sourcePublicCode: null, fromMergedAccount: true })]}
+      />,
+    );
+
+    // sourcePublicCode is nullable. "From merged account" with nothing after it reads as a truncation.
+    expect(screen.getByText(/From merged account/)).toHaveTextContent(
+      "From merged account unknown",
+    );
+  });
+
 });
