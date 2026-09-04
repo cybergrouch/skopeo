@@ -17,6 +17,7 @@ import org.skopeo.domain.service.settings.PointsScheduleHistory
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
+import java.math.BigDecimal
 import org.skopeo.domain.mapper.entity.club.toDomain as toClubDomain
 import org.skopeo.domain.mapper.entity.event.toDomain as toEventDomain
 
@@ -190,6 +191,20 @@ class AwardDerivationAssembler(
                     pointsForThisPlayer = if (recipientIsTeam1) set.team1Points else set.team2Points,
                 )
             }
+        // THE GUARD (#892): does this arithmetic actually reproduce what was paid?
+        //
+        // Until now the assembler assumed it must, because the derivation runs the same `scoreSets` the
+        // awarder folded over. That holds for an award written since #862 — but not for one whose inputs
+        // were BACKFILLED, since the schedule it was really paid under may be gone (the pre-V47
+        // `points_config` was upsert-keyed, so editing a schedule overwrote it).
+        //
+        // Checked at read time rather than at backfill time, deliberately: this way the promise covers
+        // every award forever — backfilled, or paid under a schedule since edited, or diverging for a
+        // reason nobody has thought of yet — instead of only the rows one migration happened to touch.
+        // It is also the invariant #862 already claimed, now enforced instead of assumed.
+        if (!reproducesPaidAmount(award = award, sets = sets)) {
+            return base.copy(unavailableReason = AMOUNT_NOT_REPRODUCIBLE)
+        }
         // The award's own reason is carried through (#881): a zero produced by the calibration clamp is not
         // what the schedule arithmetic below computes, so without it the derivation would contradict the
         // amount beside it — the exact failure #862 exists to prevent.
@@ -200,6 +215,31 @@ class AwardDerivationAssembler(
             opponentBand = inputs.opponentBand,
             reason = award.reason,
         )
+    }
+
+    /**
+     * Whether the per-set arithmetic adds up to the amount actually paid (#892).
+     *
+     * Two outcomes count as reproducing it:
+     *
+     * 1. the sum equals the paid figure — the ordinary case;
+     * 2. the paid figure is **zero while the sum is negative** — the calibration clamp (#881), which
+     *    floors a negative payout at zero. That discrepancy is real, documented, and explained on the row
+     *    itself via the award's `reason`, so refusing to show the derivation would hide an explanation
+     *    that exists rather than protect anyone.
+     *
+     * Anything else means the recorded inputs no longer describe this payment, and a confident panel whose
+     * numbers contradict the figure above it is worse than an honest gap — the whole premise of #862.
+     */
+    private fun reproducesPaidAmount(
+        award: RankingPointAward,
+        sets: List<AwardSetDerivation>,
+    ): Boolean {
+        val computed = BigDecimal(sets.sumOf { it.pointsForThisPlayer })
+        if (computed.compareTo(other = award.points) == 0) {
+            return true
+        }
+        return award.points.signum() == 0 && computed.signum() < 0
     }
 
     /** The set score from the recipient's side first, e.g. "6-4". */
@@ -234,6 +274,9 @@ class AwardDerivationAssembler(
         const val BANDS_NOT_RECORDED =
             "This award predates the change that records how amounts are derived, so its inputs were never stored."
         const val SCHEDULE_GONE = "The schedule version this award was paid under is no longer available."
+        const val AMOUNT_NOT_REPRODUCIBLE =
+            "The recorded inputs no longer reproduce the amount paid — most likely the schedule was edited " +
+                "after this award, so how it was reached cannot be shown faithfully."
         const val MATCH_GONE = "The granting fixture is no longer available."
     }
 }
