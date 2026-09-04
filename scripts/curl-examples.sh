@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 
-# Tennis Levelr API - cURL Examples
+# Skopeo API - cURL Examples
 # Collection of useful cURL commands for testing
 
 BASE_URL="http://localhost:8080"
 
-echo "🎾 Tennis Levelr API - cURL Examples"
+echo "🎾 Skopeo API - cURL Examples"
 echo "====================================="
 echo ""
 echo "Base URL: $BASE_URL"

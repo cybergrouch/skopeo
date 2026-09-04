@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 
-# Tennis Levelr API Test Script
+# Skopeo API Test Script
 # Tests all available endpoints
 
 BASE_URL="http://localhost:8080"
 
-echo "🎾 Testing Tennis Levelr API..."
+echo "🎾 Testing Skopeo API..."
 echo "================================"
 echo ""
 

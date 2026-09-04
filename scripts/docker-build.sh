@@ -2,14 +2,14 @@
 # SPDX-FileCopyrightText: 2026 Lange Pantoja
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-# Docker build helper script for Tennis Levelr
+# Docker build helper script for Skopeo
 # Usage: ./scripts/docker-build.sh [version]
 # Example: ./scripts/docker-build.sh 1.0.0
 
 set -e
 
 VERSION=${1:-latest}
-IMAGE_NAME="tennis-levelr"
+IMAGE_NAME="skopeo"
 
 echo "======================================"
 echo "  Building Docker Image"

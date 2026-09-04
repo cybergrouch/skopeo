@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 
-# Tennis Levelr - Ranking API Test Script
+# Skopeo - Ranking API Test Script
 
 BASE_URL="http://localhost:8080"
 

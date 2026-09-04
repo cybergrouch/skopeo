@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 
-# Stop Tennis Levelr API Server
+# Stop Skopeo API Server
 
-echo "🛑 Stopping Tennis Levelr API..."
+echo "🛑 Stopping Skopeo API..."
 echo ""
 
 # Check if server is running

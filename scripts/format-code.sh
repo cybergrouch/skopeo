@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Lange Pantoja
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-# Code formatting script for Tennis Levelr
+# Code formatting script for Skopeo
 # Auto-formats all Kotlin code using ktlint
 
 set -e

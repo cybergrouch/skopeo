@@ -40,7 +40,7 @@ out/
 ### Kotlin ###
 .kotlin
 
-### Tennis Levelr Specific ###
+### Skopeo Specific ###
 # Environment and configuration files
 .env
 .env.local
