@@ -190,7 +190,16 @@ class AwardDerivationAssembler(
                     pointsForThisPlayer = if (recipientIsTeam1) set.team1Points else set.team2Points,
                 )
             }
-        return base.copy(recorded = true, sets = sets, teamBand = inputs.teamBand, opponentBand = inputs.opponentBand)
+        // The award's own reason is carried through (#881): a zero produced by the calibration clamp is not
+        // what the schedule arithmetic below computes, so without it the derivation would contradict the
+        // amount beside it — the exact failure #862 exists to prevent.
+        return base.copy(
+            recorded = true,
+            sets = sets,
+            teamBand = inputs.teamBand,
+            opponentBand = inputs.opponentBand,
+            reason = award.reason,
+        )
     }
 
     /** The set score from the recipient's side first, e.g. "6-4". */
