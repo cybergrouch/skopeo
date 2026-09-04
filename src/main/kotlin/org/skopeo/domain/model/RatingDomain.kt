@@ -210,3 +210,16 @@ data class PreEventRating(
     val previousRating: BigDecimal,
     val previousLevel: String?,
 )
+
+/**
+ * A player's calibration state (#881).
+ *
+ * [matchesRated] and [matchesRequired] are carried even when [inCalibration] is false, so a caller can
+ * say "3 of 10" without asking a second question — and so a completed window is distinguishable from one
+ * that never opened, which matters when explaining why an opponent's rating did or did not move.
+ */
+data class CalibrationStatus(
+    val inCalibration: Boolean,
+    val matchesRated: Int,
+    val matchesRequired: Int,
+)

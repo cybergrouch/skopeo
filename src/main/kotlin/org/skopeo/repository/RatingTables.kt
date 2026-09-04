@@ -30,6 +30,14 @@ internal object UserRatingsTable : UUIDTable(name = "user_ratings") {
     // Matches applied since the last reset — an override/self-rating or an NTRP band jump (#343). Ramps
     // confidence up over ~5 matches (scale = min(1, m/5)); reset to 0 on any override or band jump.
     val matchesSinceReset = integer(name = "matches_since_reset").default(defaultValue = 0)
+
+    // When the current calibration window opened (#881) — stamped by every MANUAL designation, i.e. only
+    // by `setRating`, never by `applyMatchRating`. Null means the player has not been manually designated
+    // since the feature shipped, which is what makes the rollout prospective.
+    //
+    // Only the START is stored. "Is this player calibrating?" is derived from this plus their rated-match
+    // count and the global N, because N is mutable and must take effect without a sweep.
+    val calibrationStartedAt = datetime(name = "calibration_started_at").nullable()
 }
 
 /** Append-only rating-change history (match-driven, or initial assessment when match_id is null). */

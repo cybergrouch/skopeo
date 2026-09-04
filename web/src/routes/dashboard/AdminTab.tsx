@@ -1,5 +1,6 @@
 import { ApiClientsSection } from "./admin/ApiClientsSection";
 import { BuildInfoSection } from "./admin/BuildInfoSection";
+import { CalibrationWindowSection } from "./admin/CalibrationWindowSection";
 import { CircuitsSection } from "./admin/CircuitsSection";
 import { FeatureFlagsSection } from "./admin/FeatureFlagsSection";
 import { PendingCalculationSection } from "./admin/PendingCalculationSection";
@@ -15,6 +16,7 @@ export function AdminTab() {
       <PendingCalculationSection />
       <StandingsSourceSection />
       <FeatureFlagsSection />
+      <CalibrationWindowSection />
       <ThemeSection />
       <ApiClientsSection />
       <BuildInfoSection />

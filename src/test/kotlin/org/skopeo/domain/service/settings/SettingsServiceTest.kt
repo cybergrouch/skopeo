@@ -11,6 +11,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -340,5 +341,82 @@ class SettingsServiceTest {
         response.hidden shouldBe true
         response.updatedBy.shouldNotBeNull()
         response.updatedAt.shouldNotBeNull()
+    }
+
+    @Test
+    fun `the calibration window defaults to 10 rated matches when unseeded (#881)`() {
+        transaction { AppSettingsTable.deleteAll() }
+
+        service.getCalibrationMatches().matches shouldBe 10
+        service.getCalibrationMatches().updatedBy.shouldBeNull()
+        // Also through the route-facing form, which is what the endpoint actually serves — the mapper is
+        // where a default could be lost on the way out.
+        service.getCalibrationMatchesResponse().matches shouldBe 10
+        service.getCalibrationMatchesResponse().updatedBy.shouldBeNull()
+    }
+
+    @Test
+    fun `an administrator sets the calibration window, and the audit records both values (#881)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        service.setCalibrationMatches(token = token(uid = "admin"), matches = 5).shouldBeRight().matches shouldBe 5
+        service.getCalibrationMatches().matches shouldBe 5
+        // The response form carries the provenance the Admin card shows.
+        service.getCalibrationMatchesResponse().let {
+            it.matches shouldBe 5
+            it.updatedBy shouldBe admin.id.toString()
+            it.updatedAt.shouldNotBeNull()
+        }
+
+        // Both values, because lowering N ends in-flight calibrations immediately — the delta is the
+        // operationally interesting part, not the new number alone.
+        val entry =
+            AuditRepository()
+                .list(actions = listOf(element = AuditAction.SETTINGS_CALIBRATION_MATCHES_CHANGED), limit = 10, offset = 0)
+                .first
+                .single()
+        entry.actorUserId shouldBe admin.id
+        entry.summary shouldContain "from 10 to 5"
+    }
+
+    @Test
+    fun `a value outside 1 to 100 is rejected (#881)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        // Zero would mean "calibration is off" — a separate decision, not a number that silently means
+        // nothing. The ceiling stops a typo putting a player in calibration for a career.
+        listOf(0, -1, 101).forEach { bad ->
+            withClue(clue = "$bad should be rejected") {
+                service
+                    .setCalibrationMatches(token = token(uid = "admin"), matches = bad)
+                    .shouldBeLeft()
+                    .shouldBeInstanceOf<ServiceError.Validation>()
+            }
+        }
+        // ...and the boundaries themselves are allowed.
+        service.setCalibrationMatches(token = token(uid = "admin"), matches = 1).shouldBeRight()
+        service.setCalibrationMatches(token = token(uid = "admin"), matches = 100).shouldBeRight()
+    }
+
+    @Test
+    fun `a non-administrator cannot change the calibration window (#881)`() {
+        provision(uid = "rater", roles = setOf(Capability.PLAYER, Capability.RATER))
+
+        // A RATER assigns the ratings that OPEN calibration windows, but does not set the policy for how
+        // long they last.
+        service
+            .setCalibrationMatches(token = token(uid = "rater"), matches = 5)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `a stored value outside the bounds falls back to the default rather than being trusted (#881)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        // Written directly, as an older build or a manual edit could: the read must not propagate a value
+        // the setter would reject, or a bad row would silently disable calibration for everyone.
+        settings.upsert(key = "calibration_match_count", value = "0", updatedBy = admin.id)
+
+        service.getCalibrationMatches().matches shouldBe 10
     }
 }

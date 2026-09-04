@@ -3788,6 +3788,63 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/settings/calibration-matches:
+    get:
+      summary: Get the calibration window length, N (#881)
+      description: >-
+        How many RATED matches a manually-rated player stays in calibration for. Defaults to 10 when
+        unseeded. Rated rather than assigned or merely completed: a player entered into fixtures that are
+        never played would otherwise leave calibration having played nothing.
+
+        Public read -- the number is policy rather than a secret, and a client needs it to say "match 3 of
+        10" on the band indicator. A client that had to guess N would eventually disagree with the server
+        about who is still calibrating.
+
+        Note the value is read at EVALUATION time and never copied onto a player: whether someone is
+        calibrating is derived from their designation timestamp, their rated-match count and this number.
+        So changing it applies globally and immediately -- lowering it ends several in-flight calibrations
+        at once, with no migration or sweep.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+        - {}
+      responses:
+        '200':
+          description: The current calibration window length
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalibrationMatchesResponse'
+    put:
+      summary: Set the calibration window length, N (#881)
+      description: >-
+        ADMINISTRATOR only; audit-logged with both the previous and the new value, because the change
+        applies globally and immediately. Must be between 1 and 100 -- 0 would mean "calibration is off",
+        which is a separate decision rather than a value that silently means nothing, and the ceiling
+        stops a typo putting a player in calibration for a career.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetCalibrationMatchesRequest'
+      responses:
+        '200':
+          description: The updated calibration window length
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalibrationMatchesResponse'
+        '400':
+          description: Value outside 1..100
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/settings/hide-ranking-points:
     get:
       summary: Get the hide-ranking-points feature flag (#865)
@@ -8101,6 +8158,34 @@ components:
         enabled:
           type: boolean
           description: Show or hide the event "Award Ranking Points" checkbox (#641).
+
+    CalibrationMatchesResponse:
+      type: object
+      description: >-
+        N for the calibration window (#881) -- the number of rated matches a manually-rated player stays
+        in calibration for, with the provenance of the last change.
+      required:
+        - matches
+      properties:
+        matches:
+          type: integer
+          description: 1..100; defaults to 10 when the setting has never been written.
+        updatedAt:
+          type: string
+          nullable: true
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+
+    SetCalibrationMatchesRequest:
+      type: object
+      required:
+        - matches
+      properties:
+        matches:
+          type: integer
+          description: The new N. Must be between 1 and 100.
 
     HideRankingPointsResponse:
       type: object

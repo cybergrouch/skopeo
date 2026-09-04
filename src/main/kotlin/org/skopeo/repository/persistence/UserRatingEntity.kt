@@ -23,4 +23,6 @@ data class UserRatingEntity(
     val matchesPlayed: Int,
     val lastMatchDate: LocalDate?,
     val matchRatedAt: LocalDateTime?,
+    /** When the current calibration window opened (#881); null if never manually designated. */
+    val calibrationStartedAt: LocalDateTime? = null,
 )

@@ -16,6 +16,7 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.common.dto.settings.SetAwardRankingPointsRequest
+import org.skopeo.common.dto.settings.SetCalibrationMatchesRequest
 import org.skopeo.common.dto.settings.SetFacebookLoginRequest
 import org.skopeo.common.dto.settings.SetHideRankingPointsRequest
 import org.skopeo.domain.service.settings.SettingsService
@@ -30,6 +31,7 @@ fun Application.configureFeatureFlagRoutes(service: SettingsService = SettingsSe
         facebookLoginFlag(service = service)
         awardRankingPointsFlag(service = service)
         hideRankingPointsFlag(service = service)
+        calibrationMatchesSetting(service = service)
     }
 }
 
@@ -113,6 +115,38 @@ private fun Route.hideRankingPointsFlag(service: SettingsService) {
                     val request = call.receive<SetHideRankingPointsRequest>()
                     respondEither(
                         result = service.setHideRankingPoints(token = verifiedToken(), hidden = request.hidden),
+                    ) { value ->
+                        call.respond(status = HttpStatusCode.OK, message = value)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The calibration window's N (#881). Read is public, write is ADMINISTRATOR-only (enforced, and validated,
+ * in the service).
+ *
+ * Public read because the number is policy rather than a secret, and the band indicator needs it to say
+ * "match 3 of 10" — a client that had to guess N would eventually disagree with the server about who is
+ * still calibrating, which is the whole class of bug this feature has to avoid.
+ */
+private fun Route.calibrationMatchesSetting(service: SettingsService) {
+    route(path = "/api/v1/settings/calibration-matches") {
+        authenticate(FIREBASE_AUTH, optional = true) {
+            get {
+                respondMappingErrors {
+                    call.respond(status = HttpStatusCode.OK, message = service.getCalibrationMatchesResponse())
+                }
+            }
+        }
+        authenticate(FIREBASE_AUTH) {
+            put {
+                respondMappingErrors {
+                    val request = call.receive<SetCalibrationMatchesRequest>()
+                    respondEither(
+                        result = service.setCalibrationMatches(token = verifiedToken(), matches = request.matches),
                     ) { value ->
                         call.respond(status = HttpStatusCode.OK, message = value)
                     }

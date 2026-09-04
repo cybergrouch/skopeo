@@ -77,6 +77,14 @@ class RatingRepository {
      * calculation, so it clears [UserRatingsTable.matchRatedAt]/[UserRatingsTable.matchesSinceReset]
      * (both now vestigial for confidence, #459 — left in place, no migration). Returns the resulting row
      * entity; the caller (RatingAssembler) derives confidence from windowed match counts.
+     *
+     * **Opens a calibration window** (#881) by stamping [UserRatingsTable.calibrationStartedAt]. This is
+     * the one place that happens, and it is why both manual-designation paths are covered without either
+     * knowing about calibration: a self-assessment approval and a rater's override both land here.
+     *
+     * Re-stamping unconditionally is deliberate — a fresh designation is a fresh guess, so the window
+     * restarts. `applyMatchRating` does **not** touch the column, so match-derived movement never
+     * re-opens or extends a window.
      */
     fun setRating(
         userId: UUID,
@@ -91,6 +99,7 @@ class RatingRepository {
                     it[currentLevel] = level
                     it[matchRatedAt] = null
                     it[matchesSinceReset] = 0
+                    it[calibrationStartedAt] = LocalDateTime.now()
                 }
             } else {
                 UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
@@ -98,6 +107,7 @@ class RatingRepository {
                     it[currentLevel] = level
                     it[matchRatedAt] = null
                     it[matchesSinceReset] = 0
+                    it[calibrationStartedAt] = LocalDateTime.now()
                 }
             }
             UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single().toUserRatingEntity()
@@ -424,6 +434,7 @@ internal fun ResultRow.toUserRatingEntity(): UserRatingEntity =
         matchesPlayed = this[UserRatingsTable.matchesPlayed],
         lastMatchDate = this[UserRatingsTable.lastMatchDate],
         matchRatedAt = this[UserRatingsTable.matchRatedAt],
+        calibrationStartedAt = this[UserRatingsTable.calibrationStartedAt],
     )
 
 /** Map a `user_rating_history` row to the raw persistence entity (#633) — `setBreakdown` stays raw JSON. */

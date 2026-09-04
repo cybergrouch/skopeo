@@ -93,3 +93,17 @@ data class HideRankingPointsValue(
     val updatedBy: UUID?,
     val updatedAt: LocalDateTime?,
 )
+
+/**
+ * N for the calibration window (#881), with its provenance — the number of **rated** matches a
+ * manually-rated player stays in calibration for.
+ *
+ * Only the number lives here. Whether any given player is calibrating is derived at read time from their
+ * designation timestamp, their rated-match count and this value, so changing it applies to everyone at
+ * once rather than needing a sweep.
+ */
+data class CalibrationMatchesValue(
+    val matches: Int,
+    val updatedBy: UUID?,
+    val updatedAt: LocalDateTime?,
+)
