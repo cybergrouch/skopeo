@@ -137,3 +137,70 @@ data class AwardedPointsPlayerRow(
     /** An admin-soft-deleted account (#518) — rendered as a dominant chip wherever the name appears. */
     val isDeleted: Boolean = false,
 )
+
+/**
+ * How one award's amount was reached (#862) — the shared payload behind the Points Management popup and
+ * the public match card (#858). Only the gate and the surface differ between them.
+ *
+ * **Derived, never stored.** It is rebuilt from the schedule version the award records, the two band
+ * strings it recorded, and the match's own set scores — so it cannot disagree with the `points` beside it.
+ * Recomputing from *today's* schedule would, which is why versioning came first.
+ *
+ * [recorded] is false for an award written before #862 added the version and band columns. The UI must say
+ * so rather than substituting current rates: a confident derivation whose numbers do not add up to the
+ * amount is worse than an honest gap.
+ */
+@Serializable
+data class AwardDerivationResponse(
+    val awardId: String,
+    val points: String,
+    val pointClass: String,
+    /**
+     * The schedule version the award was computed under.
+     *
+     * Not nullable: V47 backfilled every existing row to version 1, so an award always records one. What
+     * an old award lacks is the *band* inputs, which is what [recorded] reports — the version being
+     * present says nothing about whether the amount can be explained.
+     */
+    val scheduleVersion: Int,
+    val recorded: Boolean,
+    /** Why nothing can be shown — populated only when [recorded] is false. */
+    val unavailableReason: String? = null,
+    /** Per-set detail for an open-play / Full Match award; empty for placement and manual grants. */
+    val sets: List<AwardSetDerivation> = emptyList(),
+    /** The band matchup as the calculator saw it, e.g. "4.0 vs 3.5"; null when not recorded. */
+    val teamBand: String? = null,
+    val opponentBand: String? = null,
+    /** Placement awards only: the placing decided, and whether the club was sanctioned (#525). */
+    val placement: AwardPlacementDerivation? = null,
+    /** Manual / EXTERNAL grants only: all there is to show. */
+    val reason: String? = null,
+)
+
+/**
+ * One set's contribution to an award (#862): the margin, the band relation, and what that cell paid.
+ *
+ * [pointsForThisPlayer] is the figure that actually reached the recipient — the winner's or the loser's
+ * amount depending on which side they were on. Both are carried because the least self-evident part of the
+ * schedule is that a loser can be paid at all (#525).
+ */
+@Serializable
+data class AwardSetDerivation(
+    val setNumber: Int,
+    val score: String,
+    val margin: Int,
+    /** EQUAL, FAVORITE or UPSET — from the recipient's side of the net. */
+    val relation: String,
+    val wonSet: Boolean,
+    val winnerPoints: Int,
+    val loserPoints: Int,
+    val pointsForThisPlayer: Int,
+)
+
+/** A placement award's derivation (#862): which place, and which schedule column paid it. */
+@Serializable
+data class AwardPlacementDerivation(
+    val place: Int,
+    val sanctioned: Boolean,
+    val scheduleAmount: Int,
+)

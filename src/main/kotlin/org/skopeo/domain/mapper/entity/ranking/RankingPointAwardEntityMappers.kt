@@ -36,4 +36,7 @@ fun RankingPointAwardEntity.toDomain(): RankingPointAward =
         awardedAt = awardedAt,
         eventId = eventId,
         matchId = matchId,
+        pointsScheduleVersion = pointsScheduleVersion,
+        teamBand = teamBand,
+        opponentBand = opponentBand,
     )

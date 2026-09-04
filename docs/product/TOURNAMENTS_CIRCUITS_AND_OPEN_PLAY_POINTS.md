@@ -203,6 +203,17 @@ So the designation-plus-policy machinery is **obsolete for both**, and two of th
 
 The rule-based amounts above started as **code constants**. They are now a **global, admin-configurable schedule** — the scoped successor to the removed global policy — stored as JSON in `points_config` (migration V28) and edited by an ADMINISTRATOR via `GET/PUT /api/v1/settings/points/{open-play,tournament}`.
 
+### Every award can explain itself ([#862](https://github.com/cybergrouch/skopeo/issues/862))
+
+Clicking an amount in Points Management shows how it was reached: per set, the game margin, the band relation, and what that schedule cell paid — the winner's amount *and* the loser's, because a schedule that pays a beaten underdog is its least obvious property and a lone "+1" on a lost set reads as a bug without the pair.
+
+Two properties make it trustworthy rather than merely informative:
+
+- **It is derived, not stored.** The inputs are the schedule version the award records, the two band strings it records, and the match's own set scores. Nothing comes from *today's* schedule — that is what versioning bought.
+- **It is the same computation that paid the award.** The per-set arithmetic runs through the identical function the awarder folds over, so an explanation cannot disagree with the amount beside it about a margin, a relation or a cell.
+
+**An award that cannot be explained says so.** Anything paid before this existed has no recorded inputs, and the popup states that instead of substituting current rates. A confident derivation whose numbers do not add up to the figure above it would be worse than an honest gap.
+
 ### Schedules are versioned, and an award keeps the rates it was paid under ([#862](https://github.com/cybergrouch/skopeo/issues/862))
 
 Editing a schedule used to **overwrite** the previous one, which destroyed the only record of what earlier awards had been paid under — and since an open-play amount depends on the set margin and the band matchup read from that schedule, an old award became unexplainable. Since V47:

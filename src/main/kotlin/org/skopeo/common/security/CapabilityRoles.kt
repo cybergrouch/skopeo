@@ -83,3 +83,12 @@ val PLAYER_POINTS_VIEW_ROLES: Set<Capability> =
  */
 val HOST_OR_ADMIN: Set<Capability> =
     setOf(Capability.HOST, Capability.ADMINISTRATOR)
+
+/**
+ * Who may operate the Points Management surfaces (#472) — a points manager or an administrator.
+ *
+ * ADMINISTRATOR is listed because it is implicitly a points manager everywhere else in the product; the
+ * tab's own gating says the same thing.
+ */
+val POINTS_MANAGEMENT_ROLES: Set<Capability> =
+    setOf(Capability.POINTS_MANAGER, Capability.ADMINISTRATOR)

@@ -31,24 +31,47 @@ internal object OpenPlayPointsCalculator {
     )
 
     /**
+     * One set's scoring, as the calculator saw it (#862).
+     *
+     * This exists so a derivation shown to a reader **is** the computation that paid them, not a parallel
+     * reimplementation that can drift from it: [compute] is a fold over exactly these rows, so the two
+     * cannot disagree about a margin, a relation, or a cell.
+     */
+    data class SetScoring(
+        val setNumber: Int,
+        val margin: Int,
+        val relation: BandRelation,
+        /** True when team1 won this set — which of [winnerPoints]/[loserPoints] each side received. */
+        val team1WonSet: Boolean,
+        val winnerPoints: Int,
+        val loserPoints: Int,
+    ) {
+        /** What team1 earned from this set. */
+        val team1Points: Int get() = if (team1WonSet) winnerPoints else loserPoints
+
+        /** What team2 earned from this set. */
+        val team2Points: Int get() = if (team1WonSet) loserPoints else winnerPoints
+    }
+
+    /**
+     * Score each set, in order — the per-set detail behind a match's points (#862).
+     *
      * @param band1 team1's entry band (e.g. "4.0"); [band2] team2's. Compared numerically.
      * @param team1Id team1's id, matched against each set's winner (team2 is inferred as the other side).
      * @param config the admin-configurable margin-bracket schedule.
      */
-    fun compute(
+    fun scoreSets(
         band1: String,
         band2: String,
         team1Id: UUID,
         sets: List<MatchSetResult>,
         config: OpenPlayPointsConfig,
-    ): TeamPoints {
+    ): List<SetScoring> {
         val b1 = band1.toBigDecimal()
         val b2 = band2.toBigDecimal()
         val equalBands = b1.compareTo(other = b2) == 0
         val team1IsHigher = b1 > b2
-        var team1Total = 0
-        var team2Total = 0
-        sets.forEach { set ->
+        return sets.mapIndexed { index, set ->
             val team1WonSet = set.winnerTeamId == team1Id
             val higherWonSet = (team1WonSet && team1IsHigher) || (!team1WonSet && !team1IsHigher)
             val relation =
@@ -57,16 +80,35 @@ internal object OpenPlayPointsCalculator {
                     higherWonSet -> BandRelation.FAVORITE
                     else -> BandRelation.UPSET
                 }
-            val cell = config.cell(relation = relation, margin = marginInSet(set = set, team1WonSet = team1WonSet))
-            if (team1WonSet) {
-                team1Total += cell.winnerPoints
-                team2Total += cell.loserPoints
-            } else {
-                team2Total += cell.winnerPoints
-                team1Total += cell.loserPoints
-            }
+            val margin = marginInSet(set = set, team1WonSet = team1WonSet)
+            val cell = config.cell(relation = relation, margin = margin)
+            SetScoring(
+                setNumber = index + 1,
+                margin = margin,
+                relation = relation,
+                team1WonSet = team1WonSet,
+                winnerPoints = cell.winnerPoints,
+                loserPoints = cell.loserPoints,
+            )
         }
-        return TeamPoints(team1 = team1Total, team2 = team2Total)
+    }
+
+    /**
+     * Each team's total for the match — a fold over [scoreSets], so the totals and the explanation are the
+     * same computation (#862).
+     */
+    fun compute(
+        band1: String,
+        band2: String,
+        team1Id: UUID,
+        sets: List<MatchSetResult>,
+        config: OpenPlayPointsConfig,
+    ): TeamPoints {
+        val scored = scoreSets(band1 = band1, band2 = band2, team1Id = team1Id, sets = sets, config = config)
+        return TeamPoints(
+            team1 = scored.sumOf { it.team1Points },
+            team2 = scored.sumOf { it.team2Points },
+        )
     }
 
     /** The set's game margin (winner games − loser games); a tiebreak-only set uses tiebreak points as games. */
