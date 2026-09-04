@@ -140,9 +140,13 @@ class CalibrationMergeTest {
         val retired = provision(uid = "retired")
         designate(raterUid = "rater", userId = survivor.id)
         designate(raterUid = "rater", userId = retired.id)
-        val earlier = LocalDateTime.now().minusDays(30)
-        setStamp(userId = survivor.id, at = earlier)
+        setStamp(userId = survivor.id, at = LocalDateTime.now().minusDays(30))
         setStamp(userId = retired.id, at = LocalDateTime.now())
+        // Read the stamp back rather than remembering what was written: Postgres TIMESTAMP truncates
+        // LocalDateTime's nanoseconds to microseconds, so the stored value is NOT equal to the literal
+        // that produced it. Comparing against the persisted form makes this assertion about whether the
+        // merge moved the window, which is the actual claim.
+        val earlier = stampedAt(userId = survivor.id).shouldNotBeNull()
 
         service
             .mergeAccounts(
