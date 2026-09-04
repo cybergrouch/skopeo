@@ -532,4 +532,61 @@ class AwardDerivationAssemblerTest {
         derivation.recorded.shouldBeFalse()
         derivation.unavailableReason.shouldNotBeNull() shouldContain "fixture"
     }
+
+    @Test
+    fun `an award whose inputs were backfilled explains itself, and the parts sum to what was paid (#892)`() {
+        val ana = player(uid = "ana")
+        val ben = player(uid = "ben")
+        val match = completedMatch(one = ana.id, two = ben.id, sets = listOf(element = 6 to 3))
+
+        // The shape a V49-backfilled row has: bands recovered from the sibling award, schedule version 1.
+        // v1 pays 13 at margin 3 between equal bands, which is what was actually paid.
+        val derivation = assembler.derive(award = award(userId = ana.id, matchId = match.id, points = "13"))
+
+        derivation.recorded.shouldBeTrue()
+        derivation.sets.single().pointsForThisPlayer shouldBe 13
+        // The claim the guard now enforces rather than assumes.
+        derivation.sets.sumOf { it.pointsForThisPlayer } shouldBe 13
+    }
+
+    @Test
+    fun `an award whose arithmetic does not reproduce the amount paid is reported, never shown (#892)`() {
+        val ana = player(uid = "ana")
+        val ben = player(uid = "ben")
+        val match = completedMatch(one = ana.id, two = ben.id, sets = listOf(element = 6 to 3))
+
+        // Inputs present and a live match, but the paid figure disagrees with the schedule — the shape a
+        // backfilled award takes when the rates it was really paid under were overwritten before V47.
+        // Showing the arithmetic here would contradict the number beside it, which is the one outcome
+        // #862 exists to prevent, so it must be reported instead.
+        val derivation = assembler.derive(award = award(userId = ana.id, matchId = match.id, points = "999"))
+
+        derivation.recorded.shouldBeFalse()
+        derivation.sets.shouldBeEmpty()
+        derivation.unavailableReason.shouldNotBeNull() shouldContain "no longer reproduce the amount paid"
+        // The amount is still reported: the award is real, only its explanation is untrustworthy.
+        derivation.points shouldBe "999"
+    }
+
+    @Test
+    fun `a calibration-clamped zero still explains itself, since the clamp is documented (#881, #892)`() {
+        val ana = player(uid = "ana")
+        val ben = player(uid = "ben")
+        // Ana is the higher band and loses, so v1 computes a NEGATIVE payout for her (-2 at UPSET_LOSS).
+        val match = completedMatch(one = ana.id, two = ben.id, sets = listOf(element = 4 to 6))
+
+        // Paid zero because #881 floors a negative amount when the match involved calibration. The guard
+        // must accept this: paid 0 against a negative computation is the clamp, which is real, documented,
+        // and explained on the row itself — refusing the derivation would hide an explanation that exists.
+        val derivation =
+            assembler.derive(
+                award =
+                    award(userId = ana.id, matchId = match.id, points = "0", teamBand = "4.0", opponentBand = "3.5")
+                        .copy(reason = "Awarded on finalize of event X — clamped to zero because a player was in calibration"),
+            )
+
+        derivation.recorded.shouldBeTrue()
+        derivation.sets.sumOf { it.pointsForThisPlayer } shouldBe -2
+        derivation.reason.shouldNotBeNull() shouldContain "clamped"
+    }
 }
