@@ -6882,6 +6882,17 @@ components:
           nullable: true
         levelChanged:
           type: boolean
+        wasSuppressed:
+          type: boolean
+          description: >-
+            True when no rating was applied to this player for this match because calibration suppressed
+            it (#881) -- nothing to reverse, nothing to re-apply, so the correction leaves them untouched.
+            reversedChange and netAdjustment are then "0" and resultingRating equals currentRating, which
+            without this flag is indistinguishable from a correction that happened to cancel out.
+
+            A player suppressed at rating time STAYS suppressed on correction: the decision belongs to the
+            state as it was then, not now -- otherwise correcting a match after its calibration window
+            closed would retroactively move a settled opponent's rating.
 
     MatchScoreCorrectionResponse:
       type: object

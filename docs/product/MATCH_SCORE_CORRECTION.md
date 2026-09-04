@@ -31,6 +31,22 @@ newCurrent(p) = currentRating(p) − oldDelta(p) + newDelta(p)
 
 Nothing downstream is re-rated. The players' subsequent matches, and their history rows, are left exactly as they are.
 
+### 2.1 A player whose rating was never applied (#881)
+
+Since calibration, **not every participant necessarily has a delta to reverse.** While one player is in a calibration window the others' computed changes are discarded rather than applied, so those players have **no history row for the match**.
+
+The rule is therefore per player: **reverse exactly what was applied, or nothing.**
+
+- A player **with** a row is corrected exactly as above.
+- A player **without** one is left untouched: no delta reversed, no replacement row written, no rating change. `reversedChange`, `newChange` and `netAdjustment` all report `0`, and the response flags them `wasSuppressed` so those zeroes are distinguishable from a correction that happened to cancel out.
+
+Two consequences worth stating plainly, because both are easy to get wrong:
+
+1. **A player suppressed at rating time stays suppressed on correction**, even if the calibration window has since closed. The decision belongs to the state as it was when the match was rated — which the presence or absence of a row records — not to the state now. Otherwise correcting an old match would retroactively start moving a settled opponent's rating, applying a change that was deliberately withheld.
+2. **A suppressed player's rating is still an input.** It is reconstructed from their most recent history row at or before the match's rating time (falling back to their current rating), because the rating gap it feeds decides the *other* side's corrected delta. It is read, never written.
+
+The precondition is correspondingly *"at least one player has a live row"*, not *"every player does"* — the latter made any match involving a calibrating player permanently uncorrectable. A rated match with **no** rows for anyone remains a conflict: suppression only ever applies to players who were not calibrating while someone else was, so it can never remove them all.
+
 ## 3. What each subsystem does
 
 ### 3.1 Ratings

@@ -16,8 +16,12 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -45,6 +49,7 @@ import org.skopeo.domain.service.rating.RatingCalculationService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.UserRatingHistoryTable
 import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -502,4 +507,135 @@ class MatchScoreCorrectionTest {
 
         currentRating(userId = r.p1.id) shouldBe before
     }
+
+    /**
+     * Make [userId] **settled** by clearing their calibration stamp (#881).
+     *
+     * Written directly because no live path produces it: every route into `setRating` is a manual
+     * designation and so opens a window. This is the state of every player who predates the feature, and
+     * the state a player reaches after N rated matches.
+     */
+    private fun makeSettled(userId: UUID) {
+        transaction {
+            UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
+                it[calibrationStartedAt] = null
+            }
+        }
+    }
+
+    /** A rated scenario where p2 was SETTLED at rating time, so their rating was suppressed (#881). */
+    private fun ratedWithSuppressedOpponent(): Rated {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        makeSettled(userId = p2.id)
+        val match = seedCompleted(host = host, p1 = p1, p2 = p2)
+        calc.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
+        return Rated(
+            admin = admin,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            match = matchRepo.findById(matchId = match.id).shouldBeRight().toDomain(),
+        )
+    }
+
+    @Test
+    fun `a match with a suppressed player is still correctable (#881)`() {
+        val r = ratedWithSuppressedOpponent()
+
+        // Before #881 PR 3 this was a 409: the guard demanded a history row for EVERY player, and a
+        // suppressed player has none — so any match involving a calibrating player was permanently
+        // uncorrectable, reporting that its ratings "cannot be reversed" when there was nothing to reverse.
+        val outcome =
+            service.correctScore(
+                token = token(uid = "admin"),
+                matchId = r.match.id,
+                request = correction(team1Games = 6, team2Games = 0),
+            ).shouldBeRight()
+
+        val forP1 = outcome.impacts.single { it.userId == r.p1.id.toString() }
+        val forP2 = outcome.impacts.single { it.userId == r.p2.id.toString() }
+        forP1.wasSuppressed shouldBe false
+        forP2.wasSuppressed shouldBe true
+        // Nothing was applied to p2, so there is nothing to reverse and nothing to re-apply.
+        forP2.reversedChange shouldBe "0"
+        forP2.newChange shouldBe "0"
+        forP2.netAdjustment shouldBe "0"
+        forP2.resultingRating shouldBe forP2.currentRating
+    }
+
+    @Test
+    fun `correcting does not invent a change for a player who never had one (#881)`() {
+        val r = ratedWithSuppressedOpponent()
+        val p2Before = currentRating(userId = r.p2.id)
+
+        service.correctScore(
+            token = token(uid = "admin"),
+            matchId = r.match.id,
+            request = correction(team1Games = 6, team2Games = 0, dryRun = false),
+        ).shouldBeRight()
+
+        // The whole point of reversing what was APPLIED rather than what was computed: p2's rating is
+        // untouched, and no replacement history row was written for them.
+        currentRating(userId = r.p2.id) shouldBe p2Before
+        historyRowsFor(userId = r.p2.id, matchId = r.match.id) shouldBe 0
+        // ...while p1's row was superseded and replaced, as usual.
+        historyRowsFor(userId = r.p1.id, matchId = r.match.id) shouldBe 1
+    }
+
+    @Test
+    fun `a player suppressed at rating time stays suppressed even after calibration ends (#881)`() {
+        val r = ratedWithSuppressedOpponent()
+        val p2Before = currentRating(userId = r.p2.id)
+        // p1's calibration window has since closed. The correction must NOT now start moving p2's rating:
+        // the suppression belongs to the state as it was when the match was rated, which the absence of a
+        // row records. This is the case that would pass a casual review and be wrong in production.
+        makeSettled(userId = r.p1.id)
+
+        val outcome =
+            service
+                .correctScore(
+                    token = token(uid = "admin"),
+                    matchId = r.match.id,
+                    request = correction(team1Games = 6, team2Games = 0, dryRun = false),
+                )
+                .shouldBeRight()
+
+        outcome.impacts.single { it.userId == r.p2.id.toString() }.wasSuppressed shouldBe true
+        currentRating(userId = r.p2.id) shouldBe p2Before
+        historyRowsFor(userId = r.p2.id, matchId = r.match.id) shouldBe 0
+    }
+
+    @Test
+    fun `a rated match with no history for anyone is still a conflict (#881)`() {
+        val r = ratedScenario()
+        // Suppression can never remove EVERY row — it only ever applies to players who were not
+        // calibrating while someone else was. So no rows at all on a rated match is genuine inconsistency,
+        // and relaxing the guard must not have relaxed it into silence.
+        transaction { UserRatingHistoryTable.deleteAll() }
+
+        service
+            .correctScore(token = token(uid = "admin"), matchId = r.match.id, request = correction(team1Games = 6, team2Games = 0))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    private fun historyRowsFor(
+        userId: UUID,
+        matchId: UUID,
+    ): Int =
+        transaction {
+            UserRatingHistoryTable
+                .selectAll()
+                .where {
+                    (UserRatingHistoryTable.userId eq userId) and
+                        (UserRatingHistoryTable.matchId eq matchId) and
+                        UserRatingHistoryTable.reversedAt.isNull()
+                }.count()
+                .toInt()
+        }
 }

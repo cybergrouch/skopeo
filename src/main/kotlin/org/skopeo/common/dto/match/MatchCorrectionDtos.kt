@@ -41,6 +41,20 @@ data class MatchCorrectionPlayerImpact(
     val previousLevel: String? = null,
     val resultingLevel: String? = null,
     val levelChanged: Boolean = false,
+    /**
+     * True when **no rating was applied to this player for this match**, because calibration suppressed
+     * it (#881) — so there is nothing to reverse and nothing to re-apply, and the correction leaves them
+     * untouched.
+     *
+     * `reversedChange` and `netAdjustment` are then "0" and `resultingRating` equals `currentRating`.
+     * Without this flag those zeroes are indistinguishable from a correction that happened to cancel out,
+     * which is the difference an administrator previewing a correction most needs to see.
+     *
+     * A player suppressed at rating time stays suppressed on correction: the decision belongs to the
+     * state as it was then, not to the state now — otherwise correcting a match after its calibration
+     * window closed would retroactively move a settled opponent's rating.
+     */
+    val wasSuppressed: Boolean = false,
 )
 
 /**

@@ -102,10 +102,17 @@ class MatchScoreCorrectionService(
         val resultingLevel: String?,
         // The history row being superseded — its `previous_rating`/`previous_level` are the historical
         // context the replacement row records.
-        val reversed: RatingHistoryEntry,
+        //
+        // **Null when no rating was applied to this player for this match** (#881): calibration suppressed
+        // it, so there is no row, nothing to reverse, and nothing to re-apply. Not an error — a valid
+        // state that this service must carry rather than reject.
+        val reversed: RatingHistoryEntry?,
     ) {
-        val netAdjustment: BigDecimal get() = newChange.change - oldDelta
-        val levelChanged: Boolean get() = reversed.previousLevel != resultingLevel
+        /** True when nothing was applied to this player, so the correction must leave them untouched. */
+        val wasSuppressed: Boolean get() = reversed == null
+
+        val netAdjustment: BigDecimal get() = if (wasSuppressed) BigDecimal.ZERO else newChange.change - oldDelta
+        val levelChanged: Boolean get() = !wasSuppressed && reversed?.previousLevel != resultingLevel
     }
 
     fun correctScore(
@@ -126,9 +133,18 @@ class MatchScoreCorrectionService(
             // was computed from) and rating_change (what was applied). Without them there is nothing to reverse.
             val history = ratings.historyForMatches(matchIds = listOf(element = matchId)).associateBy { it.userId }
             val players = match.team1.userIds + match.team2.userIds
-            ensure(condition = players.all { it in history }) {
+            // Requires a row for at least ONE player, not for every player (#881).
+            //
+            // A calibration-suppressed player HAS no row — nothing was applied to them — and demanding one
+            // made any match involving a calibrating player permanently uncorrectable, reporting that its
+            // ratings "cannot be reversed" when in truth there was nothing to reverse for that player.
+            //
+            // The floor still matters: a rated match where NO player has a row is genuinely inconsistent,
+            // since suppression only ever applies to players who were not calibrating while someone else
+            // was — it can never suppress everyone.
+            ensure(condition = players.any { it in history }) {
                 ServiceError.Conflict(
-                    message = "Match $matchId has no live rating history for every player; its ratings cannot be reversed",
+                    message = "Match $matchId has no live rating history for any player; its ratings cannot be reversed",
                 )
             }
 
@@ -178,6 +194,39 @@ class MatchScoreCorrectionService(
     )
 
     /**
+     * The rating [userId] held when [match] was rated.
+     *
+     * For a player whose delta was applied, that is recorded on their own history row and is used
+     * verbatim. A **calibration-suppressed** player has no row for this match (#881), so it is
+     * reconstructed from their most recent history row calculated at or before the match's rating time —
+     * i.e. wherever their rating stood when this match was computed.
+     *
+     * Falls back to their current rating when they have no earlier history at all, which is the case for
+     * a player whose only rating is the manual designation itself. That is exact in the common case: with
+     * no matches rated since, current *is* the rating they held.
+     *
+     * This is an input to the recomputation rather than something written back, but it is not cosmetic —
+     * the rating gap it feeds decides the other side's corrected delta.
+     */
+    private fun historicalRatingFor(
+        userId: UUID,
+        match: Match,
+        row: RatingHistoryEntry?,
+    ): BigDecimal {
+        if (row != null) {
+            return row.previousRating
+        }
+        val ratedAt = match.ratedAt
+        val priorRating =
+            ratings
+                .historyByUser(userId = userId)
+                .filter { entry -> ratedAt == null || !entry.calculatedAt.isAfter(ratedAt) }
+                .maxByOrNull { it.calculatedAt }
+                ?.newRating
+        return priorRating ?: ratings.findCurrentRating(userId = userId)?.currentRating ?: BigDecimal.ZERO
+    }
+
+    /**
      * Recompute each player's delta for the corrected score and pair it with the delta being reversed.
      *
      * The calculator is fed the players' ratings AT THE TIME — `previous_rating` from the row being
@@ -192,7 +241,13 @@ class MatchScoreCorrectionService(
     ): Either<ServiceError, List<Impact>> =
         either {
             val players = match.team1.userIds + match.team2.userIds
-            val historicalRatings = players.associateWith { history.getValue(key = it).previousRating }
+            // The rating each player held when this match was rated. For a rated player that is on their
+            // row; for a calibration-suppressed player there is no row, so it is reconstructed from their
+            // most recent history row before this match, falling back to their current rating.
+            //
+            // It matters even though their own rating will not move: it is an INPUT to the recomputation,
+            // so the rating gap — and therefore the other side's corrected delta — depends on it.
+            val historicalRatings = players.associateWith { historicalRatingFor(userId = it, match = match, row = history[it]) }
             val groups = groupsFor(users = users, classifier = classifier, userIds = players, format = match.matchFormat)
 
             // The corrected match as the calculator should see it: the new sets and winner, everything else
@@ -206,16 +261,22 @@ class MatchScoreCorrectionService(
 
             players.map { userId ->
                 val change = playerChangeFrom(userId = userId, response = result.response, breakdowns = breakdowns).bind()
-                val reversed = history.getValue(key = userId)
+                val reversed = history[userId]
                 val current =
                     ensureNotNull(value = ratings.findCurrentRating(userId = userId)?.currentRating) {
                         ServiceError.Conflict(message = "User $userId has no current rating to correct")
                     }
-                val resulting = clamp(value = current - reversed.ratingChange + change.change)
+                // A player who was suppressed STAYS suppressed (#881). The suppression belongs to the
+                // state as it was when the match was rated — which the presence or absence of a row
+                // records — not to the state now. Otherwise correcting a match after its calibration
+                // window closed would retroactively start moving a settled opponent's rating, applying a
+                // change that was deliberately withheld at the time.
+                val resulting =
+                    if (reversed == null) current else clamp(value = current - reversed.ratingChange + change.change)
                 Impact(
                     userId = userId,
                     currentRating = current,
-                    oldDelta = reversed.ratingChange,
+                    oldDelta = reversed?.ratingChange ?: BigDecimal.ZERO,
                     newChange = change,
                     resultingRating = resulting,
                     resultingLevel = Level.fromValue(value = resulting.toPlainString()).value,
@@ -260,18 +321,21 @@ class MatchScoreCorrectionService(
                 completedAt = match.completedAt ?: now,
             )
             ratings.markMatchHistoryReversed(matchId = match.id, reversedAt = now)
-            impacts.forEach { impact ->
+            // A suppressed player had no row to supersede and gets no replacement (#881): the correction
+            // reverses exactly what was applied, per player, or nothing. Writing a row here would invent a
+            // change that never happened and hand the next correction something false to reverse.
+            impacts.mapNotNull { impact -> impact.reversed?.let { impact to it } }.forEach { (impact, reversed) ->
                 ratings.appendHistory(
                     write =
                         RatingHistoryWrite(
                             userId = impact.userId,
                             matchId = match.id,
                             // Historical context, so the row reads as the calculation that SHOULD have happened.
-                            previousRating = impact.reversed.previousRating,
+                            previousRating = reversed.previousRating,
                             newRating = impact.newChange.newRating,
                             ratingChange = impact.newChange.change,
                             percentChange = impact.newChange.percentChange,
-                            previousLevel = impact.reversed.previousLevel,
+                            previousLevel = reversed.previousLevel,
                             newLevel = impact.newChange.newLevel,
                             levelChanged = impact.newChange.levelChanged,
                             breakdown = impact.newChange.breakdown.toSnapshot(),
@@ -425,12 +489,20 @@ class MatchScoreCorrectionService(
                         displayName = usersById[impact.userId]?.displayName(),
                         currentRating = impact.currentRating.toPlainString(),
                         reversedChange = impact.oldDelta.toPlainString(),
-                        newChange = impact.newChange.change.toPlainString(),
+                        // Zero for a suppressed player: the recomputed delta is real but was never going
+                        // to be applied, and reporting it would read as a change that is about to happen.
+                        newChange =
+                            if (impact.wasSuppressed) {
+                                BigDecimal.ZERO.toPlainString()
+                            } else {
+                                impact.newChange.change.toPlainString()
+                            },
                         netAdjustment = impact.netAdjustment.toPlainString(),
                         resultingRating = impact.resultingRating.toPlainString(),
-                        previousLevel = impact.reversed.previousLevel,
+                        previousLevel = impact.reversed?.previousLevel,
                         resultingLevel = impact.resultingLevel,
                         levelChanged = impact.levelChanged,
+                        wasSuppressed = impact.wasSuppressed,
                     )
                 },
             awardsRevoked = points.revoked,
