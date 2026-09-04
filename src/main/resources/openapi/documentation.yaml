@@ -7833,6 +7833,14 @@ components:
           nullable: true
         levelChanged:
           type: boolean
+        suppressed:
+          type: boolean
+          description: >-
+            True when this player's rating was NOT applied because they were not in calibration while
+            another player in the match was (#881). The other figures are then truthful rather than
+            counterfactual -- newRating equals previousRating and change is "0" -- so this flag is the
+            only way to tell a genuinely-zero calculation from a suppressed one. `breakdown` still holds
+            what would have happened.
         breakdown:
           $ref: '#/components/schemas/CalculationBreakdownResponse'
 

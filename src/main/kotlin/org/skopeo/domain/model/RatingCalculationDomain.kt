@@ -39,6 +39,20 @@ data class PlayerChange(
     val newLevel: String?,
     val levelChanged: Boolean,
     val breakdown: CalculationBreakdown,
+    /**
+     * True when this player's rating was **not applied** because they were not in calibration while
+     * someone else in the match was (#881).
+     *
+     * The reported figures are then truthful rather than counterfactual: [newRating] equals
+     * [previousRating], [change] is zero, and [levelChanged] is false — the rating genuinely did not
+     * move. What *would* have happened is still recoverable from [breakdown], which is left intact, so
+     * nothing is lost for debugging a suppression that looks wrong.
+     *
+     * A suppressed change writes **no** rating row and **no** history row. That absence is load-bearing:
+     * `MatchScoreCorrectionService` reverses exactly what was applied, so a history row here would make a
+     * later correction reverse a change that never happened.
+     */
+    val suppressed: Boolean = false,
 )
 
 data class MatchCalculation(

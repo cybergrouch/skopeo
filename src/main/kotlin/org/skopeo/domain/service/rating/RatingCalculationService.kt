@@ -21,6 +21,7 @@ import org.skopeo.domain.model.AuditEntityType
 import org.skopeo.domain.model.AuditWrite
 import org.skopeo.domain.model.CalculationBreakdown
 import org.skopeo.domain.model.CalculationBreakdownSnapshot
+import org.skopeo.domain.model.CalibrationStatus
 import org.skopeo.domain.model.Match
 import org.skopeo.domain.model.MatchCalculation
 import org.skopeo.domain.model.MatchRatingWrite
@@ -61,6 +62,8 @@ class RatingCalculationService(
     private val matches: MatchRepository = MatchRepository(),
     private val ratings: RatingAssembler = RatingAssembler(),
     private val users: UserRepository = UserRepository(),
+    // Who is still being calibrated (#881) — the asymmetry's only input.
+    private val calibration: CalibrationService = CalibrationService(),
     private val calculator: RankingCalculator = PerformanceBasedRankingCalculatorImpl(),
     private val audit: AuditService = AuditService(),
     // Owns all group-classification logic (#719); stamps each PlayerProfile with its opaque `group`.
@@ -161,7 +164,9 @@ class RatingCalculationService(
         val ratingRunId = UUID.randomUUID()
         transaction {
             processed.forEach { calc ->
-                calc.changes.forEach { change ->
+                // A suppressed change (#881) writes neither a rating nor a history row. The missing
+                // history row is what lets a later score correction reverse only what was applied.
+                calc.changes.filterNot { it.suppressed }.forEach { change ->
                     ratings.applyMatchRating(
                         write =
                             MatchRatingWrite(
@@ -262,8 +267,15 @@ class RatingCalculationService(
             val result = calculator.calculate(request = request)
             val breakdowns = breakdownsByPlayer(audit = result.audit)
 
-            val changes = players.map { playerChangeFrom(userId = it, response = result.response, breakdowns = breakdowns).bind() }
-            changes.forEach { snapshot[it.userId] = it.newRating }
+            val computed = players.map { playerChangeFrom(userId = it, response = result.response, breakdowns = breakdowns).bind() }
+            // Calibration asymmetry (#881), applied HERE and not in the calculator: the calculator stays a
+            // pure, zero-sum function of the request, and its tests keep asserting that. Suppression is a
+            // property of the players, which the calculator knows nothing about.
+            val changes = withCalibrationApplied(changes = computed, calibration = calibration.statusesFor(userIds = players))
+            // Only ratings that actually moved carry forward. Seeding the snapshot with a suppressed
+            // player's computed rating would let the suppression leak into every later match in the run —
+            // the change would not be written, but the next calculation would be computed from it.
+            changes.filterNot { it.suppressed }.forEach { snapshot[it.userId] = it.newRating }
             MatchCalculation(matchId = match.id, matchDate = match.matchDate, completedAt = match.completedAt, changes = changes)
         }
 
@@ -526,3 +538,57 @@ private fun teamOf(
         // Team-mean NTRP-unit handicap (#486); the calculator deducts it from this side for the delta only.
         handicap = handicap?.toPlainString(),
     )
+
+/**
+ * Apply the calibration asymmetry to a match's computed changes (#881).
+ *
+ * **The rule, in one line:** a player's change is suppressed when *they* are not calibrating and someone
+ * else in the match is.
+ *
+ * That single predicate produces every case the issue specifies, which is why there is no per-format
+ * branching here:
+ *
+ * | Match | Result |
+ * |---|---|
+ * | calibrating vs settled | only the calibrating player moves |
+ * | calibrating vs calibrating | both move — neither has a rating worth protecting |
+ * | settled vs settled | both move, exactly as before |
+ * | doubles, one partner calibrating | only that partner's share is applied |
+ *
+ * The doubles row is the **documented exception to §7.1** of the algorithm doc: the team delta and the
+ * mean-normalized split are computed exactly as usual, but only the calibrating partner's share lands, so
+ * the team mean no longer moves by exactly `Δ_team`. That is the agreed behaviour, not a rounding error.
+ *
+ * The rationale for suppressing the settled side at all: a rating assigned by a human is a guess, and a
+ * settled player should not carry a permanent change caused by someone else's provisional number. The
+ * cost is that the pool is no longer zero-sum while anyone is calibrating — rating is created or
+ * destroyed — which is a deliberate trade recorded in the algorithm doc.
+ *
+ * A suppressed change is **zeroed, not dropped**: the player stays in the response so a dry-run preview
+ * still accounts for everyone, and the figures shown are what actually happened (no movement) rather than
+ * a counterfactual an admin might read as fact. The [CalculationBreakdown] is left untouched, so what
+ * would have happened remains inspectable.
+ */
+internal fun withCalibrationApplied(
+    changes: List<PlayerChange>,
+    calibration: Map<UUID, CalibrationStatus>,
+): List<PlayerChange> {
+    val anyCalibrating = changes.any { calibration[it.userId]?.inCalibration == true }
+    if (!anyCalibrating) {
+        return changes
+    }
+    return changes.map { change ->
+        if (calibration[change.userId]?.inCalibration == true) {
+            change
+        } else {
+            change.copy(
+                newRating = change.previousRating,
+                change = BigDecimal.ZERO,
+                percentChange = BigDecimal.ZERO,
+                newLevel = change.previousLevel,
+                levelChanged = false,
+                suppressed = true,
+            )
+        }
+    }
+}

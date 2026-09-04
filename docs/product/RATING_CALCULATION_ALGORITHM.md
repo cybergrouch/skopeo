@@ -681,9 +681,9 @@ The team delta is distributed to the two partners **in proportion to each partne
 
 This split is deliberately **mean-normalized** rather than an even halving:
 
-- The **team mean moves by exactly `Δ_team`** (the amount the formula computed for the team), so the calibration is identical to singles.
+- The **team mean moves by exactly `Δ_team`** (the amount the formula computed for the team), so the calibration is identical to singles. **Exception (#881):** when one partner is in a [calibration window](#calibration-window) and the other is not, only the calibrating partner's share `δᵢ` is applied, so the team mean does *not* move by `Δ_team`. The split is computed exactly as below; the settled partner's share is simply discarded on the way to the database.
 - The partners' changes **sum to `2 × Δ_team`** — each player is a full member of the team, not half of one.
-- Total rating is **conserved across all four players** before boundary clamping (team 1 gains what team 2 loses, doubled).
+- Total rating is **conserved across all four players** before boundary clamping (team 1 gains what team 2 loses, doubled) — except where a calibration window suppresses a player's change, per the exception above.
 - **Equal partners split evenly**: when `rₐ = r_b = teamMean`, each `δ = Δ_team` — the same change the equivalent singles player would get.
 - **Unequal partners split proportionally**: the stronger partner (higher `rᵢ`) absorbs a larger share of the swing — they had more rating "at stake" in the team average. This is the only signal available, since a match result never reveals which partner actually contributed the points ([known limitation](#8-edge-cases-and-known-limitations)).
 
@@ -860,6 +860,15 @@ The constant **2.0** applied to the scale factor on the upset path, making surpr
 
 #### Zero-sum
 The property that the winner's gain equals the loser's loss (`change₁ + change₂ = 0`). Holds for raw and smoothed changes; can be intentionally broken by boundary clamping. See [§5.2](#52-boundary-clamping).
+
+**The calculator remains zero-sum unconditionally** — it is a pure function of the request and knows nothing about who is calibrating. What is no longer conserved is the **pool**: while any player is in a [calibration window](#calibration-window), the settled players' computed changes are discarded when they are applied, so rating is created or destroyed at the boundary between calculation and persistence. That is deliberate (#881), lives entirely in the application layer, and is why the calculator's own zero-sum tests are untouched by it.
+
+#### Calibration window
+The first N **rated** matches after a rating is assigned by hand (#881), N being a global admin setting that defaults to 10. During it, the player's own rating moves but their opponents' and partners' do not — unless those players are calibrating too, in which case everyone moves. The intent is that a mis-assessment cannot permanently drag settled players with it.
+
+Distinct from [confidence](RATING_CONFIDENCE.md) even though both describe an unproven rating: confidence is a *displayed, advisory* measure that rises with match count and recency, while calibration is a *hard rule* about whose rating may move at all. A manual assessment computes to 0% confidence **and** opens a calibration window; they are two different consequences of the same event, and neither substitutes for the other.
+
+Calibration is **derived, never stored**: it is computed from the designation timestamp, the count of rated matches since, and the current N. Because N is global and mutable, lowering it ends several in-flight calibrations at once with no migration.
 
 #### Smoothing factor
 An optional damping multiplier applied to the raw change before clamping: 0.5 means only half the calculated change is applied. Reduces volatility from single outlier performances. See [§5.1](#51-smoothing-optional) and [RATING_SMOOTHING.md](RATING_SMOOTHING.md).
