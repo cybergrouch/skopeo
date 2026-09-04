@@ -17,8 +17,8 @@ This document tracks major implementation milestones and architectural decisions
 
 - Organized the calculator under a versioned package (`service/calculator/impl/v1/`) behind the `RankingCalculator` interface.
 - Calibrated the Elo-style K-factor for the NTRP/UTR range vs the chess range; added system-specific K-factors (UTR has since been removed — see 2026-06-23).
-- Added USTA NTRP Dynamic-style rating smoothing (`options.smoothingFactor`) with edge-case coverage, migrated tests to Kotest assertions, and enforced named parameters via detekt.
-- Added comprehensive algorithm documentation (later renamed `RATING_CALCULATION_ALGORITHM.md`) and a USTA feature-comparison document.
+- Added optional rating smoothing (`options.smoothingFactor`) with edge-case coverage, migrated tests to Kotest assertions, and enforced named parameters via detekt.
+- Added comprehensive algorithm documentation (later renamed `RATING_CALCULATION_ALGORITHM.md`) and a feature-comparison document measuring Skopeo against USTA's rating system.
 
 ## 2026-06-06 – 2026-06-10: API hardening and audit detail
 

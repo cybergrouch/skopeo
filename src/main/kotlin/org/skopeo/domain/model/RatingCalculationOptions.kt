@@ -8,13 +8,16 @@ import kotlinx.serialization.Serializable
 /**
  * Configuration options for rating calculations.
  *
- * These options allow customization of the rating algorithm behavior,
- * particularly for implementing USTA NTRP Dynamic-style rating smoothing.
+ * These options allow customization of the rating algorithm behavior, particularly the optional
+ * averaging of a new rating against the previous one ("smoothing").
+ *
+ * The smoothing *idea* is borrowed from how dynamic tennis ratings are commonly damped; the factor and
+ * its default are Skopeo's own choice, not a published standard we conform to (#879).
  */
 @Serializable
 data class RatingCalculationOptions(
     /**
-     * Enable rating smoothing (USTA NTRP Dynamic style).
+     * Enable rating smoothing: average the new rating against the previous one.
      *
      * When enabled, the final rating is calculated as an average between
      * the calculated new rating and the previous rating:
@@ -34,15 +37,15 @@ data class RatingCalculationOptions(
      *
      * Determines how much weight to give the calculated rating vs the previous rating:
      * - 0.0: No change (rating never moves)
-     * - 0.5: USTA NTRP Dynamic style (average of calculated and previous)
+     * - 0.5: even average of the calculated and previous ratings
      * - 1.0: Full change (no smoothing, same as smoothingEnabled=false)
      *
      * Common values:
-     * - 0.5: Standard USTA averaging
+     * - 0.5: even averaging (Skopeo's default)
      * - 0.3: Conservative (30% of calculated change)
      * - 0.7: Aggressive (70% of calculated change)
      *
-     * Default: 0.5 (USTA-style averaging)
+     * Default: 0.5 (even averaging)
      *
      * @throws IllegalArgumentException if not in range [0.0, 1.0]
      */

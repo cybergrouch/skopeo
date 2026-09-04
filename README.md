@@ -4,7 +4,9 @@ A Ktor API for dynamic calculation of tennis rankings based on match results.
 
 ## Overview
 
-Skopeo provides real-time ranking calculations for tennis players using the NTRP (National Tennis Rating Program) system. The API calculates updated rankings for both players based on match outcomes, deriving expected results from the difference in their current rankings. NTRP is the only supported rating system by design — UTR support was intentionally removed.
+Skopeo provides real-time ranking calculations for tennis players on the **NTRP scale: 1.0–7.0 in 0.5-point bands**. The API calculates updated ratings for both players from a match result, deriving the expected outcome from the gap between their current ratings. NTRP is the only supported rating scale by design — UTR support was intentionally removed.
+
+> **What "NTRP" means here.** It is Skopeo's own term for a banded 1.0–7.0 rating scale — a reference framework **loosely based on** USTA's rating system, whose concept of a banded tennis scale we borrowed. Skopeo does not implement that system, does not claim to reproduce its ratings, and **is not affiliated with or endorsed by the United States Tennis Association (USTA)**. Every constant in the algorithm is derived from Skopeo's own calibration — see [RATING_CALCULATION_ALGORITHM.md](docs/product/RATING_CALCULATION_ALGORITHM.md).
 
 Beyond the stateless calculator, Skopeo persists players, matches, and ratings: admins set each player's initial rating, hosts create match fixtures and upload results, an admin-triggered calculation turns those results into rating changes (dry-run by default, explicit commit to write), and every change is recorded in rating history. A capability-gated React web UI (`web/`) wraps it all — sign-up plus a dashboard whose tabs (Profile, Settings, Standings, Event Organizer, Ratings, Admin, and more) are shown according to each user's capabilities.
 
@@ -26,7 +28,7 @@ The heart of the Skopeo system - a sophisticated performance-based rating calcul
   - Single K-factor of 0.16 calibrated to the NTRP range
 - **Published Levels**: Discrete rating buckets with automatic level change detection
   - Stateless calculator derives the published level dynamically from the value
-- **Rating Smoothing**: USTA NTRP Dynamic-style smoothing for stable ratings
+- **Rating Smoothing**: optional damping of rating changes for stability
   - Configurable smoothing factors (0.3, 0.5, 0.7)
   - Reduces volatility from single exceptional performances
 - **Comprehensive Validation**: Input validation for player profiles, ratings, and match scores
@@ -417,7 +419,7 @@ Skopeo uses a **performance-based rating system** with normalized gaps to ensure
 
 ### Rating Smoothing (Optional)
 
-Skopeo supports **USTA NTRP Dynamic-style rating smoothing** to create more stable and predictable ratings:
+Skopeo supports **optional rating smoothing** to create more stable and predictable ratings. The idea of damping a dynamic rating is borrowed, not the algorithm — the factors below are Skopeo's own:
 
 **What is smoothing?**
 - Blends calculated rating changes with previous ratings
@@ -425,7 +427,7 @@ Skopeo supports **USTA NTRP Dynamic-style rating smoothing** to create more stab
 - Provides gradual convergence toward true skill level
 
 **Smoothing Factors:**
-- **0.5** - USTA standard (recommended default, 50% of change applied)
+- **0.5** - Even average (recommended default, 50% of change applied)
 - **0.3** - Conservative (30% applied, for established players)
 - **0.7** - Aggressive (70% applied, for newer players)
 - **1.0** - Full change (no smoothing, equivalent to disabled)
@@ -434,7 +436,7 @@ Skopeo supports **USTA NTRP Dynamic-style rating smoothing** to create more stab
 ```
 Without smoothing: +0.160 / -0.160
 With 0.3 factor:   +0.048 / -0.048  (30% applied)
-With 0.5 factor:   +0.080 / -0.080  (50% applied - USTA style)
+With 0.5 factor:   +0.080 / -0.080  (50% applied - the default)
 With 0.7 factor:   +0.112 / -0.112  (70% applied)
 ```
 
@@ -470,7 +472,7 @@ Comprehensive documentation is available in the `docs/` directory:
   - Examples and error codes
 
 - **[RATING_SMOOTHING.md](docs/product/RATING_SMOOTHING.md)** - Rating smoothing algorithm (NEW)
-  - USTA NTRP Dynamic-style smoothing explained
+  - Optional rating smoothing explained
   - Mathematical formulas and examples
   - Smoothing factor recommendations (0.3, 0.5, 0.7)
   - Usage guide and best practices

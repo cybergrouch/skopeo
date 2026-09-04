@@ -46,7 +46,9 @@ paths:
       summary: Calculate ranking changes
       description: |
         Calculates rating changes for players based on match results.
-        Uses the NTRP (National Tennis Rating Program) system.
+        Ratings are on the NTRP scale: 1.0-7.0 in 0.5-point bands. "NTRP" here is Skopeo's own term for
+        that scale -- a reference framework loosely based on USTA's rating system, not an implementation
+        of it, and Skopeo is not affiliated with or endorsed by the United States Tennis Association.
 
         The algorithm uses a performance-based Elo calculation that considers:
         - Current player ratings and rating difference

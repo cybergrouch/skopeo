@@ -2,7 +2,9 @@
 
 ## Overview
 
-Skopeo implements **USTA NTRP Dynamic-style rating smoothing**, a technique that creates more stable and predictable rating changes by blending calculated ratings with previous ratings.
+Skopeo offers **optional rating smoothing**: a technique that creates more stable, more predictable rating changes by blending a newly calculated rating with the previous one.
+
+The *idea* of damping a dynamic rating this way is widely used, including by USTA's rating system, and Skopeo borrowed it. What follows is **not** an implementation of anyone else's algorithm and makes no claim to reproduce its results: the factor, its default and the pipeline position are Skopeo's own choices, derived in [RATING_CALCULATION_ALGORITHM.md](RATING_CALCULATION_ALGORITHM.md) (#879).
 
 ## Why Smoothing?
 
@@ -48,7 +50,7 @@ finalRating = previousRating + smoothedChange
 |--------|------|-------------|-------------|
 | **0.0** | Frozen | No change applied | Testing only |
 | **0.3** | Conservative | 30% of calculated change | High-stakes leagues, established players |
-| **0.5** | Standard | 50% of calculated change (USTA style) | **Recommended default** |
+| **0.5** | Standard | 50% of calculated change (even average) | **Recommended default** |
 | **0.7** | Aggressive | 70% of calculated change | Newer players, rapid convergence needed |
 | **1.0** | Full | 100% of calculated change (no smoothing) | Tournament play, single events |
 
@@ -70,7 +72,7 @@ Player 1: 4.0 → 4.048000 (+0.048000)
 Player 2: 4.0 → 3.952000 (-0.048000)
 ```
 
-**With smoothing factor 0.5** (USTA standard):
+**With smoothing factor 0.5** (an even average — the default):
 ```
 smoothedChange = 0.160000 × 0.5 = 0.080000
 Player 1: 4.0 → 4.080000 (+0.080000)
@@ -147,7 +149,7 @@ val request = RankingCalculationRequest(
     ),
     options = RatingCalculationOptions(
         smoothingEnabled = true,
-        smoothingFactor = 0.5  // USTA standard
+        smoothingFactor = 0.5  // even average (default)
     )
 )
 
@@ -221,9 +223,9 @@ result.audit.filter { it.message.contains("NTRP change") }.forEach { entry ->
 
 ### Choosing a Smoothing Factor
 
-1. **0.5 (USTA Standard)** - Recommended for most use cases
+1. **0.5 (even average)** - Recommended for most use cases
    - Balanced between stability and responsiveness
-   - Proven effective by USTA NTRP Dynamic Algorithm
+   - The same damping idea is used by established dynamic-rating systems
    - Good for leagues with regular play (weekly/biweekly)
 
 2. **0.3 (Conservative)** - Use when:
@@ -319,7 +321,7 @@ Test scenarios also included in `TestScenarios.kt` (SM1-SM6).
 
 ## References
 
-- **USTA NTRP Dynamic Algorithm**: Inspired the smoothing approach
+- **USTA's rating system**: the source of the smoothing *idea*; not implemented or reproduced here
 - **Elo Rating System**: Foundation for base rating calculations
 - **Skopeo Documentation**: [RatingCalculationOptions.kt](../src/main/kotlin/org/skopeo/model/RatingCalculationOptions.kt)
 
@@ -327,4 +329,4 @@ Test scenarios also included in `TestScenarios.kt` (SM1-SM6).
 
 Rating smoothing provides a simple yet powerful way to create more stable and fair rating systems. By choosing an appropriate smoothing factor, you can balance between rating stability and responsiveness to new information.
 
-**Recommended**: Start with factor 0.5 (USTA standard) and adjust based on your specific use case and player feedback.
+**Recommended**: Start with factor 0.5 (an even average) and adjust based on your specific use case and player feedback.

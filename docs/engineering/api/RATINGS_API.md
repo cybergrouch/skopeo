@@ -169,7 +169,7 @@ unverified inputs, and limit how much a noisy newcomer perturbs everyone else.**
   Mechanism: reliability gates **both** a player's own swing size **and** their influence on the
   pool.
 
-- **USTA NTRP.** New players enter **self-rated** (flagged `S`) using published NTRP guidelines.
+- **USTA's system.** New players enter **self-rated** (flagged `S`) using its published guidelines.
   A dynamic in-season rating (NTRP-D) updates per match; a year-end computer rating (`C`)
   consolidates it. Mis-self-rates are corrected via appeals, benchmarking, and dynamic/
   "three-strikes" disqualification. Mechanism: **flagged self-rate + dynamic correction +
