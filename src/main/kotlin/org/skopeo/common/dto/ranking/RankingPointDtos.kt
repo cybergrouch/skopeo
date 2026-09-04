@@ -125,7 +125,14 @@ data class AwardedPointsSummaryResponse(
     val totalPoints: String,
 )
 
-/** One player's total from a single event or match (#857), highest first. */
+/**
+ * One player's points from a single event or match (#857/#858), highest first.
+ *
+ * The last three fields are populated by the **match** card only, and that asymmetry is deliberate rather
+ * than an oversight: the event card sums every award a player earned across the event, so no single award
+ * id, point class or derivation describes the figure it shows. A match award is one award, so all three
+ * are meaningful there. One row shape for both, rather than a near-identical second one (#858).
+ */
 @Serializable
 data class AwardedPointsPlayerRow(
     val userId: String,
@@ -136,6 +143,23 @@ data class AwardedPointsPlayerRow(
     val isPlaceholder: Boolean = false,
     /** An admin-soft-deleted account (#518) — rendered as a dominant chip wherever the name appears. */
     val isDeleted: Boolean = false,
+    /** The award this row reports; null on the event card, which aggregates several. */
+    val awardId: String? = null,
+    /**
+     * OPEN_PLAY / FULL_MATCH / ANNUAL_TOURNAMENT / EXTERNAL.
+     *
+     * Shown per row because one tournament match can pay either a placement amount or the per-set
+     * schedule (#836/#837), and the two differ by an order of magnitude — 1000 beside 7, unlabelled,
+     * reads as a bug.
+     */
+    val pointClass: String? = null,
+    /**
+     * How the amount was reached — **omitted for a viewer not entitled to it**, not merely hidden by the
+     * client, because the band relation it contains is rating-adjacent (#583/#654). Present for an
+     * administrator, a rater, and an organizer of the match's own event (#789); absent for everyone else,
+     * including anonymous readers.
+     */
+    val derivation: AwardDerivationResponse? = null,
 )
 
 /**
