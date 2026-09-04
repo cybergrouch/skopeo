@@ -413,7 +413,7 @@ More complex but accounts for partner chemistry
 **Recommended Approach**: Option 1 (Individual Doubles Ratings)
 - Simpler to implement and understand
 - Players maintain consistent doubles rating regardless of partner
-- Similar to how USTA handles doubles
+- Similar to how USTA's rating system handles doubles
 - Easier migration path from singles-only system
 
 **Database Schema Implications** (Design Considerations for #7):

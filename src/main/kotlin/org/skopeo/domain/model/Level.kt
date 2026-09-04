@@ -11,7 +11,11 @@ import java.math.BigDecimal
  * 3.0 = [3.00, 3.50), 3.5 = [3.50, 4.00), … up to 7.0 (open-ended).
  *
  * In v1 the level is derived dynamically from the continuous rating value (it changes the
- * moment the rating crosses a boundary). USTA NTRP runs 1.0–7.0 in 0.5 steps.
+ * moment the rating crosses a boundary).
+ *
+ * The 1.0–7.0 span and the 0.5 band width are the shape Skopeo borrowed from USTA's rating system; see
+ * the NTRP entry in `docs/product/RATING_CALCULATION_ALGORITHM.md` for what that term does and does not
+ * claim (#879).
  *
  * @property value The level designation (e.g., "3.0", "4.5")
  * @property minRating Minimum rating (inclusive) for this level

@@ -392,7 +392,7 @@ raw change → (1) smoothing (optional) → (2) boundary clamping → (3) new ra
 
 ### 5.1 Smoothing (optional)
 
-When enabled via request `options`, the **[smoothing factor](#smoothing-factor)** blends the new rating with the old one, USTA NTRP Dynamic style:
+When enabled via request `options`, the **[smoothing factor](#smoothing-factor)** blends the new rating with the old one — a borrowed *idea*, with Skopeo's own factors (see the [NTRP glossary entry](#ntrp)):
 
 ```
 smoothed = (calculated × factor) + (previous × (1 − factor))
@@ -407,7 +407,7 @@ smoothedChange = rawChange × smoothingFactor
 | Factor | Effect |
 |---|---|
 | 0.3 | Conservative — 30% of the change applied (established players) |
-| 0.5 | USTA standard — 50% applied |
+| 0.5 | Even average — 50% applied (default) |
 | 0.7 | Aggressive — 70% applied (newer players, faster convergence) |
 | 1.0 | No smoothing (default behavior) |
 
@@ -806,6 +806,22 @@ Test coverage: `PerformanceBasedRankingCalculatorImplTest` (763 NTRP scenarios, 
 
 ## 10. Glossary
 
+#### NTRP
+**Our own defined term, and the only name we give the scale.** It denotes a rating scale running
+**1.0–7.0 with 0.5-point band increments** — a *reference framework loosely based on* USTA's rating
+system, whose concept of a banded 1.0–7.0 tennis scale we borrowed. It is not that system, does not claim
+to reproduce its numbers, and Skopeo is not affiliated with or endorsed by the United States Tennis
+Association.
+
+Deliberately left as an initialism — the expanded phrase is a USTA trademark, so **write "NTRP" and
+never spell it out** (#879). Every other document defers to this entry rather than re-explaining the relationship — the aim is
+one definition to keep accurate, not eight paraphrases.
+
+What we took is the *shape*: the 1.0–7.0 span (hence a rating range of 6.0, [§3.1](#31-the-rating-range-60))
+and the 0.5 half-level, which anchors the competitive threshold ([§3.2](#32-the-competitive-threshold-83--05-ntrp)).
+Everything else here — the K-factor, the dominance tables, the upset multiplier — is derived in this
+document from Skopeo's own calibration, not adopted from anyone.
+
 #### Elo rating system
 The classical chess rating method ([Wikipedia](https://en.wikipedia.org/wiki/Elo_rating_system)): after each game, points transfer from loser to winner, with the amount based on how expected the result was. Skopeo extends Elo with margin-of-victory awareness (the dominance factor).
 
@@ -846,7 +862,7 @@ The constant **2.0** applied to the scale factor on the upset path, making surpr
 The property that the winner's gain equals the loser's loss (`change₁ + change₂ = 0`). Holds for raw and smoothed changes; can be intentionally broken by boundary clamping. See [§5.2](#52-boundary-clamping).
 
 #### Smoothing factor
-An optional damping multiplier (USTA NTRP Dynamic style) applied to the raw change before clamping: 0.5 means only half the calculated change is applied. Reduces volatility from single outlier performances. See [§5.1](#51-smoothing-optional) and [RATING_SMOOTHING.md](RATING_SMOOTHING.md).
+An optional damping multiplier applied to the raw change before clamping: 0.5 means only half the calculated change is applied. Reduces volatility from single outlier performances. See [§5.1](#51-smoothing-optional) and [RATING_SMOOTHING.md](RATING_SMOOTHING.md).
 
 #### Boundary clamping
 Forcing a new rating back inside the NTRP floor/ceiling (1.0–7.0). The final pipeline step and the only one that may break zero-sum.
@@ -865,7 +881,7 @@ How a doubles team's computed change (`Δ_team`) is distributed to its partners:
 ## References
 
 - **Elo Rating System**: [Wikipedia](https://en.wikipedia.org/wiki/Elo_rating_system)
-- **NTRP**: USTA National Tennis Rating Program (1.0–7.0 scale, 0.5-step published levels)
+- **NTRP**: our own term for a 1.0–7.0 / 0.5-band rating scale — see the [glossary](#10-glossary) for what it is and is not
 - **Rating smoothing**: [RATING_SMOOTHING.md](RATING_SMOOTHING.md)
 - **Audit trail design**: [AUDIT_TRAIL.md](../engineering/architecture/AUDIT_TRAIL.md)
 
