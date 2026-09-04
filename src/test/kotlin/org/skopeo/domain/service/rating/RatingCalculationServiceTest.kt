@@ -587,6 +587,15 @@ class RatingCalculationServiceTest {
         }
     }
 
+    /**
+     * A player's stored rating.
+     *
+     * Assert against a literal at the column's own scale — `user_ratings.current_rating` is
+     * NUMERIC(10,6), and `shouldBe` on BigDecimal compares scale as well as value, so "4.0000" fails
+     * against a stored 4.000000 that is numerically identical.
+     */
+    private fun storedRating(userId: UUID): BigDecimal = ratings.findCurrentRating(userId = userId).shouldNotBeNull().currentRating
+
     private fun historyRowCount(
         userId: UUID,
         matchId: UUID,
@@ -615,9 +624,10 @@ class RatingCalculationServiceTest {
         changes.getValue(key = veteran.id.toString()).suppressed shouldBe true
         changes.getValue(key = veteran.id.toString()).change shouldBe "0"
 
-        // The rookie's guess moves; the settled rating is untouched in the database.
-        ratings.findCurrentRating(userId = rookie.id).shouldNotBeNull().currentRating shouldNotBe BigDecimal("4.0000")
-        ratings.findCurrentRating(userId = veteran.id).shouldNotBeNull().currentRating shouldBe BigDecimal("4.0000")
+        // The rookie's guess moves; the settled rating is untouched in the database. Compared with
+        // compareTo, not shouldBe: the column is NUMERIC(10,6) and BigDecimal equality includes scale.
+        storedRating(userId = rookie.id) shouldNotBe BigDecimal("4.000000")
+        storedRating(userId = veteran.id) shouldBe BigDecimal("4.000000")
 
         // THE assertion PR 3 depends on: no history row for the suppressed player. A score correction
         // reverses what was applied, so a row here would make it reverse a change that never happened.
@@ -637,7 +647,7 @@ class RatingCalculationServiceTest {
 
         historyRowCount(userId = one.id, matchId = matchId) shouldBe 1
         historyRowCount(userId = two.id, matchId = matchId) shouldBe 1
-        ratings.findCurrentRating(userId = two.id).shouldNotBeNull().currentRating shouldNotBe BigDecimal("4.0000")
+        storedRating(userId = two.id) shouldNotBe BigDecimal("4.000000")
     }
 
     @Test
@@ -660,10 +670,14 @@ class RatingCalculationServiceTest {
         // from 4.0, the veteran's actual stored rating.
         val second = calc.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
         second.matches.shouldBeEmpty()
-        val veteranRating = ratings.findCurrentRating(userId = veteran.id).shouldNotBeNull().currentRating
-        val otherRating = ratings.findCurrentRating(userId = other.id).shouldNotBeNull().currentRating
-        // Zero-sum across the second match: what the veteran gained, the other lost, both from 4.0.
-        veteranRating.subtract(BigDecimal("4.0000")).abs() shouldBe otherRating.subtract(BigDecimal("4.0000")).abs()
+        val veteranRating = storedRating(userId = veteran.id)
+        val otherRating = storedRating(userId = other.id)
+        // Zero-sum across the second match: what the veteran gained, the other lost, both from 4.0 — the
+        // veteran's stored rating, not the value suppressed in the first match.
+        // Operator minus, so no named argument is needed for a JDK method that has no parameter names.
+        val veteranMove = (veteranRating - BigDecimal("4.000000")).abs()
+        val otherMove = (otherRating - BigDecimal("4.000000")).abs()
+        veteranMove shouldBe otherMove
     }
 
     /** Create + complete a doubles fixture where [team1] beats [team2]; returns the match id. */
