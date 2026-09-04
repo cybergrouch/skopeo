@@ -3,12 +3,21 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { MatchPage } from "./MatchPage";
 
-const { useGetApiV1MatchesCodeCode, useGetApiV1UsersMe } = vi.hoisted(() => ({
+const {
+  useGetApiV1MatchesCodeCode,
+  useGetApiV1MatchesCodeCodePoints,
+  useGetApiV1UsersMe,
+} = vi.hoisted(() => ({
   useGetApiV1MatchesCodeCode: vi.fn(),
+  useGetApiV1MatchesCodeCodePoints: vi.fn(),
   useGetApiV1UsersMe: vi.fn(),
 }));
+// Both hooks the page reads from this module. A mock that omits one returns undefined for it, which
+// fails inside the component rather than where the omission is — so every hook the page imports has to
+// be listed here.
 vi.mock("@/api/generated/matches/matches", () => ({
   useGetApiV1MatchesCodeCode,
+  useGetApiV1MatchesCodeCodePoints,
 }));
 // The viewer lookup that gates the admin-only score correction (#776); anonymous by default.
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
@@ -50,6 +59,8 @@ describe("MatchPage", () => {
     vi.clearAllMocks();
     // Anonymous by default: no capabilities, so no admin affordance.
     useGetApiV1UsersMe.mockReturnValue({ data: undefined });
+    // No points awarded by default, so the card is absent unless a test says otherwise (#858).
+    useGetApiV1MatchesCodeCodePoints.mockReturnValue({ data: undefined });
   });
 
   it("shows a loading state", () => {
@@ -588,5 +599,92 @@ describe("MatchPage", () => {
 
       expect(screen.queryByText("Re-rated")).not.toBeInTheDocument();
     });
+  });
+
+  it("shows what the match awarded, with the point class named (#858)", () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({ data: match, isLoading: false });
+    useGetApiV1MatchesCodeCodePoints.mockReturnValue({
+      data: {
+        rows: [
+          {
+            userId: "u1",
+            displayName: "Ana",
+            publicCode: "AAA111",
+            points: "8.0000",
+            awardId: "a1",
+            pointClass: "OPEN_PLAY",
+          },
+          { userId: "u2", displayName: "Bob", points: "1.0000", awardId: "a2", pointClass: "OPEN_PLAY" },
+        ],
+        totalPoints: "9.0000",
+      },
+      isLoading: false,
+    });
+    renderAt();
+
+    expect(screen.getByText("Ranking points awarded")).toBeInTheDocument();
+    expect(screen.getByText("+8")).toBeInTheDocument();
+    expect(screen.getByText("+1")).toBeInTheDocument();
+    // The class is what stops a placement amount reading as a per-set one (#836/#837).
+    expect(screen.getAllByText("per set")).toHaveLength(2);
+  });
+
+  it("renders no points card at all when the match awarded nothing (#858)", () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({ data: match, isLoading: false });
+    useGetApiV1MatchesCodeCodePoints.mockReturnValue({ data: { rows: [], totalPoints: "0" }, isLoading: false });
+    renderAt();
+
+    // An unfinalized event, awarding switched off (#831), or a suppressed viewer (#865) all land here.
+    // An empty card would read as a fault; absence reads as absence.
+    expect(screen.queryByText("Ranking points awarded")).not.toBeInTheDocument();
+  });
+
+  it("shows the derivation only when the server sent one (#858)", () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({ data: match, isLoading: false });
+    useGetApiV1MatchesCodeCodePoints.mockReturnValue({
+      data: {
+        rows: [
+          {
+            userId: "u1",
+            displayName: "Ana",
+            points: "8.0000",
+            awardId: "a1",
+            pointClass: "OPEN_PLAY",
+            derivation: {
+              awardId: "a1",
+              points: "8.0000",
+              pointClass: "OPEN_PLAY",
+              scheduleVersion: 1,
+              recorded: true,
+              teamBand: "4.0",
+              opponentBand: "4.0",
+              sets: [
+                {
+                  setNumber: 1,
+                  score: "6-4",
+                  margin: 2,
+                  relation: "EQUAL",
+                  wonSet: true,
+                  winnerPoints: 8,
+                  loserPoints: 0,
+                  pointsForThisPlayer: 8,
+                },
+              ],
+            },
+          },
+          { userId: "u2", displayName: "Bob", points: "1.0000", awardId: "a2", pointClass: "OPEN_PLAY" },
+        ],
+        totalPoints: "9.0000",
+      },
+      isLoading: false,
+    });
+    renderAt();
+
+    // Ana's row explains itself; Bob's does not, because the server omitted the field. The component
+    // makes no access decision of its own — there is no client-side capability check here to drift from
+    // the server's (#583/#654).
+    expect(screen.getByText(/Set 1: 6-4/)).toBeInTheDocument();
+    expect(screen.getByText(/margin 2/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Set 1/)).toHaveLength(1);
   });
 });

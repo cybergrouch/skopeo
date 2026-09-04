@@ -24,6 +24,7 @@ import org.skopeo.common.dto.match.ReorderMatchesRequest
 import org.skopeo.common.dto.match.SetHandicapsRequest
 import org.skopeo.domain.service.match.MatchScoreCorrectionService
 import org.skopeo.domain.service.match.MatchService
+import org.skopeo.domain.service.ranking.MatchAwardedPointsService
 import java.math.BigDecimal
 import java.util.UUID
 
@@ -35,6 +36,7 @@ import java.util.UUID
 fun Application.configureMatchRoutes(
     service: MatchService = MatchService(),
     corrections: MatchScoreCorrectionService = MatchScoreCorrectionService(),
+    points: MatchAwardedPointsService = MatchAwardedPointsService(),
 ) {
     routing {
         route(path = "/api/v1/matches") {
@@ -42,6 +44,7 @@ fun Application.configureMatchRoutes(
             // (raters/admins see precise rates) but not required.
             authenticate(FIREBASE_AUTH, optional = true) {
                 publicByCode(service = service)
+                pointsByCode(points = points)
             }
             authenticate(FIREBASE_AUTH) {
                 listAndCreate(service = service)
@@ -132,6 +135,24 @@ private fun Route.publicByCode(service: MatchService) {
             val code = call.parameters["code"].orEmpty()
             respondEither(result = service.publicByCode(token = optionalVerifiedToken(), code = code)) { match ->
                 call.respond(status = HttpStatusCode.OK, message = match)
+            }
+        }
+    }
+}
+
+/**
+ * What this match awarded, per player (#858) — the public match page's points card.
+ *
+ * Anonymous like the match read it sits beside, and one endpoint for both audiences: amounts, recipients
+ * and point classes are public, while the derivation is omitted from the payload for a caller not
+ * entitled to it (see [MatchAwardedPointsService]).
+ */
+private fun Route.pointsByCode(points: MatchAwardedPointsService) {
+    get(path = "/code/{code}/points") {
+        respondMappingErrors {
+            val code = call.parameters["code"].orEmpty()
+            respondEither(result = points.forMatch(code = code, token = optionalVerifiedToken())) { summary ->
+                call.respond(status = HttpStatusCode.OK, message = summary)
             }
         }
     }

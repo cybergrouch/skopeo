@@ -16,6 +16,7 @@ import type {
   MatchPublicResponse,
 } from "@/api/generated/model";
 import { ShareCard } from "@/components/ShareCard";
+import { MatchPointsCard } from "@/features/match/MatchPointsCard";
 import { PublicPageShell } from "@/components/PublicPageShell";
 import { formatConfidence } from "@/lib/confidence";
 import { ConfidenceValue } from "@/components/ConfidenceValue";
@@ -337,6 +338,11 @@ export function MatchPage() {
       {match && canCorrectScore ? (
         <MatchScoreCorrectionCard match={match} />
       ) : null}
+
+      {/* Renders nothing until this match has actually awarded points (#858) — an unfinalized event, one
+          with "Award ranking points" off (#831), or a viewer the points are suppressed for (#865), all
+          legitimately have none, and an empty card there would read as a fault. */}
+      {match ? <MatchPointsCard code={match.publicCode} /> : null}
 
       {match ? <HeadToHeadCard match={match} /> : null}
 
