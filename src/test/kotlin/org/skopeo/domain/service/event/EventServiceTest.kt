@@ -65,6 +65,7 @@ import org.skopeo.repository.EventsTable
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.RatingRepository
+import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestAppSettings
@@ -1559,7 +1560,26 @@ class EventServiceTest {
     private fun rate(
         userId: UUID,
         level: String,
-    ) = RatingRepository().setRating(userId = userId, rating = BigDecimal(level), level = level)
+    ) = RatingRepository().setRating(userId = userId, rating = BigDecimal(level), level = level).also {
+        clearCalibration(userId = userId)
+    }
+
+    /**
+     * Clear the calibration stamp that a manual designation opens (#881).
+     *
+     * `setRating` is a manual designation, so a freshly-rated player is **in calibration** and earns no
+     * ranking points for their first N rated matches. These tests are about awarding, not calibration:
+     * their players are meant to be settled, which is the state of everyone who predates the feature and
+     * of anyone past their window. Without this they would assert zero awards and pass for the wrong
+     * reason — or, as they did, fail for a reason unrelated to what they test.
+     */
+    private fun clearCalibration(userId: UUID) {
+        transaction {
+            UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
+                it[calibrationStartedAt] = null
+            }
+        }
+    }
 
     @Test
     fun `finalizing a TOURNAMENT event awards placement points from the sanction-selected table (#525)`() {
