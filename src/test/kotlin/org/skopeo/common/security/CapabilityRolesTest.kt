@@ -61,16 +61,38 @@ class CapabilityRolesTest {
     fun `both view sets are supersets of match management`() {
         MATCH_MANAGEMENT_ROLES.all { it in EMAIL_VIEW_ROLES } shouldBe true
         MATCH_MANAGEMENT_ROLES.all { it in PLAYER_POINTS_VIEW_ROLES } shouldBe true
+        // Since #867, so is player search — a club owner organizing their own event needs the picker.
+        MATCH_MANAGEMENT_ROLES.all { it in PLAYER_SEARCH_ROLES } shouldBe true
     }
 
     @Test
-    fun `host-or-admin deliberately omits club owner, pending #867`() {
-        // NOT the same set as match management, and not quietly made so: a CLUB_OWNER without HOST can
-        // reach the New Event form (#789) but gets 403 from the player search this gates. Whether that is
-        // deliberate is tracked in #867; until it is answered the discrepancy stays visible here.
-        HOST_OR_ADMIN shouldContainExactlyInAnyOrder listOf(Capability.HOST, Capability.ADMINISTRATOR)
-        HOST_OR_ADMIN.contains(element = Capability.CLUB_OWNER) shouldBe false
-        (MATCH_MANAGEMENT_ROLES - HOST_OR_ADMIN) shouldBe setOf(element = Capability.CLUB_OWNER)
+    fun `player search admits club owners, closing the #867 gap`() {
+        // The gap this set was created to close: a CLUB_OWNER without HOST could reach the New Event form
+        // and event manager (#789) and got 403 from the player picker inside them. Asserted as a member
+        // rather than only via the superset check below, so a future narrowing names the account shape it
+        // would break.
+        PLAYER_SEARCH_ROLES.contains(element = Capability.CLUB_OWNER) shouldBe true
+        PLAYER_SEARCH_ROLES shouldContainExactlyInAnyOrder
+            listOf(
+                Capability.HOST,
+                Capability.CLUB_OWNER,
+                Capability.ADMINISTRATOR,
+                Capability.POINTS_MANAGER,
+                Capability.RATER,
+                Capability.RESEARCHER,
+            )
+        // A plain player cannot look other players up; that is the whole point of gating it.
+        PLAYER_SEARCH_ROLES.contains(element = Capability.PLAYER) shouldBe false
+    }
+
+    @Test
+    fun `finding a player is a weaker right than reading what the search returns`() {
+        // Search is the widest of the three sets by design: being able to find someone does not entitle
+        // you to their email (#630) or their points (#865), each enforced separately on the way out. If a
+        // narrowing ever makes one of these a superset of search, the layering has inverted.
+        EMAIL_VIEW_ROLES.all { it in PLAYER_SEARCH_ROLES } shouldBe true
+        PLAYER_POINTS_VIEW_ROLES.all { it in PLAYER_SEARCH_ROLES } shouldBe true
+        (PLAYER_SEARCH_ROLES - PLAYER_POINTS_VIEW_ROLES) shouldBe setOf(element = Capability.RESEARCHER)
     }
 
     @Test
@@ -80,12 +102,12 @@ class CapabilityRolesTest {
         //
         // An alias would pass this check, but there are none — aliasing was tried and reverted, because
         // `private val STAFF_ROLES = MATCH_MANAGEMENT_ROLES` in one service beside
-        // `private val STAFF_ROLES = HOST_OR_ADMIN` in another preserved the very collision being removed.
+        // `private val STAFF_ROLES = setOf(HOST, ADMINISTRATOR)` in another preserved the very collision
+        // being removed.
         //
-        // Deliberately NOT a ban on every inline `setOf(Capability…)`. `UserService`'s function-local
-        // `searchRoles = setOf(RESEARCHER, RATER)` is used once and duplicated nowhere, and hoisting it to
-        // a shared constant would make it look like a policy shared across services when it is not. The
-        // failure mode being guarded is six names for one set, not the existence of set literals.
+        // Deliberately NOT a ban on every inline `setOf(Capability…)`: a function-local literal used once
+        // and duplicated nowhere is not drift. The failure mode being guarded is six names for one set,
+        // not the existence of set literals.
         val offenders =
             serviceSources()
                 .filter { (_, source) -> DECLARES_OWN_SET.containsMatchIn(input = source) }

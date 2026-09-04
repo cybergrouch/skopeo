@@ -251,7 +251,7 @@ class UserSearchApiIntegrationTest {
         }
 
     @Test
-    fun `a RESEARCHER can search but cannot resolve ids (#622)`() =
+    fun `a RESEARCHER can both search and resolve ids (#867)`() =
         withApp { client ->
             seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
             val player = TestFirebaseAuth.mintToken(uid = "p1")
@@ -259,9 +259,39 @@ class UserSearchApiIntegrationTest {
             // RESEARCHER is a separately-granted capability since #622 (no longer a default sign-up grant).
             CapabilityRepository().grant(userId = UUID.fromString(p1.id), capability = Capability.RESEARCHER)
 
-            // A RESEARCHER may run player research (search)...
             client.lookup(token = player, params = "name=player").status shouldBe HttpStatusCode.OK
-            // ...but id-resolution stays HOST/ADMINISTRATOR only.
+            // Resolution used to be HOST/ADMINISTRATOR-only, which #867 merged into the search gate.
+            //
+            // That split was never argued for: it was two gate functions over two sets, and the assertion
+            // that pinned it was written to RECORD the behaviour when RESEARCHER became a default sign-up
+            // grant. Resolution is the weaker of the two — you must already hold the UUIDs, so it cannot
+            // enumerate anyone, and a researcher could obtain the identical summaries by searching those
+            // same players by name.
+            client.lookup(token = player, params = "ids=${p1.id}").status shouldBe HttpStatusCode.OK
+        }
+
+    @Test
+    fun `a CLUB_OWNER without HOST can search and resolve, as their own event's picker requires (#867)`() =
+        withApp { client ->
+            // The account shape #867 exists for: #789 gives a named club owner the New Event form and the
+            // event manager, both of which render a player picker calling this endpoint. Nothing implies
+            // HOST from CLUB_OWNER, so before this the UI was granted and the call answered 403.
+            val owner = seedStaff(uid = "owner", roles = setOf(element = Capability.CLUB_OWNER))
+            val alice = client.provisionNamed(uid = "u1", displayName = "Alice")
+
+            client.lookup(token = owner, params = "name=alice").status shouldBe HttpStatusCode.OK
+            client.lookup(token = owner, params = "ids=${alice.id}").status shouldBe HttpStatusCode.OK
+        }
+
+    @Test
+    fun `a plain player can neither search nor resolve (#867)`() =
+        withApp { client ->
+            val p1 = client.provisionNamed(uid = "p1", displayName = "Player One")
+            val player = TestFirebaseAuth.mintToken(uid = "p1")
+
+            // Widening the set is not opening it: a PLAYER still cannot enumerate other players, which is
+            // the whole reason the endpoint is gated.
+            client.lookup(token = player, params = "name=player").status shouldBe HttpStatusCode.Forbidden
             client.lookup(token = player, params = "ids=${p1.id}").status shouldBe HttpStatusCode.Forbidden
         }
 

@@ -9,10 +9,26 @@ overlap). They can be devolved into fine-grained permissions later.
 |---|---|
 | `PLAYER` | The baseline role every user keeps; play matches, view own profile/rating. |
 | `HOST` | Create/run events and match fixtures, upload results (see Matches & Events APIs). |
-| `CLUB_OWNER` | Club-level role (reserved; broad ownership over a club's resources). |
+| `CLUB_OWNER` (#789) | Named owner of a specific club: organize that club's events, run its matches, manage its rosters. Scoped **per club** via `ClubAccess`, not globally — holding the capability is not authority over every club. |
 | `RATER` (#106) | Set/adjust initial ratings, work the pending-assessment list, and triage re-rate requests (approve/deny). |
-| `RESEARCHER` (#107) | Gates the player-research feature (player search, lists, standings/seeding tooling). Granted to every new user at sign-up; staff (HOST/ADMINISTRATOR) also reach the same search. |
+| `RESEARCHER` (#107) | Gates the player-research feature (player lists, standings/seeding tooling). Granted to every new user at sign-up. |
+| `POINTS_MANAGER` (#472) | Operate the Points Management tab: grant, adjust and revoke ranking-point awards, and read the ledger. |
 | `ADMINISTRATOR` | Full administrative authority; **implicitly satisfies the RATER and RESEARCHER gates**, plus capability management, audit log, duplicate triage, etc. |
+
+### Who can look a player up (#867)
+
+Player search (`GET /api/v1/users?q=`) and id-resolution (`GET /api/v1/users?ids=`) share one gate,
+`PLAYER_SEARCH_ROLES`: **HOST, CLUB_OWNER, ADMINISTRATOR, POINTS_MANAGER, RATER, RESEARCHER**. A plain
+`PLAYER` cannot enumerate other players.
+
+CLUB_OWNER was missing until #867, which made a club owner who did not also hold HOST a broken account
+shape: #789 gives them the New Event form and the event manager, both of which render a player picker that
+calls this — the UI was granted and the call it depends on answered 403.
+
+Note that **finding someone is a weaker right than reading what the search returns about them.** A
+registered email needs `EMAIL_VIEW_ROLES` (#630) and a points figure needs `PLAYER_POINTS_VIEW_ROLES`
+(#865); both are enforced separately on the way out, which is why the search set is the widest of the
+three. All three live in `common/security/CapabilityRoles.kt`.
 
 ## Admin-only, end to end
 
