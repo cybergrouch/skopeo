@@ -53,6 +53,36 @@ class RatingRepository {
             ratingRow(userId = userId)?.toUserRatingEntity()
         }
 
+    /**
+     * Carry a calibration window across an account merge (#881): the survivor keeps whichever of the two
+     * designation timestamps is **earlier**, i.e. the longer remaining window.
+     *
+     * Inheriting is the conservative side. A merge moves the retired account's matches onto the survivor,
+     * so the survivor's rating becomes answerable for play it did not previously own; suppression can only
+     * ever withhold a change, never damage a settled rating, whereas dropping a window would start moving
+     * opponents' ratings off a number that is still a guess.
+     *
+     * A no-op when the retired account has no stamp, and it never clears the survivor's own — only ever
+     * moves the survivor's window earlier, never later.
+     */
+    fun inheritEarlierCalibrationStart(
+        survivorId: UUID,
+        retiredId: UUID,
+    ) {
+        transaction {
+            val retiredStart =
+                ratingRow(userId = retiredId)?.get(expression = UserRatingsTable.calibrationStartedAt)
+                    ?: return@transaction
+            val survivorStart = ratingRow(userId = survivorId)?.get(expression = UserRatingsTable.calibrationStartedAt)
+            if (survivorStart != null && !retiredStart.isBefore(survivorStart)) {
+                return@transaction
+            }
+            UserRatingsTable.update(where = { UserRatingsTable.userId eq survivorId }) {
+                it[calibrationStartedAt] = retiredStart
+            }
+        }
+    }
+
     /** Every user's current rating row — backs the per-band standings (#113). */
     fun allCurrentRatings(): List<UserRatingEntity> =
         transaction {

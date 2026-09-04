@@ -46,4 +46,37 @@ describe('NtrpLabel', () => {
     await user.click(screen.getByRole('button'))
     expect(screen.getByText(NTRP_DISCLAIMER)).toBeInTheDocument()
   })
+
+  it('marks a calibrating rating and explains it in the popover (#881)', async () => {
+    const user = userEvent.setup()
+    render(<NtrpLabel value="4.0" calibrating />)
+
+    // The marker joins the SAME text node — a sibling would make "NTRP 4.0" unfindable by getByText and
+    // silently break assertions across the suite, which this component's own docs warn about.
+    const trigger = screen.getByRole('button', { name: /still being calibrated/ })
+    expect(trigger).toHaveTextContent('NTRP 4.0*')
+
+    await user.click(trigger)
+
+    // Both notes: the calibration explanation AND the standing disclaimer. The marker only signals that
+    // there is something to read; the sentence is where it is actually said.
+    expect(await screen.findByText(/still being calibrated/)).toBeInTheDocument()
+    expect(screen.getByText(NTRP_DISCLAIMER)).toBeInTheDocument()
+  })
+
+  it('adds no marker and no calibration note when the rating is settled (#881)', async () => {
+    const user = userEvent.setup()
+    render(<NtrpLabel value="4.0" />)
+
+    // The default must be untouched: NTRP renders many times per screen, and a marker or an extra
+    // sentence on every settled rating would be noise on every roster in the app.
+    const trigger = screen.getByRole('button', { name: 'NTRP — about this rating framework' })
+    expect(trigger).toHaveTextContent('NTRP 4.0')
+    expect(trigger.textContent).not.toContain('*')
+
+    await user.click(trigger)
+
+    expect(await screen.findByText(NTRP_DISCLAIMER)).toBeInTheDocument()
+    expect(screen.queryByText(/still being calibrated/)).not.toBeInTheDocument()
+  })
 })

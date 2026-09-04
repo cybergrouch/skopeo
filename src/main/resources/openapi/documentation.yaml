@@ -5710,6 +5710,25 @@ components:
               type: string
               nullable: true
               description: Computed rating confidence 0..1 (#343), shown as a %; 0 when not match-derived.
+            inCalibration:
+              type: boolean
+              description: >-
+                Whether this rating is still being CALIBRATED (#881) -- assigned by hand and inside its
+                first N rated matches, during which the player's own rating moves but their opponents' and
+                partners' do not. Public, like the band it qualifies: a viewer comparing two bands
+                deserves to know that one of them is provisional.
+
+                Related to but not the same as confidence: that is a continuous measure of how
+                well-evidenced a rating is, while this is a hard statement that the number is not yet
+                earned. A manual assessment produces both 0% confidence AND a calibration window.
+            calibrationMatchesRated:
+              type: integer
+              nullable: true
+              description: Rated matches played so far in the window (#881) -- for "match 3 of 10".
+            calibrationMatchesRequired:
+              type: integer
+              nullable: true
+              description: The N those are measured against (#881); the global admin setting.
         isDisabled:
           type: boolean
           description: True when this profile was marked a duplicate and disabled (#124); the card is a "merged" notice.

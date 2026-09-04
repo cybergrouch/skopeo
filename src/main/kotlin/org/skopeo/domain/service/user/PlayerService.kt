@@ -39,6 +39,7 @@ import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.awardCountsInBand
 import org.skopeo.domain.model.canSeeRawRatingOrFalse
+import org.skopeo.domain.service.rating.CalibrationService
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.settings.SettingsService
 import org.skopeo.domain.service.standings.StandingsService
@@ -68,6 +69,8 @@ private const val MAX_HISTORY_LIMIT = 100
 class PlayerService(
     private val users: UserRepository = UserRepository(),
     private val ratings: RatingAssembler = RatingAssembler(),
+    // Whether a rating is still being calibrated (#881) — surfaced beside the band it qualifies.
+    private val calibration: CalibrationService = CalibrationService(),
     private val matches: MatchRepository = MatchRepository(),
     private val standings: StandingsService = StandingsService(),
     private val awards: RankingPointRepository = RankingPointRepository(),
@@ -100,10 +103,17 @@ class PlayerService(
                     email = if (canSeeEmail) primaryEmailOf(user = located) else null,
                     rating =
                         rating?.let {
+                            // Calibration (#881) qualifies a number that is already public, so it rides
+                            // along with the band rather than needing its own request — a client that had
+                            // to fetch it separately would render an unqualified band first.
+                            val calibrationStatus = calibration.statusFor(userId = located.id)
                             PublicRatingDto(
                                 value = if (showRaw) it.currentRating.toPlainString() else null,
                                 level = it.currentLevel,
                                 confidence = it.confidence.toPlainString(),
+                                inCalibration = calibrationStatus.inCalibration,
+                                calibrationMatchesRated = calibrationStatus.matchesRated,
+                                calibrationMatchesRequired = calibrationStatus.matchesRequired,
                             )
                         },
                     // A login-less, unclaimed placeholder renders an "unclaimed" indicator + claim entry (#496).
