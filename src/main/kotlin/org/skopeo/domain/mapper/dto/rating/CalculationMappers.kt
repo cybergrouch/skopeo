@@ -37,6 +37,7 @@ fun RatingCalculationOutcome.toResponse(): CalculationResponse =
                                 previousLevel = it.previousLevel,
                                 newLevel = it.newLevel,
                                 levelChanged = it.levelChanged,
+                                suppressed = it.suppressed,
                                 breakdown =
                                     CalculationBreakdownResponse(
                                         dominance = it.breakdown.dominance,

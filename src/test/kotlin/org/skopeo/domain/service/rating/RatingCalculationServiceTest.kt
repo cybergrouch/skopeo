@@ -7,15 +7,19 @@ import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -563,6 +567,117 @@ class RatingCalculationServiceTest {
 
         calc.calculate(token = token(uid = "host"), dryRun = true).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         calc.calculate(token = token(uid = "ghost"), dryRun = false).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    /**
+     * Clear a player's calibration stamp — i.e. make them **settled**.
+     *
+     * Written directly because there is no live path that produces it: every route into `setRating` is a
+     * manual designation and therefore opens a window (#881). This is the state of every existing player
+     * on deploy, and the state a player reaches after N rated matches, so it is the realistic "settled"
+     * fixture. Note that `provisionUser(rated = true)` leaves a player CALIBRATING, which is why the
+     * pre-existing tests in this class are unaffected by the asymmetry: both sides are calibrating, so
+     * both move.
+     */
+    private fun makeSettled(userId: UUID) {
+        transaction {
+            UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
+                it[calibrationStartedAt] = null
+            }
+        }
+    }
+
+    /**
+     * A player's stored rating.
+     *
+     * Assert against a literal at the column's own scale — `user_ratings.current_rating` is
+     * NUMERIC(10,6), and `shouldBe` on BigDecimal compares scale as well as value, so "4.0000" fails
+     * against a stored 4.000000 that is numerically identical.
+     */
+    private fun storedRating(userId: UUID): BigDecimal = ratings.findCurrentRating(userId = userId).shouldNotBeNull().currentRating
+
+    private fun historyRowCount(
+        userId: UUID,
+        matchId: UUID,
+    ): Int =
+        transaction {
+            UserRatingHistoryTable
+                .selectAll()
+                .where { (UserRatingHistoryTable.userId eq userId) and (UserRatingHistoryTable.matchId eq matchId) }
+                .count()
+                .toInt()
+        }
+
+    @Test
+    fun `a calibrating player moves while their settled opponent does not (#881)`() {
+        provisionUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val rookie = provisionUser(uid = "rookie", rated = true)
+        val veteran = provisionUser(uid = "veteran", rated = true)
+        makeSettled(userId = veteran.id)
+        val matchId = playedMatch(admin = "admin", winner = rookie.id, loser = veteran.id)
+
+        val outcome = calc.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
+
+        // The preview still accounts for both players; one of them is flagged rather than dropped.
+        val changes = outcome.matches.single().changes.associateBy { it.userId }
+        changes.getValue(key = rookie.id.toString()).suppressed shouldBe false
+        changes.getValue(key = veteran.id.toString()).suppressed shouldBe true
+        changes.getValue(key = veteran.id.toString()).change shouldBe "0"
+
+        // The rookie's guess moves; the settled rating is untouched in the database. Compared with
+        // compareTo, not shouldBe: the column is NUMERIC(10,6) and BigDecimal equality includes scale.
+        storedRating(userId = rookie.id) shouldNotBe BigDecimal("4.000000")
+        storedRating(userId = veteran.id) shouldBe BigDecimal("4.000000")
+
+        // THE assertion PR 3 depends on: no history row for the suppressed player. A score correction
+        // reverses what was applied, so a row here would make it reverse a change that never happened.
+        historyRowCount(userId = rookie.id, matchId = matchId) shouldBe 1
+        historyRowCount(userId = veteran.id, matchId = matchId) shouldBe 0
+    }
+
+    @Test
+    fun `when both players are calibrating both ratings move (#881)`() {
+        provisionUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val one = provisionUser(uid = "one", rated = true)
+        val two = provisionUser(uid = "two", rated = true)
+        // Neither has a rating worth protecting, so the ordinary zero-sum calculation applies.
+        val matchId = playedMatch(admin = "admin", winner = one.id, loser = two.id)
+
+        calc.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
+
+        historyRowCount(userId = one.id, matchId = matchId) shouldBe 1
+        historyRowCount(userId = two.id, matchId = matchId) shouldBe 1
+        storedRating(userId = two.id) shouldNotBe BigDecimal("4.000000")
+    }
+
+    @Test
+    fun `a suppressed rating does not leak into later matches in the same run (#881)`() {
+        provisionUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val rookie = provisionUser(uid = "rookie", rated = true)
+        val veteran = provisionUser(uid = "veteran", rated = true)
+        val other = provisionUser(uid = "other", rated = true)
+        makeSettled(userId = veteran.id)
+        makeSettled(userId = other.id)
+        // Two matches in one run: the veteran is suppressed in the first, then plays a second against
+        // another settled player. If the suppressed rating were carried in the run's snapshot, the second
+        // match would be computed from a rating that was never stored.
+        playedMatch(admin = "admin", winner = rookie.id, loser = veteran.id)
+        playedMatch(admin = "admin", winner = veteran.id, loser = other.id)
+
+        calc.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
+
+        // Both settled, so the second match is an ordinary zero-sum calculation — and it must have started
+        // from 4.0, the veteran's actual stored rating.
+        val second = calc.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
+        second.matches.shouldBeEmpty()
+        val veteranRating = storedRating(userId = veteran.id)
+        val otherRating = storedRating(userId = other.id)
+        // Zero-sum across the second match: what the veteran gained, the other lost, both from 4.0 — the
+        // veteran's stored rating, not the value suppressed in the first match.
+        // Operator minus, so no named argument is needed for a JDK method that has no parameter names.
+        val veteranMove = (veteranRating - BigDecimal("4.000000")).abs()
+        val otherMove = (otherRating - BigDecimal("4.000000")).abs()
+        veteranMove shouldBe otherMove
     }
 
     /** Create + complete a doubles fixture where [team1] beats [team2]; returns the match id. */

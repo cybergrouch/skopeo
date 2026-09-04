@@ -36,6 +36,16 @@ data class PlayerChangeResponse(
     val newLevel: String? = null,
     val levelChanged: Boolean,
     val breakdown: CalculationBreakdownResponse,
+    /**
+     * True when this player's rating was **not applied** because they were not in calibration while
+     * another player in the match was (#881).
+     *
+     * The other figures are then truthful, not counterfactual: `newRating` equals `previousRating` and
+     * `change` is "0". Without this flag a dry-run preview would show a zero change with no way to tell a
+     * genuinely-zero calculation from a suppressed one, which is the difference an administrator
+     * previewing a run most needs to see. `breakdown` still holds what would have happened.
+     */
+    val suppressed: Boolean = false,
 )
 
 /**
