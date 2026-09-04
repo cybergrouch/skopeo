@@ -61,7 +61,11 @@ export function CalibrationWindowSection() {
   const value = draft ?? current?.toString() ?? "";
   const parsed = Number(value);
   const valid = Number.isInteger(parsed) && parsed >= MIN && parsed <= MAX;
-  const changed = current != null && valid && parsed !== current;
+  // Which way the change cuts, or null when there is nothing to save. Computed as one value rather than a
+  // boolean plus a comparison at render time: doing it there needed `current ?? 0`, a fallback that could
+  // never fire (a change requires `current != null`) and so could never be covered.
+  const direction =
+    current != null && valid && parsed !== current ? (parsed < current ? "lower" : "raise") : null;
 
   return (
     <Card>
@@ -94,7 +98,7 @@ export function CalibrationWindowSection() {
           </label>
           <Button
             type="button"
-            disabled={!changed || save.isPending}
+            disabled={direction === null || save.isPending}
             onClick={() => save.mutate({ data: { matches: parsed } })}
           >
             {save.isPending ? "Saving…" : "Save"}
@@ -105,10 +109,10 @@ export function CalibrationWindowSection() {
             Enter a whole number between {MIN} and {MAX}.
           </p>
         ) : null}
-        {changed ? (
+        {direction ? (
           <p className="text-xs text-muted-foreground">
             This applies immediately to everyone.{" "}
-            {parsed < (current ?? 0)
+            {direction === "lower"
               ? "Lowering it will end calibration for players who have already played more than this many rated matches."
               : "Raising it will put players who recently finished calibration back into it."}
           </p>

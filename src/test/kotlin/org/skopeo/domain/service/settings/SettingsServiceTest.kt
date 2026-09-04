@@ -349,6 +349,10 @@ class SettingsServiceTest {
 
         service.getCalibrationMatches().matches shouldBe 10
         service.getCalibrationMatches().updatedBy.shouldBeNull()
+        // Also through the route-facing form, which is what the endpoint actually serves — the mapper is
+        // where a default could be lost on the way out.
+        service.getCalibrationMatchesResponse().matches shouldBe 10
+        service.getCalibrationMatchesResponse().updatedBy.shouldBeNull()
     }
 
     @Test
@@ -357,6 +361,12 @@ class SettingsServiceTest {
 
         service.setCalibrationMatches(token = token(uid = "admin"), matches = 5).shouldBeRight().matches shouldBe 5
         service.getCalibrationMatches().matches shouldBe 5
+        // The response form carries the provenance the Admin card shows.
+        service.getCalibrationMatchesResponse().let {
+            it.matches shouldBe 5
+            it.updatedBy shouldBe admin.id.toString()
+            it.updatedAt.shouldNotBeNull()
+        }
 
         // Both values, because lowering N ends in-flight calibrations immediately — the delta is the
         // operationally interesting part, not the new number alone.
