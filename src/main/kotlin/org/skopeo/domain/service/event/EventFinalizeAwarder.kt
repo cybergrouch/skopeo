@@ -23,6 +23,7 @@ import org.skopeo.domain.model.PointSourceType
 import org.skopeo.domain.model.RankingPointAwardWrite
 import org.skopeo.domain.model.UserRating
 import org.skopeo.domain.service.audit.AuditService
+import org.skopeo.domain.service.rating.CalibrationService
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.settings.PointsConfigService
 import org.skopeo.domain.service.settings.SettingsService
@@ -42,6 +43,10 @@ import java.util.UUID
 // [awardForFinalizedEvent]. (The LEAGUE type was removed in #669.)
 
 private const val UNSPECIFIED_SEX = "Unspecified"
+
+/** Recorded on an award whose amount was floored at zero because the match involved calibration (#881). */
+private const val CLAMPED_BY_CALIBRATION =
+    "clamped to zero because a player in this match was still in calibration (#881)"
 private const val BAND_MEAN_SCALE = 4
 
 // Zero-based indices into the placement schedule for each finishing place (1st..4th).
@@ -75,6 +80,8 @@ class EventFinalizeAwarder(
     private val audit: AuditService = AuditService(),
     private val pointsConfig: PointsConfigService = PointsConfigService(),
     private val settings: SettingsService = SettingsService(),
+    // Who is still being calibrated (#881) — a calibrating player earns no points.
+    private val calibration: CalibrationService = CalibrationService(),
 ) {
     /** Summary of one finalize's awarding, for the audit trail: how many fixtures paid out and the total. */
     data class AwardSummary(
@@ -257,6 +264,7 @@ class EventFinalizeAwarder(
                 validFrom = start.atStartOfDay(),
                 validUntil = end.plusDays(1).atStartOfDay(),
                 scheduleVersion = pointsConfig.currentScheduleVersion(),
+                calibrating = calibratingAmong(calibration = calibration, userIds = userIds),
             )
 
         // A player earns exactly one placement award — their best (ctx.awarded is the guard). Processing
@@ -318,6 +326,9 @@ class EventFinalizeAwarder(
         var written = 0
         side.userIds.forEach { userId ->
             val band = ctx.bands[userId]?.currentLevel ?: return@forEach
+            // No points while calibrating (#881) — a placement is as provisional as a per-set payout when
+            // the rating that got you there was assigned by hand.
+            if (userId in ctx.calibrating) return@forEach
             if (!ctx.awarded.add(element = userId)) return@forEach
             awards.award(
                 write =
@@ -400,6 +411,7 @@ class EventFinalizeAwarder(
                 validUntil = validUntil,
                 scheduleVersion = pointsConfig.currentScheduleVersion(),
                 pointClass = policy.pointClass,
+                calibrating = calibratingAmong(calibration = calibration, userIds = userIds),
             )
 
         var matchCount = 0
@@ -463,6 +475,7 @@ class EventFinalizeAwarder(
     }
 
     /** The finalize-time invariants shared by every open-play award row (bundled to keep signatures small). */
+
     private data class AwardContext(
         val bands: Map<UUID, UserRating>,
         val sexes: Map<UUID, String>,
@@ -479,6 +492,13 @@ class EventFinalizeAwarder(
         // finalize, so a schedule edited mid-run cannot split one event across two versions. Deliberately
         // has no default — a default would silently attribute new awards to v1 forever.
         val scheduleVersion: Int,
+        // Who is still being calibrated (#881). A calibrating player earns nothing; the others in that
+        // match are paid, with a negative amount resolving to 0 — see `awardSide`.
+        //
+        // Resolved once per finalize, alongside bands and sexes, rather than per player: the value must
+        // not change between the two sides of one match, or the same fixture could pay asymmetrically for
+        // reasons unrelated to the result.
+        val calibrating: Set<UUID> = emptySet(),
     )
 
     /**
@@ -517,15 +537,30 @@ class EventFinalizeAwarder(
         ctx: AwardContext,
     ): Int {
         var written = 0
+        // Whether ANYONE in this fixture is calibrating decides how the rest of it is paid (#881), so it
+        // is a property of the match, not of the side being paid.
+        val anyCalibrating = (match.team1.userIds + match.team2.userIds).any { it in ctx.calibrating }
         payout.side.userIds.forEach { userId ->
             val band = ctx.bands[userId]?.currentLevel ?: return@forEach
+            // A calibrating player earns nothing (#881): their results are still provisional, so they
+            // should not bank a standing off them. Skipped entirely rather than written as zero — a zero
+            // award would sit in the ledger implying it counted for something.
+            if (userId in ctx.calibrating) return@forEach
+            // Their opponents and partners are paid normally, except that a negative amount resolves to 0.
+            // A beaten favourite can lose points (#525), and nobody should lose them for being drawn
+            // against a player whose rating was still a guess.
+            val clamped = anyCalibrating && payout.teamPoints < 0
+            val points = if (clamped) 0 else payout.teamPoints
             awards.award(
                 write =
                     awardWrite(
                         event = event,
                         matchId = match.id,
                         userId = userId,
-                        points = BigDecimal(payout.teamPoints),
+                        points = BigDecimal(points),
+                        // Recorded on the row, so a derivation (#862) can explain a zero that the schedule
+                        // arithmetic does not produce — without it the popup would contradict the amount.
+                        reason = if (clamped) CLAMPED_BY_CALIBRATION else null,
                         band = band,
                         sex = ctx.sexes.getOrDefault(key = userId, defaultValue = UNSPECIFIED_SEX),
                         pointClass = ctx.pointClass,
@@ -544,7 +579,7 @@ class EventFinalizeAwarder(
                         matchId = match.id,
                         matchPublicCode = match.publicCode,
                         userId = userId,
-                        points = payout.teamPoints,
+                        points = points,
                         band = band,
                         grantedBy = ctx.grantedBy,
                         validFrom = ctx.validFrom,
@@ -571,6 +606,10 @@ class EventFinalizeAwarder(
         now: LocalDateTime,
         scheduleVersion: Int,
         matchup: Matchup? = null,
+        // Appended to the provenance sentence when the amount was clamped (#881), so the row itself says
+        // why it is zero. Kept out of the sentence rather than replacing it: the event is still where the
+        // award came from.
+        reason: String? = null,
     ): RankingPointAwardWrite =
         RankingPointAwardWrite(
             userId = userId,
@@ -580,7 +619,8 @@ class EventFinalizeAwarder(
             sourceId = event.id.toString(),
             band = band,
             sex = sex,
-            reason = "Awarded on finalize of event ${event.name}",
+            reason =
+                listOfNotNull("Awarded on finalize of event ${event.name}", reason).joinToString(separator = " — "),
             validFrom = validFrom,
             validUntil = validUntil,
             status = AwardStatus.ACTIVE,
@@ -648,3 +688,23 @@ private fun teamBand(
     val mean = ratingValues.reduce { a, b -> a.add(b) }.divide(BigDecimal(userIds.size), BAND_MEAN_SCALE, RoundingMode.HALF_UP)
     return Level.fromValue(value = mean.toPlainString()).value
 }
+
+/**
+ * Which of [userIds] are still in a calibration window (#881).
+ *
+ * Resolved **once per finalize**, alongside bands and sexes, and then read from the award context. Asking
+ * per player would let the answer change mid-run — the Nth match being rated elsewhere could flip someone
+ * out of calibration between the two sides of one fixture, paying it asymmetrically for a reason that has
+ * nothing to do with the result.
+ *
+ * File-scope because it is one delegated lookup and a filter, and because `EventFinalizeAwarder` sits at
+ * detekt's function ceiling.
+ */
+private fun calibratingAmong(
+    calibration: CalibrationService,
+    userIds: List<UUID>,
+): Set<UUID> =
+    calibration
+        .statusesFor(userIds = userIds)
+        .filterValues { it.inCalibration }
+        .keys

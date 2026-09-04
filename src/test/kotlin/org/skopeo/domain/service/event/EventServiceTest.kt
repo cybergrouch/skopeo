@@ -68,6 +68,7 @@ import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestAppSettings
+import org.skopeo.testsupport.settleAllRatings
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -1559,7 +1560,9 @@ class EventServiceTest {
     private fun rate(
         userId: UUID,
         level: String,
-    ) = RatingRepository().setRating(userId = userId, rating = BigDecimal(level), level = level)
+    ) = RatingRepository().setRating(userId = userId, rating = BigDecimal(level), level = level).also {
+        settleAllRatings()
+    }
 
     @Test
     fun `finalizing a TOURNAMENT event awards placement points from the sanction-selected table (#525)`() {

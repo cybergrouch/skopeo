@@ -53,6 +53,7 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestAppSettings
 import org.skopeo.testsupport.seedFixtureClub
+import org.skopeo.testsupport.settleAllRatings
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.UUID
@@ -108,7 +109,9 @@ class EventReverseRatingsTest {
     private fun rate(
         userId: UUID,
         level: String,
-    ) = ratings.setRating(userId = userId, rating = BigDecimal(level), level = level)
+    ) = ratings.setRating(userId = userId, rating = BigDecimal(level), level = level).also {
+        settleAllRatings()
+    }
 
     private fun budgetedEvent(
         hostUid: String,

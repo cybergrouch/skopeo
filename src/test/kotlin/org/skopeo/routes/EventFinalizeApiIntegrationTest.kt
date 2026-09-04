@@ -56,6 +56,7 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
 import org.skopeo.testsupport.seedFixtureClub
+import org.skopeo.testsupport.settleAllRatings
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -231,6 +232,9 @@ class EventFinalizeApiIntegrationTest {
             // Rated players, so this fixture WOULD pay out (see the flag-on test) if nothing suppressed it.
             RatingAssembler().setRating(userId = p1.id, rating = BigDecimal("4.0"), level = "4.0")
             RatingAssembler().setRating(userId = p2.id, rating = BigDecimal("4.0"), level = "4.0")
+            // Settled, because these assert ordinary awarding: a designation opens a calibration window,
+            // and a calibrating player earns nothing (#881).
+            settleAllRatings()
             val event =
                 client.createEvent(
                     token = tokenFor(uid = "host"),
@@ -266,6 +270,9 @@ class EventFinalizeApiIntegrationTest {
             client.setGlobalAwarding(adminToken = admin, enabled = true)
             RatingAssembler().setRating(userId = p1.id, rating = BigDecimal("4.0"), level = "4.0")
             RatingAssembler().setRating(userId = p2.id, rating = BigDecimal("4.0"), level = "4.0")
+            // Settled, because these assert ordinary awarding: a designation opens a calibration window,
+            // and a calibrating player earns nothing (#881).
+            settleAllRatings()
             val event =
                 client.createEvent(
                     token = tokenFor(uid = "host"),
@@ -331,6 +338,9 @@ class EventFinalizeApiIntegrationTest {
         val ratings = RatingAssembler()
         ratings.setRating(userId = p1.id, rating = BigDecimal("4.0"), level = "4.0")
         ratings.setRating(userId = p2.id, rating = BigDecimal("4.0"), level = "4.0")
+        // Settled, so the finalize this seeds actually awards: a designation opens a calibration window
+        // and a calibrating player earns nothing (#881).
+        settleAllRatings()
         val matchRepo = MatchRepository()
         val eventService = EventService()
         val hostToken = VerifiedFirebaseToken(uid = "host", providerUid = "host".asRedactable())

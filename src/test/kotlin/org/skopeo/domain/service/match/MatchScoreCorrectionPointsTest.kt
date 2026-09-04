@@ -47,6 +47,7 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestAppSettings
 import org.skopeo.testsupport.seedFixtureClub
+import org.skopeo.testsupport.settleAllRatings
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -156,6 +157,9 @@ class MatchScoreCorrectionPointsTest {
         val p2 = provision(uid = "p2")
         ratings.setRating(userId = p1.id, rating = BigDecimal("4.0"), level = "4.0")
         ratings.setRating(userId = p2.id, rating = BigDecimal("4.0"), level = "4.0")
+        // These fixtures are about re-pricing awards, not about calibration (#881) — and a designation
+        // puts a player IN calibration, where they earn nothing.
+        settleAllRatings()
         // Awarding is gated by the global flag (#641/#752) and defaults off; these fixtures need a real payout.
         TestAppSettings.setAwardRankingPoints(enabled = true, updatedBy = admin.id)
         val event =
@@ -263,6 +267,9 @@ class MatchScoreCorrectionPointsTest {
         val p2 = provision(uid = "p2")
         ratings.setRating(userId = p1.id, rating = BigDecimal("4.0"), level = "4.0")
         ratings.setRating(userId = p2.id, rating = BigDecimal("4.0"), level = "4.0")
+        // These fixtures are about re-pricing awards, not about calibration (#881) — and a designation
+        // puts a player IN calibration, where they earn nothing.
+        settleAllRatings()
         TestAppSettings.setAwardRankingPoints(enabled = true, updatedBy = admin.id)
         val event =
             eventService
@@ -329,6 +336,8 @@ class MatchScoreCorrectionPointsTest {
         // A band gap gives open-play points something to compute from.
         ratings.setRating(userId = p1.id, rating = BigDecimal("4.5"), level = "4.5")
         ratings.setRating(userId = p2.id, rating = BigDecimal("3.5"), level = "3.5")
+        // Settled: this fixture pays open-play points, and a calibrating player earns nothing (#881).
+        settleAllRatings()
         TestAppSettings.setAwardRankingPoints(enabled = true, updatedBy = admin.id)
         val event =
             eventService
