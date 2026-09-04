@@ -92,7 +92,7 @@ This document tracks major implementation milestones and architectural decisions
 - **Match occasion / competitive context** (#108): renamed match dimensions — `matchFormat` (SINGLES/DOUBLES) vs `matchType` (occasion) — with a per-occasion rating factor.
 - **Duplicate handling** (#124, #126): duplicate-profile rectification, and duplicate-account detection (phone match + manual flag, `duplicate_candidates` table, V5) feeding rectification.
 - **RATER capability** (#106): dedicated Ratings tab (Phase 1).
-- **RESEARCHER capability** (#107): gates the Research tab (monetization-ready); a default player can search but cannot resolve ids.
+- **RESEARCHER capability** (#107): gates the Research tab (monetization-ready). Since #622 it is no longer granted at sign-up, and since #867 player search and id-resolution share one gate ([`PLAYER_SEARCH_ROLES`](../../src/main/kotlin/org/skopeo/common/security/CapabilityRoles.kt)) — a plain player can do neither.
 - **Rating band UX** (#114): rating-band "speed meter" on the own profile (relative position, no exact value); moved the rating card into the Profile identity card (#111).
 - **HOST seeding generator** (#111): named player lists → sorted, CSV-exportable seeding (`player_lists`, `player_list_members`, `seedings`, `seeding_entries`, V8).
 - **Ranking Race standings** (#113): per-band standings, Phase 1, ratings-derived.

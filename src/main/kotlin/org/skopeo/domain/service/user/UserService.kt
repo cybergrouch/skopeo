@@ -14,7 +14,7 @@ import org.skopeo.common.dto.user.UserSummaryPageResponse
 import org.skopeo.common.dto.user.UserSummaryResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
-import org.skopeo.common.security.HOST_OR_ADMIN
+import org.skopeo.common.security.PLAYER_SEARCH_ROLES
 import org.skopeo.domain.mapper.dto.user.toResponse
 import org.skopeo.domain.mapper.dto.user.toSummary
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -138,7 +138,7 @@ class UserService(
         includeInactive: Boolean = false,
     ): Either<ServiceError, List<UserSummaryResponse>> =
         either {
-            requireResearchAccess(repository = repository, token = token).bind()
+            requirePlayerSearchAccess(repository = repository, token = token).bind()
             val query = validatedQuery(filters = filters).bind()
             val users =
                 repository.search(
@@ -164,7 +164,7 @@ class UserService(
         includeInactive: Boolean = false,
     ): Either<ServiceError, UserSummaryPageResponse> =
         either {
-            requireResearchAccess(repository = repository, token = token).bind()
+            requirePlayerSearchAccess(repository = repository, token = token).bind()
             val query = validatedQuery(filters = filters).bind()
             val items =
                 repository.search(
@@ -233,7 +233,7 @@ class UserService(
         }
 
     /**
-     * Resolve known user ids to their profiles — HOST/ADMINISTRATOR only. Used to turn the bare
+     * Resolve known user ids to their profiles — same gate as [search] (#867). Used to turn the bare
      * UUIDs the UI holds (match rosters, rating history, calculation previews) into display names.
      * Unknown ids are simply omitted from the result.
      */
@@ -242,7 +242,7 @@ class UserService(
         ids: List<UUID>,
     ): Either<ServiceError, List<UserSummaryResponse>> =
         either {
-            requireStaff(repository = repository, token = token).bind()
+            requirePlayerSearchAccess(repository = repository, token = token).bind()
             ensure(condition = ids.isNotEmpty()) { ServiceError.Validation(message = "ids must not be empty") }
             val users = repository.findAllByIds(ids = ids).map { it.toDomain() }
             val ratingsById = currentRatings(ids = users.map { it.id })
@@ -521,34 +521,25 @@ private fun promoteIfBootstrapAdmin(
     return user.copy(capabilities = user.capabilities + granted)
 }
 
-/** Allow only HOST or ADMINISTRATOR callers. */
-private fun requireStaff(
+/**
+ * Allow looking a player up: [PLAYER_SEARCH_ROLES] (#867).
+ *
+ * **One gate for both search and id-resolution.** They were two functions over two different sets —
+ * `requireResearchAccess` admitting RESEARCHER/RATER/HOST/ADMINISTRATOR and `requireStaff` admitting only
+ * HOST/ADMINISTRATOR — which meant `findByIds` was strictly narrower than `search` for no stated reason,
+ * even though a caller who can search a player by name can already read the same summary back. Merged
+ * rather than kept in step by hand.
+ */
+private fun requirePlayerSearchAccess(
     repository: UserRepository,
     token: VerifiedFirebaseToken,
 ): Either<ServiceError, Unit> {
     val caller = repository.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-    return if (caller == null || caller.capabilities.none { it in HOST_OR_ADMIN }) {
+    return if (caller == null || caller.capabilities.none { it in PLAYER_SEARCH_ROLES }) {
         ServiceError.Forbidden().left()
     } else {
         Unit.right()
     }
-}
-
-/**
- * Allow player search: a RESEARCHER (Research tab, #107), a RATER (Ratings-tab search-and-rate, #205),
- * or staff (HOST/ADMINISTRATOR) who reach the same search via the player-picker/role-grants.
- * ADMINISTRATOR is staff, so it qualifies regardless.
- */
-private fun requireResearchAccess(
-    repository: UserRepository,
-    token: VerifiedFirebaseToken,
-): Either<ServiceError, Unit> {
-    val caller = repository.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-    val searchRoles = setOf(Capability.RESEARCHER, Capability.RATER)
-    val allowed =
-        caller != null &&
-            (caller.capabilities.any { it in searchRoles } || caller.capabilities.any { it in HOST_OR_ADMIN })
-    return if (allowed) Unit.right() else ServiceError.Forbidden().left()
 }
 
 /**

@@ -21,7 +21,8 @@ package org.skopeo.common.security
  *
  * **No local aliases.** Every service now imports and uses these names directly. Aliasing was tried first
  * and reverted: keeping `private val STAFF_ROLES = MATCH_MANAGEMENT_ROLES` in one service while another
- * had `private val STAFF_ROLES = HOST_OR_ADMIN` preserved the exact collision this file exists to remove.
+ * had `private val STAFF_ROLES = setOf(HOST, ADMINISTRATOR)` preserved the exact collision this file
+ * exists to remove.
  * A caller-specific name is only worth it when it tells the reader something the shared name does not, and
  * "staff" told them something false.
  */
@@ -72,17 +73,25 @@ val PLAYER_POINTS_VIEW_ROLES: Set<Capability> =
     MATCH_MANAGEMENT_ROLES + Capability.RATER + Capability.POINTS_MANAGER
 
 /**
- * `UserService`'s gate on player search and id-resolution — **HOST or ADMINISTRATOR, with no CLUB_OWNER.**
+ * Who may look a player up by name or resolve one by id (#867) — match management, plus the three roles
+ * whose own tools are built on searching for a person: points managers, raters and researchers.
  *
- * Named for exactly what it contains rather than folded into [MATCH_MANAGEMENT_ROLES], because those are
- * not the same set and quietly making them so would be an authorization change smuggled into a rename.
+ * **This replaced `HOST_OR_ADMIN` = {HOST, ADMINISTRATOR}, which was an oversight** (#867). #789 gave a
+ * named club owner the organizer surfaces — the New Event form and the event manager — and both render a
+ * player picker that calls this. So a CLUB_OWNER who did not *also* hold HOST was offered a picker that
+ * answered 403: the UI was granted and the call it depends on was not. Nothing implies HOST from
+ * CLUB_OWNER; adding a club owner is an ADMINISTRATOR action that grants CLUB_OWNER alone.
  *
- * Whether the omission is deliberate is **an open question, tracked in #867**: a CLUB_OWNER without HOST
- * can reach the New Event form and event manager (#789) but gets 403 from the player picker inside them.
- * Resolve it there; this constant exists to keep the discrepancy visible until someone does.
+ * Composed from [MATCH_MANAGEMENT_ROLES] rather than re-listed, so a role added to match management
+ * cannot leave the picker behind again — which is precisely how the gap arose.
+ *
+ * Searching for a person is **not** the same permission as seeing what the search returns about them: a
+ * registered email needs [EMAIL_VIEW_ROLES] and a points figure needs [PLAYER_POINTS_VIEW_ROLES], both
+ * enforced separately on the way out. Being able to find someone is the weaker right, which is why this
+ * is the widest of the three sets.
  */
-val HOST_OR_ADMIN: Set<Capability> =
-    setOf(Capability.HOST, Capability.ADMINISTRATOR)
+val PLAYER_SEARCH_ROLES: Set<Capability> =
+    MATCH_MANAGEMENT_ROLES + Capability.POINTS_MANAGER + Capability.RATER + Capability.RESEARCHER
 
 /**
  * Who may operate the Points Management surfaces (#472) — a points manager or an administrator.

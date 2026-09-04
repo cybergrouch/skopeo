@@ -159,7 +159,8 @@ paths:
       description: >-
         Same filters as `GET /api/v1/users` search mode (name/code/q/sex/age/rating; at least one
         required), but returns a page `{ items, total }` so the UI can show the current page, links to
-        other pages, and the total. RESEARCHER, RATER, HOST, or ADMINISTRATOR.
+        other pages, and the total. Same gate as `GET /api/v1/users` (#867): HOST, CLUB_OWNER,
+        ADMINISTRATOR, POINTS_MANAGER, RATER or RESEARCHER.
       tags:
         - Users
       security:
@@ -248,13 +249,20 @@ paths:
 
   /api/v1/users:
     get:
-      summary: Look up users by id (HOST/ADMINISTRATOR), or search by name/sex/age/rating (RESEARCHER or staff)
+      summary: Look up users by id, or search by name/sex/age/rating
       description: |
+        Both modes require one of HOST, CLUB_OWNER, ADMINISTRATOR, POINTS_MANAGER, RATER or RESEARCHER
+        (#867). CLUB_OWNER was added there: #789 gives a named club owner the New Event form and the event
+        manager, both of which render a player picker calling this, so an owner without HOST was offered a
+        picker that answered 403. Finding someone is a weaker right than reading what the search returns
+        about them -- a registered email (#630) and a points figure (#865) are gated separately on the way
+        out.
+
         Two modes:
           - **Id resolution** — `ids` (comma-separated UUIDs) resolves known ids to summaries
-            (match rosters, rating history, calculation previews); HOST/ADMINISTRATOR only. Exclusive:
-            it cannot be combined with the search filters below.
-          - **Search** — RESEARCHER or staff (#107). Any combination of `name`, `code`, `q`, `sex`, `age`, `rating`
+            (match rosters, rating history, calculation previews). Exclusive: it cannot be combined with
+            the search filters below.
+          - **Search** — any combination of `name`, `code`, `q`, `sex`, `age`, `rating`
             (AND-combined; at least one required). `name` is a fuzzy, partial match across all of
             a profile's names; `code` is a player-code prefix; `q` is a unified term matching a
             fuzzy name OR a code prefix. `age` and `rating` are interval strings: `[` / `]`
