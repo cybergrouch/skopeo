@@ -11,7 +11,7 @@ import type { AwardedPointRow } from "@/api/generated/model";
 import { NumberedPager } from "@/components/NumberedPager";
 import { ContentLink } from "@/components/ContentLink";
 import { PlaceholderTag } from "@/components/PlaceholderTag";
-import { formatPoints } from "@/lib/points";
+import { AwardDerivationPopover } from "./AwardDerivationPopover";
 import type { Capability } from "@/auth/capabilities";
 import { canManagePointsBudget } from "@/auth/capabilities";
 import { StandingsCalculationSection } from "./StandingsCalculationSection";
@@ -46,7 +46,7 @@ export function PointsManagementSection({
 /**
  * Points awarded (#472): a paginated, newest-first view of the whole ranking-points ledger for points
  * managers. Server-side pagination via {@link NumberedPager} (25/page); player links wear the themed
- * {@link ContentLink}; points render as a signed integer via {@link formatPoints}.
+ * {@link ContentLink}; points render through {@link AwardDerivationPopover}, which formats them and explains them on click (#862).
  *
  * The granting event and match are separate columns and expiry is its own (#855) — see
  * {@link AwardedPointsRow}. Every field was already on the DTO, so this needed no backend change.
@@ -133,7 +133,11 @@ function AwardedPointsRow({ row }: { row: AwardedPointRow }) {
         )}
         <PlaceholderTag show={row.isPlaceholder} deleted={row.isDeleted} />
       </td>
-      <td className="py-1 pr-2 tabular-nums">{formatPoints(row.points) ?? row.points}</td>
+      {/* Clickable (#862): the amount is the thing a reader questions, so it is the thing that explains
+          itself. Derivation loads on open, not with the table. */}
+      <td className="py-1 pr-2">
+        <AwardDerivationPopover awardId={row.id} points={row.points} />
+      </td>
       {/* The class explains why two awards have different windows (#840: tournament 365 days, Full
           Match 182, open play 91) — without it the Expires column looks arbitrary. */}
       <td className="py-1 pr-2 text-xs text-muted-foreground">{row.pointClass}</td>

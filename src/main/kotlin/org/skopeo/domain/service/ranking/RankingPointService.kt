@@ -10,6 +10,7 @@ import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.dto.ranking.AdjustRankingPointsRequest
+import org.skopeo.common.dto.ranking.AwardDerivationResponse
 import org.skopeo.common.dto.ranking.AwardedPointsPageResponse
 import org.skopeo.common.dto.ranking.AwardedPointsPlayerRow
 import org.skopeo.common.dto.ranking.AwardedPointsSummaryResponse
@@ -17,6 +18,7 @@ import org.skopeo.common.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.common.dto.ranking.RankingPointAwardResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.POINTS_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.ranking.toCommand
 import org.skopeo.domain.mapper.dto.ranking.toResponse
 import org.skopeo.domain.mapper.entity.ranking.toDomain
@@ -72,6 +74,8 @@ class RankingPointService(
     private val configs: PointsConfigRepository = PointsConfigRepository(),
     // Only to read the hide-ranking-points flag (#865).
     private val settings: SettingsService = SettingsService(),
+    // Rebuilds how an award's amount was reached (#862).
+    private val derivations: AwardDerivationAssembler = AwardDerivationAssembler(),
 ) {
     /** Grant an award to a user. ADMINISTRATOR-only; band-tagged, sex from the target, policy validity. */
     fun grant(
@@ -80,7 +84,7 @@ class RankingPointService(
         request: GrantRankingPointsRequest,
     ): Either<ServiceError, RankingPointAwardResponse> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireAnyOf(token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
             val command = request.toCommand(userId = userId)
             ensure(condition = command.points > BigDecimal.ZERO) {
                 ServiceError.Validation(message = "Points must be greater than zero")
@@ -157,7 +161,7 @@ class RankingPointService(
         request: AdjustRankingPointsRequest,
     ): Either<ServiceError, RankingPointAwardResponse> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireAnyOf(token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
             val command = request.toCommand(userId = userId)
             // Signed: a positive value awards, a negative value deducts — but zero is a no-op → reject it.
             ensure(condition = command.points.signum() != 0) {
@@ -251,7 +255,7 @@ class RankingPointService(
         reason: String?,
     ): Either<ServiceError, Unit> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireAnyOf(token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
             val marker =
                 ensureNotNull(
                     value =
@@ -287,7 +291,7 @@ class RankingPointService(
         userId: UUID,
     ): Either<ServiceError, List<RankingPointAwardResponse>> =
         either {
-            requireAdmin(token = token).bind()
+            requireAnyOf(token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
             users.findById(id = userId).mapLeft { ServiceError.NotFound(message = "User $userId not found") }.bind().toDomain()
             awards.listByUser(userId = userId).map { it.toDomain().toResponse() }
         }
@@ -336,19 +340,41 @@ class RankingPointService(
         }
 
     /**
+     * How one award's amount was reached (#862) — the Points Management popup.
+     *
+     * **No gate beyond the surface's own.** [POINTS_MANAGEMENT_ROLES] admits ADMINISTRATOR or POINTS_MANAGER
+     * and nobody else, and this table already prints every award's `band`, so a manager could read both
+     * sides' bands off two rows of the same match and infer the relation regardless. Withholding the
+     * derivation here would hide nothing while handing someone whose job is managing points a table of
+     * amounts they cannot explain. The public surfaces (#857/#858) gate it differently because they have a
+     * different audience.
+     */
+    fun derivation(
+        token: VerifiedFirebaseToken,
+        awardId: UUID,
+    ): Either<ServiceError, AwardDerivationResponse> =
+        either {
+            requireAnyOf(token = token, allowed = POINTS_MANAGEMENT_ROLES).bind()
+            val award =
+                ensureNotNull(value = awards.findById(id = awardId)?.toDomain()) {
+                    ServiceError.NotFound(message = "Award $awardId not found")
+                }
+            derivations.derive(award = award)
+        }
+
+    /**
      * One page of the whole ledger (#472), newest-first, for the Points Management "Points awarded"
-     * list. Gated by [requirePointsManager] (POINTS_MANAGER or ADMINISTRATOR), matching the tab. Each
+     * list. Gated by [POINTS_MANAGEMENT_ROLES] (POINTS_MANAGER or ADMINISTRATOR), matching the tab. Each
      * row is enriched with the player's display name + public code and the granting source's public
      * code (match, else event; null for a manual / external grant) — all lookups batched to avoid N+1.
      */
-
     fun listAwards(
         token: VerifiedFirebaseToken,
         limit: Int?,
         offset: Int?,
     ): Either<ServiceError, AwardedPointsPageResponse> =
         either {
-            requirePointsManager(token = token).bind()
+            requireAnyOf(token = token, allowed = POINTS_MANAGEMENT_ROLES).bind()
             val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
             val pageOffset = (offset ?: 0).coerceAtLeast(minimumValue = 0)
             val (rowEntities, total) = awards.listAwards(limit = pageSize, offset = pageOffset)
@@ -379,26 +405,23 @@ class RankingPointService(
         return Level.fromValue(value = rating.currentRating.toPlainString()).value
     }
 
-    /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
-    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
+    /**
+     * Resolves the caller and returns their id (the audit actor) when they hold any of [allowed];
+     * `Forbidden` otherwise.
+     *
+     * One gate parameterised by the role set, rather than one function per role: the two it replaced
+     * differed only in that set, and the set is what a reader wants to see at the call site anyway.
+     */
+    private fun requireAnyOf(
+        token: VerifiedFirebaseToken,
+        allowed: Set<Capability>,
+    ): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-        return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
+        return if (caller == null || caller.capabilities.none { it in allowed }) {
             ServiceError.Forbidden().left()
         } else {
             caller.id.right()
         }
-    }
-
-    /**
-     * Points-manager access (#472): ADMINISTRATOR is implicitly a points manager, so the caller passes
-     * as an ADMINISTRATOR or a POINTS_MANAGER — matching the Points Management tab. Returns the caller's id.
-     */
-    private fun requirePointsManager(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-        val allowed =
-            caller != null &&
-                caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.POINTS_MANAGER }
-        return if (caller == null || !allowed) ServiceError.Forbidden().left() else caller.id.right()
     }
 }
 

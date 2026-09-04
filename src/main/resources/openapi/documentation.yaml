@@ -4734,6 +4734,42 @@ paths:
         '403':
           description: Not a points manager or administrator
 
+  /api/v1/ranking-points/{awardId}/derivation:
+    parameters:
+      - name: awardId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: How one award's amount was reached (#862)
+      description: >-
+        POINTS_MANAGER or ADMINISTRATOR, matching the Points Management tab -- no additional gate, since
+        that table already prints each award's band, so a manager could infer the relation from two rows of
+        the same match anyway. DERIVED, never stored: rebuilt from the schedule version the award records,
+        the two band strings it records, and the match's own set scores, so it cannot disagree with the
+        amount beside it. Rates come from the version the award was PAID under, never today's. An award
+        written before #862 added those columns comes back recorded=false with a reason -- a confident
+        derivation whose numbers do not add up would be worse than an honest gap.
+      tags:
+        - Ranking Points
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The award's derivation, or a recorded=false explanation of why there is none
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AwardDerivationResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not a POINTS_MANAGER or ADMINISTRATOR
+        '404':
+          description: No award with that id
+
   /api/v1/ranking-points/{awardId}/revoke:
     post:
       summary: Revoke a ranking-point award (#146)
@@ -9114,6 +9150,117 @@ components:
           format: uuid
           nullable: true
           description: Event that produced this award on finalize (#403 Phase D); null for manual or external grants.
+
+    AwardDerivationResponse:
+      type: object
+      description: >-
+        How one award's amount was reached (#862). The shared payload behind the Points Management popup
+        and the public match card (#858); only the gate and the surface differ.
+      required:
+        - awardId
+        - points
+        - pointClass
+        - scheduleVersion
+        - recorded
+      properties:
+        awardId:
+          type: string
+          format: uuid
+        points:
+          type: string
+          description: The amount actually paid. Always present -- the award is real even when unexplainable.
+        pointClass:
+          type: string
+        scheduleVersion:
+          type: integer
+          description: >-
+            The points-schedule version the award was computed under. Always present: V47 backfilled every
+            existing row to version 1. Whether the amount can be *explained* is reported by recorded.
+        recorded:
+          type: boolean
+          description: >-
+            False when the award cannot be explained -- its inputs were never stored, its schedule version
+            is gone, or its fixture is. The UI must say so rather than substitute current rates.
+        unavailableReason:
+          type: string
+          nullable: true
+          description: Why nothing can be shown; populated only when recorded is false.
+        sets:
+          type: array
+          description: Per-set detail for an open-play / Full Match award; empty for placement and manual grants.
+          items:
+            $ref: '#/components/schemas/AwardSetDerivation'
+        teamBand:
+          type: string
+          nullable: true
+          description: The recipient's side's band as fed to the calculator; null when not recorded.
+        opponentBand:
+          type: string
+          nullable: true
+        placement:
+          allOf:
+            - $ref: '#/components/schemas/AwardPlacementDerivation'
+          nullable: true
+          description: Placement awards only.
+        reason:
+          type: string
+          nullable: true
+          description: Manual / EXTERNAL grants only -- the reason IS the derivation.
+
+    AwardSetDerivation:
+      type: object
+      description: >-
+        One set's contribution (#862): the margin, the band relation, and what that schedule cell paid.
+        Both the winner's and the loser's amounts are carried, because "the loser is paid at all" is the
+        least self-evident part of the schedule (#525).
+      required:
+        - setNumber
+        - score
+        - margin
+        - relation
+        - wonSet
+        - winnerPoints
+        - loserPoints
+        - pointsForThisPlayer
+      properties:
+        setNumber:
+          type: integer
+        score:
+          type: string
+          description: The set score with the recipient's games first, e.g. "6-4".
+        margin:
+          type: integer
+        relation:
+          type: string
+          enum: [EQUAL, FAVORITE, UPSET]
+          description: From the recipient's side of the net.
+        wonSet:
+          type: boolean
+        winnerPoints:
+          type: integer
+        loserPoints:
+          type: integer
+        pointsForThisPlayer:
+          type: integer
+          description: The figure that actually reached the recipient -- winner's or loser's, per wonSet.
+
+    AwardPlacementDerivation:
+      type: object
+      description: >-
+        A placement award's derivation (#862) -- which place, and which schedule column paid it.
+      required:
+        - place
+        - sanctioned
+        - scheduleAmount
+      properties:
+        place:
+          type: integer
+          description: 1st through 4th.
+        sanctioned:
+          type: boolean
+          description: Whether the awarding event's club had tournaments sanctioned -- the x10 + 200 column (#525).
+        scheduleAmount:
+          type: integer
 
     AwardedPointRow:
       type: object

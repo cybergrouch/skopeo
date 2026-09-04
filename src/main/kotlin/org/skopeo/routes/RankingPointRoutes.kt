@@ -35,6 +35,7 @@ fun Application.configureRankingPointRoutes(service: RankingPointService = Ranki
             }
             route(path = "/api/v1/ranking-points") {
                 listAllRankingPoints(service = service)
+                awardDerivation(service = service)
                 revokeRankingPoints(service = service)
             }
         }
@@ -86,6 +87,21 @@ private fun Route.adjustRankingPoints(service: RankingPointService) {
             respondEither(result = service.adjust(token = verifiedToken(), userId = userId, request = request)) { award ->
                 call.respond(status = HttpStatusCode.Created, message = award)
             }
+        }
+    }
+}
+
+/**
+ * How one award's amount was reached (#862), for the Points Management popup. Fetched per award on click
+ * rather than folded into the list, so the paged table stays lean and 25 derivations are not assembled to
+ * show one.
+ */
+private fun Route.awardDerivation(service: RankingPointService) {
+    get(path = "/{awardId}/derivation") {
+        respondMappingErrors {
+            respondEither(
+                result = service.derivation(token = verifiedToken(), awardId = uuidParam(name = "awardId")),
+            ) { derivation -> call.respond(status = HttpStatusCode.OK, message = derivation) }
         }
     }
 }

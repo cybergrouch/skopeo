@@ -83,6 +83,17 @@ data class RankingPointAward(
     // The specific match (fixture) that granted this award on finalize (#448); null for manual grants
     // and pre-V19 awards — the profile points audit then falls back to linking the [eventId].
     val matchId: UUID? = null,
+    /**
+     * The points-schedule version this award was computed under (#862), and the two band strings the
+     * calculator consumed. Needed on the READ side to rebuild a derivation — PR 1 added them to the write
+     * model and the entity but not here, so nothing could explain an award it had just recorded.
+     *
+     * The bands are null for placement and manual grants, which have no band relation, and for any award
+     * written before #862 — which is why a derivation reports "not recorded" rather than guessing.
+     */
+    val pointsScheduleVersion: Int = 1,
+    val teamBand: String? = null,
+    val opponentBand: String? = null,
 ) {
     /** Whether this award is active and its validity window contains [asOf] — i.e. it counts then. */
     fun countsAsOf(asOf: LocalDateTime): Boolean = status == AwardStatus.ACTIVE && !asOf.isBefore(validFrom) && asOf.isBefore(validUntil)
