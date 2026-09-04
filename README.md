@@ -183,8 +183,13 @@ Skopeo has grown from a stateless rating calculator into a capability-gated rank
 
 ### Prerequisites
 
-- Java 17 or higher
+- **JDK 21** — the code targets Java 17, but the Gradle daemon is pinned to 21 because detekt 1.23.8's
+  bundled Kotlin compiler crashes on Java 25+. A newer JDK may stay your system default; the pin in
+  `gradle/gradle-daemon-jvm.properties` decides what Gradle uses. See
+  [JVM_COMPATIBILITY.md](docs/engineering/operations/JVM_COMPATIBILITY.md).
 - Gradle (included via wrapper)
+- Docker (for PostgreSQL; the app itself can run on the host)
+- Node.js 20+ (for the web app)
 
 ### Running the Application
 
@@ -202,9 +207,15 @@ The API will start on `http://localhost:8080`
 
 ### Docker Deployment
 
-#### Option 1: Using Docker Compose (recommended)
+> **What Docker covers here.** `docker-compose.yml` runs **PostgreSQL** and, optionally, the **API** —
+> there is no `web` service. The web app always runs on the host via Vite (`cd web && npm run dev`), which
+> is what gives you hot reload; production web is Firebase Hosting, not a container. So `docker-compose up`
+> does not start the whole system.
+
+#### Option 1: Using Docker Compose (recommended for the database)
 ```bash
-docker-compose up
+docker-compose up -d postgres     # database only — run the API with ./gradlew run
+docker-compose up                 # database + API (no web app)
 ```
 
 #### Option 2: Using Docker directly
