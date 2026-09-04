@@ -730,4 +730,52 @@ class RankingPointServiceTest {
             }
         }
     }
+
+    @Test
+    fun `a points manager and an administrator can read an award's derivation (#862)`() {
+        val player = provision(uid = "player")
+        val host = provision(uid = "host")
+        val event = seedEvent(createdBy = host.id)
+        val awardId = eventAward(userId = player.id, eventId = event.id, points = "7").id
+        provision(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provision(uid = "pm", roles = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
+
+        listOf("root", "pm").forEach { uid ->
+            withClue(clue = "$uid runs the Points Management tab, so the derivation is theirs to read") {
+                val derivation = service.derivation(token = token(uid = uid), awardId = awardId).shouldBeRight()
+                derivation.awardId shouldBe awardId.toString()
+                derivation.points shouldBe "7.0000"
+            }
+        }
+    }
+
+    @Test
+    fun `nobody outside the Points Management roles can read a derivation (#862)`() {
+        val player = provision(uid = "player")
+        val host = provision(uid = "host")
+        val event = seedEvent(createdBy = host.id)
+        val awardId = eventAward(userId = player.id, eventId = event.id, points = "7").id
+        // A rater sees derivations on the PUBLIC match card (#858) but has no business in this tool; the
+        // two surfaces gate separately, and this pins that they do.
+        provision(uid = "rater", roles = setOf(Capability.PLAYER, Capability.RATER))
+
+        listOf("player", "host", "rater").forEach { uid ->
+            withClue(clue = "$uid must not reach the ledger's derivation") {
+                service
+                    .derivation(token = token(uid = uid), awardId = awardId)
+                    .shouldBeLeft()
+                    .shouldBeInstanceOf<ServiceError.Forbidden>()
+            }
+        }
+    }
+
+    @Test
+    fun `an unknown award id is a NotFound rather than an empty derivation (#862)`() {
+        provision(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        service
+            .derivation(token = token(uid = "root"), awardId = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
 }
