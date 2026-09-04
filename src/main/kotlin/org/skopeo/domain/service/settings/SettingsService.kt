@@ -6,9 +6,11 @@ package org.skopeo.domain.service.settings
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
+import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.dto.settings.AwardRankingPointsResponse
+import org.skopeo.common.dto.settings.CalibrationMatchesResponse
 import org.skopeo.common.dto.settings.FacebookLoginResponse
 import org.skopeo.common.dto.settings.HideRankingPointsResponse
 import org.skopeo.common.dto.settings.StandingsSourceResponse
@@ -21,6 +23,7 @@ import org.skopeo.domain.model.AuditAction
 import org.skopeo.domain.model.AuditEntityType
 import org.skopeo.domain.model.AuditWrite
 import org.skopeo.domain.model.AwardRankingPointsValue
+import org.skopeo.domain.model.CalibrationMatchesValue
 import org.skopeo.domain.model.FacebookLoginValue
 import org.skopeo.domain.model.HideRankingPointsValue
 import org.skopeo.domain.model.SnapshotSource
@@ -45,6 +48,23 @@ private const val AWARD_RANKING_POINTS_KEY = "award_ranking_points_enabled"
 // suppresses *awarding*, this one suppresses *display*. Two flags whose names differ by one word, with
 // entirely different consequences, is a mistake waiting to happen.
 private const val HIDE_RANKING_POINTS_KEY = "hide_ranking_points_from_players"
+
+/**
+ * The app_settings key holding N for the calibration window (#881) — the number of RATED matches a
+ * manually-rated player stays in calibration for. Absent ⇒ [DEFAULT_CALIBRATION_MATCHES].
+ */
+private const val CALIBRATION_MATCHES_KEY = "calibration_match_count"
+
+/** The agreed default: calibration runs from the 1st through the 10th rated match (#881). */
+private const val DEFAULT_CALIBRATION_MATCHES = 10
+
+/**
+ * Bounds on N. Zero would mean "calibration is off", which the flag is not for — disabling it belongs in
+ * a separate decision, not in a value that silently means nothing. The ceiling keeps a typo from putting
+ * a player in calibration for a career.
+ */
+private const val MIN_CALIBRATION_MATCHES = 1
+private const val MAX_CALIBRATION_MATCHES = 100
 
 /**
  * Operational app_settings that steer serving behaviour without a redeploy (#146). Mirrors the
@@ -218,6 +238,62 @@ class SettingsService(
      */
     fun pointsVisibleTo(viewer: User?): Boolean =
         !getHideRankingPoints().hidden || viewer?.capabilities?.any { it in PLAYER_POINTS_VIEW_ROLES } == true
+
+    /**
+     * N for the calibration window (#881) — how many **rated** matches a manually-rated player stays in
+     * calibration for. Defaults to [DEFAULT_CALIBRATION_MATCHES] when unseeded or unparseable.
+     *
+     * Read at **evaluation time**, never copied onto a player, which is what lets a changed N take effect
+     * across everyone at once: lowering it from 10 to 5 ends several in-flight calibrations immediately,
+     * with no migration and no sweep. That was a deliberate decision on #881, and it is the reason
+     * calibration is derived rather than stored.
+     */
+    fun getCalibrationMatches(): CalibrationMatchesValue {
+        val row = settings.get(key = CALIBRATION_MATCHES_KEY)
+        val matches =
+            row?.value?.toIntOrNull()?.takeIf { it in MIN_CALIBRATION_MATCHES..MAX_CALIBRATION_MATCHES }
+                ?: DEFAULT_CALIBRATION_MATCHES
+        return CalibrationMatchesValue(matches = matches, updatedBy = row?.updatedBy, updatedAt = row?.updatedAt)
+    }
+
+    /** N as its response DTO — the route-facing form of [getCalibrationMatches]. */
+    fun getCalibrationMatchesResponse(): CalibrationMatchesResponse = getCalibrationMatches().toResponse()
+
+    /**
+     * Set N for the calibration window (ADMINISTRATOR only, #881), audited.
+     *
+     * Validated here rather than at the route because the bounds are policy, not parsing: this is the
+     * first numeric app setting, and a bad value would not fail loudly — it would quietly put every
+     * manually-rated player into a calibration that never ends, or none at all.
+     */
+    fun setCalibrationMatches(
+        token: VerifiedFirebaseToken,
+        matches: Int,
+    ): Either<ServiceError, CalibrationMatchesResponse> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            ensure(condition = matches in MIN_CALIBRATION_MATCHES..MAX_CALIBRATION_MATCHES) {
+                ServiceError.Validation(
+                    message = "Calibration matches must be between $MIN_CALIBRATION_MATCHES and $MAX_CALIBRATION_MATCHES",
+                )
+            }
+            val previous = getCalibrationMatches().matches
+            val row = settings.upsert(key = CALIBRATION_MATCHES_KEY, value = matches.toString(), updatedBy = adminId)
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = adminId,
+                        action = AuditAction.SETTINGS_CALIBRATION_MATCHES_CHANGED,
+                        entityType = AuditEntityType.SETTING,
+                        entityId = null,
+                        // Both values, because the change applies globally and immediately: lowering it
+                        // ends in-flight calibrations, so the delta is the operationally interesting part.
+                        summary = "Changed the calibration window from $previous to $matches rated matches",
+                        details = mapOf("previous" to previous.toString(), "matches" to matches.toString()),
+                    ),
+            )
+            CalibrationMatchesValue(matches = matches, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
+        }
 
     /**
      * Hide or show ranking-point figures for players and researchers (ADMINISTRATOR only, #865). Ticking

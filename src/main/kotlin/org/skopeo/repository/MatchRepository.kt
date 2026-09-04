@@ -662,6 +662,47 @@ class MatchRepository {
         }
 
     /**
+     * How many **rated** matches [userId] has taken part in since [since] — the calibration clock (#881).
+     *
+     * Rated, not assigned and not merely completed: a player entered into ten fixtures that are never
+     * played would otherwise leave calibration having played nothing, and a completed-but-unrated match
+     * has not yet had the calibrating effect applied to it. `rated_at` is the moment that happens.
+     *
+     * Counts the match rather than the player's rating-history rows on purpose. Once suppression lands
+     * (#881 PR 2) a *suppressed* player has no history row for a match they genuinely played, so counting
+     * history would make the clock depend on whose rating moved — which is the thing calibration decides.
+     *
+     * Excludes soft-deleted matches and those whose event/club container is gone, matching what
+     * [windowedMatchesInWindow] excludes from confidence: a match that counts for nothing else should not
+     * advance the clock either.
+     */
+    fun countRatedMatchesSince(
+        userId: UUID,
+        since: LocalDateTime,
+    ): Int =
+        transaction {
+            val teamIds =
+                TeamUsersTable
+                    .select(columns = listOf(element = TeamUsersTable.teamId))
+                    .where { TeamUsersTable.userId eq userId }
+                    .map { it[TeamUsersTable.teamId].value }
+            if (teamIds.isEmpty()) {
+                return@transaction 0
+            }
+            MatchesTable
+                .leftJoin(otherTable = EventsTable)
+                .select(columns = listOf(element = MatchesTable.id))
+                .where {
+                    MatchesTable.isActive and
+                        eventContainerActive() and
+                        ((MatchesTable.team1Id inList teamIds) or (MatchesTable.team2Id inList teamIds)) and
+                        MatchesTable.ratedAt.isNotNull() and
+                        (MatchesTable.ratedAt greater since)
+                }.count()
+                .toInt()
+        }
+
+    /**
      * Active matches between exactly these two players (head-to-head, #188), newest match date first.
      * Singles-oriented: a match counts when one side is [userIdA] and the other is [userIdB] (either
      * way round). Empty when either player has no matches. A directly soft-deleted meeting is excluded

@@ -4,9 +4,11 @@
 package org.skopeo.domain.mapper.dto.settings
 
 import org.skopeo.common.dto.settings.AwardRankingPointsResponse
+import org.skopeo.common.dto.settings.CalibrationMatchesResponse
 import org.skopeo.common.dto.settings.FacebookLoginResponse
 import org.skopeo.common.dto.settings.HideRankingPointsResponse
 import org.skopeo.domain.model.AwardRankingPointsValue
+import org.skopeo.domain.model.CalibrationMatchesValue
 import org.skopeo.domain.model.FacebookLoginValue
 import org.skopeo.domain.model.HideRankingPointsValue
 
@@ -28,6 +30,14 @@ fun AwardRankingPointsValue.toResponse(): AwardRankingPointsResponse =
 fun HideRankingPointsValue.toResponse(): HideRankingPointsResponse =
     HideRankingPointsResponse(
         hidden = hidden,
+        updatedAt = updatedAt?.toString(),
+        updatedBy = updatedBy?.toString(),
+    )
+
+/** [CalibrationMatchesValue] → its wire form (#881). */
+fun CalibrationMatchesValue.toResponse(): CalibrationMatchesResponse =
+    CalibrationMatchesResponse(
+        matches = matches,
         updatedAt = updatedAt?.toString(),
         updatedBy = updatedBy?.toString(),
     )

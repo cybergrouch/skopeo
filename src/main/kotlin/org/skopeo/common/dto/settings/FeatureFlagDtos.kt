@@ -61,3 +61,21 @@ data class HideRankingPointsResponse(
 data class SetHideRankingPointsRequest(
     val hidden: Boolean,
 )
+
+/**
+ * `GET /api/v1/settings/calibration-matches` (#881) — N, the number of rated matches a manually-rated
+ * player stays in calibration for. Public read: the number is policy, not a secret, and the band
+ * indicator needs it to say "match 3 of 10".
+ */
+@Serializable
+data class CalibrationMatchesResponse(
+    val matches: Int,
+    val updatedAt: String? = null,
+    val updatedBy: String? = null,
+)
+
+/** Body for `PUT /api/v1/settings/calibration-matches` (#881). ADMINISTRATOR only; 1..100. */
+@Serializable
+data class SetCalibrationMatchesRequest(
+    val matches: Int,
+)

@@ -23,6 +23,11 @@ vi.mock("./admin/StandingsSourceSection", () => ({
 vi.mock("./admin/ApiClientsSection", () => ({
   ApiClientsSection: () => <div>api clients section</div>,
 }));
+// Stubbed like every other section: the real one reads a setting through react-query, so rendering it
+// here would need a QueryClientProvider this test has no reason to set up (#881).
+vi.mock("./admin/CalibrationWindowSection", () => ({
+  CalibrationWindowSection: () => <div>calibration window section</div>,
+}));
 
 describe("AdminTab", () => {
   it("renders the admin sections (invites #135 and activity log #134 now live in their own tabs)", () => {
@@ -32,6 +37,7 @@ describe("AdminTab", () => {
     expect(screen.getByText("theme section")).toBeInTheDocument();
     expect(screen.getByText("standings source section")).toBeInTheDocument();
     expect(screen.getByText("feature flags section")).toBeInTheDocument();
+    expect(screen.getByText("calibration window section")).toBeInTheDocument();
     expect(screen.getByText("api clients section")).toBeInTheDocument();
     expect(screen.getByText("build info section")).toBeInTheDocument();
     expect(screen.queryByText("invites section")).not.toBeInTheDocument();
