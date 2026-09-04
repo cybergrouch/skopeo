@@ -15,6 +15,25 @@ import { cn } from '@/lib/utils'
 export const NTRP_DISCLAIMER =
   'NTRP is a reference framework. This platform is not affiliated with or endorsed by the United States Tennis Association (USTA).'
 
+/**
+ * Appended to the label when the rating is still being calibrated (#881).
+ *
+ * A bare asterisk, inside the same text node, deliberately:
+ *
+ * - **Inside**, because splitting the label across nodes breaks `getByText` (see below) — and because a
+ *   marker sitting outside the trigger would not be clickable, so the explanation would be unreachable
+ *   from the thing it qualifies.
+ * - **Bare**, because NTRP appears many times per screen (a 16-player roster renders it 16 times) and a
+ *   word like "calibrating" beside each one would swamp the data. The popover carries the sentence; the
+ *   asterisk only signals that there is one.
+ */
+const CALIBRATION_MARKER = '*'
+
+/** The explanation shown alongside the disclaimer when a rating is calibrating (#881). */
+export const NTRP_CALIBRATION_NOTE =
+  'This rating is still being calibrated: it was set by hand, and for its first few rated matches it moves ' +
+  'without affecting opponents’ or partners’ ratings. Treat it as provisional.'
+
 interface NtrpLabelProps {
   /** A band or rating to render after the term, e.g. `4.0` → "NTRP 4.0". */
   value?: string | number
@@ -22,6 +41,15 @@ interface NtrpLabelProps {
   children?: ReactNode
   /** Extra classes for the inline trigger. */
   className?: string
+  /**
+   * Mark the rating as still being calibrated (#881) — appends {@link CALIBRATION_MARKER} and adds
+   * {@link NTRP_CALIBRATION_NOTE} to the popover.
+   *
+   * Comes from the server (`rating.inCalibration`), never derived here: the rule depends on a designation
+   * timestamp, a rated-match count and a global setting, none of which the client holds — and a client
+   * that guessed would eventually disagree with the standings about who is provisional.
+   */
+  calibrating?: boolean
 }
 
 /**
@@ -46,15 +74,23 @@ interface NtrpLabelProps {
  *
  * See #842 for the full surface list and the reasoning behind each exclusion.
  */
-export function NtrpLabel({ value, children, className }: NtrpLabelProps) {
+export function NtrpLabel({ value, children, className, calibrating = false }: NtrpLabelProps) {
   const descriptionId = useId()
-  const text = children ?? (value == null ? 'NTRP' : `NTRP ${value}`)
+  // The marker joins the same string rather than being rendered as a sibling: Testing Library's
+  // getNodeText concatenates only DIRECT child text nodes, so a sibling would make "NTRP 4.0"
+  // unfindable by getByText and silently break assertions across the suite.
+  const base = children ?? (value == null ? 'NTRP' : `NTRP ${value}`)
+  const text = calibrating && typeof base === 'string' ? `${base}${CALIBRATION_MARKER}` : base
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="NTRP — about this rating framework"
+          aria-label={
+            calibrating
+              ? 'NTRP — about this rating framework, and this rating is still being calibrated'
+              : 'NTRP — about this rating framework'
+          }
           aria-describedby={descriptionId}
           className={cn(
             'inline underline decoration-dotted underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm',
@@ -65,7 +101,14 @@ export function NtrpLabel({ value, children, className }: NtrpLabelProps) {
         </button>
       </PopoverTrigger>
       <PopoverContent id={descriptionId} role="tooltip">
-        {NTRP_DISCLAIMER}
+        {calibrating ? (
+          <>
+            <span className="mb-2 block font-medium">{NTRP_CALIBRATION_NOTE}</span>
+            {NTRP_DISCLAIMER}
+          </>
+        ) : (
+          NTRP_DISCLAIMER
+        )}
       </PopoverContent>
     </Popover>
   )

@@ -149,7 +149,7 @@ export function PlayerProfilePage() {
             ) : null}
             {player.rating ? (
               <p className="text-sm">
-                <NtrpLabel className="font-medium" />{" "}
+                <NtrpLabel className="font-medium" calibrating={player.rating.inCalibration === true} />{" "}
                 {player.rating.level ?? player.rating.value}
                 {formatConfidence(player.rating.confidence) ? (
                   <>

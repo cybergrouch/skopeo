@@ -42,6 +42,19 @@ data class PublicRatingDto(
     // Computed rating confidence as a 0..1 decimal string (#343); the UI shows it as a percentage.
     // 0 when the rating isn't match-derived (self-rating / override).
     val confidence: String? = null,
+    /**
+     * Whether this rating is still being **calibrated** (#881) — assigned by hand and inside its first N
+     * rated matches, during which the player's own rating moves but their opponents' and partners' do not.
+     *
+     * Public, like the band itself: it qualifies a number that is already shown, and a viewer comparing
+     * two bands deserves to know that one of them is provisional. Confidence is adjacent but not the same
+     * thing — that is a continuous measure of how well-evidenced a rating is, while this is a hard
+     * statement that the number is not yet earned.
+     */
+    val inCalibration: Boolean = false,
+    /** Rated matches played so far in the window, and the N they are measured against (#881). */
+    val calibrationMatchesRated: Int? = null,
+    val calibrationMatchesRequired: Int? = null,
 )
 
 /**

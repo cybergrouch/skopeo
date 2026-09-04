@@ -18,6 +18,7 @@ import org.skopeo.domain.model.AuditEntityType
 import org.skopeo.domain.model.AuditWrite
 import org.skopeo.domain.model.User
 import org.skopeo.domain.service.audit.AuditService
+import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import java.util.UUID
 
@@ -34,6 +35,8 @@ import java.util.UUID
 class DuplicateService(
     private val users: UserRepository = UserRepository(),
     private val audit: AuditService = AuditService(),
+    // Only to carry a calibration window across a merge (#881).
+    private val ratings: RatingRepository = RatingRepository(),
 ) {
     /** Mark [duplicateIds] as disabled duplicates of [canonicalId]. */
     fun markDuplicates(
@@ -172,6 +175,18 @@ class DuplicateService(
                     survivorId = survivorId,
                     transferLogin = transferLogin,
                 )
+            // Calibration is inherited, taking the EARLIER designation (#881) — the safer side.
+            //
+            // The survivor keeps its own rating and points, but a merge moves the retired account's
+            // matches onto it, so the survivor's rating is now answerable for play it did not previously
+            // own. Inheriting the longer remaining window is the conservative outcome: suppression can
+            // only ever withhold a change, never damage a settled rating, whereas dropping a window would
+            // start moving opponents' ratings off a rating that is still a guess.
+            //
+            // Because calibration is derived from the designation timestamp rather than stored (#881),
+            // "inherit the longer window" is exactly "keep the earlier timestamp" — no state machine to
+            // reconcile, and the rated-match count follows automatically since the matches have moved.
+            ratings.inheritEarlierCalibrationStart(survivorId = survivorId, retiredId = retiredAccountId)
             audit.record(
                 write =
                     AuditWrite(
