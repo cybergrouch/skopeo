@@ -16,6 +16,8 @@ import org.skopeo.common.dto.user.OpponentBandSeries
 import org.skopeo.common.dto.user.OpponentSummary
 import org.skopeo.common.dto.user.PlayerMatchHistoryEntry
 import org.skopeo.common.dto.user.PlayerMatchHistoryPage
+import org.skopeo.common.dto.user.PlayerPointsBandGroup
+import org.skopeo.common.dto.user.PlayerPointsByBandResponse
 import org.skopeo.common.dto.user.PlayerResultsSummary
 import org.skopeo.common.dto.user.PlayerStandingResponse
 import org.skopeo.common.dto.user.PublicPlayerResponse
@@ -35,6 +37,7 @@ import org.skopeo.domain.model.ContactType
 import org.skopeo.domain.model.Match
 import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.User
+import org.skopeo.domain.model.awardCountsInBand
 import org.skopeo.domain.model.canSeeRawRatingOrFalse
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.settings.SettingsService
@@ -43,6 +46,7 @@ import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
+import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.time.YearMonth
 import java.util.UUID
@@ -388,15 +392,21 @@ class PlayerService(
         }
 
     /**
-     * A player's ACTIVE ranking-point awards (#448) for the profile points audit — owner-or-admin only.
-     * Each award carries its points, band, expiry ([validUntil]), and a link to the granting match (its
-     * public code → `/matches/:code`); an award with no match link (a manual grant or a pre-V19 finalize
-     * award) falls back to the event code (→ `/events/:code`). Not visible to other / anonymous viewers.
+     * A player's ACTIVE ranking-point awards (#448), **grouped by the band they were earned in** (#882) —
+     * owner-or-admin only. Each award carries its points, band, expiry ([validUntil]), and a link to the
+     * granting match (its public code → `/matches/:code`); an award with no match link (a manual grant or
+     * a pre-V19 finalize award) falls back to the event code (→ `/events/:code`). Not visible to other /
+     * anonymous viewers.
+     *
+     * Grouped rather than flat because points count only while their band tag matches the player's current
+     * level (#403 decision #2), and the flat list said nothing about it: a player who changed bands saw
+     * their awards listed as live while the Ranking section of the same profile said "Unranked". The
+     * grouping — and the server-side `counting` flag on each group — is what makes the two agree.
      */
     fun activePoints(
         token: VerifiedFirebaseToken,
         code: String,
-    ): Either<ServiceError, List<ActivePointsAwardResponse>> =
+    ): Either<ServiceError, PlayerPointsByBandResponse> =
         either {
             val user = resolve(code = code).bind()
             // Owner-or-admin only (#448): the caller is the profile owner, or holds ADMINISTRATOR.
@@ -407,25 +417,27 @@ class PlayerService(
             // capability-only, with no owner-self exemption. An empty list rather than a Forbidden: the
             // caller is entitled to the endpoint, there is simply nothing to show them.
             if (!settings.pointsVisibleTo(viewer = caller)) {
-                return@either emptyList()
+                return@either PlayerPointsByBandResponse(totalPoints = "0")
             }
 
             val active = awards.listActiveByUser(userId = user.id, asOf = LocalDateTime.now()).map { it.toDomain() }
             val matchCodes = matches.publicRefsByIds(ids = active.mapNotNull { it.matchId }).mapValues { it.value.publicCode }
             val eventCodes = events.publicCodesByIds(ids = active.mapNotNull { it.eventId })
             // Prefer the match link; fall back to the event only when there is no match (manual / pre-V19).
-            active.map { award ->
-                val matchCode = award.matchId?.let { matchCodes[it] }
-                ActivePointsAwardResponse(
-                    id = award.id.toString(),
-                    points = award.points.toPlainString(),
-                    band = award.band,
-                    pointClass = award.pointClass.name,
-                    validUntil = award.validUntil.toString(),
-                    matchCode = matchCode,
-                    eventCode = if (matchCode == null) award.eventId?.let { eventCodes[it] } else null,
-                )
-            }
+            val rows =
+                active.map { award ->
+                    val matchCode = award.matchId?.let { matchCodes[it] }
+                    ActivePointsAwardResponse(
+                        id = award.id.toString(),
+                        points = award.points.toPlainString(),
+                        band = award.band,
+                        pointClass = award.pointClass.name,
+                        validUntil = award.validUntil.toString(),
+                        matchCode = matchCode,
+                        eventCode = if (matchCode == null) award.eventId?.let { eventCodes[it] } else null,
+                    )
+                }
+            groupPointsByBand(rows = rows, currentBand = ratings.findCurrentRating(userId = user.id)?.currentLevel)
         }
 
     /**
@@ -636,3 +648,50 @@ private data class ResultRow(
     val period: String,
     val won: Boolean,
 )
+
+/**
+ * Group a player's active awards by the band they were earned in (#882).
+ *
+ * The **current** band's group is always emitted, even holding nothing, because a player with 0 counting
+ * points and a pile of latent ones is exactly the case this exists to explain — that combination is what
+ * made the profile look broken (`SG59VN`: 3.5 current with nothing counting, 81 points latent at 3.0).
+ * **Latent** groups are emitted only when they hold points; the 1.0–7.0 ladder is never enumerated.
+ *
+ * Latent covers **promotion and demotion alike** — three of the four players affected when this was
+ * reported had moved *down* — so nothing here may imply a direction.
+ *
+ * File-scope because it is a pure fold over rows plus one band string; `PlayerService` is at detekt's
+ * function ceiling and this belongs to nothing but its arguments.
+ */
+private fun groupPointsByBand(
+    rows: List<ActivePointsAwardResponse>,
+    currentBand: String?,
+): PlayerPointsByBandResponse {
+    val byBand = rows.groupBy { it.band }
+
+    fun group(
+        band: String,
+        awards: List<ActivePointsAwardResponse>,
+    ) = PlayerPointsBandGroup(
+        band = band,
+        counting = awardCountsInBand(awardBand = band, currentLevel = currentBand),
+        totalPoints = awards.fold(initial = BigDecimal.ZERO) { sum, row -> sum.add(BigDecimal(row.points)) }.toPlainString(),
+        awards = awards,
+    )
+
+    val current = currentBand?.let { group(band = it, awards = byBand[it].orEmpty()) }
+    val latent =
+        byBand
+            .filterKeys { it != currentBand }
+            // Strongest band first, so a promoted player reads down from where they came. Bands are
+            // numeric strings ("2.5", "3.0"), so compare as numbers — lexicographic would put "10.0"
+            // before "3.0" if the scale ever widened.
+            .toSortedMap(comparator = compareByDescending { it.toBigDecimalOrNull() ?: BigDecimal.ZERO })
+            .map { (band, awards) -> group(band = band, awards = awards) }
+    return PlayerPointsByBandResponse(
+        currentBand = currentBand,
+        current = current,
+        latent = latent,
+        totalPoints = rows.fold(initial = BigDecimal.ZERO) { sum, row -> sum.add(BigDecimal(row.points)) }.toPlainString(),
+    )
+}

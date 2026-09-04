@@ -24,6 +24,7 @@ import org.skopeo.domain.model.StandingsCalculationOutcome
 import org.skopeo.domain.model.StandingsEntryWrite
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserRating
+import org.skopeo.domain.model.awardCountsInBand
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
@@ -113,7 +114,11 @@ class StandingsCalculationService(
         // but Phase D only counts it while that band matches the player's CURRENT band (band-scoped, #2).
         val totals = mutableMapOf<GroupKey, MutableMap<UUID, BigDecimal>>()
         countingForActive.forEach { award ->
-            if (award.band != ratingsById[award.userId]?.currentLevel) return@forEach
+            // The one definition of band-scoped counting (#882) — shared with the profile's points audit,
+            // which used to apply no band filter at all and so contradicted this on the same page.
+            if (!awardCountsInBand(awardBand = award.band, currentLevel = ratingsById[award.userId]?.currentLevel)) {
+                return@forEach
+            }
             // The award's band is the player's RAW NTRP level (e.g. "2.0"); bucket it into the standings
             // race via [StandingsBand.of] (#555) — sub-3.0 → "<3.0", 6.0+ → "6.0+". Using the strict
             // requireCode here 500s for any tail band whose level isn't an exact StandingsBand code.

@@ -808,13 +808,23 @@ paths:
 
   /api/v1/players/{code}/points:
     get:
-      summary: A player's active ranking-point awards by code (owner or ADMINISTRATOR only, #448)
+      summary: A player's active ranking points, grouped by band (owner or ADMINISTRATOR only, #448/#882)
       description: >-
-        The profile points audit — the player's ACTIVE ranking-point awards (status ACTIVE and now
-        within their validity window). Each award carries its points, band, expiry (validUntil), and a
-        link to the granting match (its public code); an award with no match link (a manual grant or a
-        pre-V19 finalize award) falls back to the event code. Visible only to the profile owner and to
-        ADMINISTRATORs; other and anonymous viewers get 403.
+        The profile points audit — the player's ACTIVE ranking-point awards (status ACTIVE and now within
+        their validity window), **grouped by the band each was earned in** (#882). Each award carries its
+        points, band, expiry (validUntil), and a link to the granting match (its public code); an award
+        with no match link (a manual grant or a pre-V19 finalize award) falls back to the event code.
+        Visible only to the profile owner and to ADMINISTRATORs; other and anonymous viewers get 403.
+
+        Grouped because an award counts toward a standing only while its band tag equals the player's
+        CURRENT level (#403 decision 2). A flat list said nothing about that, so a player who changed
+        bands saw their awards listed as live while the Ranking section of the same profile reported
+        "Unranked". The `counting` flag on each group is the SERVER's answer -- a client cannot know the
+        rule, and having it guess is how the two surfaces drifted apart.
+
+        The `current` group is present even when it holds zero points, because that zero is the
+        explanation for an unranked player who visibly holds points elsewhere. `latent` groups appear
+        only when they hold points, and cover promotion and demotion alike -- no direction is implied.
       tags:
         - Users
       security:
@@ -828,13 +838,11 @@ paths:
           description: The player's shareable public code (case-insensitive).
       responses:
         '200':
-          description: The player's active ranking-point awards
+          description: The player's active ranking points, grouped by band
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ActivePointsAwardResponse'
+                $ref: '#/components/schemas/PlayerPointsByBandResponse'
         '401':
           description: Missing or invalid Firebase token
         '403':
@@ -5974,6 +5982,61 @@ components:
           description: >-
             The precise current rating as a decimal string, present only when source=RATING and the caller may see
             rates (RATER/ADMINISTRATOR or the owner, #186); omitted for anonymous / other viewers.
+
+    PlayerPointsByBandResponse:
+      type: object
+      description: >-
+        A player's active ranking points grouped by the band they were earned in (#882). Points count only
+        while their band tag matches the player's current level, so a player who changes bands keeps points
+        that no longer count.
+      required:
+        - totalPoints
+      properties:
+        currentBand:
+          type: string
+          nullable: true
+          description: The player's current published level; null when they have no rating (nothing counts).
+        current:
+          allOf:
+            - $ref: '#/components/schemas/PlayerPointsBandGroup'
+          nullable: true
+          description: >-
+            The band the player is racing in. Present even when it holds zero points -- that zero is what
+            explains an unranked player who holds points in another band. Null only when unrated.
+        latent:
+          type: array
+          description: >-
+            Bands the player holds points in but is no longer competing in -- promoted OR demoted. Only
+            bands holding points appear; the 1.0-7.0 ladder is not enumerated. These resume counting if
+            the player returns to that band.
+          items:
+            $ref: '#/components/schemas/PlayerPointsBandGroup'
+        totalPoints:
+          type: string
+          description: Every band's points summed, counting and latent alike.
+
+    PlayerPointsBandGroup:
+      type: object
+      description: One band's worth of a player's points (#882).
+      required:
+        - band
+        - counting
+        - totalPoints
+      properties:
+        band:
+          type: string
+          description: The band these awards were earned in, e.g. "3.5".
+        counting:
+          type: boolean
+          description: >-
+            Whether these awards count toward the player's standing right now. The server's answer, not a
+            client inference -- only the backend knows the band-scoped counting rule.
+        totalPoints:
+          type: string
+        awards:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivePointsAwardResponse'
 
     ActivePointsAwardResponse:
       type: object
