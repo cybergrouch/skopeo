@@ -13,8 +13,6 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -51,11 +49,11 @@ import org.skopeo.repository.CircuitRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
-import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestAppSettings
 import org.skopeo.testsupport.seedFixtureClub
+import org.skopeo.testsupport.settleAllRatings
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.UUID
@@ -112,24 +110,7 @@ class EventReverseRatingsTest {
         userId: UUID,
         level: String,
     ) = ratings.setRating(userId = userId, rating = BigDecimal(level), level = level).also {
-        clearCalibration(userId = userId)
-    }
-
-    /**
-     * Clear the calibration stamp that a manual designation opens (#881).
-     *
-     * `setRating` is a manual designation, so a freshly-rated player is **in calibration** and earns no
-     * ranking points for their first N rated matches. These tests are about awarding, not calibration:
-     * their players are meant to be settled, which is the state of everyone who predates the feature and
-     * of anyone past their window. Without this they would assert zero awards and pass for the wrong
-     * reason — or, as they did, fail for a reason unrelated to what they test.
-     */
-    private fun clearCalibration(userId: UUID) {
-        transaction {
-            UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
-                it[calibrationStartedAt] = null
-            }
-        }
+        settleAllRatings()
     }
 
     private fun budgetedEvent(
