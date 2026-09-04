@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 
-# Start Tennis Levelr API Server
+# Start Skopeo API Server
 
-echo "🎾 Starting Tennis Levelr API..."
+echo "🎾 Starting Skopeo API..."
 echo ""
 
 # Check if port 8080 is already in use
