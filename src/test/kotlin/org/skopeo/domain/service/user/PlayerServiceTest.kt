@@ -5,6 +5,8 @@ package org.skopeo.domain.service.user
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
@@ -16,7 +18,9 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.user.ActivePointsAwardResponse
 import org.skopeo.common.dto.user.OpponentBand
+import org.skopeo.common.dto.user.PlayerPointsByBandResponse
 import org.skopeo.common.dto.user.ResultsTotals
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.redaction.asRedactable
@@ -885,10 +889,15 @@ class PlayerServiceTest {
 
     private val awardRepo = RankingPointRepository()
 
+    /** Every award across the current and latent groups — for assertions that don't care about grouping. */
+    private fun PlayerPointsByBandResponse.allAwards(): List<ActivePointsAwardResponse> =
+        listOfNotNull(element = current).plus(elements = latent).flatMap { it.awards }
+
     /** Insert an ACTIVE award for [userId], optionally linked to [matchId] / [eventId] (#448). */
     private fun grant(
         userId: UUID,
         points: String,
+        band: String = "4.0",
         matchId: UUID? = null,
         eventId: UUID? = null,
         validFrom: LocalDateTime = LocalDateTime.now().minusDays(1),
@@ -902,7 +911,7 @@ class PlayerServiceTest {
                 pointClass = PointClass.FULL_MATCH,
                 sourceType = PointSourceType.INTERNAL,
                 sourceId = eventId?.toString(),
-                band = "4.0",
+                band = band,
                 sex = "Male",
                 reason = null,
                 validFrom = validFrom,
@@ -1039,7 +1048,7 @@ class PlayerServiceTest {
         grant(userId = owner.id, points = "20", validFrom = LocalDateTime.now().plusDays(1), validUntil = LocalDateTime.now().plusMonths(6))
         grant(userId = owner.id, points = "40", status = AwardStatus.REVOKED)
 
-        val rows = service.activePoints(token = token(uid = "owner"), code = owner.publicCode.lowercase()).shouldBeRight()
+        val rows = service.activePoints(token = token(uid = "owner"), code = owner.publicCode.lowercase()).shouldBeRight().allAwards()
         rows shouldHaveSize 1
         rows.single().let {
             it.id shouldBe active.id.toString()
@@ -1059,7 +1068,7 @@ class PlayerServiceTest {
         val event = org.skopeo.repository.EventRepository().create(command = eventCommand(createdBy = owner.id)).toDomain()
         grant(userId = owner.id, points = "15", matchId = null, eventId = event.id)
 
-        val row = service.activePoints(token = token(uid = "owner"), code = owner.publicCode).shouldBeRight().single()
+        val row = service.activePoints(token = token(uid = "owner"), code = owner.publicCode).shouldBeRight().allAwards().single()
         row.matchCode.shouldBeNull()
         row.eventCode shouldBe event.publicCode
     }
@@ -1070,7 +1079,7 @@ class PlayerServiceTest {
         val owner = newUser(uid = "owner", names = display(name = "Owner"))
         grant(userId = owner.id, points = "30")
 
-        service.activePoints(token = token(uid = "admin"), code = owner.publicCode).shouldBeRight() shouldHaveSize 1
+        service.activePoints(token = token(uid = "admin"), code = owner.publicCode).shouldBeRight().allAwards() shouldHaveSize 1
     }
 
     @Test
@@ -1089,6 +1098,85 @@ class PlayerServiceTest {
             token = token(uid = "ghost"),
             code = owner.publicCode,
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `a promoted player's old-band points are latent, and the current band still reports zero (#882)`() {
+        val owner = newUser(uid = "owner", names = display(name = "Owner"))
+        // The exact production shape that produced the bug report (SG59VN): now at 3.5, holding 81 points
+        // earned at 3.0 and nothing at all in the band they are actually racing in.
+        ratings.setRating(userId = owner.id, rating = BigDecimal("3.5"), level = "3.5")
+        grant(userId = owner.id, points = "81", band = "3.0")
+
+        val response = service.activePoints(token = token(uid = "owner"), code = owner.publicCode).shouldBeRight()
+
+        response.currentBand shouldBe "3.5"
+        // The current band is reported EVEN THOUGH it holds nothing — that zero is the whole explanation
+        // for a player who is unranked while visibly holding points. Omitting it recreates the report.
+        val current = response.current.shouldNotBeNull()
+        current.band shouldBe "3.5"
+        current.counting.shouldBeTrue()
+        current.totalPoints shouldBe "0"
+        current.awards.shouldBeEmpty()
+        // ...and the 81 points are present, grouped under where they were earned, marked as not counting.
+        val latent = response.latent.single()
+        latent.band shouldBe "3.0"
+        latent.counting.shouldBeFalse()
+        latent.totalPoints shouldBe "81.0000"
+        latent.awards.single().points shouldBe "81.0000"
+        // The total spans both, so the profile can never again show points that add up to nothing.
+        response.totalPoints shouldBe "81.0000"
+    }
+
+    @Test
+    fun `a demoted player's points are latent on the same terms as a promoted one (#882)`() {
+        val owner = newUser(uid = "owner", names = display(name = "Owner"))
+        // Three of the four players affected in production had moved DOWN, not up (8DSAJP: 3.0 → 2.5,
+        // 54 points stranded). The payload must not encode a direction.
+        ratings.setRating(userId = owner.id, rating = BigDecimal("2.5"), level = "2.5")
+        grant(userId = owner.id, points = "20", band = "3.0")
+        grant(userId = owner.id, points = "34", band = "3.0")
+
+        val response = service.activePoints(token = token(uid = "owner"), code = owner.publicCode).shouldBeRight()
+
+        response.current.shouldNotBeNull().totalPoints shouldBe "0"
+        val latent = response.latent.single()
+        latent.band shouldBe "3.0"
+        latent.counting.shouldBeFalse()
+        latent.totalPoints shouldBe "54.0000"
+        latent.awards shouldHaveSize 2
+    }
+
+    @Test
+    fun `only bands holding points appear, strongest first (#882)`() {
+        val owner = newUser(uid = "owner", names = display(name = "Owner"))
+        ratings.setRating(userId = owner.id, rating = BigDecimal("3.5"), level = "3.5")
+        grant(userId = owner.id, points = "5", band = "2.5")
+        grant(userId = owner.id, points = "7", band = "4.0")
+        grant(userId = owner.id, points = "9", band = "3.5")
+
+        val response = service.activePoints(token = token(uid = "owner"), code = owner.publicCode).shouldBeRight()
+
+        // The 1.0–7.0 ladder is never enumerated: only bands the player actually holds points in.
+        response.latent.map { it.band } shouldBe listOf("4.0", "2.5")
+        response.current.shouldNotBeNull().totalPoints shouldBe "9.0000"
+        response.totalPoints shouldBe "21.0000"
+    }
+
+    @Test
+    fun `an unrated player has no current band, so every band is latent (#882)`() {
+        val owner = newUser(uid = "owner", names = display(name = "Owner"))
+        // No rating at all: the recompute counts none of their awards, so nothing here may claim to count.
+        grant(userId = owner.id, points = "12", band = "3.0")
+
+        val response = service.activePoints(token = token(uid = "owner"), code = owner.publicCode).shouldBeRight()
+
+        response.currentBand.shouldBeNull()
+        response.current.shouldBeNull()
+        val onlyGroup = response.latent.single()
+        onlyGroup.band shouldBe "3.0"
+        onlyGroup.counting.shouldBeFalse()
+        response.totalPoints shouldBe "12.0000"
     }
 
     private fun eventCommand(
@@ -1249,15 +1337,15 @@ class PlayerServiceTest {
         val settings = SettingsService()
 
         // Visible while the flag is off — the default, so nothing changed by adding it.
-        service.activePoints(token = token(uid = "p"), code = player.publicCode).shouldBeRight().shouldHaveSize(size = 1)
+        service.activePoints(token = token(uid = "p"), code = player.publicCode).shouldBeRight().allAwards().shouldHaveSize(size = 1)
 
         settings.setHideRankingPoints(token = token(uid = "root"), hidden = true).shouldBeRight()
 
         // Suppressed for the OWNER of the profile, not merely for strangers. Deliberately unlike #186,
         // where the owner does see their own precise rating; the rule here is capability-only.
-        service.activePoints(token = token(uid = "p"), code = player.publicCode).shouldBeRight().shouldBeEmpty()
+        service.activePoints(token = token(uid = "p"), code = player.publicCode).shouldBeRight().allAwards().shouldBeEmpty()
         // ...and still visible to an administrator, who is exempt.
-        service.activePoints(token = token(uid = "root"), code = player.publicCode).shouldBeRight().shouldHaveSize(size = 1)
+        service.activePoints(token = token(uid = "root"), code = player.publicCode).shouldBeRight().allAwards().shouldHaveSize(size = 1)
         admin.id shouldNotBe player.id
     }
 
@@ -1271,6 +1359,6 @@ class PlayerServiceTest {
         val manager = viewerWith(uid = "pm", capabilities = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
         grant(userId = manager.id, points = "10")
 
-        service.activePoints(token = token(uid = "pm"), code = manager.publicCode).shouldBeRight().shouldHaveSize(size = 1)
+        service.activePoints(token = token(uid = "pm"), code = manager.publicCode).shouldBeRight().allAwards().shouldHaveSize(size = 1)
     }
 }

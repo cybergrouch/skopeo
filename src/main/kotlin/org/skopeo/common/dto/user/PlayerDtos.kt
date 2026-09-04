@@ -236,3 +236,47 @@ data class ActivePointsAwardResponse(
     val matchCode: String? = null,
     val eventCode: String? = null,
 )
+
+/**
+ * A player's active ranking points, **grouped by the band they were earned in** (#882).
+ *
+ * Points count only while their band tag matches the player's current level (#403 decision #2), so a
+ * player who changes bands keeps points that no longer count. Reporting a flat list made the profile
+ * contradict itself — it showed the awards as live while the Ranking section on the same page said
+ * "Unranked". This shape states the relationship instead of leaving the reader to infer it.
+ *
+ * [currentBand] is null when the player has no rating, in which case nothing counts and every group is
+ * latent.
+ */
+@Serializable
+data class PlayerPointsByBandResponse(
+    val currentBand: String? = null,
+    /** The player's current band: their counting total, **present even when it is zero** — see below. */
+    val current: PlayerPointsBandGroup? = null,
+    /**
+     * Bands the player holds points in but is no longer competing in — promoted *or* demoted. Empty when
+     * there are none. Only bands holding points appear; the ladder is not enumerated.
+     */
+    val latent: List<PlayerPointsBandGroup> = emptyList(),
+    /** Every band's points added up, counting and latent alike — what the player has ever been awarded. */
+    val totalPoints: String,
+)
+
+/**
+ * One band's worth of a player's points (#882).
+ *
+ * [counting] is the server's answer, not the client's inference: only the backend knows the band-scoped
+ * counting rule, and having the UI re-derive it is how the profile and the standings drifted apart in the
+ * first place.
+ *
+ * The **current** band's group is emitted even when [totalPoints] is "0" and [awards] is empty, because
+ * that is the whole explanation for an unranked player who visibly holds points elsewhere. Latent groups
+ * are only emitted when they actually hold something.
+ */
+@Serializable
+data class PlayerPointsBandGroup(
+    val band: String,
+    val counting: Boolean,
+    val totalPoints: String,
+    val awards: List<ActivePointsAwardResponse> = emptyList(),
+)
