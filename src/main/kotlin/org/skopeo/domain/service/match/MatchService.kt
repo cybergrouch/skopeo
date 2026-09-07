@@ -465,10 +465,19 @@ class MatchService(
         }
 
     /**
-     * Set the manual calculation order for a set of same-date matches (#331/#332). Staff-only. The
-     * rating calculation orders by match date first, so a manual drag only re-sequences matches that
-     * share a date — hence the same-date guard. Rated matches are frozen, so they can't be reordered.
-     * [matchIds] is the desired order; each gets calc_sequence = its index.
+     * Renumber an event's matches (#898, replacing the #331/#332 same-date tiebreaker). Staff-only.
+     * [matchIds] is the desired order; they redistribute the match numbers they already hold.
+     *
+     * **The same-date guard is gone.** It existed because the calculation ordered by match date first, so
+     * dragging across dates could not have had any effect. Now match_number *is* the intra-event order,
+     * so moving a match from day 2 to day 1 is meaningful — an event is one sortable list, not one per day.
+     *
+     * **A subset is fine.** The submitted matches permute the numbers they already hold rather than being
+     * renumbered 1..k, so untouched matches keep theirs and nothing collides. That is what closes the
+     * partial-reorder gap the old tiebreaker had — two subsets could each be numbered from zero and
+     * silently produce duplicates — without forcing a caller to submit matches it does not render.
+     *
+     * Rated matches are frozen (#337), so a batch containing one is refused.
      */
     fun reorder(
         token: VerifiedFirebaseToken,
@@ -487,12 +496,12 @@ class MatchService(
             ensure(condition = loaded.all { it.ratedAt == null }) {
                 ServiceError.Conflict(message = "Cannot reorder a match that has already been rated")
             }
-            ensure(condition = loaded.map { it.matchDate }.toSet().size == 1) {
-                ServiceError.Validation(message = "Only matches on the same date can be reordered")
+            val eventIds = loaded.map { it.eventId }.toSet()
+            ensure(condition = eventIds.size == 1) {
+                ServiceError.Validation(message = "Only matches in the same event can be reordered")
             }
-            // Every evented fixture in the batch inherits its event's club rule (#789).
-            loaded.forEach { organizer.ensureForEventId(eventId = it.eventId, caller = caller).bind() }
-            matches.reorderCalcSequence(matchIds = matchIds)
+            organizer.ensureForEventId(eventId = eventIds.first(), caller = caller).bind()
+            matches.renumberMatches(matchIds = matchIds)
         }
 
     fun getById(

@@ -189,7 +189,7 @@ class RatingCalculationServiceTest {
     }
 
     @Test
-    fun `processes matches in match-date order, not result-entry order (#331)`() {
+    fun `processes matches in match-number order, regardless of date or result-entry order (#331, #898)`() {
         provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
@@ -206,12 +206,15 @@ class RatingCalculationServiceTest {
                 UUID.fromString(it.matchId)
             }
 
-        // Match date wins over result-entry (completed_at) order.
-        order shouldBe listOf(earlier, later)
+        // #331 originally asserted that match DATE wins over result-entry order. #898 replaced the
+        // intra-event key with match_number, so the guarantee is now stronger and simpler: the order is
+        // the host's arrangement, and neither the date nor when someone happened to type the result in
+        // can move it. 'later' was created first, so it is #1 and processes first despite its later date.
+        order shouldBe listOf(later, earlier)
     }
 
     @Test
-    fun `a manual reorder re-sequences same-date matches for calculation (#332)`() {
+    fun `a manual reorder re-sequences the event for calculation (#332, #898)`() {
         provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
@@ -223,7 +226,7 @@ class RatingCalculationServiceTest {
         recordResult(admin = "root", matchId = m1)
         recordResult(admin = "root", matchId = m2)
 
-        // A manual drag sets the exact same-date processing order (no reliance on the completed_at tiebreak).
+        // A manual drag sets the exact processing order outright — no completed_at tiebreak involved.
         matchService.reorder(token = token(uid = "root"), matchIds = listOf(m2, m1)).shouldBeRight()
         calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.map {
             UUID.fromString(it.matchId)

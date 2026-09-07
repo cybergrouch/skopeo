@@ -89,18 +89,17 @@ class MatchRepository {
      * that into a constraint violation rather than a silent duplicate, which is the safe direction to
      * fail; the caller sees the insert error rather than two matches sharing "#4".
      */
-    private fun nextMatchNumber(eventId: UUID): Int {
-        // Bound to a local: ResultRow.get(expression) trips detekt's NamedArguments rule, and naming the
-        // parameter is not an option because Exposed exposes it through the indexing operator.
+    private fun nextMatchNumber(eventId: UUID): Int = currentMaxNumber(eventId = eventId) + 1
+
+    /** The highest match number currently used in [eventId], or 0 when the event has no matches. */
+    private fun currentMaxNumber(eventId: UUID): Int {
         val highest = MatchesTable.matchNumber.max()
-        val current =
-            MatchesTable
-                .select(columns = listOf(element = highest))
-                .where { MatchesTable.eventId eq eventId }
-                .firstOrNull()
-                ?.let { it[highest] }
-                ?: 0
-        return current + 1
+        return MatchesTable
+            .select(columns = listOf(element = highest))
+            .where { MatchesTable.eventId eq eventId }
+            .firstOrNull()
+            ?.let { it[highest] }
+            ?: 0
     }
 
     /** Record results on a fixture: persist sets/tiebreaks, set the winner, mark COMPLETED. */
@@ -188,13 +187,46 @@ class MatchRepository {
         }
 
     /**
-     * Set the manual calculation-order tiebreaker (#331/#332): assign calc_sequence = 0,1,2,… to
-     * [matchIds] in the given order, in one transaction. The service validates the set first.
+     * Permute the match numbers already held by [matchIds] into the given order (#898, replacing the
+     * #331/#332 tiebreaker). The service validates the set first — one event, unrated, active.
+     *
+     * **The numbers are permuted, not reassigned 1..k.** The submitted matches keep their existing
+     * multiset of numbers and simply redistribute it: submit {A=3, B=5, C=1} ordered [C, A, B] and they
+     * become C=1, A=3, B=5. Two things follow, and both matter.
+     *
+     * A **subset is safe** — untouched matches keep their numbers, and no number is invented or dropped,
+     * so the event's numbering stays exactly as contiguous as it was. That is what closes the
+     * partial-reorder gap the old tiebreaker had, where two subsets could each be numbered from zero and
+     * silently collide. It also means the UI can reorder the scheduled matches it renders without having
+     * to submit the recorded ones it does not.
+     *
+     * **Two phases, deliberately.** `idx_matches_event_number` is a UNIQUE index, so writing the finals
+     * row by row collides the moment two matches swap, and a partial unique index cannot be DEFERRABLE.
+     * Phase one parks every affected row above the event's current maximum; phase two writes the finals.
+     * Parking high rather than negative because `chk_matches_number_positive` requires `>= 1` — the very
+     * constraint that makes the number trustworthy rejects the usual "shift into negatives" trick.
      */
-    fun reorderCalcSequence(matchIds: List<UUID>) {
+    fun renumberMatches(matchIds: List<UUID>) {
+        if (matchIds.isEmpty()) return
         transaction {
+            val current =
+                MatchesTable
+                    .select(columns = listOf(MatchesTable.id, MatchesTable.matchNumber, MatchesTable.eventId))
+                    .where { MatchesTable.id inList matchIds }
+                    .associate { it[MatchesTable.id].value to it[MatchesTable.matchNumber] }
+            val slots = current.values.sorted()
+            val eventId =
+                MatchesTable
+                    .select(columns = listOf(element = MatchesTable.eventId))
+                    .where { MatchesTable.id eq matchIds.first() }
+                    .single()[MatchesTable.eventId]
+                    .value
+            val park = currentMaxNumber(eventId = eventId)
             matchIds.forEachIndexed { index, matchId ->
-                MatchesTable.update(where = { MatchesTable.id eq matchId }) { it[calcSequence] = index }
+                MatchesTable.update(where = { MatchesTable.id eq matchId }) { it[matchNumber] = park + index + 1 }
+            }
+            matchIds.forEachIndexed { index, matchId ->
+                MatchesTable.update(where = { MatchesTable.id eq matchId }) { it[matchNumber] = slots[index] }
             }
         }
     }
@@ -416,11 +448,9 @@ class MatchRepository {
                     // Keep a single event's matches contiguous when two events share a key. calc_priority
                     // has no unique constraint and falls back to end_date, so ties are the normal case.
                     { it.match.eventId.toString() },
-                    { it.match.matchDate },
-                    // An un-dragged match (null calc_sequence) sorts after dragged ones within its date.
-                    { it.match.calcSequence ?: Int.MAX_VALUE },
-                    { it.match.completedAt },
-                    { it.match.id.toString() },
+                    // match_number is the intra-event order (#898): unique within the event and never
+                    // null, so this key is total on its own — no date, completion time or id tiebreak.
+                    { it.match.matchNumber },
                 ),
         )
     }
@@ -490,12 +520,7 @@ class MatchRepository {
                     MatchesTable.isActive and
                         (MatchesTable.status eq MatchStatus.COMPLETED.name) and
                         (MatchesTable.eventId eq eventId)
-                }.orderBy(
-                    MatchesTable.matchDate to SortOrder.ASC,
-                    MatchesTable.calcSequence to SortOrder.ASC_NULLS_LAST,
-                    MatchesTable.completedAt to SortOrder.ASC,
-                    MatchesTable.id to SortOrder.ASC,
-                )
+                }.orderBy(MatchesTable.matchNumber to SortOrder.ASC)
                 .map { loadMatch(id = it[MatchesTable.id].value)!! }
         }
 
@@ -523,12 +548,7 @@ class MatchRepository {
                         createdBy != null -> base and (MatchesTable.createdBy eq createdBy)
                         else -> base
                     }
-                }.orderBy(
-                    MatchesTable.matchDate to SortOrder.ASC,
-                    MatchesTable.calcSequence to SortOrder.ASC_NULLS_LAST,
-                    MatchesTable.completedAt to SortOrder.ASC,
-                    MatchesTable.id to SortOrder.ASC,
-                )
+                }.orderBy(MatchesTable.matchNumber to SortOrder.ASC)
                 .map { loadMatch(id = it[MatchesTable.id].value)!! }
         }
 
@@ -848,7 +868,6 @@ private fun ResultRow.toMatchEntity(): MatchEntity =
         createdBy = this[MatchesTable.createdBy]?.value,
         recordedBy = this[MatchesTable.recordedBy]?.value,
         eventId = this[MatchesTable.eventId].value,
-        calcSequence = this[MatchesTable.calcSequence],
         matchNumber = this[MatchesTable.matchNumber],
         team1Handicap = this[MatchesTable.team1Handicap],
         team2Handicap = this[MatchesTable.team2Handicap],

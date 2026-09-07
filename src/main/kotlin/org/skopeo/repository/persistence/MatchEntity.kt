@@ -35,7 +35,6 @@ data class MatchEntity(
     val createdBy: UUID?,
     val recordedBy: UUID?,
     val eventId: UUID,
-    val calcSequence: Int?,
     val matchNumber: Int,
     val team1Handicap: BigDecimal?,
     val team2Handicap: BigDecimal?,

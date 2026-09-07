@@ -1970,12 +1970,24 @@ paths:
 
   /api/v1/matches/calculation-order:
     put:
-      summary: Reorder same-date matches for calculation (staff; evented fixtures follow their club rule)
+      summary: Renumber an event's matches (staff; follows the event's club rule)
       description: |
-        Set the manual calculation-order tiebreaker (#331/#332). The rating calculation orders matches
-        by match date first, so this only re-sequences matches that share the same date. The request
-        lists the match ids in the desired order; each is assigned its position. Rated matches are
-        frozen and cannot be reordered.
+        Renumber an event's matches (#331/#332, #898). Each id is assigned `matchNumber` = its 1-based
+        position, so this sets the **user-visible** number on the match ("Match #3"), not a hidden
+        tiebreaker — and because match number is the intra-event ordering key, it also sets the order the
+        rating calculation will process them in.
+
+        The submitted matches must all belong to one event, and they **permute the numbers they already
+        hold** rather than being renumbered from 1. A subset is therefore safe: untouched matches keep
+        their numbers and nothing collides, so a caller can reorder the matches it renders without having
+        to submit the ones it does not.
+
+        There is no same-date restriction. That existed while the calculation ordered by match date
+        first, which made a cross-date move a no-op; an event is now one sortable list rather than one
+        per day. Rated matches are frozen (#337) and a batch containing one is refused.
+
+        The path keeps its original name for compatibility with existing callers, including partner API
+        clients (#225), even though "calculation-order" now understates what it sets.
       tags:
         - Matches
       security:
@@ -6968,7 +6980,9 @@ components:
       properties:
         matchIds:
           type: array
-          description: Same-date match ids in the desired calculation order (#331/#332).
+          description: >-
+            Match ids from ONE event, in the desired order (#331/#332, #898). They redistribute the
+            matchNumbers they already hold, so a subset is safe.
           items:
             type: string
             format: uuid
