@@ -16,8 +16,10 @@ import org.skopeo.domain.model.ProvisionUserCommand
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.domain.service.rating.RatingCalculationService
+import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.EventsTable
+import org.skopeo.repository.UserCapabilitiesTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.repository.UsersTable
 import java.time.LocalDate
@@ -119,12 +121,51 @@ fun fixtureEventId(vararg participantIds: UUID): UUID {
                 ?.value
         }
     val id = existing ?: seedEvent(name = SHARED_FIXTURE_EVENT).id
+    // Re-open it if a previous [finalizeFixtureEvent] closed it. Finalize is terminal for the product
+    // (`ensureEventNotFinalized` refuses new fixtures and results), but a suite that interleaves
+    // create -> rate -> create is testing exactly that sequence, and #477 makes un-finalizing a real
+    // operation rather than a test-only escape hatch. Asking for the event id means "I am about to add
+    // a fixture", so re-opening here is the honest reading.
+    EventRepository().unfinalize(id = id)
     // Only real users: a suite may deliberately pass an unprovisioned id to exercise validation, and
     // event_participants has a foreign key to users — adding it would fail the insert, not the assertion.
     val known = transaction { UsersTable.selectAll().map { it[UsersTable.id].value }.toSet() }
     participantIds.filter { it in known }.forEach { events.addParticipant(eventId = id, userId = it, approvedBy = it) }
+    grantOrganizerRights(eventId = id)
     return id
 }
+
+/**
+ * Make every **staff** user an owner of the shared event's club, so a HOST in these suites can organize
+ * on it.
+ *
+ * #898 routed every fixture through the #789 club gate: `organizer.ensure` used to sit inside
+ * `eventId?.let { }`, so an event-less fixture skipped authorization entirely, and a plain HOST could
+ * create one anywhere. With no event-less matches left, a HOST must now own the event's club or have
+ * created the event. Suites whose subject is a *match* should not have to model a club hierarchy to say
+ * that, so the shared event's club grants it.
+ *
+ * Scoped to staff on purpose. Handing ownership to every provisioned user would make an authorization
+ * *refusal* test pass for the wrong reason, which is the trap [seedFixtureClub] warns about — and a
+ * suite whose subject IS club authorization must build its own club and event rather than use this one.
+ * ADMINISTRATORs need nothing from this: they are the first clause of both `mayOrganize` and
+ * `mayFileUnder`, and stay able to organize any event under any club.
+ */
+private fun grantOrganizerRights(eventId: UUID) {
+    val clubId = transaction { EventsTable.selectAll().where { EventsTable.id eq eventId }.single()[EventsTable.clubId].value }
+    val staff =
+        transaction {
+            UserCapabilitiesTable
+                .selectAll()
+                .where { UserCapabilitiesTable.capability inList ORGANIZER_CAPABILITIES }
+                .map { it[UserCapabilitiesTable.userId].value }
+                .distinct()
+        }
+    val clubs = ClubRepository()
+    staff.forEach { clubs.addOwner(clubId = clubId, userId = it) }
+}
+
+private val ORGANIZER_CAPABILITIES = listOf("HOST", "CLUB_OWNER", "ADMINISTRATOR")
 
 /**
  * [fixtureEventId] for a fixture's two sides: the shared event, with every named player registered.

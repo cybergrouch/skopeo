@@ -553,6 +553,7 @@ class RatingCalculationServiceTest {
         // The dry-run preview carries the v2 per-set steps with net fields null.
         val previewSets =
             calc
+                .afterFinalizingFixtureEvent()
                 .calculate(token = token(uid = "root"), dryRun = true)
                 .shouldBeRight()
                 .matches
@@ -827,7 +828,11 @@ class RatingCalculationServiceTest {
         val calcWithEmpty =
             RatingCalculationService(matches = matchRepo, ratings = ratings, users = users, calculator = emptyCalculator)
 
-        calcWithEmpty.calculate(token = token(uid = "root"), dryRun = true).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        calcWithEmpty
+            .afterFinalizingFixtureEvent()
+            .calculate(token = token(uid = "root"), dryRun = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -847,6 +852,7 @@ class RatingCalculationServiceTest {
             RatingCalculationService(matches = matchRepo, ratings = ratings, users = users, calculator = noBreakdownCalculator)
 
         calcWithoutBreakdown
+            .afterFinalizingFixtureEvent()
             .calculate(token = token(uid = "root"), dryRun = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()

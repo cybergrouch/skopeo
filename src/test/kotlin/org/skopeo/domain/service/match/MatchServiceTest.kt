@@ -54,6 +54,8 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.MatchesTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.afterFinalizingFixtureEvent
+import org.skopeo.testsupport.finalizeFixtureEvent
 import org.skopeo.testsupport.fixtureEventFor
 import org.skopeo.testsupport.fixtureEventForRequest
 import org.skopeo.testsupport.seedClub
@@ -472,7 +474,7 @@ class MatchServiceTest {
         val match =
             service.createFixture(token = token(uid = "root"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
         service.uploadResult(token = token(uid = "root"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
-        calc.calculate(token = token(uid = "root"), dryRun = false) // commit, persisting the breakdown
+        calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "root"), dryRun = false) // commit, persisting the breakdown
 
         // The calculation breakdown is an ADMINISTRATOR-only analysis tool (#583).
         val detail = service.calculationDetail(token = token(uid = "root"), matchId = UUID.fromString(match.id)).shouldBeRight()
@@ -510,7 +512,7 @@ class MatchServiceTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
 
-        calc.calculate(token = token(uid = "root"), dryRun = false)
+        calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "root"), dryRun = false)
         // A non-participant, non-staff caller is refused.
         service
             .calculationDetail(token = token(uid = "outsider"), matchId = UUID.fromString(match.id))
@@ -608,6 +610,9 @@ class MatchServiceTest {
                     token = token(uid = "host"),
                     request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2020-01-01")),
                 ).shouldBeRight()
+        // pending-calculation only lists matches whose event is finalized (#403); every match has one
+        // since #898, so finalize after the fixtures exist — finalize is terminal and refuses new ones.
+        finalizeFixtureEvent()
 
         // Admin sees every match in the view.
         service
@@ -733,7 +738,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `publicByCode links to the owning event, and omits it for an open-play match (#358)`() {
+    fun `publicByCode links to the owning event (#358)`() {
         val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
@@ -765,14 +770,9 @@ class MatchServiceTest {
         eventRef.publicCode shouldBe event.publicCode
         eventRef.name shouldBe "Spring Open"
 
-        // An eventless (open-play) match has no event reference.
-        val openPlay =
-            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service
-            .publicByCode(token = token(uid = "host"), code = openPlay.publicCode)
-            .shouldBeRight()
-            .event
-            .shouldBeNull()
+        // This test used to end by asserting an event-less ("open play") match carries no event
+        // reference. #898 made every match belong to an event, so the reference is never absent and
+        // there is no longer a case to assert — MatchPublicEvent is now always populated.
     }
 
     @Test
@@ -971,7 +971,7 @@ class MatchServiceTest {
         val match =
             service.createFixture(token = token(uid = "root"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
         service.uploadResult(token = token(uid = "root"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
-        calc.calculate(token = token(uid = "root"), dryRun = false) // commit ratings + history
+        calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "root"), dryRun = false) // commit ratings + history
 
         // A non-rater viewer sees the NTRP bands only — the precise rates are withheld.
         val asPlayer = service.publicByCode(token = token(uid = "viewer"), code = match.publicCode).shouldBeRight()

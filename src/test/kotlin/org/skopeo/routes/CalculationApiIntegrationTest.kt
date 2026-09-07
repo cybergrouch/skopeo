@@ -44,6 +44,7 @@ import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
+import org.skopeo.testsupport.finalizeFixtureEvent
 import org.skopeo.testsupport.fixtureEventForRequest
 
 /**
@@ -145,6 +146,10 @@ class CalculationApiIntegrationTest {
                         ),
                 )
             }
+
+            // Nothing queues for rating until its event is finalized (#403); every match has an event
+            // since #898, so this step is now unconditional.
+            finalizeFixtureEvent()
 
             // Dry run (empty body → defaults to dryRun=true): previews, writes nothing.
             val dry =

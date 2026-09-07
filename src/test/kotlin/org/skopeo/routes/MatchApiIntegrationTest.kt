@@ -45,6 +45,7 @@ import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
+import org.skopeo.testsupport.finalizeFixtureEvent
 import org.skopeo.testsupport.fixtureEventForRequest
 
 /**
@@ -204,6 +205,9 @@ class MatchApiIntegrationTest {
                 it.ratedAt shouldBe null // not rated on upload
             }
 
+            // pending-calculation only lists matches whose event is finalized (#403); every match
+            // has one since #898, so finalize once the fixtures and results exist.
+            finalizeFixtureEvent()
             val pending =
                 client.get(urlString = "/api/v1/matches?filter=pending-calculation") {
                     header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
@@ -307,6 +311,10 @@ class MatchApiIntegrationTest {
                 )
             }
 
+            // pending-calculation only lists matches whose event is finalized (#403); every match
+            // has one since #898, so finalize once the fixtures and results exist.
+            finalizeFixtureEvent()
+
             suspend fun pendingCalculation(token: String): List<String> =
                 client
                     .get(urlString = "/api/v1/matches?filter=pending-calculation") {
@@ -338,6 +346,9 @@ class MatchApiIntegrationTest {
                         ),
                 )
             }
+            // Nothing queues for rating until its event is finalized (#403); since #898 every match has
+            // one, so this is now a required step rather than something only evented matches needed.
+            finalizeFixtureEvent()
             // Commit the calculation so the breakdown is persisted.
             client.post(urlString = "/api/v1/ratings/calculations") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
