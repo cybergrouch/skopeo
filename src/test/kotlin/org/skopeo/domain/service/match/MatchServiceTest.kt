@@ -1295,7 +1295,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `reorder assigns calc sequence to same-date matches in the given order (#331, #332)`() {
+    fun `reorder renumbers the event's matches into the given order (#331, #332, #898)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
@@ -1312,7 +1312,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `reorder rejects empty, duplicate, cross-date, unknown, and non-staff requests (#332)`() {
+    fun `reorder rejects empty, duplicate, incomplete, unknown, and non-staff requests (#332, #898)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         provisionUser(uid = "player")
         val p1 = provisionUser(uid = "p1", rated = true)
@@ -1326,7 +1326,13 @@ class MatchServiceTest {
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m1.id), UUID.fromString(m1.id)))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        // Cross-date used to be refused. It is now the point: match_number is the intra-event order, so
+        // moving a match between days is meaningful — and this pair is the event's full active set.
         service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m1.id), UUID.fromString(m2.id)))
+            .shouldBeRight()
+        // What IS refused now is an incomplete set: renumbering a subset would collide with the numbers
+        // the untouched matches still hold.
+        service.reorder(token = token(uid = "host"), matchIds = listOf(element = UUID.fromString(m1.id)))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.reorder(token = token(uid = "host"), matchIds = listOf(element = UUID.randomUUID()))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
@@ -1492,5 +1498,31 @@ class MatchServiceTest {
                     request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = UUID.randomUUID()),
                 ).shouldBeLeft()
         error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "not found"
+    }
+
+    @Test
+    fun `a reorder must cover the event's whole active set, and may cross dates (#898)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val eventId = fixtureEventFor(team1 = listOf(element = p1.id), team2 = listOf(element = p2.id))
+        val saturday = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-07")))
+        val sunday = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-08")))
+        val ids = listOf(UUID.fromString(saturday.id), UUID.fromString(sunday.id))
+
+        // A subset is refused: the number is unique within the event, so renumbering part of it would
+        // collide with the numbers the untouched matches still hold.
+        service
+            .reorder(token = token(uid = "host"), matchIds = listOf(element = ids.first()))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+            .message shouldContain "every active match"
+
+        // Across dates is now allowed — the same-date guard existed only while the calculation keyed on
+        // match_date, which made a cross-date move a no-op. An event is one sortable list.
+        service.reorder(token = token(uid = "host"), matchIds = ids.reversed()).shouldBeRight()
+        matchRepo.findById(matchId = ids[1]).shouldBeRight().toDomain().matchNumber shouldBe 1
+        matchRepo.findById(matchId = ids[0]).shouldBeRight().toDomain().matchNumber shouldBe 2
+        eventId.shouldNotBeNull()
     }
 }

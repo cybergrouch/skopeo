@@ -988,4 +988,53 @@ class MatchRepositoryTest {
             }
         }
     }
+
+    @Test
+    fun `renumbering swaps two adjacent numbers without tripping the unique index (#898)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
+        val a = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId)
+        val b = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 2), eventId = eventId)
+
+        // The minimal case that breaks a naive row-by-row rewrite: setting a from 1 to 2 while b still
+        // holds 2 violates idx_matches_event_number mid-loop, and a partial unique index cannot be
+        // DEFERRABLE. The two-phase update is what makes this pass.
+        matches.renumberMatches(matchIds = listOf(b, a))
+
+        matches.findById(matchId = b).shouldBeRight().toDomain().matchNumber shouldBe 1
+        matches.findById(matchId = a).shouldBeRight().toDomain().matchNumber shouldBe 2
+    }
+
+    @Test
+    fun `a full reversal renumbers every match, no intermediate state escapes (#898)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
+        val ids = (1..4).map { completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId) }
+
+        matches.renumberMatches(matchIds = ids.reversed())
+
+        ids.reversed().forEachIndexed { index, id ->
+            matches.findById(matchId = id).shouldBeRight().toDomain().matchNumber shouldBe index + 1
+        }
+        // Every number is still in 1..N and unique — no negative parking value survived the transaction.
+        val numbers = ids.map { matches.findById(matchId = it).shouldBeRight().toDomain().matchNumber }
+        numbers.sorted() shouldBe listOf(1, 2, 3, 4)
+    }
+
+    @Test
+    fun `the calculation order follows match_number, not the match date (#898)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 3, 10), members = listOf(u1, u2))
+        // Created out of chronological order on purpose: the LATER-played match is numbered first.
+        val sunday = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 3, 8), eventId = eventId)
+        val saturday = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 3, 7), eventId = eventId)
+        events.finalize(id = eventId, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
+
+        // Chronology no longer decides: #1 is processed first even though it was played a day later.
+        // Before #898 this list came back saturday-first, keyed on match_date.
+        matches.listPendingCalculation().map { it.toDomain().id } shouldBe listOf(sunday, saturday)
+    }
 }

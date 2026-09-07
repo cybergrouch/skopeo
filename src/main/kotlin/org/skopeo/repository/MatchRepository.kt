@@ -89,19 +89,7 @@ class MatchRepository {
      * that into a constraint violation rather than a silent duplicate, which is the safe direction to
      * fail; the caller sees the insert error rather than two matches sharing "#4".
      */
-    private fun nextMatchNumber(eventId: UUID): Int {
-        // Bound to a local: ResultRow.get(expression) trips detekt's NamedArguments rule, and naming the
-        // parameter is not an option because Exposed exposes it through the indexing operator.
-        val highest = MatchesTable.matchNumber.max()
-        val current =
-            MatchesTable
-                .select(columns = listOf(element = highest))
-                .where { MatchesTable.eventId eq eventId }
-                .firstOrNull()
-                ?.let { it[highest] }
-                ?: 0
-        return current + 1
-    }
+    private fun nextMatchNumber(eventId: UUID): Int = currentMaxNumber(eventId = eventId) + 1
 
     /** Record results on a fixture: persist sets/tiebreaks, set the winner, mark COMPLETED. */
     fun addResult(
@@ -194,19 +182,41 @@ class MatchRepository {
      * **Two phases, deliberately.** `idx_matches_event_number` is a UNIQUE index, so writing the final
      * numbers row by row collides the moment two matches swap: setting A from 1 to 2 while B still holds
      * 2 violates it mid-loop. A partial unique index cannot be declared DEFERRABLE either, so the check
-     * cannot simply be pushed to commit. Phase one parks every affected row in a disjoint negative range
-     * (no real number is < 1 — `chk_matches_number_positive`), phase two writes the finals. Both share
-     * one transaction, so nothing outside it ever observes a negative number.
+     * cannot simply be pushed to commit. Phase one parks every affected row **above** the event's current
+     * maximum, phase two writes the finals; both share one transaction, so nothing outside it observes a
+     * parked value.
+     *
+     * Parking high rather than negative: `chk_matches_number_positive` requires `>= 1`, so the obvious
+     * "shift into negatives" trick is rejected by the very constraint that makes the number trustworthy.
      */
     fun renumberMatches(matchIds: List<UUID>) {
+        if (matchIds.isEmpty()) return
         transaction {
+            val eventId =
+                MatchesTable
+                    .select(columns = listOf(element = MatchesTable.eventId))
+                    .where { MatchesTable.id eq matchIds.first() }
+                    .single()[MatchesTable.eventId]
+                    .value
+            val park = currentMaxNumber(eventId = eventId)
             matchIds.forEachIndexed { index, matchId ->
-                MatchesTable.update(where = { MatchesTable.id eq matchId }) { it[matchNumber] = -(index + 1) }
+                MatchesTable.update(where = { MatchesTable.id eq matchId }) { it[matchNumber] = park + index + 1 }
             }
             matchIds.forEachIndexed { index, matchId ->
                 MatchesTable.update(where = { MatchesTable.id eq matchId }) { it[matchNumber] = index + 1 }
             }
         }
+    }
+
+    /** The highest match number currently used in [eventId], or 0 when the event has no matches. */
+    private fun currentMaxNumber(eventId: UUID): Int {
+        val highest = MatchesTable.matchNumber.max()
+        return MatchesTable
+            .select(columns = listOf(element = highest))
+            .where { MatchesTable.eventId eq eventId }
+            .firstOrNull()
+            ?.let { it[highest] }
+            ?: 0
     }
 
     /** Every active match in [eventId] — the set a renumber must cover in full. */
