@@ -1977,9 +1977,10 @@ paths:
         tiebreaker — and because match number is the intra-event ordering key, it also sets the order the
         rating calculation will process them in.
 
-        The list must name every **active** match in one event, exactly once: the number is an identifier
-        unique within its event, so renumbering a subset would collide with the numbers the untouched
-        matches still hold.
+        The submitted matches must all belong to one event, and they **permute the numbers they already
+        hold** rather than being renumbered from 1. A subset is therefore safe: untouched matches keep
+        their numbers and nothing collides, so a caller can reorder the matches it renders without having
+        to submit the ones it does not.
 
         There is no same-date restriction. That existed while the calculation ordered by match date
         first, which made a cross-date move a no-op; an event is now one sortable list rather than one
@@ -6980,8 +6981,8 @@ components:
         matchIds:
           type: array
           description: >-
-            Every active match id in one event, exactly once, in the desired order (#331/#332, #898).
-            Each is assigned matchNumber = its 1-based position.
+            Match ids from ONE event, in the desired order (#331/#332, #898). They redistribute the
+            matchNumbers they already hold, so a subset is safe.
           items:
             type: string
             format: uuid

@@ -1312,7 +1312,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `reorder rejects empty, duplicate, incomplete, unknown, and non-staff requests (#332, #898)`() {
+    fun `reorder rejects empty, duplicate, unknown, and non-staff requests (#332, #898)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         provisionUser(uid = "player")
         val p1 = provisionUser(uid = "p1", rated = true)
@@ -1330,10 +1330,6 @@ class MatchServiceTest {
         // moving a match between days is meaningful — and this pair is the event's full active set.
         service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m1.id), UUID.fromString(m2.id)))
             .shouldBeRight()
-        // What IS refused now is an incomplete set: renumbering a subset would collide with the numbers
-        // the untouched matches still hold.
-        service.reorder(token = token(uid = "host"), matchIds = listOf(element = UUID.fromString(m1.id)))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.reorder(token = token(uid = "host"), matchIds = listOf(element = UUID.randomUUID()))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
@@ -1501,7 +1497,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `a reorder must cover the event's whole active set, and may cross dates (#898)`() {
+    fun `a reorder may cross dates, and a subset only permutes its own numbers (#898)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
@@ -1510,19 +1506,21 @@ class MatchServiceTest {
         val sunday = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-08")))
         val ids = listOf(UUID.fromString(saturday.id), UUID.fromString(sunday.id))
 
-        // A subset is refused: the number is unique within the event, so renumbering part of it would
-        // collide with the numbers the untouched matches still hold.
-        service
-            .reorder(token = token(uid = "host"), matchIds = listOf(element = ids.first()))
-            .shouldBeLeft()
-            .shouldBeInstanceOf<ServiceError.Validation>()
-            .message shouldContain "every active match"
-
         // Across dates is now allowed — the same-date guard existed only while the calculation keyed on
         // match_date, which made a cross-date move a no-op. An event is one sortable list.
         service.reorder(token = token(uid = "host"), matchIds = ids.reversed()).shouldBeRight()
         matchRepo.findById(matchId = ids[1]).shouldBeRight().toDomain().matchNumber shouldBe 1
         matchRepo.findById(matchId = ids[0]).shouldBeRight().toDomain().matchNumber shouldBe 2
+
+        // A third match joins as #3. Reordering only the first two permutes {1,2} between them and leaves
+        // #3 alone — which is what lets the manager view reorder the fixtures it renders without having to
+        // submit the recorded matches it does not.
+        val third = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-09")))
+        matchRepo.findById(matchId = UUID.fromString(third.id)).shouldBeRight().toDomain().matchNumber shouldBe 3
+        service.reorder(token = token(uid = "host"), matchIds = ids).shouldBeRight()
+        matchRepo.findById(matchId = ids[0]).shouldBeRight().toDomain().matchNumber shouldBe 1
+        matchRepo.findById(matchId = ids[1]).shouldBeRight().toDomain().matchNumber shouldBe 2
+        matchRepo.findById(matchId = UUID.fromString(third.id)).shouldBeRight().toDomain().matchNumber shouldBe 3
         eventId.shouldNotBeNull()
     }
 }

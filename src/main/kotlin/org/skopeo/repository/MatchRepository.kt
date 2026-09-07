@@ -91,6 +91,17 @@ class MatchRepository {
      */
     private fun nextMatchNumber(eventId: UUID): Int = currentMaxNumber(eventId = eventId) + 1
 
+    /** The highest match number currently used in [eventId], or 0 when the event has no matches. */
+    private fun currentMaxNumber(eventId: UUID): Int {
+        val highest = MatchesTable.matchNumber.max()
+        return MatchesTable
+            .select(columns = listOf(element = highest))
+            .where { MatchesTable.eventId eq eventId }
+            .firstOrNull()
+            ?.let { it[highest] }
+            ?: 0
+    }
+
     /** Record results on a fixture: persist sets/tiebreaks, set the winner, mark COMPLETED. */
     fun addResult(
         matchId: UUID,
@@ -176,22 +187,34 @@ class MatchRepository {
         }
 
     /**
-     * Renumber [matchIds] as 1,2,3,… in the given order (#898, replacing the #331/#332 tiebreaker). The
-     * service validates the set first — one event, unrated, active, and complete.
+     * Permute the match numbers already held by [matchIds] into the given order (#898, replacing the
+     * #331/#332 tiebreaker). The service validates the set first — one event, unrated, active.
      *
-     * **Two phases, deliberately.** `idx_matches_event_number` is a UNIQUE index, so writing the final
-     * numbers row by row collides the moment two matches swap: setting A from 1 to 2 while B still holds
-     * 2 violates it mid-loop. A partial unique index cannot be declared DEFERRABLE either, so the check
-     * cannot simply be pushed to commit. Phase one parks every affected row **above** the event's current
-     * maximum, phase two writes the finals; both share one transaction, so nothing outside it observes a
-     * parked value.
+     * **The numbers are permuted, not reassigned 1..k.** The submitted matches keep their existing
+     * multiset of numbers and simply redistribute it: submit {A=3, B=5, C=1} ordered [C, A, B] and they
+     * become C=1, A=3, B=5. Two things follow, and both matter.
      *
-     * Parking high rather than negative: `chk_matches_number_positive` requires `>= 1`, so the obvious
-     * "shift into negatives" trick is rejected by the very constraint that makes the number trustworthy.
+     * A **subset is safe** — untouched matches keep their numbers, and no number is invented or dropped,
+     * so the event's numbering stays exactly as contiguous as it was. That is what closes the
+     * partial-reorder gap the old tiebreaker had, where two subsets could each be numbered from zero and
+     * silently collide. It also means the UI can reorder the scheduled matches it renders without having
+     * to submit the recorded ones it does not.
+     *
+     * **Two phases, deliberately.** `idx_matches_event_number` is a UNIQUE index, so writing the finals
+     * row by row collides the moment two matches swap, and a partial unique index cannot be DEFERRABLE.
+     * Phase one parks every affected row above the event's current maximum; phase two writes the finals.
+     * Parking high rather than negative because `chk_matches_number_positive` requires `>= 1` — the very
+     * constraint that makes the number trustworthy rejects the usual "shift into negatives" trick.
      */
     fun renumberMatches(matchIds: List<UUID>) {
         if (matchIds.isEmpty()) return
         transaction {
+            val current =
+                MatchesTable
+                    .select(columns = listOf(MatchesTable.id, MatchesTable.matchNumber, MatchesTable.eventId))
+                    .where { MatchesTable.id inList matchIds }
+                    .associate { it[MatchesTable.id].value to it[MatchesTable.matchNumber] }
+            val slots = current.values.sorted()
             val eventId =
                 MatchesTable
                     .select(columns = listOf(element = MatchesTable.eventId))
@@ -203,30 +226,10 @@ class MatchRepository {
                 MatchesTable.update(where = { MatchesTable.id eq matchId }) { it[matchNumber] = park + index + 1 }
             }
             matchIds.forEachIndexed { index, matchId ->
-                MatchesTable.update(where = { MatchesTable.id eq matchId }) { it[matchNumber] = index + 1 }
+                MatchesTable.update(where = { MatchesTable.id eq matchId }) { it[matchNumber] = slots[index] }
             }
         }
     }
-
-    /** The highest match number currently used in [eventId], or 0 when the event has no matches. */
-    private fun currentMaxNumber(eventId: UUID): Int {
-        val highest = MatchesTable.matchNumber.max()
-        return MatchesTable
-            .select(columns = listOf(element = highest))
-            .where { MatchesTable.eventId eq eventId }
-            .firstOrNull()
-            ?.let { it[highest] }
-            ?: 0
-    }
-
-    /** Every active match in [eventId] — the set a renumber must cover in full. */
-    fun activeIdsForEvent(eventId: UUID): List<UUID> =
-        transaction {
-            MatchesTable
-                .select(columns = listOf(element = MatchesTable.id))
-                .where { MatchesTable.isActive and (MatchesTable.eventId eq eventId) }
-                .map { it[MatchesTable.id].value }
-        }
 
     fun findById(matchId: UUID): Either<ServiceError, MatchAggregateEntity> =
         transaction {

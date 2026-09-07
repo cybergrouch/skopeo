@@ -466,16 +466,16 @@ class MatchService(
 
     /**
      * Renumber an event's matches (#898, replacing the #331/#332 same-date tiebreaker). Staff-only.
-     * [matchIds] is the desired order; each gets match_number = its 1-based index.
+     * [matchIds] is the desired order; they redistribute the match numbers they already hold.
      *
      * **The same-date guard is gone.** It existed because the calculation ordered by match date first, so
      * dragging across dates could not have had any effect. Now match_number *is* the intra-event order,
      * so moving a match from day 2 to day 1 is meaningful — an event is one sortable list, not one per day.
      *
-     * **The batch must be the event's complete active set.** match_number is an identifier, unique within
-     * the event: renumbering a subset 1..k would collide with the numbers the untouched matches still
-     * hold. Requiring the whole set also closes the partial-reorder gap the old tiebreaker had, where two
-     * subsets could each be numbered from zero and silently produce duplicates.
+     * **A subset is fine.** The submitted matches permute the numbers they already hold rather than being
+     * renumbered 1..k, so untouched matches keep theirs and nothing collides. That is what closes the
+     * partial-reorder gap the old tiebreaker had — two subsets could each be numbered from zero and
+     * silently produce duplicates — without forcing a caller to submit matches it does not render.
      *
      * Rated matches are frozen (#337), so a batch containing one is refused.
      */
@@ -500,13 +500,7 @@ class MatchService(
             ensure(condition = eventIds.size == 1) {
                 ServiceError.Validation(message = "Only matches in the same event can be reordered")
             }
-            val eventId = eventIds.first()
-            ensure(condition = matchIds.toSet() == matches.activeIdsForEvent(eventId = eventId).toSet()) {
-                ServiceError.Validation(
-                    message = "A reorder must list every active match in the event, exactly once",
-                )
-            }
-            organizer.ensureForEventId(eventId = eventId, caller = caller).bind()
+            organizer.ensureForEventId(eventId = eventIds.first(), caller = caller).bind()
             matches.renumberMatches(matchIds = matchIds)
         }
 
