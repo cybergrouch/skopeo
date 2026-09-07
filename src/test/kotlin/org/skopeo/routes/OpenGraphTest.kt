@@ -127,6 +127,7 @@ class OpenGraphTest {
             matchFormat = "BEST_OF_THREE",
             matchType = "SINGLES",
             matchDate = "2026-06-30",
+            matchNumber = 1,
             status = "COMPLETED",
             team1 = listOf(element = MatchPublicPlayer(displayName = "Ana", publicCode = "A1")),
             team2 = listOf(element = MatchPublicPlayer(displayName = "Bo", publicCode = "B1")),

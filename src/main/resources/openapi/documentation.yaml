@@ -7024,6 +7024,7 @@ components:
         - team1
         - team2
         - eventId
+        - matchNumber
         - sets
         - isActive
       properties:
@@ -7086,6 +7087,10 @@ components:
           type: string
           format: uuid
           description: The event this fixture belongs to (#138). Always present since #898.
+        matchNumber:
+          type: integer
+          minimum: 1
+          description: 1-based identifier within the event ("Match #3"), unique per event (#898). Display order derives from it.
         team1Handicap:
           type: string
           nullable: true
@@ -7614,6 +7619,7 @@ components:
         - matchFormat
         - matchType
         - matchDate
+        - matchNumber
         - status
         - team1
         - team2
@@ -7636,6 +7642,10 @@ components:
         matchDate:
           type: string
           format: date
+        matchNumber:
+          type: integer
+          minimum: 1
+          description: 1-based identifier within the event ("Match #3"), unique per event (#898). Display order derives from it.
         status:
           type: string
         rated:

@@ -20,6 +20,7 @@ import org.jetbrains.exposed.sql.count
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
+import org.jetbrains.exposed.sql.max
 import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
@@ -68,6 +69,7 @@ class MatchRepository {
                     it[tournamentName] = command.tournamentName
                     it[createdBy] = command.createdBy
                     it[eventId] = command.eventId
+                    it[matchNumber] = nextMatchNumber(eventId = command.eventId)
                     it[team1Handicap] = command.team1Handicap
                     it[team2Handicap] = command.team2Handicap
                     it[isPlacementMatch] = command.isPlacementMatch
@@ -75,6 +77,31 @@ class MatchRepository {
                 }.value
             loadMatchOrThrow(id = matchId)
         }
+
+    /**
+     * The next free match number in [eventId] (#898): max + 1, or 1 for the event's first fixture.
+     *
+     * Deliberately max-based rather than count-based. A soft-deleted match keeps its number and leaves a
+     * gap, so counting would hand the gap's number to a new fixture and collide with a number people may
+     * already have used out loud — the unique index would then reject the insert.
+     *
+     * Two concurrent creations in one event can compute the same max. `idx_matches_event_number` turns
+     * that into a constraint violation rather than a silent duplicate, which is the safe direction to
+     * fail; the caller sees the insert error rather than two matches sharing "#4".
+     */
+    private fun nextMatchNumber(eventId: UUID): Int {
+        // Bound to a local: ResultRow.get(expression) trips detekt's NamedArguments rule, and naming the
+        // parameter is not an option because Exposed exposes it through the indexing operator.
+        val highest = MatchesTable.matchNumber.max()
+        val current =
+            MatchesTable
+                .select(columns = listOf(element = highest))
+                .where { MatchesTable.eventId eq eventId }
+                .firstOrNull()
+                ?.let { it[highest] }
+                ?: 0
+        return current + 1
+    }
 
     /** Record results on a fixture: persist sets/tiebreaks, set the winner, mark COMPLETED. */
     fun addResult(
@@ -822,6 +849,7 @@ private fun ResultRow.toMatchEntity(): MatchEntity =
         recordedBy = this[MatchesTable.recordedBy]?.value,
         eventId = this[MatchesTable.eventId].value,
         calcSequence = this[MatchesTable.calcSequence],
+        matchNumber = this[MatchesTable.matchNumber],
         team1Handicap = this[MatchesTable.team1Handicap],
         team2Handicap = this[MatchesTable.team2Handicap],
         reRatedAt = this[MatchesTable.reRatedAt],

@@ -5,6 +5,7 @@ package org.skopeo.repository
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
@@ -15,6 +16,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
@@ -80,6 +82,7 @@ class MatchRepositoryTest {
         u1: UUID,
         u2: UUID,
         date: LocalDate = LocalDate.of(2026, 1, 1),
+        eventId: UUID = fixtureEventId(),
     ) = matches.createFixture(
         command =
             CreateFixtureCommand(
@@ -91,7 +94,7 @@ class MatchRepositoryTest {
                 team1Name = "T1",
                 team2Name = "T2",
                 createdBy = u1,
-                eventId = fixtureEventId(),
+                eventId = eventId,
             ),
     ).toDomain()
 
@@ -706,13 +709,9 @@ class MatchRepositoryTest {
         // Two recorded results in the first event, plus a scheduled (undecided) fixture that must not count.
         completedMatch(u1 = a, u2 = b, matchDate = LocalDate.of(2026, 2, 20), eventId = withResults)
         completedMatch(u1 = b, u2 = a, matchDate = LocalDate.of(2026, 2, 25), eventId = withResults)
-        fixture(u1 = a, u2 = b, date = LocalDate.of(2026, 2, 28)).let { f ->
-            transaction { MatchesTable.update(where = { MatchesTable.id eq f.id }) { it[eventId] = withResults } }
-        }
+        fixture(u1 = a, u2 = b, date = LocalDate.of(2026, 2, 28), eventId = withResults)
         // The second event has only a scheduled fixture — no recorded result.
-        fixture(u1 = a, u2 = b, date = LocalDate.of(2026, 3, 20)).let { f ->
-            transaction { MatchesTable.update(where = { MatchesTable.id eq f.id }) { it[eventId] = scheduledOnly } }
-        }
+        fixture(u1 = a, u2 = b, date = LocalDate.of(2026, 3, 20), eventId = scheduledOnly)
 
         val counts = matches.completedResultCountByEvents(eventIds = listOf(withResults, scheduledOnly))
         counts[withResults] shouldBe 2
@@ -924,5 +923,71 @@ class MatchRepositoryTest {
 
         // The later match is unrated, so the earlier rated one is still the answer.
         matches.latestRatedMatchDatesByUsers(userIds = listOf(element = p1)).getValue(key = p1) shouldBe rated
+    }
+
+    @Test
+    fun `match numbers run 1_2_3 within an event, and restart per event (#898)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventA = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
+        val eventB = event(creator = u1, endDate = LocalDate.of(2026, 2, 10), members = listOf(u1, u2))
+
+        val a = (1..3).map { completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventA) }
+        val b = (1..2).map { completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 2, 1), eventId = eventB) }
+
+        a.map { matches.findById(matchId = it).shouldBeRight().toDomain().matchNumber } shouldBe listOf(1, 2, 3)
+        // The number is scoped to its event, so the second event starts again at 1 rather than continuing.
+        b.map { matches.findById(matchId = it).shouldBeRight().toDomain().matchNumber } shouldBe listOf(1, 2)
+    }
+
+    @Test
+    fun `a match keeps its number through recording a result and being rated (#898)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
+        val ids = (1..5).map { completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId) }
+        val before = ids.map { matches.findById(matchId = it).shouldBeRight().toDomain().matchNumber }
+
+        // Rate them OUT OF ORDER — the middle one first, then the last. This is the case that would break
+        // a number derived from a filtered list: #3 leaving the unrated set would renumber #4 and #5.
+        matches.markRated(matchId = ids[2], ratedAt = LocalDateTime.now(), ratedBy = u1)
+        matches.markRated(matchId = ids[4], ratedAt = LocalDateTime.now(), ratedBy = u1)
+
+        ids.map { matches.findById(matchId = it).shouldBeRight().toDomain().matchNumber } shouldBe before
+    }
+
+    @Test
+    fun `a disabled match keeps its number, leaving a gap rather than renumbering (#898)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
+        val ids = (1..3).map { completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId) }
+
+        matches.setActive(matchId = ids[1], active = false, disabledAt = LocalDateTime.now()).shouldBeRight()
+
+        // #2 is gone from the listings but keeps its number, and #3 does NOT slide down into the gap:
+        // recycling a number people have already said out loud is exactly what an identifier must not do.
+        matches.findById(matchId = ids[2]).shouldBeRight().toDomain().matchNumber shouldBe 3
+        // ...and the next fixture continues past the gap rather than filling it, so the number stays unique.
+        val next = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId)
+        matches.findById(matchId = next).shouldBeRight().toDomain().matchNumber shouldBe 4
+    }
+
+    @Test
+    fun `two matches in one event cannot share a number - the database refuses it (#898)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
+        val first = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId)
+
+        // Uniqueness is the database's guarantee, not the application's — that is what makes the number
+        // safe to quote. Forcing a duplicate past nextMatchNumber must still fail.
+        shouldThrow<ExposedSQLException> {
+            transaction {
+                MatchesTable.update(where = { MatchesTable.id eq first }) { it[matchNumber] = 1 }
+                val second = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId)
+                MatchesTable.update(where = { MatchesTable.id eq second }) { it[matchNumber] = 1 }
+            }
+        }
     }
 }

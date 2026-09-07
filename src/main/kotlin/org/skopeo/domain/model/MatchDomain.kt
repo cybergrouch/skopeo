@@ -106,6 +106,8 @@ data class Match(
     val eventId: UUID,
     // Manual same-date ordering tiebreaker for the rating calculation (#331/#332); null = default.
     val calcSequence: Int? = null,
+    // Human-facing 1-based identifier within the event ("Match #3"), unique per event (#898).
+    val matchNumber: Int,
     // Per-side rating handicap in team-mean NTRP units (#486); null = none. Deducted from the side's
     // rating for the delta computation only. Range 0 < h <= 1.0, editable while unrated.
     val team1Handicap: BigDecimal? = null,
