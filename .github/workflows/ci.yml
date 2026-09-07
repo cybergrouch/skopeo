@@ -52,6 +52,13 @@ jobs:
 
       # Drillable per-test report as a "Test Report" check; failures are expanded with
       # their stack trace and annotated on the source line.
+      #
+      # Only FAILED suites/tests are listed. A check run's summary is capped at 65,535 bytes by the
+      # GitHub API, and listing all ~1,400 passing tests blew past it — the action would warn
+      # ("summary is too big"), silently downgrade list-tests to 'failed' and then trim the markdown.
+      # The conclusion and the annotations were always correct; what was lost was the tail of the
+      # listing. Asking for failures only makes that explicit rather than a truncation, and nobody
+      # scrolls a thousand green rows to find the one red one.
       - name: Test report
         uses: dorny/test-reporter@v3
         if: always()
@@ -59,8 +66,8 @@ jobs:
           name: Test Report
           path: '**/build/test-results/test/TEST-*.xml'
           reporter: java-junit
-          list-suites: all
-          list-tests: all
+          list-suites: failed
+          list-tests: failed
           # Publish as a drillable "Test Report" check run (not just the run summary).
           use-actions-summary: 'false'
 
@@ -162,6 +169,8 @@ jobs:
 
       # Drillable per-test report as a "Web Test Report" check (mirrors the API's
       # Test Report); failures expand with their assertion and source location.
+      # Failures only, for the same 65,535-byte reason as the backend report above — the web suite is
+      # ~1,200 tests and heading the same way.
       - name: Web test report
         uses: dorny/test-reporter@v3
         if: always()
@@ -169,8 +178,8 @@ jobs:
           name: Web Test Report
           path: web/test-results/junit.xml
           reporter: jest-junit
-          list-suites: all
-          list-tests: all
+          list-suites: failed
+          list-tests: failed
           use-actions-summary: 'false'
 
       # Overall coverage from the vitest v8 lcov, plus patch (changed-lines) coverage
