@@ -115,8 +115,12 @@ data class SetHandicapsRequest(
 }
 
 /**
- * Body for `PUT /api/v1/matches/calculation-order` (#331/#332): the desired processing order of a
- * group of same-date matches. Each id is assigned calc_sequence = its index.
+ * Body for `PUT /api/v1/matches/calculation-order` (#331/#332, #898): an event's matches in the desired
+ * order. Each id is assigned match_number = its 1-based index, so this sets the **user-visible** number
+ * on the card, not just a hidden tiebreaker. The list must cover the event's active matches exactly once.
+ *
+ * The path keeps its original name deliberately. Renaming it to match the new meaning would break every
+ * existing caller — including partner API clients (#225), which we do not control — for a cosmetic gain.
  */
 @Serializable
 data class ReorderMatchesRequest(

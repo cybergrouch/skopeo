@@ -328,10 +328,8 @@ class MatchRepositoryTest {
         val eventA = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
         val eventB = event(creator = u1, endDate = LocalDate.of(2026, 1, 20), members = listOf(u1, u2))
         val day = LocalDate.of(2026, 1, 8)
-        // Three same-day matches in event A: a2 is dragged to the front (calc_sequence); a1 and a3 are
-        // un-dragged (null calc_sequence) and share a completion time, so they tie down to the id.
+        // Three same-day matches in event A, ordered by match_number — a2 is renumbered to the front.
         val a2 = completedMatch(u1 = u1, u2 = u2, matchDate = day, eventId = eventA)
-        matches.reorderCalcSequence(matchIds = listOf(element = a2))
         val tie = LocalDateTime.of(2026, 1, 8, 12, 0)
         val a1 = completedMatch(u1 = u1, u2 = u2, matchDate = day, eventId = eventA, completedAt = tie)
         val a3 = completedMatch(u1 = u1, u2 = u2, matchDate = day, eventId = eventA, completedAt = tie)
@@ -395,9 +393,9 @@ class MatchRepositoryTest {
     }
 
     @Test
-    fun `reorderCalcSequence on an empty list is a harmless no-op (#331)`() {
+    fun `renumberMatches on an empty list is a harmless no-op (#331)`() {
         // The empty-input path runs no updates and must not throw.
-        matches.reorderCalcSequence(matchIds = emptyList())
+        matches.renumberMatches(matchIds = emptyList())
 
         val u1 = newUser(uid = "u1")
         val u2 = newUser(uid = "u2")

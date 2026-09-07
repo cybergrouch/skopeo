@@ -57,9 +57,6 @@ internal object MatchesTable : UUIDTable(name = "matches") {
     val disabledAt = datetime(name = "disabled_at").nullable()
     val eventId = reference(name = "event_id", foreign = EventsTable, onDelete = ReferenceOption.RESTRICT)
 
-    // Manual same-date ordering tiebreaker for the rating calculation (#331/#332); null = default.
-    val calcSequence = integer(name = "calc_sequence").nullable()
-
     // Human-facing 1-based identifier within the event ("Match #3"), unique per event (#898). An
     // identifier, not a display ordinal: display order derives from it, and a status change never moves it.
     val matchNumber = integer(name = "match_number")

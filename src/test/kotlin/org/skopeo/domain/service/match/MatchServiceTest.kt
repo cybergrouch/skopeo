@@ -1306,8 +1306,9 @@ class MatchServiceTest {
 
         service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m2.id), UUID.fromString(m1.id))).shouldBeRight()
 
-        matchRepo.findById(matchId = UUID.fromString(m2.id)).shouldBeRight().toDomain().calcSequence shouldBe 0
-        matchRepo.findById(matchId = UUID.fromString(m1.id)).shouldBeRight().toDomain().calcSequence shouldBe 1
+        // Renumbering writes the user-visible match_number now, 1-based, not a hidden 0-based tiebreaker.
+        matchRepo.findById(matchId = UUID.fromString(m2.id)).shouldBeRight().toDomain().matchNumber shouldBe 1
+        matchRepo.findById(matchId = UUID.fromString(m1.id)).shouldBeRight().toDomain().matchNumber shouldBe 2
     }
 
     @Test
