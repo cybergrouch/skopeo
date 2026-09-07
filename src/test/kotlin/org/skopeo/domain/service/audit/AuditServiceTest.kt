@@ -36,6 +36,7 @@ import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventId
 import java.time.LocalDate
 import java.util.UUID
 
@@ -170,6 +171,7 @@ class AuditServiceTest {
                         team1Name = "p1",
                         team2Name = "p2",
                         createdBy = admin.id,
+                        eventId = fixtureEventId(),
                     ),
             ).toDomain()
         service.record(

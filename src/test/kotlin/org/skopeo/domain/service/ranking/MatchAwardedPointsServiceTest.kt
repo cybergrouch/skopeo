@@ -42,6 +42,7 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventId
 import org.skopeo.testsupport.seedFixtureClub
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -123,6 +124,8 @@ class MatchAwardedPointsServiceTest {
                     ).toEventDomain()
                     .id
             }
+                // Every match needs an event since #898; without a club owner under test, any event will do.
+                ?: fixtureEventId(one.id, two.id)
         val fixture =
             matches
                 .createFixture(

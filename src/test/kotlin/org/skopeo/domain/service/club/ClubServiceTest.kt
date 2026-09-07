@@ -40,6 +40,7 @@ import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventId
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -309,6 +310,7 @@ class ClubServiceTest {
                         team1Name = "p1",
                         team2Name = "p2",
                         createdBy = admin.id,
+                        eventId = fixtureEventId(),
                     ),
             ).toDomain()
 

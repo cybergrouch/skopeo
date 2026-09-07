@@ -34,6 +34,7 @@ import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventId
 import org.skopeo.testsupport.seedFixtureClub
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -115,6 +116,7 @@ class SeedingServiceTest {
                             team1Name = "T1",
                             team2Name = "T2",
                             createdBy = user.id,
+                            eventId = fixtureEventId(),
                         ),
                 ).toDomain()
             matchRepo.addResult(

@@ -47,6 +47,7 @@ import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventFor
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.UUID
@@ -539,6 +540,7 @@ class ClubScopedEventAuthzTest {
                 matchDate = LocalDate.now(),
                 team1 = listOf(element = p1.id),
                 team2 = listOf(element = p2.id),
+                eventId = fixtureEventFor(team1 = listOf(element = p1.id), team2 = listOf(element = p2.id)),
             )
         val match = matchService.createFixture(token = token(uid = "host"), request = request).shouldBeRight()
 

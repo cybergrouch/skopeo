@@ -42,6 +42,7 @@ import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventId
 import org.skopeo.testsupport.seedFixtureClub
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -109,6 +110,7 @@ class AwardDerivationAssemblerTest {
                             team1Name = "T1",
                             team2Name = "T2",
                             createdBy = one,
+                            eventId = fixtureEventId(),
                         ),
                 ).toDomain()
         // team1 wins any set it leads; the fixture's overall winner is irrelevant to per-set scoring.

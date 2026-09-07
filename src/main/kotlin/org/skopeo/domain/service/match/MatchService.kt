@@ -89,8 +89,8 @@ data class FixtureInput(
     val team2Ref: UUID? = null,
     val venue: String? = null,
     val tournamentName: String? = null,
-    /** When set, the fixture belongs to this event and both sides must be event participants (#138). */
-    val eventId: UUID? = null,
+    /** The owning event (#138); required since #898. Both sides must be event participants. */
+    val eventId: UUID,
     /**
      * Optional per-side rating handicap (#486) in team-mean NTRP units, `0 < h <= 1.0`; null = none.
      * Validated at the boundary; deducted from that side for the rating-delta computation only.
@@ -165,7 +165,7 @@ class MatchService(
             team2Ref = team2Ref,
             venue = request.venue,
             tournamentName = request.tournamentName,
-            eventId = request.eventId?.let { uuidOf(value = it, field = "event id") },
+            eventId = uuidOf(value = request.eventId, field = "event id"),
             // Range (0 < h <= 1.0) is enforced in CreateFixtureRequest.init; here we only parse to BigDecimal.
             team1Handicap = request.team1Handicap?.let { BigDecimal(it) },
             team2Handicap = request.team2Handicap?.let { BigDecimal(it) },
@@ -220,16 +220,12 @@ class MatchService(
             ensureEventParticipants(request = resolvedRequest).bind()
             // A HOST cannot add fixtures to an event that has ended; an ADMINISTRATOR still can (#310).
             val event =
-                resolvedRequest.eventId?.let { eventId ->
-                    val loaded =
-                        ensureNotNull(value = events.findById(id = eventId)?.toDomain()) {
-                            ServiceError.Validation(message = "Event $eventId not found")
-                        }
-                    organizer.ensure(event = loaded, caller = caller).bind()
-                    ensureHostMayEnter(event = loaded, caller = caller).bind()
-                    ensureEventNotFinalized(event = loaded).bind()
-                    loaded
+                ensureNotNull(value = events.findById(id = resolvedRequest.eventId)?.toDomain()) {
+                    ServiceError.Validation(message = "Event ${resolvedRequest.eventId} not found")
                 }
+            organizer.ensure(event = event, caller = caller).bind()
+            ensureHostMayEnter(event = event, caller = caller).bind()
+            ensureEventNotFinalized(event = event).bind()
             val team1Users = resolveRatedParticipants(ids = resolvedRequest.team1).bind()
             val team2Users = resolveRatedParticipants(ids = resolvedRequest.team2).bind()
             val match =
@@ -272,8 +268,9 @@ class MatchService(
             if (request.team1Ref == null && request.team2Ref == null) {
                 request
             } else {
-                val eventId =
-                    ensureNotNull(value = request.eventId) { ServiceError.Validation(message = "A team fixture requires an event") }
+                // No null-check on the event any more: every fixture has one since #898, enforced by the
+                // type and by matches.event_id NOT NULL (V50), so a team ref always has an event to resolve in.
+                val eventId = request.eventId
                 val team1 =
                     resolveSide(
                         ref = request.team1Ref,
@@ -368,15 +365,13 @@ class MatchService(
                 ServiceError.Conflict(message = "Cannot edit a match that has already been rated")
             }
             // A HOST cannot record results on an event that has ended; an ADMINISTRATOR still can (#310).
-            match.eventId?.let { eventId ->
-                val event =
-                    ensureNotNull(value = events.findById(id = eventId)?.toDomain()) {
-                        ServiceError.NotFound(message = "Event $eventId not found")
-                    }
-                organizer.ensure(event = event, caller = caller).bind()
-                ensureHostMayEnter(event = event, caller = caller).bind()
-                ensureEventNotFinalized(event = event).bind()
-            }
+            val event =
+                ensureNotNull(value = events.findById(id = match.eventId)?.toDomain()) {
+                    ServiceError.NotFound(message = "Event ${match.eventId} not found")
+                }
+            organizer.ensure(event = event, caller = caller).bind()
+            ensureHostMayEnter(event = event, caller = caller).bind()
+            ensureEventNotFinalized(event = event).bind()
             val (resolvedSets, winner) =
                 deriveOutcome(
                     team1Id = match.team1.teamId,
@@ -544,13 +539,10 @@ class MatchService(
                 if (match.ratedAt != null) ratingChangesFor(match = match, usersById = usersById, token = token) else null
             // Prior meetings between the same two players (#188), if any.
             val headToHead = headToHeadFor(match = match, usersById = usersById)
-            // The owning event (#358), if the match belongs to one — resolved to its shareable code + name
-            // so the public page can link to the event. Null for eventless (open-play) matches.
-            val event =
-                match.eventId?.let { eventId ->
-                    val owning = events.getById(id = eventId).toDomain()
-                    MatchPublicEvent(publicCode = owning.publicCode, name = owning.name)
-                }
+            // The owning event (#358), resolved to its shareable code + name so the public page can link
+            // to it. Every match has one since #898.
+            val owningEvent = events.getById(id = match.eventId).toDomain()
+            val event = MatchPublicEvent(publicCode = owningEvent.publicCode, name = owningEvent.name)
             match.toPublicResponse(
                 players = players,
                 ratingChanges = ratingChanges,

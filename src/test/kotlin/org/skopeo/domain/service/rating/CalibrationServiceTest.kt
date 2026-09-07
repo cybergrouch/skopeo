@@ -33,6 +33,7 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventId
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -133,6 +134,7 @@ class CalibrationServiceTest {
                             team1Name = "T1",
                             team2Name = "T2",
                             createdBy = one.id,
+                            eventId = fixtureEventId(),
                         ),
                 ).toDomain()
         matches.addResult(
@@ -311,6 +313,7 @@ class CalibrationServiceTest {
                             team1Name = "T1",
                             team2Name = "T2",
                             createdBy = player.id,
+                            eventId = fixtureEventId(),
                         ),
                 ).toDomain()
         matches.addResult(

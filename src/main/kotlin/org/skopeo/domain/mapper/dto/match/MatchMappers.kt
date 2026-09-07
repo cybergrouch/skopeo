@@ -44,7 +44,7 @@ fun Match.toResponse(): MatchResponse =
         ratedAt = ratedAt?.toString(),
         createdBy = createdBy?.toString(),
         recordedBy = recordedBy?.toString(),
-        eventId = eventId?.toString(),
+        eventId = eventId.toString(),
         team1Handicap = team1Handicap?.toPlainString(),
         team2Handicap = team2Handicap?.toPlainString(),
     )

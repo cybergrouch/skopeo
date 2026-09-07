@@ -38,8 +38,8 @@ data class CreateFixtureRequest(
     val team2Id: String? = null,
     val venue: String? = null,
     val tournamentName: String? = null,
-    /** When set, the fixture belongs to this event and both sides must be participants (#138). */
-    val eventId: String? = null,
+    /** The owning event (#138); required since #898. Both sides must be participants of it. */
+    val eventId: String,
     /**
      * Optional per-side rating handicap (#486) in team-mean NTRP units, `0 < h <= 1.0`; null = none.
      * Deducted from that side's rating for the rating-delta computation only; the delta is applied to the
@@ -158,7 +158,7 @@ data class MatchResponse(
     val ratedAt: String? = null,
     val createdBy: String? = null,
     val recordedBy: String? = null,
-    val eventId: String? = null,
+    val eventId: String,
     // Per-side rating handicap (#486) in team-mean NTRP units; null = none. Shown for transparency.
     val team1Handicap: String? = null,
     val team2Handicap: String? = null,

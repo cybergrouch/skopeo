@@ -49,6 +49,7 @@ import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
+import org.skopeo.testsupport.fixtureEventForRequest
 
 /**
  * End-to-end score correction over HTTP (#776): a host records a result, an admin rates it, then the admin
@@ -151,6 +152,7 @@ class MatchScoreCorrectionApiIntegrationTest {
                             matchDate = "2026-01-01",
                             team1 = listOf(element = p1.id),
                             team2 = listOf(element = p2.id),
+                            eventId = fixtureEventForRequest(team1 = listOf(element = p1.id), team2 = listOf(element = p2.id)),
                         ),
                 )
             }.body<MatchResponse>()

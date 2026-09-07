@@ -54,6 +54,8 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.MatchesTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventFor
+import org.skopeo.testsupport.fixtureEventForRequest
 import org.skopeo.testsupport.seedClub
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -122,6 +124,7 @@ class MatchServiceTest {
         matchDate = date,
         team1 = listOf(element = p1),
         team2 = listOf(element = p2),
+        eventId = fixtureEventFor(team1 = listOf(element = p1), team2 = listOf(element = p2)),
     )
 
     private fun straightSets() =
@@ -647,6 +650,11 @@ class MatchServiceTest {
                 matchDate = "2026-01-01",
                 team1 = listOf(element = UUID.randomUUID().toString()),
                 team2 = listOf(element = UUID.randomUUID().toString()),
+                eventId =
+                    fixtureEventForRequest(
+                        team1 = listOf(element = UUID.randomUUID().toString()),
+                        team2 = listOf(element = UUID.randomUUID().toString()),
+                    ),
                 isPlacementMatch = true,
                 placementBracket = "NOT_A_BRACKET",
             )
@@ -667,6 +675,7 @@ class MatchServiceTest {
                 matchDate = "2026-01-01",
                 team1 = listOf(element = p1.id.toString()),
                 team2 = listOf(element = p2.id.toString()),
+                eventId = fixtureEventForRequest(team1 = listOf(element = p1.id.toString()), team2 = listOf(element = p2.id.toString())),
                 isPlacementMatch = true,
                 placementBracket = "CHAMPIONSHIP_FINALS",
             )
@@ -849,6 +858,7 @@ class MatchServiceTest {
                             matchDate = LocalDate.parse("2026-01-15"),
                             team1 = listOf(p1.id, p3.id),
                             team2 = listOf(p2.id, p4.id),
+                            eventId = fixtureEventFor(team1 = listOf(p1.id, p3.id), team2 = listOf(p2.id, p4.id)),
                         ),
                 ).shouldBeRight()
         service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(dbl.id), request = straightSets()).shouldBeRight()
@@ -939,6 +949,7 @@ class MatchServiceTest {
                         matchDate = LocalDate.parse("2026-01-01"),
                         team1 = team1,
                         team2 = team2,
+                        eventId = fixtureEventFor(team1 = team1, team2 = team2),
                     ),
             ).shouldBeRight()
 
@@ -1367,6 +1378,7 @@ class MatchServiceTest {
                             matchDate = LocalDate.parse("2026-01-15"),
                             team1 = listOf(p2.id, p3.id),
                             team2 = listOf(p1.id, p4.id),
+                            eventId = fixtureEventFor(team1 = listOf(p2.id, p3.id), team2 = listOf(p1.id, p4.id)),
                         ),
                 ).shouldBeRight()
         service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(reversed.id), request = straightSets()).shouldBeRight()
@@ -1407,6 +1419,7 @@ class MatchServiceTest {
                             matchDate = LocalDate.parse("2026-01-15"),
                             team1 = listOf(p1.id, p2.id),
                             team2 = listOf(p3.id, p4.id),
+                            eventId = fixtureEventFor(team1 = listOf(p1.id, p2.id), team2 = listOf(p3.id, p4.id)),
                         ),
                 ).shouldBeRight()
         service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(partners.id), request = straightSets()).shouldBeRight()
@@ -1445,6 +1458,7 @@ class MatchServiceTest {
                             matchDate = LocalDate.parse("2026-01-15"),
                             team1 = listOf(p3.id, p4.id),
                             team2 = listOf(p1.id, p2.id),
+                            eventId = fixtureEventFor(team1 = listOf(p3.id, p4.id), team2 = listOf(p1.id, p2.id)),
                         ),
                 ).shouldBeRight()
         service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(partners.id), request = straightSets()).shouldBeRight()

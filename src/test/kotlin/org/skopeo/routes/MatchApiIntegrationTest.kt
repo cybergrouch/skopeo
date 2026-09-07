@@ -45,6 +45,7 @@ import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
+import org.skopeo.testsupport.fixtureEventForRequest
 
 /**
  * End-to-end exercise of the match API: a host creates a fixture between rated players, uploads
@@ -123,6 +124,7 @@ class MatchApiIntegrationTest {
                         matchDate = "2026-01-01",
                         team1 = listOf(p1),
                         team2 = listOf(p2),
+                        eventId = fixtureEventForRequest(team1 = listOf(p1), team2 = listOf(p2)),
                     ),
             )
         }
@@ -147,6 +149,7 @@ class MatchApiIntegrationTest {
                         matchDate = matchDate,
                         team1 = team1,
                         team2 = team2,
+                        eventId = fixtureEventForRequest(team1 = team1, team2 = team2),
                     ),
             )
         }
@@ -419,6 +422,18 @@ class MatchApiIntegrationTest {
                 header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
                 contentType(type = ContentType.Application.Json)
                 setBody(body = """{"matchFormat":"SINGLES","matchDate":"2026-01-01","team1":["${p1.id}"],"team2":["${p2.id}"]}""")
+            }.status shouldBe HttpStatusCode.BadRequest
+            // A missing eventId is likewise rejected at deserialization (#898). Every match belongs to an
+            // event, so this is now a wire-contract requirement rather than a service-layer validation —
+            // the service can no longer be reached with a null event, and matches.event_id is NOT NULL (V50).
+            client.post(urlString = "/api/v1/matches") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                contentType(type = ContentType.Application.Json)
+                setBody(
+                    body =
+                        """{"matchFormat":"SINGLES","matchType":"OPEN_PLAY","matchDate":"2026-01-01",""" +
+                            """"team1":["${p1.id}"],"team2":["${p2.id}"]}""",
+                )
             }.status shouldBe HttpStatusCode.BadRequest
         }
 

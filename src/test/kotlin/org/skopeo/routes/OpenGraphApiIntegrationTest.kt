@@ -36,6 +36,7 @@ import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventFor
 import org.skopeo.testsupport.seedFixtureClub
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -119,6 +120,7 @@ class OpenGraphApiIntegrationTest {
                             matchDate = LocalDate.parse("2026-06-30"),
                             team1 = listOf(element = ana.id),
                             team2 = listOf(element = bo.id),
+                            eventId = fixtureEventFor(team1 = listOf(element = ana.id), team2 = listOf(element = bo.id)),
                         ),
                 ).shouldBeRight()
 

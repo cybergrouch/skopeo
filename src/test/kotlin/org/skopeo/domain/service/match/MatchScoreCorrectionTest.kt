@@ -53,6 +53,8 @@ import org.skopeo.repository.UserRatingHistoryTable
 import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.afterFinalizingFixtureEvent
+import org.skopeo.testsupport.fixtureEventId
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -129,6 +131,7 @@ class MatchScoreCorrectionTest {
                         team1Name = "t1",
                         team2Name = "t2",
                         createdBy = host.id,
+                        eventId = fixtureEventId(),
                     ),
             ).toDomain()
         val winner = if (team1Games > team2Games) match.team1.teamId else match.team2.teamId
@@ -168,7 +171,7 @@ class MatchScoreCorrectionTest {
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
         val match = seedCompleted(host = host, p1 = p1, p2 = p2)
-        calc.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
+        calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
         return Rated(
             admin = admin,
             host = host,
@@ -275,7 +278,7 @@ class MatchScoreCorrectionTest {
         // Two matches: the earlier one gets corrected, the later one must keep its own rating change.
         val earlier = seedCompleted(host = host, p1 = p1, p2 = p2, date = LocalDate.now().minusDays(20))
         val later = seedCompleted(host = host, p1 = p1, p2 = p2, date = LocalDate.now().minusDays(2))
-        calc.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
+        calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
 
         val laterRowBefore = ratings.historyForMatches(matchIds = listOf(element = later.id)).single { it.userId == p1.id }
 
@@ -533,7 +536,7 @@ class MatchScoreCorrectionTest {
         rate(userId = p2.id, level = "4.0")
         makeSettled(userId = p2.id)
         val match = seedCompleted(host = host, p1 = p1, p2 = p2)
-        calc.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
+        calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
         return Rated(
             admin = admin,
             host = host,

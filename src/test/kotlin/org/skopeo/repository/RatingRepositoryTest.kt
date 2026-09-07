@@ -32,6 +32,7 @@ import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventId
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -88,6 +89,7 @@ class RatingRepositoryTest {
                         team1Name = "T1",
                         team2Name = "T2",
                         createdBy = u1,
+                        eventId = fixtureEventId(),
                     ),
             ).toDomain()
         matches.addResult(

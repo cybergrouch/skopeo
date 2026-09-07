@@ -43,6 +43,8 @@ class MatchDtosTest {
         matchDate = "2026-01-01",
         team1 = listOf(element = "u1"),
         team2 = listOf(element = "u2"),
+        // A literal id: this suite validates the DTO's own init block, and never reaches a database.
+        eventId = "00000000-0000-0000-0000-0000000000e1",
         team1Handicap = team1Handicap,
         team2Handicap = team2Handicap,
     )
