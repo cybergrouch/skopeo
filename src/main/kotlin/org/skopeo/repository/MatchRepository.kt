@@ -89,15 +89,19 @@ class MatchRepository {
      * that into a constraint violation rather than a silent duplicate, which is the safe direction to
      * fail; the caller sees the insert error rather than two matches sharing "#4".
      */
-    private fun nextMatchNumber(eventId: UUID): Int =
-        (
+    private fun nextMatchNumber(eventId: UUID): Int {
+        // Bound to a local: ResultRow.get(expression) trips detekt's NamedArguments rule, and naming the
+        // parameter is not an option because Exposed exposes it through the indexing operator.
+        val highest = MatchesTable.matchNumber.max()
+        val current =
             MatchesTable
-                .select(columns = listOf(element = MatchesTable.matchNumber.max()))
+                .select(columns = listOf(element = highest))
                 .where { MatchesTable.eventId eq eventId }
                 .firstOrNull()
-                ?.get(MatchesTable.matchNumber.max())
+                ?.let { it[highest] }
                 ?: 0
-        ) + 1
+        return current + 1
+    }
 
     /** Record results on a fixture: persist sets/tiebreaks, set the winner, mark COMPLETED. */
     fun addResult(
