@@ -14,6 +14,7 @@ import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -1473,5 +1474,22 @@ class MatchServiceTest {
         h2h.meetings shouldBe emptyList()
         h2h.team1Wins shouldBe 1
         h2h.team2Wins shouldBe 0
+    }
+
+    @Test
+    fun `createFixture rejects an eventId that does not exist (#898)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+
+        // Unlike a match's own event_id — FK-guaranteed to exist, so uploadResult resolves it with getById
+        // — this id comes straight from the request and can name nothing at all. It stays validated.
+        val error =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = UUID.randomUUID()),
+                ).shouldBeLeft()
+        error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "not found"
     }
 }

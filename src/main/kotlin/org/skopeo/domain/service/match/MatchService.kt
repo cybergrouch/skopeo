@@ -365,10 +365,12 @@ class MatchService(
                 ServiceError.Conflict(message = "Cannot edit a match that has already been rated")
             }
             // A HOST cannot record results on an event that has ended; an ADMINISTRATOR still can (#310).
-            val event =
-                ensureNotNull(value = events.findById(id = match.eventId)?.toDomain()) {
-                    ServiceError.NotFound(message = "Event ${match.eventId} not found")
-                }
+            // getById, not a nullable lookup plus a NotFound: this id comes from the match row, and since
+            // #898 matches.event_id is NOT NULL behind an ON DELETE RESTRICT FK (V50), so it always points
+            // at a live event. There is no absent case to invent an error branch for — the same reasoning
+            // EventOrganizerGate.ensureForEventId already applies. An id from a REQUEST is different, and
+            // createFixture still validates that one.
+            val event = events.getById(id = match.eventId).toDomain()
             organizer.ensure(event = event, caller = caller).bind()
             ensureHostMayEnter(event = event, caller = caller).bind()
             ensureEventNotFinalized(event = event).bind()
