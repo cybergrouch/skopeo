@@ -63,6 +63,7 @@ fun MatchAggregateEntity.toDomain(): Match =
         recordedBy = match.recordedBy,
         eventId = match.eventId,
         calcSequence = match.calcSequence,
+        matchNumber = match.matchNumber,
         team1Handicap = match.team1Handicap,
         team2Handicap = match.team2Handicap,
         isPlacementMatch = match.isPlacementMatch,

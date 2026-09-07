@@ -45,6 +45,7 @@ fun Match.toResponse(): MatchResponse =
         createdBy = createdBy?.toString(),
         recordedBy = recordedBy?.toString(),
         eventId = eventId.toString(),
+        matchNumber = matchNumber,
         team1Handicap = team1Handicap?.toPlainString(),
         team2Handicap = team2Handicap?.toPlainString(),
     )
@@ -73,6 +74,7 @@ fun Match.toPublicResponse(
         matchFormat = matchFormat.name,
         matchType = matchType.name,
         matchDate = matchDate.toString(),
+        matchNumber = matchNumber,
         status = status.name,
         rated = ratedAt != null,
         // Public transparency signal (#776): this match's score was corrected after it had been rated.

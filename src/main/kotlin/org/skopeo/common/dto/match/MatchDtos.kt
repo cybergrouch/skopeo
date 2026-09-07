@@ -159,6 +159,8 @@ data class MatchResponse(
     val createdBy: String? = null,
     val recordedBy: String? = null,
     val eventId: String,
+    /** 1-based identifier within the event ("Match #3"), unique per event (#898). */
+    val matchNumber: Int,
     // Per-side rating handicap (#486) in team-mean NTRP units; null = none. Shown for transparency.
     val team1Handicap: String? = null,
     val team2Handicap: String? = null,
@@ -212,6 +214,8 @@ data class MatchPublicResponse(
     val matchFormat: String,
     val matchType: String,
     val matchDate: String,
+    /** 1-based identifier within the event ("Match #3"), unique per event (#898). */
+    val matchNumber: Int,
     val status: String,
     // True once the rating calculation has committed this match (#361): lets a list view derive the
     // Scheduled / Awaiting rating / Rated status without the precise rating changes. On the standalone
