@@ -26,6 +26,7 @@ import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.CreateEventCommand
 import org.skopeo.domain.model.CreateFixtureCommand
 import org.skopeo.domain.model.EventBucket
+import org.skopeo.domain.model.Match
 import org.skopeo.domain.model.MatchSetResult
 import org.skopeo.domain.model.MatchType
 import org.skopeo.domain.model.NameType
@@ -40,6 +41,7 @@ import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventId
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -274,21 +276,7 @@ class ClubServiceTest {
                         clubId = UUID.fromString(club.id),
                     ),
             ).toDomain()
-        val underClub =
-            matchRepo.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.now(),
-                        team1UserIds = listOf(element = p1.id),
-                        team2UserIds = listOf(element = p2.id),
-                        team1Name = "p1",
-                        team2Name = "p2",
-                        createdBy = admin.id,
-                        eventId = event.id,
-                    ),
-            ).toDomain()
+        val underClub = singlesFixture(creator = admin.id, p1 = p1.id, p2 = p2.id, eventId = event.id)
         matchRepo.addResult(
             matchId = underClub.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = underClub.team1.teamId)),
@@ -296,27 +284,16 @@ class ClubServiceTest {
             recordedBy = admin.id,
             completedAt = LocalDateTime.now(),
         )
-        // A standalone (clubless) match must still surface after the club delete.
-        val standalone =
-            matchRepo.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.now(),
-                        team1UserIds = listOf(element = p1.id),
-                        team2UserIds = listOf(element = p2.id),
-                        team1Name = "p1",
-                        team2Name = "p2",
-                        createdBy = admin.id,
-                    ),
-            ).toDomain()
+        // A match under a DIFFERENT club's event must still surface after this club is deleted. It used
+        // to be a clubless match, which #898 made impossible; an unrelated event tests the same thing —
+        // the container join cascades only through the deleted club's own events.
+        val elsewhere = singlesFixture(creator = admin.id, p1 = p1.id, p2 = p2.id, eventId = fixtureEventId())
 
         // Deleting the club cascades is_active=false down through its event onto the match.
         service.delete(token = token(uid = "admin"), clubId = UUID.fromString(club.id)).shouldBeRight()
 
         val history = matchRepo.listByUser(userId = p1.id).map { it.toDomain().id }
-        history shouldContain standalone.id
+        history shouldContain elsewhere.id
         history shouldNotContain underClub.id
         // Win/loss likewise drops the only decided match (the container-deleted one), leaving p1 with no
         // decided record at all — absent from the aggregate map.
@@ -501,4 +478,27 @@ class ClubServiceTest {
         service.setSanction(token = token(uid = "admin"), clubId = java.util.UUID.randomUUID(), sanctioned = true)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
+
+    /** A completed-less singles fixture between [p1] and [p2] under [eventId]; the suite's two cases differ only in the event. */
+    private fun singlesFixture(
+        creator: UUID,
+        p1: UUID,
+        p2: UUID,
+        eventId: UUID,
+    ): Match =
+        matchRepo
+            .createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.now(),
+                        team1UserIds = listOf(element = p1),
+                        team2UserIds = listOf(element = p2),
+                        team1Name = "p1",
+                        team2Name = "p2",
+                        createdBy = creator,
+                        eventId = eventId,
+                    ),
+            ).toDomain()
 }

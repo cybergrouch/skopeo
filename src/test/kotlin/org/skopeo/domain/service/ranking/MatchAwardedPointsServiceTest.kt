@@ -42,6 +42,7 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventId
 import org.skopeo.testsupport.seedFixtureClub
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -123,6 +124,8 @@ class MatchAwardedPointsServiceTest {
                     ).toEventDomain()
                     .id
             }
+                // Every match needs an event since #898; without a club owner under test, any event will do.
+                ?: fixtureEventId(one.id, two.id)
         val fixture =
             matches
                 .createFixture(
@@ -340,23 +343,6 @@ class MatchAwardedPointsServiceTest {
 
         service.forMatch(code = match.publicCode, token = token(uid = "host")).shouldBeRight()
             .rows.single().derivation.shouldBeNull()
-    }
-
-    @Test
-    fun `an eventless match is ADMINISTRATOR and RATER only, with no club to scope against (#858)`() {
-        val ana = provision(uid = "ana")
-        val ben = provision(uid = "ben")
-        provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
-        provision(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        // No event, so no club — mayOrganize has nothing to answer. Handled explicitly rather than
-        // discovered as a null-club crash.
-        val match = completedMatch(one = ana, two = ben)
-        matchAward(userId = ana.id, match = match, points = "8")
-
-        service.forMatch(code = match.publicCode, token = token(uid = "owner")).shouldBeRight()
-            .rows.single().derivation.shouldBeNull()
-        service.forMatch(code = match.publicCode, token = token(uid = "root")).shouldBeRight()
-            .rows.single().derivation.shouldNotBeNull()
     }
 
     @Test

@@ -41,6 +41,7 @@ import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.StandingsSnapshotRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventId
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -160,6 +161,7 @@ class StandingsCalculationServiceTest {
                         team1Name = "T1",
                         team2Name = "T2",
                         createdBy = u1,
+                        eventId = fixtureEventId(),
                     ),
             ).toDomain()
         matches.addResult(

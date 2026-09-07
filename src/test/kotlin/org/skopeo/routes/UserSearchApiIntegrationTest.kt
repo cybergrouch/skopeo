@@ -46,6 +46,7 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
+import org.skopeo.testsupport.fixtureEventId
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -455,6 +456,7 @@ class UserSearchApiIntegrationTest {
                             team1Name = "T1",
                             team2Name = "T2",
                             createdBy = UUID.fromString(alice.id),
+                            eventId = fixtureEventId(),
                         ),
                 ).toDomain()
             matches.addResult(

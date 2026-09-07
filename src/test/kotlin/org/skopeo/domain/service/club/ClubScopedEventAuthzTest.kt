@@ -8,6 +8,7 @@ import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
@@ -527,24 +528,40 @@ class ClubScopedEventAuthzTest {
     }
 
     @Test
-    fun `a match with no event keeps the plain staff gate (#789)`() {
-        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
+    fun `an administrator organizes under a club they do not own, for both events and fixtures (#898)`() {
+        // #898 routed every fixture through this gate: `organizer.ensure` used to sit inside
+        // `eventId?.let { }`, so an event-less fixture skipped authorization entirely. With no event-less
+        // matches left, the ADMINISTRATOR exemption is the only thing keeping an admin able to work on a
+        // club they have nothing to do with — it is the first clause of both `mayFileUnder` and
+        // `mayOrganize`, and this pins it so a later tightening cannot quietly remove it.
+        val owner = provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val p1 = provision(uid = "p1", rated = true)
         val p2 = provision(uid = "p2", rated = true)
-        val request =
-            FixtureInput(
-                matchFormat = TeamType.SINGLES,
-                matchType = MatchType.OPEN_PLAY,
-                matchDate = LocalDate.now(),
-                team1 = listOf(element = p1.id),
-                team2 = listOf(element = p2.id),
-            )
-        val match = matchService.createFixture(token = token(uid = "host"), request = request).shouldBeRight()
+        val someoneElsesClub = club(name = "Not The Admin's Club", owners = arrayOf(owner))
+        someoneElsesClub.ownerIds shouldNotContain admin.id
 
-        // There is no event, so there is nothing to anchor ownership on — any staff caller may record it.
+        // Files an event under a club they do not own.
+        val event =
+            service
+                .create(
+                    token = token(uid = "admin"),
+                    input = eventInput(name = "Admin Run", clubId = someoneElsesClub.id, participants = listOf(p1.id, p2.id)),
+                ).shouldBeRight()
+
+        // ...and creates a fixture on it.
         matchService
-            .uploadResult(token = token(uid = "other"), matchId = UUID.fromString(match.id), request = straightSets())
-            .shouldBeRight()
+            .createFixture(
+                token = token(uid = "admin"),
+                request =
+                    FixtureInput(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.now(),
+                        team1 = listOf(element = p1.id),
+                        team2 = listOf(element = p2.id),
+                        eventId = UUID.fromString(event.id),
+                    ),
+            ).shouldBeRight()
     }
 }

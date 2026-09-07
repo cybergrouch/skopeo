@@ -41,6 +41,8 @@ import org.skopeo.domain.model.WeightClass
 import org.skopeo.domain.model.WinLossRecord
 import org.skopeo.domain.model.WindowMatch
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.finalizeFixtureEvent
+import org.skopeo.testsupport.fixtureEventId
 import org.skopeo.testsupport.seedClub
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -89,6 +91,7 @@ class MatchRepositoryTest {
                 team1Name = "T1",
                 team2Name = "T2",
                 createdBy = u1,
+                eventId = fixtureEventId(),
             ),
     ).toDomain()
 
@@ -97,7 +100,7 @@ class MatchRepositoryTest {
         u1: UUID,
         u2: UUID,
         matchDate: LocalDate,
-        eventId: UUID? = null,
+        eventId: UUID = fixtureEventId(),
         completedAt: LocalDateTime = LocalDateTime.now(),
         matchType: MatchType = MatchType.OPEN_PLAY,
     ): UUID {
@@ -136,7 +139,7 @@ class MatchRepositoryTest {
         u1: UUID,
         u2: UUID,
         matchDate: LocalDate,
-        eventId: UUID? = null,
+        eventId: UUID = fixtureEventId(),
     ): UUID {
         val match =
             matches.createFixture(
@@ -202,6 +205,7 @@ class MatchRepositoryTest {
                         team1Name = "T1",
                         team2Name = "T2",
                         createdBy = winners.first(),
+                        eventId = fixtureEventId(),
                     ),
             ).toDomain()
         matches.addResult(
@@ -230,6 +234,7 @@ class MatchRepositoryTest {
                         team1Name = "T1",
                         team2Name = "T2",
                         createdBy = u1,
+                        eventId = fixtureEventId(),
                         isPlacementMatch = true,
                         placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
                     ),
@@ -288,6 +293,7 @@ class MatchRepositoryTest {
                         team1Name = "T1",
                         team2Name = "T2",
                         createdBy = a,
+                        eventId = fixtureEventId(),
                     ),
             ).toDomain()
         matches.addResult(
@@ -313,7 +319,7 @@ class MatchRepositoryTest {
     }
 
     @Test
-    fun `pending-calculation orders by event end date, interleaves eventless by match date, honors override (#335)`() {
+    fun `pending-calculation orders by event end date, honors a priority override (#335)`() {
         val u1 = newUser(uid = "u1")
         val u2 = newUser(uid = "u2")
         val eventA = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
@@ -327,18 +333,20 @@ class MatchRepositoryTest {
         val a1 = completedMatch(u1 = u1, u2 = u2, matchDate = day, eventId = eventA, completedAt = tie)
         val a3 = completedMatch(u1 = u1, u2 = u2, matchDate = day, eventId = eventA, completedAt = tie)
         val b1 = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 18), eventId = eventB)
-        // An eventless match played between the two events' end dates.
-        val open = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 15))
-        // Evented matches queue only once their event is finalized (#403); finalize both so this ordering
-        // test sees the full set (the eventless match queues immediately regardless).
+        // A third event ending between the other two. This used to be an event-less match; #898 removed
+        // those, and an event sitting between A and B exercises the same end-date ordering.
+        val eventC = event(creator = u1, endDate = LocalDate.of(2026, 1, 15), members = listOf(u1, u2))
+        val c1 = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 15), eventId = eventC)
+        // A match queues only once its event is finalized (#403) — since #898 there is no exception.
         events.finalize(id = eventA, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
         events.finalize(id = eventB, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
+        events.finalize(id = eventC, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
 
-        // Default: event A (ends 1/10; a2 dragged first, then the a1/a3 tie) → eventless (1/15) → event B.
+        // Default: event A (ends 1/10; a2 dragged first, then the a1/a3 tie) → event C (1/15) → event B.
         val order = matches.listPendingCalculation().map { it.toDomain().id }
         order.first() shouldBe a2
         order.subList(fromIndex = 1, toIndex = 3).toSet() shouldBe setOf(a1, a3)
-        order.subList(fromIndex = 3, toIndex = 5) shouldBe listOf(open, b1)
+        order.subList(fromIndex = 3, toIndex = 5) shouldBe listOf(c1, b1)
 
         // Admin bumps event B ahead of everything by giving it the lowest processing key.
         events.setCalcPriority(id = eventB, priority = 0.0)
@@ -346,7 +354,7 @@ class MatchRepositoryTest {
         overridden.first() shouldBe b1
         overridden[1] shouldBe a2
         overridden.subList(fromIndex = 2, toIndex = 4).toSet() shouldBe setOf(a1, a3)
-        overridden.last() shouldBe open
+        overridden.last() shouldBe c1
     }
 
     @Test
@@ -377,6 +385,8 @@ class MatchRepositoryTest {
         val mine = completedMatch(u1 = host, u2 = p1, matchDate = LocalDate.of(2026, 3, 1))
         // A fixture created by another host must be excluded from a creator-scoped list.
         completedMatchCreatedBy(creator = otherHost, u1 = otherHost, u2 = p2, matchDate = LocalDate.of(2026, 3, 1))
+        // Nothing queues until its event is finalized (#403); since #898 that applies to every match.
+        finalizeFixtureEvent()
 
         matches.listPendingCalculation(createdBy = host).map { it.toDomain().id } shouldBe listOf(element = mine)
     }
@@ -389,33 +399,25 @@ class MatchRepositoryTest {
         val u1 = newUser(uid = "u1")
         val u2 = newUser(uid = "u2")
         val only = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1))
+        finalizeFixtureEvent()
         matches.listPendingCalculation(createdBy = u1).map { it.toDomain().id } shouldBe listOf(element = only)
     }
 
     @Test
-    fun `pending-calculation excludes an evented match until its event is finalized, always includes eventless (#403)`() {
+    fun `pending-calculation excludes a match until its event is finalized (#403)`() {
         val u1 = newUser(uid = "u1")
         val u2 = newUser(uid = "u2")
         val eventId = event(creator = u1, endDate = LocalDate.of(2026, 1, 3), members = listOf(u1, u2))
         val evented = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId)
-        val eventless = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 2))
 
-        // While the event is open, only the event-less match is eligible; the evented one is held back.
-        matches.listPendingCalculation().map { it.toDomain().id }.let { queued ->
-            queued shouldContain eventless
-            queued shouldNotContain evented
-        }
-        matches.listPendingCalculation(createdBy = u1).map { it.toDomain().id }.let { queued ->
-            queued shouldContain eventless
-            queued shouldNotContain evented
-        }
+        // #403 also admitted event-less matches immediately, as an unchanged-behaviour carve-out. #898
+        // made every match belong to an event, so that half of this test is now unrepresentable and the
+        // gate is absolute: finalizing the event is the ONLY route into the queue.
+        matches.listPendingCalculation().map { it.toDomain().id } shouldNotContain evented
+        matches.listPendingCalculation(createdBy = u1).map { it.toDomain().id } shouldNotContain evented
 
-        // Once the event is finalized, its match becomes eligible too.
         events.finalize(id = eventId, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
-        matches.listPendingCalculation().map { it.toDomain().id }.let { queued ->
-            queued shouldContain eventless
-            queued shouldContain evented
-        }
+        matches.listPendingCalculation().map { it.toDomain().id } shouldContain evented
         matches.listPendingCalculation(createdBy = u1).map { it.toDomain().id } shouldContain evented
     }
 
@@ -604,6 +606,8 @@ class MatchRepositoryTest {
             completedAt = LocalDateTime.now(),
         )
         val scheduled = fixture(u1 = newUser(uid = "b1"), u2 = newUser(uid = "b2"))
+        // Nothing queues until its event is finalized (#403); since #898 that applies to every match.
+        finalizeFixtureEvent()
 
         val pending = matches.listPendingCalculation().map { it.toDomain().id }
         pending shouldContain completed.id

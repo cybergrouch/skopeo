@@ -350,17 +350,17 @@ class MatchRepository {
         }
 
     /**
-     * The rating-queue eligibility clause (#403): a match qualifies when it is event-less (event_id is
-     * null → queues immediately, unchanged) OR its event is finalized (finalized_at is non-null). Built
-     * as a membership test against the ids of finalized events, so the queue trigger for an evented match
-     * moves from result-upload time to finalize time.
+     * The rating-queue eligibility clause (#403): a match qualifies once its event is finalized
+     * (finalized_at is non-null), so the queue trigger sits at finalize time rather than result-upload
+     * time. Built as a membership test against the ids of finalized events.
+     *
+     * #403 also admitted event-less matches immediately, as an unchanged-behaviour carve-out. #898 made
+     * `matches.event_id` NOT NULL, so that branch became unreachable and is gone: **finalizing the event
+     * is now the only route to a rating.** There is no longer any match that bypasses the gate.
      */
     private fun ISqlExpressionBuilder.queueEligible(): Op<Boolean> =
-        MatchesTable.eventId.isNull() or
-            (
-                MatchesTable.eventId inSubQuery
-                    EventsTable.select(columns = listOf(element = EventsTable.id)).where { EventsTable.finalizedAt.isNotNull() }
-            )
+        MatchesTable.eventId inSubQuery
+            EventsTable.select(columns = listOf(element = EventsTable.id)).where { EventsTable.finalizedAt.isNotNull() }
 
     /** Each event's processing key: its calc_priority override, else its end date as an epoch day. */
     private fun eventProcessingKeys(eventIds: List<UUID>): Map<UUID, Double> =
@@ -378,17 +378,17 @@ class MatchRepository {
 
     /** Order matches into the global calculation sequence (#335) — see [listPendingCalculation]. */
     private fun sortForCalculation(matches: List<MatchAggregateEntity>): List<MatchAggregateEntity> {
-        val keyByEvent = eventProcessingKeys(eventIds = matches.mapNotNull { it.match.eventId }.distinct())
+        val keyByEvent = eventProcessingKeys(eventIds = matches.map { it.match.eventId }.distinct())
 
-        // Processing key: an evented match keys off its event; an eventless one off its own match date.
-        fun processingKey(match: MatchAggregateEntity): Double =
-            match.match.eventId?.let { keyByEvent.getValue(key = it) } ?: match.match.matchDate.toEpochDay().toDouble()
+        // Processing key: every match keys off its event (#898 — a match cannot be eventless).
+        fun processingKey(match: MatchAggregateEntity): Double = keyByEvent.getValue(key = match.match.eventId)
         return matches.sortedWith(
             comparator =
                 compareBy(
                     { processingKey(match = it) },
-                    // Keep a single event's matches contiguous when two events share a key.
-                    { it.match.eventId?.toString().orEmpty() },
+                    // Keep a single event's matches contiguous when two events share a key. calc_priority
+                    // has no unique constraint and falls back to end_date, so ties are the normal case.
+                    { it.match.eventId.toString() },
                     { it.match.matchDate },
                     // An un-dragged match (null calc_sequence) sorts after dragged ones within its date.
                     { it.match.calcSequence ?: Int.MAX_VALUE },
@@ -419,10 +419,9 @@ class MatchRepository {
                         MatchesTable.winnerTeamId.isNotNull() and
                         (MatchesTable.eventId inList eventIds)
                 }.groupBy(MatchesTable.eventId)
-                .mapNotNull { row ->
-                    // event_id is non-null for every row (the inList filter above excludes null keys).
-                    row[MatchesTable.eventId]?.value?.let { it to row[countAlias].toInt() }
-                }.toMap()
+                .associate { row ->
+                    row[MatchesTable.eventId].value to row[countAlias].toInt()
+                }
         }
 
     /**
@@ -447,10 +446,9 @@ class MatchRepository {
                         MatchesTable.ratedAt.isNotNull() and
                         (MatchesTable.eventId inList eventIds)
                 }.groupBy(MatchesTable.eventId)
-                .mapNotNull { row ->
-                    // event_id is non-null for every row (the inList filter above excludes null keys).
-                    row[MatchesTable.eventId]?.value?.let { it to row[countAlias].toInt() }
-                }.toMap()
+                .associate { row ->
+                    row[MatchesTable.eventId].value to row[countAlias].toInt()
+                }
         }
 
     /**
@@ -822,7 +820,7 @@ private fun ResultRow.toMatchEntity(): MatchEntity =
         ratedAt = this[MatchesTable.ratedAt],
         createdBy = this[MatchesTable.createdBy]?.value,
         recordedBy = this[MatchesTable.recordedBy]?.value,
-        eventId = this[MatchesTable.eventId]?.value,
+        eventId = this[MatchesTable.eventId].value,
         calcSequence = this[MatchesTable.calcSequence],
         team1Handicap = this[MatchesTable.team1Handicap],
         team2Handicap = this[MatchesTable.team2Handicap],

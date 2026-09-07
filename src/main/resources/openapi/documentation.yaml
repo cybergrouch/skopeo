@@ -6742,6 +6742,7 @@ components:
         - matchFormat
         - matchType
         - matchDate
+        - eventId
       properties:
         matchFormat:
           type: string
@@ -6788,8 +6789,7 @@ components:
         eventId:
           type: string
           format: uuid
-          nullable: true
-          description: When set, the fixture belongs to this event and both sides must be participants (#138).
+          description: The owning event (#138); required since #898. Both sides must be participants of it.
         team1Handicap:
           type: string
           nullable: true
@@ -7023,6 +7023,7 @@ components:
         - status
         - team1
         - team2
+        - eventId
         - sets
         - isActive
       properties:
@@ -7084,8 +7085,7 @@ components:
         eventId:
           type: string
           format: uuid
-          nullable: true
-          description: The event this fixture belongs to, if any (#138).
+          description: The event this fixture belongs to (#138). Always present since #898.
         team1Handicap:
           type: string
           nullable: true

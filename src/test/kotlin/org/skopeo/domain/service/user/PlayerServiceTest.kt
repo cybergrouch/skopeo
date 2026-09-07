@@ -54,6 +54,7 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.fixtureEventId
 import org.skopeo.testsupport.seedClub
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -163,6 +164,7 @@ class PlayerServiceTest {
                 team1Name = "T1",
                 team2Name = "T2",
                 createdBy = u1,
+                eventId = fixtureEventId(),
             ),
     ).toDomain()
 
@@ -181,6 +183,7 @@ class PlayerServiceTest {
                 team1Name = "T1",
                 team2Name = "T2",
                 createdBy = team1.first(),
+                eventId = fixtureEventId(),
             ),
     ).toDomain()
 

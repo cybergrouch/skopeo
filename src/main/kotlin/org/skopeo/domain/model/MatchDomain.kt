@@ -103,7 +103,7 @@ data class Match(
     val ratedAt: LocalDateTime? = null,
     val createdBy: UUID? = null,
     val recordedBy: UUID? = null,
-    val eventId: UUID? = null,
+    val eventId: UUID,
     // Manual same-date ordering tiebreaker for the rating calculation (#331/#332); null = default.
     val calcSequence: Int? = null,
     // Per-side rating handicap in team-mean NTRP units (#486); null = none. Deducted from the side's
@@ -132,7 +132,7 @@ data class CreateFixtureCommand(
     val createdBy: UUID,
     val venue: String? = null,
     val tournamentName: String? = null,
-    val eventId: UUID? = null,
+    val eventId: UUID,
     // Per-side rating handicap in team-mean NTRP units (#486); null = none. Range 0 < h <= 1.0.
     val team1Handicap: BigDecimal? = null,
     val team2Handicap: BigDecimal? = null,

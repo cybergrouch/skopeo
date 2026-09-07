@@ -44,6 +44,8 @@ import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
+import org.skopeo.testsupport.finalizeFixtureEvent
+import org.skopeo.testsupport.fixtureEventForRequest
 
 /**
  * End-to-end exercise of the rating calculation trigger: a dry-run previews without writing, an
@@ -130,6 +132,7 @@ class CalculationApiIntegrationTest {
                                 matchDate = "2026-01-01",
                                 team1 = listOf(p1.id),
                                 team2 = listOf(p2.id),
+                                eventId = fixtureEventForRequest(team1 = listOf(p1.id), team2 = listOf(p2.id)),
                             ),
                     )
                 }.body<MatchResponse>()
@@ -143,6 +146,10 @@ class CalculationApiIntegrationTest {
                         ),
                 )
             }
+
+            // Nothing queues for rating until its event is finalized (#403); every match has an event
+            // since #898, so this step is now unconditional.
+            finalizeFixtureEvent()
 
             // Dry run (empty body → defaults to dryRun=true): previews, writes nothing.
             val dry =

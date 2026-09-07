@@ -49,6 +49,8 @@ import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
+import org.skopeo.testsupport.finalizeFixtureEvent
+import org.skopeo.testsupport.fixtureEventForRequest
 
 /**
  * End-to-end score correction over HTTP (#776): a host records a result, an admin rates it, then the admin
@@ -151,6 +153,7 @@ class MatchScoreCorrectionApiIntegrationTest {
                             matchDate = "2026-01-01",
                             team1 = listOf(element = p1.id),
                             team2 = listOf(element = p2.id),
+                            eventId = fixtureEventForRequest(team1 = listOf(element = p1.id), team2 = listOf(element = p2.id)),
                         ),
                 )
             }.body<MatchResponse>()
@@ -160,6 +163,9 @@ class MatchScoreCorrectionApiIntegrationTest {
             contentType(type = ContentType.Application.Json)
             setBody(body = MatchResultRequest(sets = listOf(element = SetScoreRequest(team1Games = 6, team2Games = 4))))
         }
+        // Nothing queues for rating until its event is finalized (#403); every match has an event since
+        // #898, so this step is now unconditional rather than only needed for evented matches.
+        finalizeFixtureEvent()
         // Commit the rating calculation so the match is RATED and therefore frozen to the normal edit path.
         post(urlString = "/api/v1/ratings/calculations") {
             header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")

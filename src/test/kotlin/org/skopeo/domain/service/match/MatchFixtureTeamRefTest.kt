@@ -246,31 +246,4 @@ class MatchFixtureTeamRefTest {
                 ).shouldBeLeft()
         error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "not found"
     }
-
-    @Test
-    fun `a team ref requires an event`() {
-        val h = host(uid = "host")
-        val p1 = rated(uid = "p1")
-        val p2 = rated(uid = "p2")
-        val eventId = doublesEvent(hostId = h.id, participants = listOf(p1.id, p2.id))
-        val t1 = team(eventId = eventId, name = "A", members = listOf(p1.id, p2.id))
-
-        val error =
-            service
-                .createFixture(
-                    token = token(uid = "host"),
-                    request =
-                        FixtureInput(
-                            matchFormat = TeamType.DOUBLES,
-                            matchType = MatchType.OPEN_PLAY,
-                            matchDate = LocalDate.now(),
-                            team1 = emptyList(),
-                            team2 = emptyList(),
-                            team1Ref = t1,
-                            team2Ref = t1,
-                            eventId = null,
-                        ),
-                ).shouldBeLeft()
-        error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "requires an event"
-    }
 }

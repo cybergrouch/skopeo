@@ -34,7 +34,7 @@ data class MatchEntity(
     val ratedAt: LocalDateTime?,
     val createdBy: UUID?,
     val recordedBy: UUID?,
-    val eventId: UUID?,
+    val eventId: UUID,
     val calcSequence: Int?,
     val team1Handicap: BigDecimal?,
     val team2Handicap: BigDecimal?,
