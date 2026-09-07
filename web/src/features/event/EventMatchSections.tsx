@@ -26,6 +26,11 @@ function MatchRow({ match }: { match: MatchPublicResponse }) {
     <li>
       <Link to={`/matches/${match.publicCode}`} className="block rounded-lg border p-2 hover:bg-muted/50">
         <span className="flex items-center gap-2">
+          {/* The match number (#898) leads the row: it is the handle people use out loud during an
+              event ("we're on Match #3"), so it needs to be the first thing read, not a detail. */}
+          <span className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
+            Match #{match.matchNumber}
+          </span>
           <span className="flex-1">
             {side(match.team1)} vs {side(match.team2)}
           </span>

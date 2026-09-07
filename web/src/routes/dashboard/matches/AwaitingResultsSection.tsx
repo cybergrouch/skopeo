@@ -210,6 +210,11 @@ function MatchResultRow({
   return (
     <div className="rounded-lg border p-3">
       <div className="mb-2 flex items-center gap-2 text-sm">
+        {/* Match number first (#898) — the same handle the public event page leads with, so a host and a
+            player reading over their shoulder are talking about the same "Match #3". */}
+        <span className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
+          Match #{match.matchNumber}
+        </span>
         <span className="font-medium">
           {player1} vs {player2}
         </span>
