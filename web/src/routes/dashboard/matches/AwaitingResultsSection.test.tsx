@@ -103,6 +103,7 @@ vi.mock('@dnd-kit/utilities', () => ({ CSS: { Transform: { toString: () => undef
 const match = {
   id: 'm1',
   publicCode: 'MPUB1',
+  matchNumber: 1,
   matchDate: '2026-01-01',
   team1: { teamId: 't1', userIds: ['p1'] },
   team2: { teamId: 't2', userIds: ['p2'] },
@@ -114,6 +115,7 @@ const recordedMatch = {
   ...match,
   id: 'm2',
   publicCode: 'MPUB2',
+  matchNumber: 2,
   sets: [
     { setNumber: 1, team1Games: 6, team2Games: 4, winnerTeamId: 't1' },
     { setNumber: 2, team1Games: 6, team2Games: 3, winnerTeamId: 't1' },
@@ -161,6 +163,16 @@ describe('AwaitingResultsSection', () => {
     busy.value = true
     renderSection()
     expect(screen.getByRole('button', { name: 'Recording…' })).toBeDisabled()
+  })
+
+  it('labels each fixture with its match number (#898)', () => {
+    useGetApiV1Matches.mockReturnValue({ data: [match, recordedMatch], isLoading: false })
+    renderSection('evt-1')
+
+    // The same handle the public event page leads with, so a host and a player reading over their
+    // shoulder are talking about the same "Match #2".
+    expect(screen.getByText('Match #1')).toBeInTheDocument()
+    expect(screen.getByText('Match #2')).toBeInTheDocument()
   })
 
   it('scopes the query to an event when given an eventId (#138)', () => {

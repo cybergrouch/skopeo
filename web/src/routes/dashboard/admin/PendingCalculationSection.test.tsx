@@ -232,12 +232,14 @@ describe('PendingCalculationSection', () => {
     const epochDay = (iso: string) => Math.round(new Date(`${iso}T00:00:00Z`).getTime() / 86_400_000)
     const priorityOf = () =>
       (setPriorityMutate.mock.calls[0][0] as { id: string; data: { priority: number } }).data.priority
-    // Alpha (ends 1/10, two matches → one group), an eventless match (played 1/15), Beta (ends 1/20).
+    // Alpha (ends 1/10, two matches → one group), Mid (ends 1/15), Beta (ends 1/20). The middle entry
+    // used to be an event-less match; #898 removed those, and an event between the two tests the same
+    // end-date ordering.
     useGetApiV1Matches.mockReturnValue({
       data: [
         match({ id: 'a1', eventId: 'evA' }),
         match({ id: 'a2', eventId: 'evA' }),
-        match({ id: 'mid', matchDate: '2026-01-15' }),
+        match({ id: 'mid', eventId: 'evMid' }),
         match({ id: 'b1', eventId: 'evB' }),
       ],
       isLoading: false,
@@ -246,6 +248,7 @@ describe('PendingCalculationSection', () => {
       data: [
         // Alpha carries an explicit priority (equal to its end-date key) — exercises the override path.
         { id: 'evA', name: 'Alpha Cup', endDate: '2026-01-10', calcPriority: epochDay('2026-01-10') },
+        { id: 'evMid', name: 'Mid Cup', endDate: '2026-01-15', calcPriority: null },
         { id: 'evB', name: 'Beta Cup', endDate: '2026-01-20', calcPriority: null },
       ],
       isLoading: false,
@@ -254,17 +257,17 @@ describe('PendingCalculationSection', () => {
 
     expect(screen.getByText('Alpha Cup')).toBeInTheDocument()
     expect(screen.getByText('Beta Cup')).toBeInTheDocument()
-    expect(screen.getByText('Open (no event)')).toBeInTheDocument()
-    // Only the two events are draggable (the Open entry is pinned by date).
-    expect(screen.getAllByRole('button', { name: /Reorder event/ })).toHaveLength(2)
+    expect(screen.getByText('Mid Cup')).toBeInTheDocument()
+    // Every entry is an event now, so every entry is draggable.
+    expect(screen.getAllByRole('button', { name: /Reorder event/ })).toHaveLength(3)
 
     // Drop onto the first entry (no "before" neighbour) → just below Alpha's key.
     act(() => dnd.onDragEnd?.({ active: { id: 'event:evB' }, over: { id: 'event:evA' } }))
     expect(priorityOf()).toBeLessThan(epochDay('2026-01-10'))
 
-    // Drop between neighbours (Beta over the Open entry) → midpoint of Alpha's and the Open key.
+    // Drop between neighbours (Beta over Mid) → midpoint of Alpha's and Mid's keys.
     setPriorityMutate.mockClear()
-    act(() => dnd.onDragEnd?.({ active: { id: 'event:evB' }, over: { id: 'open:mid' } }))
+    act(() => dnd.onDragEnd?.({ active: { id: 'event:evB' }, over: { id: 'event:evMid' } }))
     const mid = priorityOf()
     expect(mid).toBeGreaterThan(epochDay('2026-01-10'))
     expect(mid).toBeLessThan(epochDay('2026-01-15'))
@@ -275,11 +278,10 @@ describe('PendingCalculationSection', () => {
     expect(priorityOf()).toBeGreaterThan(epochDay('2026-01-20'))
   })
 
-  it('ignores no-op / invalid drops and dragging an eventless entry (#335)', () => {
+  it('ignores no-op and invalid drops (#335)', () => {
     useGetApiV1Matches.mockReturnValue({
       data: [
         match({ id: 'a1', eventId: 'evA' }),
-        match({ id: 'open1' }),
         match({ id: 'x1', eventId: 'evX' }), // event missing from the events list → "Event" fallback
       ],
       isLoading: false,
@@ -295,11 +297,8 @@ describe('PendingCalculationSection', () => {
     act(() => dnd.onDragEnd?.({ active: { id: 'event:evA' }, over: { id: 'event:evA' } }))
     act(() => dnd.onDragEnd?.({ active: { id: 'event:gone' }, over: { id: 'event:evA' } }))
     act(() => dnd.onDragEnd?.({ active: { id: 'event:evA' }, over: { id: 'event:nope' } }))
-    // The Open (eventless) entry isn't an event, so dragging it changes no priority.
-    act(() => dnd.onDragEnd?.({ active: { id: 'open:open1' }, over: { id: 'event:evA' } }))
     expect(setPriorityMutate).not.toHaveBeenCalled()
 
-    expect(screen.getByText('Open (no event)')).toBeInTheDocument()
     // A group whose event isn't loaded still renders with a generic label.
     expect(screen.getByText('Event')).toBeInTheDocument()
   })
@@ -433,28 +432,6 @@ describe('PendingCalculationSection', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Include event Beta Cup' }))
     expect(screen.getByTestId('calculation-guard-error')).toHaveTextContent(/Alpha Cup/)
     // Preview is blocked while the selection is invalid.
-    expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled()
-    expect(calculateMutate).not.toHaveBeenCalled()
-  })
-
-  it('blocks a selection that skips an earlier eventless Open match (#479)', async () => {
-    const user = userEvent.setup()
-    // An eventless Open match plays first, then an event — selecting the event skips the Open match,
-    // which can't itself be selected, so the prefix is broken by the earlier "Open (no event)" entry.
-    useGetApiV1Matches.mockReturnValue({
-      data: [match({ id: 'open1', matchDate: '2026-01-05' }), match({ id: 'b1', eventId: 'evB' })],
-      isLoading: false,
-    })
-    useGetApiV1Events.mockReturnValue({
-      data: [{ id: 'evB', name: 'Beta Cup', endDate: '2026-01-20', calcPriority: null }],
-      isLoading: false,
-    })
-    renderSection()
-
-    await user.click(screen.getByRole('checkbox', { name: 'Include event Beta Cup' }))
-    expect(screen.getByTestId('calculation-guard-error')).toHaveTextContent(
-      /earlier "Open \(no event\)" match \(2026-01-05\) must be included/,
-    )
     expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled()
     expect(calculateMutate).not.toHaveBeenCalled()
   })
