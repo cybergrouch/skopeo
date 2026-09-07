@@ -60,6 +60,7 @@ import org.skopeo.testsupport.finalizeFixtureEvent
 import org.skopeo.testsupport.fixtureEventFor
 import org.skopeo.testsupport.fixtureEventForRequest
 import org.skopeo.testsupport.seedClub
+import org.skopeo.testsupport.seedEvent
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -1522,5 +1523,32 @@ class MatchServiceTest {
         matchRepo.findById(matchId = ids[1]).shouldBeRight().toDomain().matchNumber shouldBe 2
         matchRepo.findById(matchId = UUID.fromString(third.id)).shouldBeRight().toDomain().matchNumber shouldBe 3
         eventId.shouldNotBeNull()
+    }
+
+    @Test
+    fun `a reorder spanning two events is refused (#898)`() {
+        // An ADMINISTRATOR, so creating in a second event is not blocked by the club gate first — the
+        // point under test is the cross-event refusal, not authorization.
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val here = create(host = "root", request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        val elsewhere =
+            create(
+                host = "root",
+                request =
+                    fixtureRequest(p1 = p1.id, p2 = p2.id)
+                        .copy(eventId = seedEvent(name = "Other Cup", participantIds = listOf(p1.id, p2.id)).id),
+            )
+
+        // match_number is unique per EVENT, so a batch spanning two of them has no single number space
+        // to permute. This replaced the old same-date guard, which #898 made meaningless.
+        service
+            .reorder(
+                token = token(uid = "root"),
+                matchIds = listOf(UUID.fromString(here.id), UUID.fromString(elsewhere.id)),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+            .message shouldContain "same event"
     }
 }
