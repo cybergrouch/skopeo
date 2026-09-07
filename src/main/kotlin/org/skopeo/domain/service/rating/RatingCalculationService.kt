@@ -125,7 +125,7 @@ class RatingCalculationService(
         }
         val selected = eventIds.toSet()
 
-        fun isSelected(match: Match): Boolean = match.eventId?.toString() in selected
+        fun isSelected(match: Match): Boolean = match.eventId.toString() in selected
 
         // The scoped run is the leading prefix up to the last selected match; nothing selected → empty (no-op).
         val lastSelectedIndex = pending.indexOfLast { isSelected(match = it) }
@@ -137,7 +137,8 @@ class RatingCalculationService(
         return if (excluded == null) {
             prefix.right()
         } else {
-            val label = excluded.eventId?.let { "event $it" } ?: "Open (eventless) match ${excluded.id}"
+            // Every match belongs to an event since #898, so there is no event-less label to fall back to.
+            val label = "event ${excluded.eventId}"
             ServiceError.Validation(
                 message =
                     "Selection must be a contiguous prefix of the pending timeline: " +

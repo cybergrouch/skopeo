@@ -419,10 +419,9 @@ class MatchRepository {
                         MatchesTable.winnerTeamId.isNotNull() and
                         (MatchesTable.eventId inList eventIds)
                 }.groupBy(MatchesTable.eventId)
-                .mapNotNull { row ->
-                    // event_id is non-null for every row (the inList filter above excludes null keys).
-                    row[MatchesTable.eventId]?.value?.let { it to row[countAlias].toInt() }
-                }.toMap()
+                .associate { row ->
+                    row[MatchesTable.eventId].value to row[countAlias].toInt()
+                }
         }
 
     /**
@@ -447,10 +446,9 @@ class MatchRepository {
                         MatchesTable.ratedAt.isNotNull() and
                         (MatchesTable.eventId inList eventIds)
                 }.groupBy(MatchesTable.eventId)
-                .mapNotNull { row ->
-                    // event_id is non-null for every row (the inList filter above excludes null keys).
-                    row[MatchesTable.eventId]?.value?.let { it to row[countAlias].toInt() }
-                }.toMap()
+                .associate { row ->
+                    row[MatchesTable.eventId].value to row[countAlias].toInt()
+                }
         }
 
     /**

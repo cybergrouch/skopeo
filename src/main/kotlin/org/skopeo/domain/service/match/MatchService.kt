@@ -779,11 +779,11 @@ class MatchService(
         }
 
     /**
-     * When a fixture is scoped to an event (#138), the event must exist and BOTH sides must be event
-     * participants — the hard constraint behind the participant-scoped player search. No-op otherwise.
+     * A fixture's event must exist and BOTH sides must be event participants (#138) — the hard constraint
+     * behind the participant-scoped player search. Every fixture has an event since #898.
      */
     private fun ensureEventParticipants(request: FixtureInput): Either<ServiceError, Unit> {
-        val eventId = request.eventId ?: return Unit.right()
+        val eventId = request.eventId
         val event = events.findById(id = eventId)?.toDomain()
         val players = request.team1 + request.team2
         return when {

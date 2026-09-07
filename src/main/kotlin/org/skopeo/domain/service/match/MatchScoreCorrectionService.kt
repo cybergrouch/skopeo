@@ -382,7 +382,7 @@ class MatchScoreCorrectionService(
         adminId: UUID,
         now: LocalDateTime,
     ): PointsOutcome {
-        val event = match.eventId?.let { events.findById(id = it)?.toDomain() } ?: return PointsOutcome()
+        val event = events.findById(id = match.eventId)?.toDomain() ?: return PointsOutcome()
         val toRevoke =
             if (match.isPlacementMatch) {
                 awards.listActiveByEvent(eventId = event.id)

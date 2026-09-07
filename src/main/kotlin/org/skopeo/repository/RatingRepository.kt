@@ -276,7 +276,7 @@ class RatingRepository {
                         UserRatingHistoryTable.completedAt to SortOrder.ASC_NULLS_FIRST,
                         UserRatingHistoryTable.id to SortOrder.ASC,
                     ).map { row ->
-                        row[UserRatingHistoryTable.userId].value to (row[MatchesTable.eventId]?.value == eventId)
+                        row[UserRatingHistoryTable.userId].value to (row[MatchesTable.eventId].value == eventId)
                     }.groupBy(keySelector = { it.first }, valueTransform = { it.second })
             // For each user with an in-event row, that row must be their LAST rated row overall; if any row
             // sorts after it (a later match was rated on top), the event is not at the tip.

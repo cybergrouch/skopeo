@@ -117,8 +117,7 @@ fun fixtureEventId(vararg participantIds: UUID): UUID {
                 .selectAll()
                 .where { EventsTable.name eq SHARED_FIXTURE_EVENT }
                 .firstOrNull()
-                ?.get(EventsTable.id)
-                ?.value
+                ?.let { it[EventsTable.id].value }
         }
     val id = existing ?: seedEvent(name = SHARED_FIXTURE_EVENT).id
     // Re-open it if a previous [finalizeFixtureEvent] closed it. Finalize is terminal for the product
@@ -177,7 +176,7 @@ private val ORGANIZER_CAPABILITIES = listOf("HOST", "CLUB_OWNER", "ADMINISTRATOR
 fun fixtureEventFor(
     team1: List<UUID>,
     team2: List<UUID>,
-): UUID = fixtureEventId(*(team1 + team2).toTypedArray())
+): UUID = fixtureEventId(participantIds = (team1 + team2).toTypedArray())
 
 /**
  * [fixtureEventFor] for the DTO layer, where a fixture's sides and its event id are all id *strings*
@@ -222,8 +221,7 @@ fun finalizeFixtureEvent() {
                 .selectAll()
                 .where { EventsTable.name eq SHARED_FIXTURE_EVENT }
                 .firstOrNull()
-                ?.get(EventsTable.id)
-                ?.value
+                ?.let { it[EventsTable.id].value }
         } ?: return
     EventRepository().finalize(id = id, finalizedAt = LocalDateTime.now(), finalizedBy = anyEventCreatorId())
 }

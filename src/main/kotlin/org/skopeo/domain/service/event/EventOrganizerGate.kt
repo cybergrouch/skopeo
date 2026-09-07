@@ -19,8 +19,8 @@ import java.util.UUID
  * event itself (#789) — chiefly [org.skopeo.domain.service.match.MatchService], where the club rule has to
  * be resolved from a match's `event_id`.
  *
- * A match with **no** event keeps the plain staff gate: there is no club to anchor ownership on, so
- * [ensureForEventId] treats a null id as allowed rather than inventing a rule for non-evented matches.
+ * Every match belongs to an event since #898, so [ensureForEventId] always has a club to anchor
+ * ownership on — there is no event-less case, and no carve-out for one.
  *
  * Distinct from the event-EXPIRY gate (#310, `ensureHostMayEnter`), which is a different axis; both apply.
  */
@@ -38,18 +38,14 @@ class EventOrganizerGate(
         }
 
     /**
-     * [ensure] for an event referenced by id — a match's `event_id`. A null [eventId] means the match has
-     * no event, which is allowed (see the class doc).
+     * [ensure] for an event referenced by id — a match's `event_id`.
      *
-     * A non-null value is resolved with [EventRepository.getById] rather than a nullable lookup plus a
-     * NotFound: `matches.event_id` is an FK with `ON DELETE SET NULL` (#358), so it either is null or
-     * points at a live row. There is no third case to invent an error branch for.
+     * Resolved with [EventRepository.getById] rather than a nullable lookup plus a NotFound:
+     * `matches.event_id` is NOT NULL with an `ON DELETE RESTRICT` FK (#898, V50), so it always points at a
+     * live row. There is no absent case to invent an error branch for.
      */
     fun ensureForEventId(
-        eventId: UUID?,
+        eventId: UUID,
         caller: User,
-    ): Either<ServiceError, Unit> =
-        either {
-            eventId?.let { id -> ensure(event = events.getById(id = id).toDomain(), caller = caller).bind() }
-        }
+    ): Either<ServiceError, Unit> = ensure(event = events.getById(id = eventId).toDomain(), caller = caller)
 }
