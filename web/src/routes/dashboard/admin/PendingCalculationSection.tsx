@@ -75,18 +75,13 @@ function errorMessage(err: unknown, fallback: string): string {
 }
 
 // The pending list arrives already in processing order; walk it into display entries: consecutive
-// same-event matches form one event group; each eventless match is its own "Open" entry (#335).
-type Entry =
-  | { kind: 'event'; id: string; eventId: string; matches: MatchResponse[] }
-  | { kind: 'open'; id: string; match: MatchResponse }
+// same-event matches form one event group (#335). Every match belongs to an event since #898, so the
+// "Open (no event)" entry this used to interleave is gone — with it, the only unselectable entry type.
+type Entry = { kind: 'event'; id: string; eventId: string; matches: MatchResponse[] }
 
 function buildEntries(pending: MatchResponse[]): Entry[] {
   const entries: Entry[] = []
   for (const match of pending) {
-    if (!match.eventId) {
-      entries.push({ kind: 'open', id: `open:${match.id}`, match })
-      continue
-    }
     const last = entries[entries.length - 1]
     if (last && last.kind === 'event' && last.eventId === match.eventId) {
       last.matches.push(match)
@@ -213,26 +208,6 @@ function EventGroup({
   )
 }
 
-/** A non-draggable, date-pinned eventless match entry (#335), rendered inline among the event groups. */
-function OpenEntry({
-  entry,
-  renderMatch,
-}: {
-  entry: Extract<Entry, { kind: 'open' }>
-  renderMatch: (match: MatchResponse) => ReactNode
-}) {
-  const { setNodeRef, transform, transition } = useSortable({ id: entry.id })
-  const style = { transform: CSS.Transform.toString(transform), transition }
-  return (
-    <li ref={setNodeRef} style={style} className="rounded-lg border">
-      <div className="border-b bg-muted/40 px-3 py-1.5 text-xs font-medium uppercase text-muted-foreground">
-        Open (no event)
-      </div>
-      <ul className="space-y-2 p-2">{renderMatch(entry.match)}</ul>
-    </li>
-  )
-}
-
 export function PendingCalculationSection() {
   const queryClient = useQueryClient()
   const [preview, setPreview] = useState<CalculationResponse | null>(null)
@@ -318,8 +293,8 @@ export function PendingCalculationSection() {
   const scopeEventIds = selected.size > 0 ? [...selected] : undefined
 
   // Client-side mirror of the backend ordering guard (#479): a selection must form a contiguous
-  // prefix of the pending timeline. Find the last selected event; anything unselected before it
-  // (an earlier event, or any eventless "Open" match — which can't be selected) breaks the prefix.
+  // prefix of the pending timeline. Find the last selected event; any earlier unselected event breaks
+  // the prefix. Since #898 every entry is an event, so there is no unselectable entry type left.
   function prefixError(): string | null {
     if (!scopeEventIds) return null
     const lastSelected = entries.reduce(
@@ -329,9 +304,6 @@ export function PendingCalculationSection() {
     if (lastSelected < 0) return null
     for (let i = 0; i < lastSelected; i++) {
       const e = entries[i]
-      if (e.kind === 'open') {
-        return `An earlier "Open (no event)" match (${e.match.matchDate}) must be included: selections must be a contiguous prefix, starting from the oldest pending match.`
-      }
       if (!selected.has(e.eventId)) {
         const name = eventsById.get(e.eventId)?.name ?? 'an earlier event'
         return `${name} is older than a selected event and must also be included: selections must be a contiguous prefix, starting from the oldest pending match.`
@@ -343,10 +315,9 @@ export function PendingCalculationSection() {
   // Client-side selection guard (#479); the backend's guard message surfaces as a toast via onError.
   const scopeError = prefixError()
 
-  // An entry's processing key on the epoch-day scale: an event's calc_priority override or its end
-  // date; an eventless entry keys off its match date (so events and Open entries interleave by date).
+  // An entry's processing key on the epoch-day scale: the event's calc_priority override, else its
+  // end date. Every entry is an event since #898, so there is no second keying rule.
   function entryKey(entry: Entry): number {
-    if (entry.kind === 'open') return epochDay(entry.match.matchDate)
     const info = eventsById.get(entry.eventId)
     return info?.calcPriority ?? (info ? epochDay(info.endDate) : 0)
   }
@@ -415,20 +386,16 @@ export function PendingCalculationSection() {
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={entries.map((e) => e.id)} strategy={verticalListSortingStrategy}>
               <ul className="space-y-2">
-                {entries.map((entry) =>
-                  entry.kind === 'event' ? (
-                    <EventGroup
-                      key={entry.id}
-                      entry={entry}
-                      eventName={eventsById.get(entry.eventId)?.name ?? 'Event'}
-                      renderMatch={renderMatch}
-                      selected={selected.has(entry.eventId)}
-                      onToggleSelect={() => toggleSelect(entry.eventId)}
-                    />
-                  ) : (
-                    <OpenEntry key={entry.id} entry={entry} renderMatch={renderMatch} />
-                  ),
-                )}
+                {entries.map((entry) => (
+                  <EventGroup
+                    key={entry.id}
+                    entry={entry}
+                    eventName={eventsById.get(entry.eventId)?.name ?? 'Event'}
+                    renderMatch={renderMatch}
+                    selected={selected.has(entry.eventId)}
+                    onToggleSelect={() => toggleSelect(entry.eventId)}
+                  />
+                ))}
               </ul>
             </SortableContext>
           </DndContext>

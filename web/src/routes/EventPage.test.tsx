@@ -75,6 +75,7 @@ const event = {
   matches: [
     {
       publicCode: "MTCH01",
+      matchNumber: 1,
       matchFormat: "SINGLES",
       matchType: "OPEN_PLAY",
       matchDate: "2026-03-02",
@@ -87,6 +88,7 @@ const event = {
     },
     {
       publicCode: "MTCH02",
+      matchNumber: 2,
       matchFormat: "SINGLES",
       matchType: "OPEN_PLAY",
       matchDate: "2026-03-02",
@@ -100,6 +102,7 @@ const event = {
     {
       // No winner yet and no sets — exercises the "not played" branches.
       publicCode: "MTCH03",
+      matchNumber: 3,
       matchFormat: "SINGLES",
       matchType: "OPEN_PLAY",
       matchDate: "2026-03-03",
@@ -134,6 +137,18 @@ describe("EventPage", () => {
     state.capabilities = ["PLAYER"];
     state.managedId = undefined;
   });
+
+  it("labels each match with its number, the handle people use during an event (#898)", () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: event });
+    renderAt();
+
+    // The number leads the row on the public page: it is what a player is told to look for
+    // ("you're on Match #2"), so it has to be visible without opening the match.
+    expect(screen.getByText("Match #1")).toBeInTheDocument();
+    expect(screen.getByText("Match #2")).toBeInTheDocument();
+    expect(screen.getByText("Match #3")).toBeInTheDocument();
+  });
+
 
   it("renders the organizer surface in place of the read-only one for a match manager (#741)", () => {
     state.capabilities = ["PLAYER", "HOST"];

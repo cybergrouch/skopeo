@@ -210,6 +210,11 @@ function MatchResultRow({
   return (
     <div className="rounded-lg border p-3">
       <div className="mb-2 flex items-center gap-2 text-sm">
+        {/* Match number first (#898) — the same handle the public event page leads with, so a host and a
+            player reading over their shoulder are talking about the same "Match #3". */}
+        <span className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
+          Match #{match.matchNumber}
+        </span>
         <span className="font-medium">
           {player1} vs {player2}
         </span>
@@ -355,19 +360,6 @@ function useNameResolver(matches: MatchResponse[]): (userId: string) => string {
   return (userId: string) => nameById.get(userId) ?? userId.slice(0, 8);
 }
 
-/** Group matches by match date, preserving the incoming (already date-sorted) order. */
-function groupByDate(
-  matches: MatchResponse[],
-): { date: string; items: MatchResponse[] }[] {
-  const groups: { date: string; items: MatchResponse[] }[] = [];
-  for (const m of matches) {
-    const last = groups[groups.length - 1];
-    if (last && last.date === m.matchDate) last.items.push(m);
-    else groups.push({ date: m.matchDate, items: [m] });
-  }
-  return groups;
-}
-
 /** A draggable wrapper around a match card (#332): a grip handle carries the drag listeners. */
 function SortableMatchCard({
   match,
@@ -398,15 +390,23 @@ function SortableMatchCard({
 }
 
 /**
- * A same-date group of match cards (#331/#332). When reorderable (event-scoped, not read-only, and
- * more than one match on the date), a host can drag to set the calculation order within that date;
- * the new order persists via PUT /matches/calculation-order. Otherwise the cards render plainly.
+ * An event's match cards as ONE sortable list (#331/#332, #898). When reorderable (event-scoped, not
+ * read-only, more than one match), a host drags to set the order; it persists via
+ * PUT /matches/calculation-order, which assigns the visible match numbers.
  *
- * A group with any already-rated match is NOT reorderable (#337): ratings are frozen, so the backend
- * rejects a reorder touching a rated match — disabling drag for the whole group keeps the UI honest
- * rather than letting the host discover the refusal only on drop.
+ * It used to be one list per date, because the calculation ordered by match date first and a
+ * cross-date drag could not have had any effect. #898 made match_number the intra-event order, so
+ * moving a match from day 2 to day 1 is meaningful and the day boundaries are gone.
+ *
+ * The list holds only the fixtures this section renders (SCHEDULED), never the recorded ones — which
+ * is fine: a reorder permutes the numbers the submitted matches already hold, so the recorded matches'
+ * numbers are untouched.
+ *
+ * A list with any already-rated match is NOT reorderable (#337): ratings are frozen, so the backend
+ * rejects a reorder touching a rated match — disabling drag keeps the UI honest rather than letting
+ * the host discover the refusal only on drop.
  */
-function MatchDateGroup({
+function SortableMatchList({
   items,
   nameOf,
   readOnly,
@@ -433,8 +433,8 @@ function MatchDateGroup({
     }),
   );
 
-  // A rated match freezes the group's order (#337): the backend rejects any reorder touching one, so
-  // don't offer drag handles for a group that has one — render plain cards instead.
+  // A rated match freezes the order (#337): the backend rejects any reorder touching one, so don't
+  // offer drag handles when the list has one — render plain cards instead.
   const anyRated = items.some((m) => m.ratedAt != null);
 
   if (!reorderable || readOnly || anyRated || items.length < 2) {
@@ -481,7 +481,7 @@ function MatchDateGroup({
   );
 }
 
-/** Render matches grouped by date, each group drag-reorderable within its date when [reorderable]. */
+/** Render the event's matches as a single drag-reorderable list when [reorderable]. */
 function ReorderableMatchList({
   matches,
   nameOf,
@@ -494,17 +494,12 @@ function ReorderableMatchList({
   reorderable: boolean;
 }) {
   return (
-    <>
-      {groupByDate(matches).map((g) => (
-        <MatchDateGroup
-          key={g.date}
-          items={g.items}
-          nameOf={nameOf}
-          readOnly={readOnly}
-          reorderable={reorderable}
-        />
-      ))}
-    </>
+    <SortableMatchList
+      items={matches}
+      nameOf={nameOf}
+      readOnly={readOnly}
+      reorderable={reorderable}
+    />
   );
 }
 
