@@ -92,8 +92,19 @@ describe("CreatePlaceholderSection", () => {
     );
   });
 
-  it("hides the initial-rating field from a non-rater match manager", () => {
+  it("offers the initial-rating field to a match manager (#907)", () => {
+    // This used to assert the opposite: the field was RATER/ADMINISTRATOR-only, so a HOST creating a
+    // placeholder could not give it a rating. #907 gave match managers a rater's capabilities, and the
+    // server dropped its now-unreachable check, so hiding the field here would only make the UI narrower
+    // than the API it calls.
     renderSection(["HOST"]);
+    expect(
+      screen.getByLabelText("Initial rating (optional)"),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the initial-rating field from someone who cannot rate at all (#907)", () => {
+    renderSection(["RESEARCHER"]);
     expect(
       screen.queryByLabelText("Initial rating (optional)"),
     ).not.toBeInTheDocument();
