@@ -464,6 +464,7 @@ class EventService(
             ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
             ensure(condition = event.isActive) { ServiceError.Validation(message = "A deleted event cannot be finalized") }
             ensure(condition = !event.isFinalized) { ServiceError.Validation(message = "Event is already finalized") }
+            ensureAllParticipantsRated(event = event).bind()
             val now = LocalDateTime.now()
             // Finalize + all awards in one transaction: an award failure rolls back the finalize too.
             val summary =
@@ -896,6 +897,47 @@ class EventService(
         val club = clubEntity?.let { EventClubRef(id = it.id, name = it.name, publicCode = it.publicCode) }
         return EventView(event = event, participants = participants, creator = creator, club = club)
     }
+
+    /**
+     * Refuse to finalize while any approved participant lacks a rating (#907).
+     *
+     * A **self-rating is not a rating**. Sign-up stores it on `users.proposed_rating`; only
+     * `RatingService.setRating` — behind the rating capability — ever writes `user_ratings`. So the
+     * presence of a current rating already means "a host, rater or administrator assented to a number",
+     * and no provenance check is needed beyond this one.
+     *
+     * This is the counterweight to #907's deferral: a Host may put an unrated player in a fixture and
+     * record their result, precisely so they can watch them before committing to a number. Finalizing is
+     * where that debt comes due, and it is the right place — finalizing is the only route into the rating
+     * queue (#403, #898), so this guard is what keeps `RatingCalculationService` from ever meeting a
+     * player it cannot rate.
+     *
+     * Scoped to **approved** participants, which is what `event.participantIds` resolves to
+     * (`EventRepository.approvedParticipantIdsOf`) — a pending or held signup is not on the roster yet.
+     * It deliberately covers a participant who never played: the decision (#907) is that everyone on the
+     * roster is rated before results become permanent.
+     *
+     * Names the players, because the whole point of #907 is that "User <uuid> has no rating" sent a Host
+     * hunting for who that was.
+     */
+    private fun ensureAllParticipantsRated(event: Event): Either<ServiceError, Unit> =
+        either {
+            val rated = ratings.findCurrentRatings(userIds = event.participantIds).keys
+            val unrated = event.participantIds.filterNot { it in rated }
+            ensure(condition = unrated.isEmpty()) {
+                val names =
+                    users
+                        .findAllByIds(ids = unrated)
+                        .map { it.toDomain() }
+                        .map { it.displayName() ?: it.publicCode }
+                        .sorted()
+                ServiceError.Validation(
+                    message =
+                        "These participants still need a rating before this event can be finalized: " +
+                            names.joinToString(separator = ", "),
+                )
+            }
+        }
 }
 
 /** Resolve the caller and require HOST/ADMINISTRATOR, else [ServiceError.Forbidden]. */

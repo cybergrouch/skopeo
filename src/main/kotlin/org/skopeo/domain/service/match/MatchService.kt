@@ -228,8 +228,8 @@ class MatchService(
             organizer.ensure(event = event, caller = caller).bind()
             ensureHostMayEnter(event = event, caller = caller).bind()
             ensureEventNotFinalized(event = event).bind()
-            val team1Users = resolveRatedParticipants(ids = resolvedRequest.team1).bind()
-            val team2Users = resolveRatedParticipants(ids = resolvedRequest.team2).bind()
+            val team1Users = resolveActiveParticipants(ids = resolvedRequest.team1).bind()
+            val team2Users = resolveActiveParticipants(ids = resolvedRequest.team2).bind()
             val match =
                 matches.createFixture(
                     command =
@@ -843,15 +843,24 @@ class MatchService(
         }
     }
 
-    private fun resolveRatedParticipants(ids: List<UUID>): Either<ServiceError, List<User>> =
+    /**
+     * Resolve a fixture's players, requiring only that each exists and is active.
+     *
+     * **A rating is deliberately not required (#907).** This used to refuse an unrated player, which
+     * forced a Host out of the Event Organizer to the Ratings tab and back before they could build a
+     * fixture. A Host may now defer: put the player in a fixture, watch them, and assent to a rating
+     * afterwards. Recording a result is likewise unrestricted — `uploadResult` never checked ratings.
+     *
+     * The requirement moves to the end instead. `EventService.finalize` refuses while any approved
+     * participant is unrated, and finalizing is the only route into the rating queue (#403, #898), so
+     * nothing can reach `RatingCalculationService` without a rating to move.
+     */
+    private fun resolveActiveParticipants(ids: List<UUID>): Either<ServiceError, List<User>> =
         either {
             ids.map { id ->
                 val user =
                     users.findById(id = id).map { it.toDomain() }.mapLeft { ServiceError.Validation(message = "Unknown user $id") }.bind()
                 ensure(condition = user.isActive) { ServiceError.Validation(message = "User $id is not active") }
-                ensure(condition = ratings.findCurrentRating(userId = id) != null) {
-                    ServiceError.Validation(message = "User $id has no rating yet (pending assessment)")
-                }
                 user
             }
         }
