@@ -377,6 +377,44 @@ and resolving *stale in-progress* ones — and they may well want different wind
 disputed result can still be inspected and short enough that the table does not accumulate several
 hundred rows per match indefinitely.
 
+### Shipped — step 3a of §13, the persistence half
+
+`V55` adds three tables, and the third one exists because of a hole this section had.
+
+| Table | Job |
+|---|---|
+| `live_match_events` | The append-only log. Never updated, never deleted; undo appends a marker. |
+| `live_match_scorers` | The **soft claim** — who is keying a match in right now. |
+| `match_umpires` | Durable credit for who scored the match. |
+
+**`match_umpires` is the fix for a hole in "disposable".** Every log row carries `recorded_by`, so while
+the log exists it knows who did what. But this section makes the log disposable once the match is
+recorded — which means attribution would survive right up until the moment the match became historical,
+and a match page rendered a year later could not say who umpired it. So the credit is folded out of the
+log at finalize and written somewhere that outlives it. A row per (match, umpire), because a takeover is
+expected and a match scored by two people should credit both; the counts and timestamps are what separate
+"umpired the match" from "tapped one point during a handover".
+
+**Concurrency is settled by `uq_live_match_events_sequence`, and by nothing else.** A writer computes the
+next sequence from the log it read and inserts; the loser of a race gets a unique violation and retries
+against the log that actually won. The repository catches the violation rather than pre-checking with a
+`SELECT`, because check-then-insert has a window between the two — which is the entire bug. Tested by
+racing eight real threads at one sequence and asserting exactly one survives, rather than by asserting
+that some Kotlin looks careful.
+
+**Who may umpire — decided: any `SCORER`, on any match.** No per-event `ClubAccess.mayOrganize` check, so
+this is the one event-scoped operation that does not go through the #789 gate. That is deliberate: an
+umpire pool moves between clubs, and requiring a roving umpire to be made a club owner would be worse.
+The cost to hold in mind is that `SCORING_ROLES` composes `MATCH_MANAGEMENT_ROLES`, so **every HOST and
+CLUB_OWNER in the system can write to any live match**, not only their own club's. If that proves too
+wide, the narrowing is to gate live scoring on `{SCORER, ADMINISTRATOR}` rather than to re-scope per club.
+
+**One umpire at a time — decided: a soft claim with takeover.** `live_match_scorers` records who holds a
+match so a second umpire takes over deliberately rather than by accident. It is *not* a lock: the unique
+constraint already makes interleaved and lost writes impossible, so this is about not confusing two
+people. A hard lock was rejected because a courtside phone that dies must not strand the fixture behind a
+timeout nobody chose well.
+
 ### What this means for score correction
 
 A post-finalize fix goes through the existing score-correction path (#776), not by reopening the stack.
