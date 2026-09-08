@@ -69,6 +69,35 @@ data class MatchSide(
  */
 enum class PlacementBracket { CHAMPIONSHIP_FINALS, PLATE_FINALS }
 
+/**
+ * How a match ended (#911) — a separate axis from [MatchStatus], which only says *whether* it ended.
+ *
+ * The conceding side is deliberately not carried here: a player who retires always **loses**, so it is
+ * the side that is not the designated winner. Storing it as well would add a way for the two to
+ * disagree, with nothing able to adjudicate.
+ */
+enum class MatchCompletionReason {
+    /** Played out. The ordinary case, and the default for every match recorded before #911. */
+    COMPLETED,
+
+    /**
+     * A player stopped mid-match. **Rated on the real score** — there was tennis, so dominance is
+     * computable from what was played, even though the match itself goes to the opponent.
+     */
+    RETIRED,
+
+    /**
+     * A walkover or disciplinary default. **Not rated at all** (§10): usually a no-show, so there is no
+     * scoreline to compute dominance from and rating one would invent a performance nobody gave.
+     * Deliberately a different answer from [RETIRED] rather than assumed symmetry.
+     */
+    DEFAULTED,
+    ;
+
+    /** Whether this ending has tennis behind it worth feeding to the rating pipeline. */
+    val isRatable: Boolean get() = this != DEFAULTED
+}
+
 /** A completed set's score, with an optional tiebreak. Winner is derived from the games/tiebreak. */
 data class MatchSetResult(
     val setNumber: Int,
@@ -92,6 +121,7 @@ data class Match(
     val matchType: MatchType,
     val matchDate: LocalDate,
     val status: MatchStatus,
+    val completionReason: MatchCompletionReason = MatchCompletionReason.COMPLETED,
     val team1: MatchSide,
     val team2: MatchSide,
     val winnerTeamId: UUID?,

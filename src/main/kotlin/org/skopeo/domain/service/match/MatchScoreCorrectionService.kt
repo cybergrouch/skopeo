@@ -324,6 +324,9 @@ class MatchScoreCorrectionService(
                 recordedBy = adminId,
                 // Preserve the original completion time: a correction fixes the score, not when it was played.
                 completedAt = match.completedAt ?: now,
+                // ...and the original ending, for the same reason. A corrected retirement is still a
+                // retirement; nothing about fixing a scoreline says the player came back on.
+                completionReason = match.completionReason.name,
             )
             ratings.markMatchHistoryReversed(matchId = match.id, reversedAt = now)
             // A suppressed player had no row to supersede and gets no replacement (#881): the correction

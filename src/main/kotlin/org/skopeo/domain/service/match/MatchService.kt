@@ -37,6 +37,7 @@ import org.skopeo.domain.model.CreateFixtureCommand
 import org.skopeo.domain.model.Event
 import org.skopeo.domain.model.Match
 import org.skopeo.domain.model.MatchCalculationDetail
+import org.skopeo.domain.model.MatchCompletionReason
 import org.skopeo.domain.model.MatchPlayerCalculation
 import org.skopeo.domain.model.MatchQuery
 import org.skopeo.domain.model.MatchSetResult
@@ -376,6 +377,7 @@ class MatchService(
             organizer.ensure(event = event, caller = caller).bind()
             ensureHostMayEnter(event = event, caller = caller).bind()
             ensureEventNotFinalized(event = event).bind()
+            val completionReason = parseCompletionReason(raw = request.completionReason).bind()
             val (resolvedSets, winner) =
                 deriveOutcome(
                     team1Id = match.team1.teamId,
@@ -402,6 +404,7 @@ class MatchService(
                     winnerTeamId = winner,
                     recordedBy = recordedBy,
                     completedAt = LocalDateTime.now(),
+                    completionReason = completionReason.name,
                 ).bind()
                 .toDomain()
                 .toResponse()
@@ -833,6 +836,23 @@ class MatchService(
         either {
             ensure(condition = !event.isFinalized) { ServiceError.Validation(message = "Event is finalized") }
         }
+
+    /**
+     * How the match ended, from the wire (#911). Absent means [MatchCompletionReason.COMPLETED].
+     *
+     * Parsed here rather than in the DTO because the permitted values are a `model` concept and `dto`
+     * must not reach into `model` — the same reason every other enum on a request is parsed in a service.
+     */
+    private fun parseCompletionReason(raw: String?): Either<ServiceError, MatchCompletionReason> {
+        val value = raw ?: return MatchCompletionReason.COMPLETED.right()
+        return MatchCompletionReason.entries.firstOrNull { it.name == value.uppercase() }?.right()
+            ?: ServiceError
+                .Validation(
+                    message =
+                        "Unknown completionReason '$value'; expected one of " +
+                            MatchCompletionReason.entries.joinToString { it.name },
+                ).left()
+    }
 
     private fun staffCaller(token: VerifiedFirebaseToken): Either<ServiceError, User> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()

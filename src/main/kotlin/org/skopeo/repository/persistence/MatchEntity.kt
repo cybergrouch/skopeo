@@ -24,6 +24,7 @@ data class MatchEntity(
     val matchType: String,
     val matchDate: LocalDate,
     val status: String,
+    val completionReason: String,
     val team1Id: UUID,
     val team2Id: UUID,
     val winnerTeamId: UUID?,

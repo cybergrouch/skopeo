@@ -572,9 +572,25 @@ rating change (#862's derivation view), not just here.
 
 ### What still has to be built
 
-1. **Representation.** Neither retirement nor default exists today: `MatchStatus` is
-   `SCHEDULED | IN_PROGRESS | COMPLETED | CANCELLED`, and nothing in the match model mentions either. It
-   needs a completion reason and *which* player retired or defaulted.
+1. ~~**Representation.**~~ **Done (V57).** `matches.completion_reason` — `COMPLETED` / `RETIRED` /
+   `DEFAULTED` — with `MatchCompletionReason` in the domain and an optional `completionReason` on
+   `MatchResultRequest`.
+
+   **One column, not two.** This section originally asked for a completion reason *and* a record of
+   which player retired. The second is **derivable and therefore deliberately not stored**: a player who
+   retires always *loses*, so the conceding side is by definition the one that is not the designated
+   `winner_team_id`. Storing it as well would add a way for the two to disagree — a row claiming team1
+   both conceded and won — with nothing able to adjudicate. The live event log already names the
+   conceding side (`ScoreEvent.Retired(side)`) and the engine turns it into a win for the opponent, so
+   the record derives it back exactly the way it was written.
+
+   An abnormal ending **requires** a designated winner, enforced both at the DTO boundary and by
+   `chk_matches_abnormal_end_has_winner`. That is one statement rather than two rules: a match that did
+   not play out has no scoreline to derive a winner from.
+
+   `DEFAULTED` is excluded from the rating **queue** rather than skipped during processing — it is not
+   pending calculation, because it will never be calculated, and listing it as pending would be a
+   standing lie. `RETIRED` is not excluded: there was tennis, and it rates on the real score.
 2. **The match winner becomes designatable; set winners stay derived.** This is the whole change, and
    it is smaller than it sounds. Today `deriveOutcome` derives *both*:
 
@@ -590,6 +606,7 @@ rating change (#862's derivation view), not just here.
    the sets-tied guard no longer applies — a retirement can legitimately stand at one set all, or at a
    single unfinished set.
 3. **Display.** `1-5 (ret)` on the match page, the event page and anywhere a scoreline is rendered.
+   Still to do — the data is now there to render from, but no surface reads it yet.
 4. **Default — decided: a defaulted match is not rated.** A default is usually a no-show, so there is
    commonly no scoreline at all to compute dominance from, and rating one would mean inventing a
    performance nobody gave. This is deliberately a *different* answer from retirement, which **is** rated
