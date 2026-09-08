@@ -1563,4 +1563,93 @@ class MatchServiceTest {
             .shouldBeInstanceOf<ServiceError.Validation>()
             .message shouldContain "same event"
     }
+
+    @Test
+    fun `a designated winner overrides the derivation and lifts the sets-tied guard (#917)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+
+        // One set, and p2 takes it 1-6. Derived, p2 wins the match.
+        val match = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        val teams = matchRepo.findById(matchId = UUID.fromString(match.id)).shouldBeRight().toDomain()
+
+        // Designating p1 makes p1 the MATCH winner even though p2 took the only set. That is the
+        // retirement shape (#911): the opponent is awarded the match, the set still belongs to whoever
+        // was ahead, and the rating follows the set.
+        service
+            .uploadResult(
+                token = token(uid = "host"),
+                matchId = UUID.fromString(match.id),
+                request =
+                    MatchResultRequest(
+                        sets = listOf(element = SetScoreRequest(team1Games = 1, team2Games = 6)),
+                        winnerTeamId = teams.team1.teamId.toString(),
+                    ),
+            ).shouldBeRight()
+
+        val stored = matchRepo.findById(matchId = UUID.fromString(match.id)).shouldBeRight().toDomain()
+        stored.winnerTeamId shouldBe teams.team1.teamId
+        // The set is untouched by the designation — 6 games beats 1, and that is the rating algorithm.
+        stored.sets.single().winnerTeamId shouldBe teams.team2.teamId
+    }
+
+    @Test
+    fun `without a designated winner the sets-tied guard still applies (#917)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+
+        // One set each: nothing to derive from, and no designation to fall back on.
+        service
+            .uploadResult(
+                token = token(uid = "host"),
+                matchId = UUID.fromString(match.id),
+                request =
+                    MatchResultRequest(
+                        sets =
+                            listOf(
+                                SetScoreRequest(team1Games = 6, team2Games = 4),
+                                SetScoreRequest(team1Games = 4, team2Games = 6),
+                            ),
+                    ),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+            .message shouldContain "sets are tied"
+    }
+
+    @Test
+    fun `a designated winner must be one of the match's own teams (#917)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+
+        // A foreign or typo'd id would otherwise record a winner who was not in the match.
+        service
+            .uploadResult(
+                token = token(uid = "host"),
+                matchId = UUID.fromString(match.id),
+                request =
+                    MatchResultRequest(
+                        sets = listOf(element = SetScoreRequest(team1Games = 6, team2Games = 4)),
+                        winnerTeamId = UUID.randomUUID().toString(),
+                    ),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+            .message shouldContain "two teams"
+
+        service
+            .uploadResult(
+                token = token(uid = "host"),
+                matchId = UUID.fromString(match.id),
+                request =
+                    MatchResultRequest(
+                        sets = listOf(element = SetScoreRequest(team1Games = 6, team2Games = 4)),
+                        winnerTeamId = "not-a-uuid",
+                    ),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
 }

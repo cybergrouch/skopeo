@@ -6852,6 +6852,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SetScoreRequest'
+        winnerTeamId:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            The designated match winner (#917). Omit it to derive the winner from the sets, which is the
+            existing behaviour. Who won a SET is always derived from that set's games and tiebreak and is
+            not overridable — this designates who won the MATCH, which is normally the same answer and
+            occasionally is not (a retirement awards the match to the opponent while the retiring player
+            may have been leading). When supplied, the "sets are tied" guard does not apply.
 
     MatchScoreCorrectionRequest:
       type: object

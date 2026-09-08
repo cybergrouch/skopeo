@@ -85,6 +85,19 @@ data class SetScoreRequest(
 @Serializable
 data class MatchResultRequest(
     val sets: List<SetScoreRequest>,
+    /**
+     * The **designated** match winner (#917); omit it to derive the winner from the sets, as before.
+     *
+     * Who won a *set* is always derived from that set's games and tiebreak — that is the rating
+     * algorithm and it is not overridable. This designates who won the *match*, which is normally the
+     * same answer and occasionally is not: a retirement (#911) awards the match to the opponent while
+     * the retiring player may have been leading the unfinished set, and the rating should follow the
+     * tennis that was played rather than the paperwork.
+     *
+     * When supplied, the "sets are tied" guard does not apply — a retirement can legitimately stand at
+     * one set all, or at a single unfinished set.
+     */
+    val winnerTeamId: String? = null,
 ) {
     init {
         // Shape validation at the boundary (#116): a result must report at least one set.
