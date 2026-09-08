@@ -204,15 +204,27 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `a fixture rejects an unrated participant`() {
+    fun `a fixture accepts an unrated participant, and a result can be recorded for them (#907)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val rated = provisionUser(uid = "p1", rated = true)
         val unrated = provisionUser(uid = "p2", rated = false)
 
-        // Composition validation (players-per-side, no repeats) is now a route concern (#116); the
-        // service still enforces the business rule that every participant must already have a rating.
+        // This used to be refused, which forced a Host out to the Ratings tab and back before they could
+        // build a fixture. #907 lets them defer: play first, assent to a rating once they have watched.
+        val match =
+            service
+                .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = rated.id, p2 = unrated.id))
+                .shouldBeRight()
+
+        // Recording the result is unrestricted too — uploadResult never checked ratings, and deferral
+        // would be useless if the Host could create the fixture but not enter what happened.
         service
-            .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = rated.id, p2 = unrated.id))
+            .uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets())
+            .shouldBeRight()
+
+        // An unknown player is still refused: dropping the rating check did not drop the others.
+        service
+            .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = rated.id, p2 = UUID.randomUUID()))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }

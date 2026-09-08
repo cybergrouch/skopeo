@@ -43,6 +43,7 @@ import org.skopeo.domain.service.calculator.AuditEntry
 import org.skopeo.domain.service.calculator.RankingCalculator
 import org.skopeo.domain.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
+import org.skopeo.domain.service.user.displayName
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import java.math.BigDecimal
@@ -296,11 +297,22 @@ class RatingCalculationService(
             snapshot.getOrElse(key = userId) {
                 val rating = ratings.findCurrentRating(userId = userId)
                 ensureNotNull(value = rating) {
-                    ServiceError.Validation(message = "User $userId has no rating (pending assessment)")
+                    // Name the player (#907). A bare uuid sent whoever hit this hunting for who it was,
+                    // which is the friction the issue is about. This should now be unreachable in
+                    // practice — EventService.finalize refuses while any participant is unrated, and
+                    // finalizing is the only route into this queue (#403, #898) — so it reads as the
+                    // backstop it is rather than a routine refusal.
+                    ServiceError.Validation(message = "${nameOf(userId = userId)} has no rating (pending assessment)")
                 }
                 rating.currentRating.also { snapshot[userId] = it }
             }
         }
+
+    /** A player's display name for an error message, falling back to their public code (never null). */
+    private fun nameOf(userId: UUID): String {
+        val user = users.findById(id = userId).getOrNull()?.toDomain() ?: return "User $userId"
+        return user.displayName() ?: user.publicCode
+    }
 
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()

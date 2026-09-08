@@ -15,6 +15,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -1461,6 +1462,9 @@ class EventServiceTest {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
+        // #907: finalize now requires every approved participant to be rated.
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "3.5")
         val created =
             service.create(
                 token = token(uid = "host"),
@@ -1556,6 +1560,23 @@ class EventServiceTest {
         recordResult(match = match)
         return matchRepo.findById(matchId = match.id).shouldBeRight().toDomain()
     }
+
+    /** A user who self-rated at sign-up and has never been assessed — `proposed_rating` set, no rating row. */
+    private fun provisionSelfRated(
+        uid: String,
+        proposed: String,
+    ): User =
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid.asRedactable(),
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = setOf(element = Capability.PLAYER),
+                        proposedRating = BigDecimal(proposed),
+                    ),
+            ).toDomain()
 
     private fun rate(
         userId: UUID,
@@ -1669,7 +1690,6 @@ class EventServiceTest {
             p2 = p3,
             placementBracket = PlacementBracket.PLATE_FINALS,
         )
-
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
         // p1 now earns per-set points for winning the semi, where before it paid them nothing.
@@ -1978,6 +1998,8 @@ class EventServiceTest {
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
         rate(userId = p1.id, level = "4.0")
+        // #907: finalize now requires every approved participant to be rated.
+        rate(userId = p2.id, level = "4.0")
         // A completed fixture with no designation → nothing awarded (clubless events skip designation here).
         val open = service.create(token = token(uid = "host"), input = input(participants = listOf(p1.id, p2.id))).shouldBeRight().domain()
         seedCompletedFixture(eventId = open.id, host = host, p1 = p1, p2 = p2)
@@ -2012,6 +2034,12 @@ class EventServiceTest {
         // p1 wins but has no rating → no band to tag → the award is skipped.
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
         seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+        rate(userId = p2.id, level = "3.5")
+        // #907: finalize refuses while any APPROVED participant is unrated, so the only way an unrated
+        // player still reaches the awarder is off the roster — a fixture is created, then the player is
+        // removed from the event (removeParticipant has no guard against a participant with matches).
+        // That is a real, reachable state, and it is what keeps this skip-the-unrated path live.
+        service.removeParticipant(token = token(uid = "host"), eventId = event.id, userId = p1.id).shouldBeRight()
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
         awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
@@ -2027,6 +2055,12 @@ class EventServiceTest {
         // drops it (exercises the null-designation arm without an early type/config return).
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
         seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+
+        // #907: finalize refuses while any APPROVED participant is unrated, so the only way an unrated
+        // player still reaches the awarder is off the roster — a fixture is created, then the player is
+        // removed from the event (removeParticipant has no guard against a participant with matches).
+        // That is a real, reachable state, and it is what keeps this skip-the-unrated path live.
+        service.removeParticipant(token = token(uid = "host"), eventId = event.id, userId = p2.id).shouldBeRight()
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
         awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
@@ -2151,6 +2185,12 @@ class EventServiceTest {
             p2 = p2,
             placementBracket = PlacementBracket.PLATE_FINALS,
         )
+
+        // #907: finalize refuses while any APPROVED participant is unrated, so the only way an unrated
+        // player still reaches the awarder is off the roster — a fixture is created, then the player is
+        // removed from the event (removeParticipant has no guard against a participant with matches).
+        // That is a real, reachable state, and it is what keeps this skip-the-unrated path live.
+        service.removeParticipant(token = token(uid = "host"), eventId = event.id, userId = p2.id).shouldBeRight()
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
@@ -2364,4 +2404,70 @@ class EventServiceTest {
         relation: BandRelation,
         margin: Int,
     ): BigDecimal = BigDecimal(OpenPlayPointsConfig.DEFAULT.cell(relation = relation, margin = margin).winnerPoints).setScale(4)
+
+    @Test
+    fun `finalize refuses while a participant is unrated, and names them (#907)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val rated = provision(uid = "p1")
+        val unrated = provision(uid = "p2")
+        rate(userId = rated.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(rated.id, unrated.id))
+
+        val error =
+            service
+                .finalize(token = token(uid = "host"), id = event.id)
+                .shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Validation>()
+
+        // Naming them is the point: "User <uuid> has no rating" is the message that sent a Host hunting.
+        error.message shouldContain "p2"
+        error.message shouldNotContain unrated.id.toString()
+    }
+
+    @Test
+    fun `rating the last participant mid-event unblocks finalize (#907)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeLeft()
+
+        // The whole shape of #907: defer the rating, then assent to it once the Host has watched.
+        rate(userId = p2.id, level = "3.5")
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+    }
+
+    @Test
+    fun `a self-rating alone does not satisfy the finalize guard (#907)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val selfRated = provisionSelfRated(uid = "p2", proposed = "3.0")
+        rate(userId = p1.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, selfRated.id))
+
+        // A self-rating lives on users.proposed_rating and never writes user_ratings — only a host, rater
+        // or administrator assenting to it does. So "has a rating" already means "someone assented", and
+        // the guard needs no provenance check beyond that.
+        service
+            .finalize(token = token(uid = "host"), id = event.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `a pending signup does not block finalize (#907)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val approved = provision(uid = "p1")
+        val pending = provision(uid = "p2")
+        rate(userId = approved.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(element = approved.id))
+
+        // A self-signup sits at PENDING until a host approves it, and participantIds resolves to APPROVED
+        // only — so an unrated player who has merely asked to join is not yet the event's problem.
+        events.selfSignup(eventId = event.id, userId = pending.id)
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+    }
 }
