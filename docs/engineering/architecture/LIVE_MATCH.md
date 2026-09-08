@@ -167,6 +167,26 @@ log should still be able to say *the umpire corrected themselves here*.
 **Events name players or teams, never "left" or "right".** The side-flip is a display preference and is
 deliberately not recorded, so a log written in terms of screen position would be corrupted by a flip.
 
+### What spectators receive is state, not keystrokes
+
+**Decided.** The broadcast carries the **derived score**, never the umpire's raw actions. Every umpire
+action — including an undo — follows the same path: append the event, fold the log, write the resulting
+score document. An undo reaches spectators as *the score changed back*, not as an operation they have to
+interpret.
+
+The append-only log and the corrections in it are an internal concern. Nothing about the umpire's
+keystrokes belongs in a public payload.
+
+Three things follow, and they are all in our favour:
+
+- **Reconnect is trivial.** A spectator who misses updates just reads the current document. There is no
+  gap to fill, no replay, no ordering to reconstruct — which is the main practical advantage of
+  broadcasting state rather than events, and it matters on a phone at a court.
+- **The payload carries the sequence number** from §2, so a late-arriving write cannot overwrite a newer
+  one and a client can tell whether what it is holding is stale.
+- **The log never needs to be public**, which mostly answers the open question in §11 about whether
+  spectators need history: they do not, and not exposing it keeps the public surface to one document.
+
 ---
 
 ## 7. Decision — the scoring engine is pure, and the umpire is authoritative
@@ -289,8 +309,9 @@ retiring player. This is a product decision with rating consequences, not a UI s
   every other event-scoped operation goes through `ClubAccess.mayOrganize` (#789)?
 - **One umpire at a time?** Two devices scoring the same match needs either a lock or last-write-wins,
   and last-write-wins on an event log is a mess.
-- **Does the spectator view need history**, or only the current score? History means the whole log is
-  public; current-score-only is a far smaller surface.
+- **Does the spectator view need history?** Largely settled by §6: the broadcast is a single
+  current-score document, so history is not exposed by default. Still worth confirming that no product
+  requirement (a point-by-point replay, say) wants it later.
 - **Doubles.** Two sides fits, but serving rotates through four players. In scope for the first cut?
 - **An abandoned scoring session** must not leave a fixture stuck `IN_PROGRESS` forever. The stack
   lifecycle in §8a is where this is handled — the retention sweep that prunes completed stacks is the
