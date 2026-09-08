@@ -7170,6 +7170,17 @@ components:
             occasionally is not (a retirement awards the match to the opponent while the retiring player
             may have been leading). When supplied, the "sets are tied" guard does not apply.
 
+        completionReason:
+          type: string
+          enum: [COMPLETED, RETIRED, DEFAULTED]
+          description: >-
+            How the match ended (#911). Defaults to COMPLETED. Anything else REQUIRES winnerTeamId --
+            one statement rather than two rules, since a match that did not play out has no scoreline to
+            derive a winner from. The CONCEDING side is deliberately not a field: a player who retires
+            always loses, so it is whichever side is not winnerTeamId, and carrying it as well would let
+            the two disagree. RETIRED is rated on the real score (there was tennis); DEFAULTED is NOT
+            rated at all (a no-show has no scoreline to compute dominance from). Ranking points follow
+            the record in both cases -- the opponent won.
     MatchScoreCorrectionRequest:
       type: object
       description: >-

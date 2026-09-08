@@ -48,6 +48,9 @@ internal object MatchesTable : UUIDTable(name = "matches") {
     val tournamentName = varchar(name = "tournament_name", length = NAME_MAX).nullable()
     val matchRound = varchar(name = "match_round", length = ROUND_MAX).nullable()
     val status = varchar(name = "status", length = TYPE_MAX)
+
+    // How it ended (#911, V57). The conceding side is derived, not stored — see the migration.
+    val completionReason = varchar(name = "completion_reason", length = TYPE_MAX)
     val completedAt = datetime(name = "completed_at").nullable()
     val ratedAt = datetime(name = "rated_at").nullable()
     val ratedBy = reference(name = "rated_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()

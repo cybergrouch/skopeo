@@ -105,6 +105,18 @@ data class MatchResultRequest(
      * one set all, or at a single unfinished set. **Nor does the per-set games floor** — see [init].
      */
     val winnerTeamId: String? = null,
+    /**
+     * How the match ended (#911): `COMPLETED` (the default), `RETIRED` or `DEFAULTED`.
+     *
+     * Anything but `COMPLETED` requires [winnerTeamId], and that is one statement rather than two rules:
+     * a match that did not play out has no scoreline to derive a winner from, so it must say who took it.
+     * The parse of the value itself is the service's job — `dto` must not reach into `model` to
+     * enumerate a domain concept.
+     *
+     * The **conceding** side is deliberately not a field. A player who retires always loses, so it is
+     * whichever side is not [winnerTeamId]; carrying it as well would let the two disagree.
+     */
+    val completionReason: String? = null,
 ) {
     init {
         // Shape validation at the boundary (#116): a result must report at least one set.
@@ -118,6 +130,13 @@ data class MatchResultRequest(
         // The same carve-out #917 already made for the "sets are tied" guard, for the same reason. A
         // result with no designation is still a normally-completed match and is still held to the floor,
         // so nothing that was rejected before is accepted now unless it says why.
+        // An abnormal ending has no scoreline to derive a winner from, so it must name one. Checked
+        // here on the raw string rather than a parsed enum: an unrecognised value is the service's 400.
+        if (completionReason != null && !completionReason.equals(other = "COMPLETED", ignoreCase = true)) {
+            requireNotNull(value = winnerTeamId) {
+                "completionReason '$completionReason' requires a designated winnerTeamId"
+            }
+        }
         if (winnerTeamId == null) {
             require(value = sets.all { it.clearsGamesFloor() }) {
                 "a set won on games must be won with at least $MIN_GAMES_TO_WIN games, " +

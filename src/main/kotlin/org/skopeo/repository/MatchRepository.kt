@@ -16,6 +16,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inSubQuery
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.count
 import org.jetbrains.exposed.sql.deleteWhere
@@ -29,6 +30,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.domain.model.CreateFixtureCommand
+import org.skopeo.domain.model.MatchCompletionReason
 import org.skopeo.domain.model.MatchPublicRef
 import org.skopeo.domain.model.MatchSetResult
 import org.skopeo.domain.model.MatchStatus
@@ -110,6 +112,11 @@ class MatchRepository {
         winnerTeamId: UUID,
         recordedBy: UUID,
         completedAt: LocalDateTime,
+        // Defaulted to COMPLETED to match both the column default (V57) and MatchCompletionReason's,
+        // because "the match played out" is the honest assumption when nobody says otherwise. The two
+        // production callers — uploadResult and the score-correction path — both pass it explicitly, so
+        // the default is only ever taken by tests whose subject is something else entirely.
+        completionReason: String = MatchCompletionReason.COMPLETED.name,
     ): Either<ServiceError, MatchAggregateEntity> =
         transaction {
             if (loadMatch(id = matchId) == null) {
@@ -141,6 +148,9 @@ class MatchRepository {
                 it[MatchesTable.winnerTeamId] = winnerTeamId
                 it[MatchesTable.completedAt] = completedAt
                 it[MatchesTable.recordedBy] = recordedBy
+                // Re-recording an edit must restate this, not leave the previous ending in place: a
+                // correction from "retired" back to a played-out result would otherwise keep the (ret).
+                it[MatchesTable.completionReason] = completionReason
             }
             loadMatchOrThrow(id = matchId).right()
         }
@@ -444,7 +454,15 @@ class MatchRepository {
                         val base =
                             MatchesTable.isActive and
                                 (MatchesTable.status eq MatchStatus.COMPLETED.name) and
-                                MatchesTable.ratedAt.isNull()
+                                MatchesTable.ratedAt.isNull() and
+                                // A DEFAULTED match is never rated (#911 §10): a no-show has no scoreline
+                                // to compute dominance from, so rating it would invent a performance
+                                // nobody gave. Excluded from the QUEUE rather than skipped during
+                                // processing, because it is not pending calculation — it will never be
+                                // calculated, and leaving it in a "pending" list would be a standing lie.
+                                // A RETIRED match is NOT excluded: there was tennis, and it rates on the
+                                // real score.
+                                (MatchesTable.completionReason neq MatchCompletionReason.DEFAULTED.name)
                         // The rating-queue eligibility (#403): a completed, unrated match queues only if
                         // it is event-less (queues immediately, as before) OR its event is finalized. An
                         // explicit event scope is a pre-finalize organizer preview, so it lists the event's
@@ -907,6 +925,7 @@ private fun ResultRow.toMatchEntity(): MatchEntity =
         matchType = this[MatchesTable.matchType],
         matchDate = this[MatchesTable.matchDate],
         status = this[MatchesTable.status],
+        completionReason = this[MatchesTable.completionReason],
         team1Id = this[MatchesTable.team1Id].value,
         team2Id = this[MatchesTable.team2Id].value,
         winnerTeamId = this[MatchesTable.winnerTeamId]?.value,

@@ -11,6 +11,7 @@
 package org.skopeo.domain.mapper.entity.match
 
 import org.skopeo.domain.model.Match
+import org.skopeo.domain.model.MatchCompletionReason
 import org.skopeo.domain.model.MatchSetResult
 import org.skopeo.domain.model.MatchSide
 import org.skopeo.domain.model.MatchStatus
@@ -92,6 +93,7 @@ fun MatchAggregateEntity.toDomain(): Match =
         matchType = MatchType.valueOf(value = match.matchType),
         matchDate = match.matchDate,
         status = MatchStatus.valueOf(value = match.status),
+        completionReason = MatchCompletionReason.valueOf(value = match.completionReason),
         team1 = team1.toDomain(),
         team2 = team2.toDomain(),
         winnerTeamId = match.winnerTeamId,
