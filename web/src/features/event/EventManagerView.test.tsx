@@ -287,6 +287,13 @@ vi.mock('@/components/PlayerPicker', () => ({
     </button>
   ),
 }))
+// EventParticipantList renders SetRatingForm since #907, which imports the generated ratings hook —
+// and through it @/api/axios, which calls getAuth() at module load. Without this the whole suite dies on
+// FirebaseError: auth/invalid-api-key wherever no Firebase key is configured (i.e. CI).
+vi.mock('@/api/generated/ratings/ratings', () => ({
+  usePutApiV1UsersUserIdRatings: () => ({ isPending: false, mutateAsync: vi.fn() }),
+}))
+
 vi.mock('@/api/generated/users/users', () => ({ useGetApiV1UsersMe }))
 vi.mock('@/routes/dashboard/matches/AwaitingResultsSection', () => ({
   AwaitingResultsSection: ({ eventId, readOnly }: { eventId?: string; readOnly?: boolean }) => (
