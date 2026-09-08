@@ -86,6 +86,7 @@ Properties that fall out of this definition for free:
 - **Naturally bounded** to [−1, +1] — no artificial cap needed, shutouts cause no division-by-zero.
 - **Symmetric**: the loser's dominance is exactly the negative of the winner's, set by set and therefore for the match. (The formula uses the magnitude; `sign` carries direction.)
 - **Set-structure aware**: a 6-0, 6-0 sweep averages (1.0 + 1.0)/2 = 1.0, while a 7-6, 6-7, 7-6 marathon averages (0.077 − 0.077 + 0.077)/3 = 0.026 — dropping a set drags the average down.
+- **Zero dominance carries no direction**: a *level* set (5-5, 6-6 — a conceded draw, or a retirement while the set is level) has dominance 0, so it moves neither player. `sign` is 0 there rather than ±1, and the step is not classed as an upset. This matters for the explanation rather than the arithmetic: `dominance` already multiplies the change to nothing, but a level set still *names* a winner — the **designated** winner, which since #917 is a separate thing from the winner the calculator *derives* from the score, and if that designation falls on the lower-rated side the step would otherwise be reported as an upset in the derivation view — a headline attached to a set that moved nobody. The rating gap must not supply a direction the play did not.
 
 Pre-computed values for every common tennis score are in [§4](#4-dominance-factor-tables).
 

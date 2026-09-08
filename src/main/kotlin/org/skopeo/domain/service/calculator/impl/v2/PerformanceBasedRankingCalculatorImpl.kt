@@ -197,11 +197,27 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         val advantage = subjectCurrentCalculatedRating - oppositionCurrentCalculatedRating
         val isWinner = set.winnerTeamId == teamId
         val normalizedGap = advantage.abs().divideBy(divisor = NTRP_RANGE)
-        val isUpset = (isWinner && advantage < ZERO) || (!isWinner && advantage > ZERO)
+        // A level set (5-5, 6-6) has zero dominance, so it moves nobody. That is deliberate: a set both
+        // sides shared carries no evidence about which is stronger, and the rating gap must not supply a
+        // direction the play did not. The `winnerTeamId` such a set still carries is a designation, not
+        // an observation — see the derived-vs-designated split in #917.
+        val hasDominance = dominance.signum() != 0
+        // Guarded for the *audit*, not the arithmetic. An "upset" headline on a set that moved nobody is
+        // a wrong explanation in front of a user (#862), and without the guard a level set nominally
+        // awarded to the lower-rated side scores as exactly that.
+        val isUpset = hasDominance && ((isWinner && advantage < ZERO) || (!isWinner && advantage > ZERO))
         // The pre-formula scale multipliers — the match-type factor (§2.5) and the binary group-category
         // factor (#719, §2.7) — arrive pre-combined; a 0 group factor zeroes the whole per-set delta.
         val scale = scaleFor(isUpset = isUpset, normalizedGap = normalizedGap) * externalScaleFactor
-        val sign = if (isWinner) ONE else -ONE
+        // Three-way rather than win/lose: with no dominance there is no direction to take. `abs()` below
+        // already zeroes the delta, so this states the intent where a reader looks for it and keeps the
+        // sign honest if the formula ever stops multiplying by dominance.
+        val sign =
+            when {
+                !hasDominance -> ZERO
+                isWinner -> ONE
+                else -> -ONE
+            }
         val delta = K_FACTOR_NTRP * dominance.abs() * scale * sign
         return SetStep(
             dominance = dominance,
