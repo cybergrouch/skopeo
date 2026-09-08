@@ -1,0 +1,353 @@
+// SPDX-FileCopyrightText: 2026 Lange Pantoja
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package org.skopeo.routes
+
+import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.shouldBe
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.delete
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.testing.ApplicationTestBuilder
+import io.ktor.server.testing.testApplication
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.livematch.LiveMatchResponse
+import org.skopeo.common.dto.livematch.LiveScoreEventRequest
+import org.skopeo.common.redaction.asRedactable
+import org.skopeo.common.security.Capability
+import org.skopeo.domain.mapper.entity.match.toDomain
+import org.skopeo.domain.mapper.entity.user.toDomain
+import org.skopeo.domain.model.AuthProvider
+import org.skopeo.domain.model.CreateFixtureCommand
+import org.skopeo.domain.model.MatchType
+import org.skopeo.domain.model.NameType
+import org.skopeo.domain.model.ProvisionUserCommand
+import org.skopeo.domain.model.TeamType
+import org.skopeo.domain.model.UserIdentity
+import org.skopeo.domain.model.UserName
+import org.skopeo.module
+import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.UserRepository
+import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.TestFirebaseAuth
+import org.skopeo.testsupport.fixtureEventId
+import java.time.LocalDate
+import java.util.UUID
+
+/**
+ * The live-scoring API over the real Firebase JWT path (#911 step 3c).
+ *
+ * The service suite already covers the rules; this covers the things only the HTTP layer can get wrong —
+ * status codes, the request parsing that had to live in the service because `routes` may not name a
+ * `model` type, and that undo is a *server-targeted* endpoint rather than a postable kind.
+ */
+class LiveMatchApiIntegrationTest {
+    companion object {
+        @BeforeAll
+        @JvmStatic
+        fun connect() {
+            PostgresTestDatabase.start()
+        }
+    }
+
+    @BeforeEach
+    fun reset() {
+        PostgresTestDatabase.truncate()
+    }
+
+    private fun ApplicationTestBuilder.jsonClient(): HttpClient = createClient { install(plugin = ContentNegotiation) { json() } }
+
+    private fun withApp(block: suspend (HttpClient) -> Unit) =
+        testApplication {
+            application { module(initDatabase = false, firebaseAuth = TestFirebaseAuth.settings) }
+            block(jsonClient())
+        }
+
+    private fun seedUser(
+        uid: String,
+        roles: Set<Capability> = setOf(element = Capability.PLAYER),
+    ): UUID =
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid.asRedactable(),
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
+            .id
+
+    private fun seedScorer(uid: String = "ump"): String {
+        seedUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.SCORER))
+        return TestFirebaseAuth.mintToken(uid = uid)
+    }
+
+    private fun seedFixture(): UUID {
+        val home = seedUser(uid = "home")
+        val away = seedUser(uid = "away")
+        return MatchRepository()
+            .createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.now(),
+                        team1UserIds = listOf(element = home),
+                        team2UserIds = listOf(element = away),
+                        team1Name = "home",
+                        team2Name = "away",
+                        createdBy = home,
+                        eventId = fixtureEventId(home, away),
+                    ),
+            ).toDomain()
+            .id
+    }
+
+    private suspend fun HttpClient.postEvent(
+        token: String,
+        matchId: UUID,
+        request: LiveScoreEventRequest,
+    ) = post(urlString = "/api/v1/matches/$matchId/live/events") {
+        header(key = HttpHeaders.Authorization, value = "Bearer $token")
+        contentType(type = ContentType.Application.Json)
+        setBody(body = request)
+    }
+
+    @Test
+    fun `a scorer records points and reads the scoreboard back`() =
+        withApp { client ->
+            val token = seedScorer()
+            val matchId = seedFixture()
+
+            repeat(times = 3) {
+                client.postEvent(
+                    token = token,
+                    matchId = matchId,
+                    request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"),
+                ).status shouldBe HttpStatusCode.Created
+            }
+
+            val view: LiveMatchResponse =
+                client.get(urlString = "/api/v1/matches/$matchId/live") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }.body()
+
+            view.pointsTeam1 shouldBe "40"
+            view.pointsTeam2 shouldBe "0"
+            view.sequence shouldBe 3L
+        }
+
+    @Test
+    fun `a plain player is refused`() =
+        withApp { client ->
+            seedUser(uid = "nobody")
+            val matchId = seedFixture()
+            client
+                .postEvent(
+                    token = TestFirebaseAuth.mintToken(uid = "nobody"),
+                    matchId = matchId,
+                    request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"),
+                ).status shouldBe HttpStatusCode.Forbidden
+        }
+
+    @Test
+    fun `an unknown kind is a 400 rather than a silent no-op`() =
+        withApp { client ->
+            val token = seedScorer()
+            val matchId = seedFixture()
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "ACE"))
+                .status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `UNDONE is not postable as a kind, because the server picks the target`() =
+        withApp { client ->
+            val token = seedScorer()
+            val matchId = seedFixture()
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "UNDONE"))
+                .status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `a kind that needs a side is refused without one`() =
+        withApp { client ->
+            val token = seedScorer()
+            val matchId = seedFixture()
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON"))
+                .status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `an unknown side is a 400`() =
+        withApp { client ->
+            val token = seedScorer()
+            val matchId = seedFixture()
+            client
+                .postEvent(
+                    token = token,
+                    matchId = matchId,
+                    request = LiveScoreEventRequest(kind = "POINT_WON", side = "LEFT"),
+                ).status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `SERVER_ASSIGNED needs a player id, and rejects a malformed one`() =
+        withApp { client ->
+            val token = seedScorer()
+            val matchId = seedFixture()
+            val player = seedUser(uid = "server")
+
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SERVER_ASSIGNED"))
+                .status shouldBe HttpStatusCode.BadRequest
+            client
+                .postEvent(
+                    token = token,
+                    matchId = matchId,
+                    request = LiveScoreEventRequest(kind = "SERVER_ASSIGNED", playerId = "not-a-uuid"),
+                ).status shouldBe HttpStatusCode.BadRequest
+
+            val ok =
+                client.postEvent(
+                    token = token,
+                    matchId = matchId,
+                    request = LiveScoreEventRequest(kind = "SERVER_ASSIGNED", playerId = player.toString()),
+                )
+            ok.status shouldBe HttpStatusCode.Created
+            ok.body<LiveMatchResponse>().serverId shouldBe player.toString()
+        }
+
+    @Test
+    fun `undo takes the last action back and returns 200`() =
+        withApp { client ->
+            val token = seedScorer()
+            val matchId = seedFixture()
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+
+            val undone =
+                client.post(urlString = "/api/v1/matches/$matchId/live/undo") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }
+            undone.status shouldBe HttpStatusCode.OK
+            undone.body<LiveMatchResponse>().pointsTeam1 shouldBe "15"
+        }
+
+    @Test
+    fun `undo with nothing to undo is 200, not an error`() =
+        withApp { client ->
+            val token = seedScorer()
+            val matchId = seedFixture()
+            val response =
+                client.post(urlString = "/api/v1/matches/$matchId/live/undo") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }
+            response.status shouldBe HttpStatusCode.OK
+            response.body<LiveMatchResponse>().sequence shouldBe 0L
+        }
+
+    @Test
+    fun `claim and release round-trip`() =
+        withApp { client ->
+            val token = seedScorer()
+            val matchId = seedFixture()
+
+            val claimed =
+                client.post(urlString = "/api/v1/matches/$matchId/live/claim") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }
+            claimed.status shouldBe HttpStatusCode.OK
+            (claimed.body<LiveMatchResponse>().scorerId != null) shouldBe true
+
+            val released =
+                client.delete(urlString = "/api/v1/matches/$matchId/live/claim") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }
+            released.status shouldBe HttpStatusCode.OK
+            released.body<LiveMatchResponse>().scorerId shouldBe null
+        }
+
+    @Test
+    fun `a whole set is recorded through the API and banked with its tiebreak`() =
+        withApp { client ->
+            val token = seedScorer()
+            val matchId = seedFixture()
+
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "MATCH_STARTED"))
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "TIEBREAK_STARTED"))
+            repeat(times = 7) {
+                client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+            }
+            repeat(times = 5) {
+                client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM2"))
+            }
+            val banked =
+                client.postEvent(
+                    token = token,
+                    matchId = matchId,
+                    request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"),
+                )
+
+            val view = banked.body<LiveMatchResponse>()
+            view.sets.shouldHaveSize(size = 1)
+            view.sets.single().tiebreakTeam1Points shouldBe 7
+            view.sets.single().tiebreakTeam2Points shouldBe 5
+            view.sets.single().winner shouldBe "TEAM1"
+            view.isTiebreak shouldBe false
+            view.hasStarted shouldBe true
+        }
+
+    @Test
+    fun `a retirement names the conceding side and hands the match over`() =
+        withApp { client ->
+            val token = seedScorer()
+            val matchId = seedFixture()
+            val retired =
+                client.postEvent(
+                    token = token,
+                    matchId = matchId,
+                    request = LiveScoreEventRequest(kind = "RETIRED", side = "TEAM2"),
+                )
+
+            val outcome = retired.body<LiveMatchResponse>().outcome
+            outcome?.kind shouldBe "RETIRED"
+            outcome?.winner shouldBe "TEAM1"
+            outcome?.concededBy shouldBe "TEAM2"
+        }
+
+    @Test
+    fun `an unknown match is a 404`() =
+        withApp { client ->
+            val token = seedScorer()
+            client
+                .postEvent(
+                    token = token,
+                    matchId = UUID.randomUUID(),
+                    request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"),
+                ).status shouldBe HttpStatusCode.NotFound
+        }
+
+    @Test
+    fun `the surface requires authentication`() =
+        withApp { client ->
+            val matchId = seedFixture()
+            client.get(urlString = "/api/v1/matches/$matchId/live").status shouldBe HttpStatusCode.Unauthorized
+        }
+}

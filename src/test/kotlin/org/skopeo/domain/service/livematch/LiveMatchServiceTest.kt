@@ -11,6 +11,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.livematch.LiveScoreEventRequest
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
@@ -22,7 +23,6 @@ import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.model.MatchType
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.ProvisionUserCommand
-import org.skopeo.domain.model.ScoreEvent
 import org.skopeo.domain.model.TeamSide
 import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.UserIdentity
@@ -102,14 +102,16 @@ class LiveMatchServiceTest {
             .id
     }
 
-    private fun point(side: TeamSide) = ScoreEvent.PointWon(side = side)
+    private fun point(side: TeamSide) = LiveScoreEventRequest(kind = "POINT_WON", side = side.name)
+
+    private fun bare(kind: String) = LiveScoreEventRequest(kind = kind)
 
     @Test
     fun `a plain player cannot score`() {
         user(uid = "nobody")
         val matchId = fixture()
         service
-            .record(token = token(uid = "nobody"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+            .record(token = token(uid = "nobody"), matchId = matchId, request = point(side = TeamSide.TEAM1))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -118,7 +120,7 @@ class LiveMatchServiceTest {
     fun `an unknown caller cannot score`() {
         val matchId = fixture()
         service
-            .record(token = token(uid = "ghost"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+            .record(token = token(uid = "ghost"), matchId = matchId, request = point(side = TeamSide.TEAM1))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -130,10 +132,9 @@ class LiveMatchServiceTest {
         umpire()
         val matchId = fixture()
         service
-            .record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+            .record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
             .shouldBeRight()
-            .state
-            .displayPoints(side = TeamSide.TEAM1) shouldBe "15"
+            .pointsTeam1 shouldBe "15"
     }
 
     @Test
@@ -141,7 +142,7 @@ class LiveMatchServiceTest {
         user(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val matchId = fixture()
         service
-            .record(token = token(uid = "host"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+            .record(token = token(uid = "host"), matchId = matchId, request = point(side = TeamSide.TEAM1))
             .shouldBeRight()
     }
 
@@ -153,7 +154,7 @@ class LiveMatchServiceTest {
         val matchId = fixture()
         matches.findById(matchId = matchId).shouldBeRight().toDomain().status shouldBe MatchStatus.SCHEDULED
 
-        service.claim(token = token(uid = "ump"), matchId = matchId).shouldBeRight().scorerId shouldBe id
+        service.claim(token = token(uid = "ump"), matchId = matchId).shouldBeRight().scorerId shouldBe id.toString()
         matches.findById(matchId = matchId).shouldBeRight().toDomain().status shouldBe MatchStatus.IN_PROGRESS
     }
 
@@ -164,7 +165,7 @@ class LiveMatchServiceTest {
         val matchId = fixture()
 
         service.claim(token = token(uid = "first"), matchId = matchId).shouldBeRight()
-        service.claim(token = token(uid = "second"), matchId = matchId).shouldBeRight().scorerId shouldBe second
+        service.claim(token = token(uid = "second"), matchId = matchId).shouldBeRight().scorerId shouldBe second.toString()
     }
 
     @Test
@@ -183,10 +184,10 @@ class LiveMatchServiceTest {
         val matchId = fixture()
 
         repeat(times = 4) {
-            service.record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+            service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
         }
-        val view = service.view(matchId = matchId)
-        view.state.gamesTeam1 shouldBe 1
+        val view = service.scoreboard(matchId = matchId)
+        view.gamesTeam1 shouldBe 1
         view.sequence shouldBe 4L
     }
 
@@ -194,11 +195,11 @@ class LiveMatchServiceTest {
     fun `undo appends a marker and takes the score back`() {
         umpire()
         val matchId = fixture()
-        service.record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
-        service.record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+        service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
+        service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
 
         val undone = service.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
-        undone.state.displayPoints(side = TeamSide.TEAM1) shouldBe "15"
+        undone.pointsTeam1 shouldBe "15"
         // Three rows: two points and the marker. Nothing was deleted.
         live.log(matchId = matchId).shouldHaveSize(size = 3)
     }
@@ -208,13 +209,13 @@ class LiveMatchServiceTest {
         umpire()
         val matchId = fixture()
         repeat(times = 3) {
-            service.record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+            service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
         }
         service.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
         val twice = service.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
 
         // The second undo must target the second point, not the marker the first undo wrote.
-        twice.state.displayPoints(side = TeamSide.TEAM1) shouldBe "15"
+        twice.pointsTeam1 shouldBe "15"
         live.log(matchId = matchId).shouldHaveSize(size = 5)
     }
 
@@ -231,15 +232,15 @@ class LiveMatchServiceTest {
     fun `undoing everything and scoring again continues from the surviving log`() {
         umpire()
         val matchId = fixture()
-        service.record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+        service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
         service.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
 
         val after =
             service
-                .record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM2))
+                .record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM2))
                 .shouldBeRight()
-        after.state.displayPoints(side = TeamSide.TEAM1) shouldBe "0"
-        after.state.displayPoints(side = TeamSide.TEAM2) shouldBe "15"
+        after.pointsTeam1 shouldBe "0"
+        after.pointsTeam2 shouldBe "15"
     }
 
     @Test
@@ -247,22 +248,22 @@ class LiveMatchServiceTest {
         umpire()
         val matchId = fixture()
 
-        service.record(token = token(uid = "ump"), matchId = matchId, event = ScoreEvent.MatchStarted).shouldBeRight()
-        service.record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+        service.record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "MATCH_STARTED")).shouldBeRight()
+        service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
         val paused =
             service
-                .record(token = token(uid = "ump"), matchId = matchId, event = ScoreEvent.Paused)
+                .record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "PAUSED"))
                 .shouldBeRight()
-        paused.state.isPaused shouldBe true
-        paused.state.hasStarted shouldBe true
+        paused.isPaused shouldBe true
+        paused.hasStarted shouldBe true
 
         val resumed =
             service
-                .record(token = token(uid = "ump"), matchId = matchId, event = ScoreEvent.Resumed)
+                .record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "RESUMED"))
                 .shouldBeRight()
-        resumed.state.isPaused shouldBe false
+        resumed.isPaused shouldBe false
         // The score is untouched by the suspension.
-        resumed.state.displayPoints(side = TeamSide.TEAM1) shouldBe "15"
+        resumed.pointsTeam1 shouldBe "15"
     }
 
     @Test
@@ -271,19 +272,19 @@ class LiveMatchServiceTest {
         // host cannot yet book, so no timeout could tell "abandoned" from "waiting for weather".
         umpire()
         val matchId = fixture()
-        service.record(token = token(uid = "ump"), matchId = matchId, event = ScoreEvent.MatchStarted)
-        service.record(token = token(uid = "ump"), matchId = matchId, event = ScoreEvent.Paused)
+        service.record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "MATCH_STARTED"))
+        service.record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "PAUSED"))
 
         live.log(matchId = matchId).shouldHaveSize(size = 2)
-        service.view(matchId = matchId).state.isPaused shouldBe true
+        service.scoreboard(matchId = matchId).isPaused shouldBe true
     }
 
     @Test
     fun `every recorded action is timestamped, so durations are derivable`() {
         umpire()
         val matchId = fixture()
-        service.record(token = token(uid = "ump"), matchId = matchId, event = ScoreEvent.MatchStarted)
-        service.record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+        service.record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "MATCH_STARTED"))
+        service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
 
         val rows = live.log(matchId = matchId)
         rows.shouldHaveSize(size = 2)
@@ -295,7 +296,7 @@ class LiveMatchServiceTest {
     fun `the recording umpire is attributed on every row`() {
         val id = umpire()
         val matchId = fixture()
-        service.record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+        service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
         service.undo(token = token(uid = "ump"), matchId = matchId)
 
         live.log(matchId = matchId).map { it.recordedBy }.toSet() shouldBe setOf(element = id)
@@ -308,7 +309,7 @@ class LiveMatchServiceTest {
         matches.setActive(matchId = matchId, active = false, disabledAt = java.time.LocalDateTime.now())
 
         service
-            .record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+            .record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -320,7 +321,7 @@ class LiveMatchServiceTest {
         matches.markRated(matchId = matchId, ratedAt = java.time.LocalDateTime.now(), ratedBy = id)
 
         service
-            .record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+            .record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -352,7 +353,7 @@ class LiveMatchServiceTest {
             }
 
         LiveMatchService(live = alwaysLoses)
-            .record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+            .record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
 
@@ -364,7 +365,7 @@ class LiveMatchServiceTest {
     fun `an unknown match is not found`() {
         umpire()
         service
-            .record(token = token(uid = "ump"), matchId = UUID.randomUUID(), event = point(side = TeamSide.TEAM1))
+            .record(token = token(uid = "ump"), matchId = UUID.randomUUID(), request = point(side = TeamSide.TEAM1))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }

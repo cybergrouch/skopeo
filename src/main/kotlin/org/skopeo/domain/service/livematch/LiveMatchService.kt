@@ -8,8 +8,11 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.common.dto.livematch.LiveMatchResponse
+import org.skopeo.common.dto.livematch.LiveScoreEventRequest
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.SCORING_ROLES
+import org.skopeo.domain.mapper.dto.livematch.toResponse
 import org.skopeo.domain.mapper.entity.livematch.LiveMatchEventKinds
 import org.skopeo.domain.mapper.entity.livematch.kindOf
 import org.skopeo.domain.mapper.entity.livematch.sideOf
@@ -62,7 +65,7 @@ class LiveMatchService(
     fun claim(
         token: VerifiedFirebaseToken,
         matchId: UUID,
-    ): Either<ServiceError, LiveMatchView> =
+    ): Either<ServiceError, LiveMatchResponse> =
         either {
             val caller = scorer(token = token).bind()
             val match = scorableMatch(matchId = matchId).bind()
@@ -70,19 +73,19 @@ class LiveMatchService(
             if (match.status == MatchStatus.SCHEDULED) {
                 matches.setStatus(matchId = matchId, status = MatchStatus.IN_PROGRESS.name)
             }
-            view(matchId = matchId)
+            view(matchId = matchId).toResponse()
         }
 
     /** Give up the scoring of [matchId]. The fixture stays `IN_PROGRESS` — the match is still being played. */
     fun release(
         token: VerifiedFirebaseToken,
         matchId: UUID,
-    ): Either<ServiceError, LiveMatchView> =
+    ): Either<ServiceError, LiveMatchResponse> =
         either {
             scorer(token = token).bind()
             scorableMatch(matchId = matchId).bind()
             live.releaseClaim(matchId = matchId)
-            view(matchId = matchId)
+            view(matchId = matchId).toResponse()
         }
 
     /**
@@ -93,21 +96,27 @@ class LiveMatchService(
      * loser. The loser must not simply take the next number — it has to re-read, because the event that
      * won may have changed what the umpire's action means. So it recomputes from the log that actually
      * landed and tries again.
+     *
+     * Parsing happens here rather than in the route because `routes` may not depend on `model` — a rule
+     * `LayeredArchitectureTest` enforces with no exception — so a route cannot name a [ScoreEvent].
      */
     fun record(
         token: VerifiedFirebaseToken,
         matchId: UUID,
-        event: ScoreEvent,
-    ): Either<ServiceError, LiveMatchView> =
-        appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
-            live.append(
-                matchId = matchId,
-                sequence = sequence,
-                kind = kindOf(event = event),
-                side = sideOf(event = event),
-                playerId = (event as? ScoreEvent.ServerAssigned)?.playerId,
-                recordedBy = callerId,
-            )
+        request: LiveScoreEventRequest,
+    ): Either<ServiceError, LiveMatchResponse> =
+        either {
+            val event = ScoreEventParser.parse(request = request).bind()
+            appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
+                live.append(
+                    matchId = matchId,
+                    sequence = sequence,
+                    kind = kindOf(event = event),
+                    side = sideOf(event = event),
+                    playerId = (event as? ScoreEvent.ServerAssigned)?.playerId,
+                    recordedBy = callerId,
+                )
+            }.bind()
         }
 
     /**
@@ -119,13 +128,13 @@ class LiveMatchService(
     fun undo(
         token: VerifiedFirebaseToken,
         matchId: UUID,
-    ): Either<ServiceError, LiveMatchView> =
+    ): Either<ServiceError, LiveMatchResponse> =
         either {
             scorer(token = token).bind()
             scorableMatch(matchId = matchId).bind()
-            val target = lastUndoableSequence(matchId = matchId)
+            val target = live.lastUndoableSequence(matchId = matchId)
             if (target == null) {
-                view(matchId = matchId)
+                view(matchId = matchId).toResponse()
             } else {
                 appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
                     live.append(
@@ -139,9 +148,12 @@ class LiveMatchService(
             }
         }
 
-    /** The current score and who is scoring it. Readable by anyone who can see the match. */
-    fun view(matchId: UUID): LiveMatchView {
-        val log = loggedActions(matchId = matchId)
+    /** The current score and who is scoring it, for the wire. Readable by anyone who can see the match. */
+    fun scoreboard(matchId: UUID): LiveMatchResponse = view(matchId = matchId).toResponse()
+
+    /** The current score and who is scoring it. Internal — the wire gets [scoreboard]. */
+    internal fun view(matchId: UUID): LiveMatchView {
+        val log = live.loggedActions(matchId = matchId)
         return LiveMatchView(
             matchId = matchId,
             state = ScoreEngine.replay(log = log),
@@ -150,23 +162,11 @@ class LiveMatchService(
         )
     }
 
-    /**
-     * The highest sequence that is still in force, which is what an undo should target.
-     *
-     * Derived by asking [ScoreEngine.effective] which actions survive rather than by scanning for the
-     * last non-marker row: only the engine knows that a redo can bring an earlier action back, and
-     * duplicating that reasoning here is how the two would drift.
-     */
-    private fun lastUndoableSequence(matchId: UUID): Long? =
-        ScoreEngine.surviving(log = loggedActions(matchId = matchId)).maxOfOrNull { it.sequence }
-
-    private fun loggedActions(matchId: UUID): List<LoggedAction> = live.log(matchId = matchId).map { it.toLoggedAction() }
-
     private fun appendWithRetry(
         token: VerifiedFirebaseToken,
         matchId: UUID,
         write: (Long, UUID) -> Boolean,
-    ): Either<ServiceError, LiveMatchView> =
+    ): Either<ServiceError, LiveMatchResponse> =
         either {
             val caller = scorer(token = token).bind()
             scorableMatch(matchId = matchId).bind()
@@ -181,7 +181,7 @@ class LiveMatchService(
                     message = "Could not record the action after $MAX_APPEND_ATTEMPTS attempts; another scorer is writing.",
                 )
             }
-            view(matchId = matchId)
+            view(matchId = matchId).toResponse()
         }
 
     /** The caller, if they may score at all. A flat capability check — see the class note. */
@@ -220,3 +220,24 @@ class LiveMatchService(
         const val MAX_APPEND_ATTEMPTS = 3
     }
 }
+
+/**
+ * The whole log for a match, as the domain sees it.
+ *
+ * File-level rather than a member: it needs nothing from the service but the repository, and
+ * `LiveMatchService` is at detekt's function limit — a class that keeps growing helpers is the thing
+ * that limit exists to notice.
+ */
+private fun LiveMatchRepository.loggedActions(matchId: UUID): List<LoggedAction> = log(matchId = matchId).map { it.toLoggedAction() }
+
+/**
+ * The highest sequence still in force, which is what an undo should target.
+ *
+ * Asks [ScoreEngine.surviving] rather than scanning for the last non-marker row: only the engine knows
+ * that a redo can bring an earlier action back, and duplicating that reasoning here is how the two would
+ * drift. It must also come from the engine *with sequences* — matching on the event value would be wrong
+ * outright, since two identical `PointWon(TEAM1)` rows are equal and a cancelled one would be
+ * indistinguishable from a surviving one.
+ */
+private fun LiveMatchRepository.lastUndoableSequence(matchId: UUID): Long? =
+    ScoreEngine.surviving(log = loggedActions(matchId = matchId)).maxOfOrNull { it.sequence }

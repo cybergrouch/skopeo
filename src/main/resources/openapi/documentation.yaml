@@ -2057,6 +2057,183 @@ paths:
         '409':
           description: The match is disabled, or already rated (the result is frozen)
 
+  /api/v1/matches/{matchId}/live:
+    parameters:
+      - name: matchId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: The live scoreboard for a match (#911)
+      description: |
+        The current derived score, folded from the umpire's append-only action log on every read. Points
+        are rendered (0/15/30/40/AD, or a plain ordinal in a tiebreak) rather than returned as raw
+        counts, so every client shows the same thing and none re-implements deuce.
+
+        `sequence` is how far the log has got: a client holding a lower number knows it is behind.
+
+        This is the umpire's and organizer's view. The public spectator scoreboard is a separate,
+        server-written projection.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The current live score
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveMatchResponse'
+        '404':
+          description: No such match
+
+  /api/v1/matches/{matchId}/live/events:
+    parameters:
+      - name: matchId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Record one umpire action (#911)
+      description: |
+        Appends a single action to the match's append-only log and returns the resulting score. Nothing
+        is ever updated or deleted.
+
+        The engine is permissive and the umpire is authoritative: points advance and close a GAME by the
+        ordinary deuce/advantage rule, while the SET, the TIEBREAK and the MATCH are declared. Six games
+        does not end a set — `SET_AWARDED` does — because a set may legitimately end below six and no
+        tiebreak target is assumed.
+
+        Concurrency is settled by a unique constraint on (match, sequence): a writer that loses a race
+        re-reads and retries, so two scorers can never interleave or lose an update.
+
+        `UNDONE` is not postable here — undo has its own endpoint, because the server picks the target.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LiveScoreEventRequest'
+      responses:
+        '201':
+          description: The score after the action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveMatchResponse'
+        '400':
+          description: Unknown kind, unknown side, a missing payload the kind requires, or a malformed player id
+        '403':
+          description: >-
+            Caller may not score. Requires SCORER, HOST, CLUB_OWNER or ADMINISTRATOR. Deliberately a
+            FLAT check with no per-club gate (#789 does not apply): an umpire pool moves between clubs.
+        '404':
+          description: No such match
+        '409':
+          description: The match is disabled, already rated, or sustained write contention
+
+  /api/v1/matches/{matchId}/live/undo:
+    parameters:
+      - name: matchId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Take back the last umpire action (#911)
+      description: |
+        Appends a compensating marker naming the action it cancels. It does NOT delete a row — the log
+        is append-only so it can still say that the umpire corrected themselves.
+
+        The body is empty and the SERVER picks the target: only the engine knows which action is still
+        in force, because an undo of an undo is a redo. A client naming a sequence would duplicate that
+        reasoning and drift from it.
+
+        Undoing when there is nothing left to undo writes nothing and returns 200 with the unchanged
+        score — what a courtside double-tap should do.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The score after the undo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveMatchResponse'
+        '403':
+          description: Caller may not score
+        '404':
+          description: No such match
+        '409':
+          description: The match is disabled or already rated
+
+  /api/v1/matches/{matchId}/live/claim:
+    parameters:
+      - name: matchId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Take (or take over) the scoring of a match (#911)
+      description: |
+        Records the caller as the current scorer and moves a SCHEDULED fixture to IN_PROGRESS.
+
+        A SOFT claim: it always succeeds for an authorized scorer and displaces whoever held it, so
+        there is no 409 to handle. Taking over is the expected path, not an error — a courtside phone
+        that dies must not strand the fixture. The data is protected by the log's unique sequence
+        constraint, not by this.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The live score, with the caller as scorer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveMatchResponse'
+        '403':
+          description: Caller may not score
+        '404':
+          description: No such match
+        '409':
+          description: The match is disabled or already rated
+    delete:
+      summary: Give up the scoring of a match (#911)
+      description: |
+        Clears the claim. The fixture stays IN_PROGRESS — the match is still being played, and only
+        finalize completes it.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The live score, with no scorer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveMatchResponse'
+        '403':
+          description: Caller may not score
+        '404':
+          description: No such match
+
   /api/v1/matches/{id}/score-correction:
     parameters:
       - name: id
@@ -6821,6 +6998,133 @@ components:
           nullable: true
           enum: [CHAMPIONSHIP_FINALS, PLATE_FINALS]
           description: Which placement the match decides (#525) — CHAMPIONSHIP_FINALS (1st/2nd) or PLATE_FINALS (3rd/4th). A placing is awarded only where a fixture decided it (#837); every other fixture earns the open-play per-set schedule (#836).
+
+    LiveScoreEventRequest:
+      type: object
+      description: >-
+        One umpire action (#911). Which payload field applies depends on `kind`, and supplying the wrong
+        one is a 400 rather than being ignored — silently dropping a field the caller meant is how a
+        scoreboard ends up quietly wrong.
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum: [POINT_WON, GAME_AWARDED, SET_AWARDED, TIEBREAK_STARTED, SERVER_ASSIGNED,
+                 RETIRED, DEFAULTED, MATCH_AWARDED, MATCH_STARTED, PAUSED, RESUMED]
+          description: >-
+            POINT_WON advances the game and may close it. SET_AWARDED banks the current set at whatever
+            the score is, and is also how a tiebreak ends (the umpire marks who won; no target is
+            assumed). MATCH_STARTED is distinct from the first point so match duration can be measured.
+            PAUSED/RESUMED suspend play without ending the match — a rain delay may last days, which is
+            why it is stated rather than inferred from a timeout. UNDONE is absent: undo has its own
+            endpoint because the server picks the target.
+        side:
+          type: string
+          enum: [TEAM1, TEAM2]
+          description: >-
+            Required for POINT_WON, GAME_AWARDED, SET_AWARDED, RETIRED, DEFAULTED and MATCH_AWARDED.
+            Never "left"/"right": switching ends in the umpire view is a display preference and is not
+            recorded, so a log in screen positions would be corrupted by a flip. For RETIRED/DEFAULTED
+            this is the side that CONCEDED; the opponent wins.
+        playerId:
+          type: string
+          format: uuid
+          description: >-
+            Required for SERVER_ASSIGNED, and only then. A player rather than a side, because in doubles
+            the serve rotates through four people. Nothing auto-rotates — the umpire is the authority.
+
+    LiveSetResponse:
+      type: object
+      description: One banked set of a live match (#911).
+      required: [gamesTeam1, gamesTeam2, winner]
+      properties:
+        gamesTeam1:
+          type: integer
+        gamesTeam2:
+          type: integer
+        winner:
+          type: string
+          enum: [TEAM1, TEAM2]
+        tiebreakTeam1Points:
+          type: integer
+          nullable: true
+        tiebreakTeam2Points:
+          type: integer
+          nullable: true
+
+    LiveOutcomeResponse:
+      type: object
+      description: How a live match ended (#911).
+      required: [kind, winner]
+      properties:
+        kind:
+          type: string
+          enum: [COMPLETED, RETIRED, DEFAULTED]
+        winner:
+          type: string
+          enum: [TEAM1, TEAM2]
+        concededBy:
+          type: string
+          enum: [TEAM1, TEAM2]
+          nullable: true
+          description: The retiring or defaulted side; null for a match that was played out.
+
+    LiveMatchResponse:
+      type: object
+      description: >-
+        The live scoreboard (#911), folded from the umpire's action log. Points are RENDERED rather than
+        raw counts, so deuce has one implementation and no client grows a second.
+      required:
+        - matchId
+        - sequence
+        - hasStarted
+        - isPaused
+        - isTiebreak
+        - pointsTeam1
+        - pointsTeam2
+        - gamesTeam1
+        - gamesTeam2
+        - sets
+      properties:
+        matchId:
+          type: string
+          format: uuid
+        sequence:
+          type: integer
+          format: int64
+          description: How far the log has got; a client holding a lower number knows it is behind.
+        scorerId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Who currently holds the soft claim, if anyone.
+        hasStarted:
+          type: boolean
+        isPaused:
+          type: boolean
+        isTiebreak:
+          type: boolean
+        serverId:
+          type: string
+          format: uuid
+          nullable: true
+        pointsTeam1:
+          type: string
+          description: 0, 15, 30, 40 or AD — or a plain ordinal while isTiebreak is true.
+        pointsTeam2:
+          type: string
+        gamesTeam1:
+          type: integer
+          description: Games in the current, unbanked set.
+        gamesTeam2:
+          type: integer
+        sets:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiveSetResponse'
+        outcome:
+          $ref: '#/components/schemas/LiveOutcomeResponse'
 
     SetScoreRequest:
       type: object

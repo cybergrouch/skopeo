@@ -456,6 +456,35 @@ enforces `MIN_GAMES_TO_WIN = 4`, so a set the engine will happily bank at 3-2 �
 requirement — cannot be submitted through `uploadResult` at all. And retirement/default still have no
 representation (§10). Both belong with the retirement work rather than being half-solved here.
 
+### Shipped — step 3c of §13, the HTTP surface
+
+| | |
+|---|---|
+| `GET /api/v1/matches/{id}/live` | the scoreboard |
+| `POST …/live/events` | one umpire action |
+| `POST …/live/undo` | take the last one back |
+| `POST` / `DELETE …/live/claim` | take or give up the scoring |
+
+Three decisions the API forced:
+
+- **Points are rendered on the server**, not returned as raw counts. `0`/`15`/`30`/`40`/`AD`, or a plain
+  ordinal in a tiebreak. Handing out raw counts would invite every client to grow its own implementation
+  of deuce, and the umpire view and the spectator view would eventually disagree.
+- **Undo is its own endpoint with an empty body, because the server picks the target.** Only the engine
+  knows which action is still in force — an undo of an undo is a redo — so a client naming a sequence
+  would be duplicating that reasoning and would drift from it. `UNDONE` is therefore not a postable kind.
+- **Parsing lives in the service, not the route.** `routes` may not depend on `model` (enforced with no
+  exception), so a route cannot name a `ScoreEvent`. `ScoreEventParser` does the translation, and the
+  service's public surface takes and returns DTOs — which meant reworking the model-returning signatures
+  step 3b shipped.
+
+An unknown kind, an unknown side, a missing payload the kind requires, or a malformed player id are all
+400s rather than being ignored. Silently dropping a field the caller meant is how a scoreboard ends up
+quietly wrong.
+
+The read is authenticated. The *public* spectator scoreboard is a Firestore projection written by the
+server (step 5), not this endpoint.
+
 ### What this means for score correction
 
 A post-finalize fix goes through the existing score-correction path (#776), not by reopening the stack.
