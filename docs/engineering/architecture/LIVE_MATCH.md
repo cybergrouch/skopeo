@@ -202,6 +202,51 @@ The engine is **permissive**: it tracks points, and the umpire declares game, se
 already requires that the UI not presume a tiebreak target and that a set may end below six games.
 Encoding every format variant is where tennis scoring implementations go to die.
 
+### Two functions, and only one of them holds the rules
+
+```kotlin
+// The step. Every scoring rule lives here and nowhere else.
+fun apply(state: ScoreState, event: ScoreEvent): ScoreState
+
+// The replay. Derived — a fold over `apply`, not a second implementation.
+fun replay(log: List<LoggedEvent>): ScoreState =
+    effective(log).fold(initial = ScoreState.start(...)) { state, event -> apply(state, event) }
+```
+
+`replay` is the one the server actually calls; `apply` is where deuce, advantage, tiebreak and set
+completion are decided. Keeping `replay` a fold rather than its own traversal is the point: there is a
+single implementation of the rules, so the live path and the replay path cannot drift — which is the
+classic way event-sourced scoring goes wrong.
+
+### `apply` should never see an UNDO
+
+This is the part that is easy to get wrong. Undoing is not a scoring operation and cannot be expressed
+as one: "un-applying" a point needs to know what the state was *before* it, which a step function does
+not have.
+
+So resolve undo **before** folding. `effective(log)` walks the log, drops each event cancelled by a
+later `UNDO` marker (and the markers themselves), and hands `apply` nothing but real scoring events.
+`apply` stays a plain tennis step function with no history awareness, and the append-only log from §6 is
+preserved intact for the audit summary.
+
+### `ScoreState` is the current score, and it is never stored as the truth
+
+It holds what the scoreboard needs: points in the current game per side, games in the current set,
+completed sets, who is serving, whether the game is a tiebreak, and whether the match has ended. That is
+deliberately close to the spectator payload in §6 — the document written to Firestore is a projection of
+this, not a separate model.
+
+Two rules follow from §2 and §8a, and both are easy to violate later "for performance":
+
+- **Do not cache `ScoreState` in memory between requests.** The server is stateless per request because
+  two Cloud Run instances would otherwise diverge. Each write is `replay(log)` → `apply(new event)` →
+  persist → project.
+- **Do not read the Firestore document back to obtain current state.** It is an outbound projection for
+  spectators. The log is the input; reading the projection back would make it an authority it is not.
+
+**No snapshotting.** A match is a few hundred events, so folding the whole log on every write costs
+microseconds. Introducing snapshots would add a second thing that can be stale for no measurable gain.
+
 ---
 
 ## 8. Decision — finalize goes through the existing result path
