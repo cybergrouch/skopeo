@@ -229,6 +229,36 @@ later `UNDO` marker (and the markers themselves), and hands `apply` nothing but 
 `apply` stays a plain tennis step function with no history awareness, and the append-only log from §6 is
 preserved intact for the audit summary.
 
+#### This does not mean `ScoreState` should hold the stack
+
+It is a natural inference — *undo needs history, so the state must carry history* — and it is worth
+saying plainly why the answer is no. **The stack is held; it is just not held inside `ScoreState`.**
+
+```
+log: List<LoggedEvent>          ← the stack lives HERE (Postgres, §8a)
+  │
+  ├── effective(log)            ← the ONLY layer that knows about UNDO
+  │        │
+  │        └── fold with apply(state, event)   ← sees real scoring events only
+  │
+  └── ScoreState                ← the current score. No history, by design.
+```
+
+`apply` does not need history *because it never sees an undo*. Undo is a property of the log, and it is
+resolved where the log is.
+
+Putting the stack inside the state instead would cost three things:
+
+- `apply` becomes history-aware, which is exactly the simplicity that made it exhaustively testable;
+- `ScoreState` stops being usable as the spectator projection (§6), because the projection would then
+  carry the whole log — the opposite of the small public surface that section argues for;
+- the log ends up represented twice, in storage and in the state folded from it, which is two things to
+  keep in step.
+
+The alternative design — state as `(score, history)` with `apply` handling UNDO — is legitimate in the
+abstract and is how some event-sourced systems do it. It is the wrong trade *here* specifically because
+`ScoreState` doubles as the thing broadcast to spectators.
+
 ### `ScoreState` is the current score, and it is never stored as the truth
 
 It holds what the scoreboard needs: points in the current game per side, games in the current set,
