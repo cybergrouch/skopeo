@@ -481,10 +481,10 @@ than persisted, recording a partial set at 1–5 needs no decision about "who wo
 rating side derives the leader, and the match side takes the designated winner. The two stop competing
 for the same column.
 
-**Scope note.** This is a refactor of existing schema and of the calculator's input model, not
-LiveMatch-specific work, and it touches matches that are already rated. It is a sensible prerequisite
-and probably wants its own issue rather than riding along with the umpire view — but doing it *first*
-makes the retirement work substantially smaller.
+**Raised separately as #917.** It refactors existing schema and the calculator's input model, is not
+LiveMatch-specific, and touches matches that are already rated — so it does not ride along with the
+umpire view. Doing it *first* makes the retirement work substantially smaller, which is why it is a
+prerequisite rather than a follow-up.
 
 ### Points and awards follow the record, not the rating
 
