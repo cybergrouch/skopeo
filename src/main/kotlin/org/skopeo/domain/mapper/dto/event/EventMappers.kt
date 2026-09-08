@@ -71,6 +71,9 @@ internal fun EventParticipantRef.toResponse(showRawRating: Boolean = false): Eve
                     confidence = it.confidence.toPlainString(),
                 )
             },
+        // Same gate as the raw rating value above: a self-rating is a claim about a person, so it goes
+        // to the organizer who has to act on it, not onto the public event page.
+        proposedRating = if (showRawRating) proposedRating?.toPlainString() else null,
         status = status.name,
         isPlaceholder = placeholder,
         isDeleted = deleted,

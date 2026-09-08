@@ -441,6 +441,10 @@ export function EventManagerView({ eventId }: { eventId: string }) {
                     ? undefined
                     : (userId) => removeParticipant.mutate({ id: eventId, userId })
                 }
+                // #907: rate an unassented player here rather than sending the host to the Ratings tab
+                // and back. Withheld on a locked event for the same reason every other control is —
+                // and the event still cannot be finalized until everyone has a rating.
+                onRated={locked || !canRate(me?.capabilities) ? undefined : refreshEvent}
               />
               {locked ? null : (
                 <div className="space-y-1">

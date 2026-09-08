@@ -7252,6 +7252,13 @@ components:
           type: integer
           nullable: true
           description: Whole years as of today, computed from date of birth.
+        proposedRating:
+          type: string
+          nullable: true
+          description: >-
+            The self-rating claimed at sign-up (#75), present only while no rater has assented to it
+            (#907) and only for a viewer allowed the raw rating figure. Lets an organizer approve or
+            override it without leaving the event.
         rating:
           nullable: true
           type: object

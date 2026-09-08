@@ -38,6 +38,13 @@ vi.mock("@/features/event/EventManagerView", () => ({
 vi.mock("@/api/generated/users/users", () => ({
   useGetApiV1UsersMe: () => ({ data: { capabilities: state.capabilities } }),
 }));
+// EventPage renders EventParticipantList directly, which renders SetRatingForm since #907. That pulls in
+// the generated ratings hook and, through @/api/axios, getAuth() at module load — which throws
+// FirebaseError: auth/invalid-api-key wherever no Firebase key is configured (i.e. CI).
+vi.mock("@/api/generated/ratings/ratings", () => ({
+  usePutApiV1UsersUserIdRatings: () => ({ isPending: false, mutateAsync: vi.fn() }),
+}));
+
 vi.mock("@/api/generated/events/events", () => ({
   useGetApiV1EventsCodeCode,
   // The manager payload is only fetched for a match manager; a plain viewer never resolves one.
