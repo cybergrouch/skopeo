@@ -2027,46 +2027,6 @@ class EventServiceTest {
     }
 
     @Test
-    fun `a winner with no rating is skipped and not awarded (#403)`() {
-        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val p1 = provision(uid = "p1")
-        val p2 = provision(uid = "p2")
-        // p1 wins but has no rating → no band to tag → the award is skipped.
-        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
-        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
-        rate(userId = p2.id, level = "3.5")
-        // #907: finalize refuses while any APPROVED participant is unrated, so the only way an unrated
-        // player still reaches the awarder is off the roster — a fixture is created, then the player is
-        // removed from the event (removeParticipant has no guard against a participant with matches).
-        // That is a real, reachable state, and it is what keeps this skip-the-unrated path live.
-        service.removeParticipant(token = token(uid = "host"), eventId = event.id, userId = p1.id).shouldBeRight()
-
-        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
-        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
-    }
-
-    @Test
-    fun `a completed fixture with no designation in a budgeted event awards nothing (#403)`() {
-        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val p1 = provision(uid = "p1")
-        val p2 = provision(uid = "p2")
-        rate(userId = p1.id, level = "4.0")
-        // A budgeted event whose completed, won fixture carries NO designation → the designation filter
-        // drops it (exercises the null-designation arm without an early type/config return).
-        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
-        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
-
-        // #907: finalize refuses while any APPROVED participant is unrated, so the only way an unrated
-        // player still reaches the awarder is off the roster — a fixture is created, then the player is
-        // removed from the event (removeParticipant has no guard against a participant with matches).
-        // That is a real, reachable state, and it is what keeps this skip-the-unrated path live.
-        service.removeParticipant(token = token(uid = "host"), eventId = event.id, userId = p2.id).shouldBeRight()
-
-        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
-        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
-    }
-
-    @Test
     fun `placement awards use the ANNUAL_TOURNAMENT point class regardless of the event window (#525)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
 
@@ -2171,12 +2131,12 @@ class EventServiceTest {
     }
 
     @Test
-    fun `a Plate Finals awards 3rd and 4th place, and an unrated placer is skipped (#525)`() {
+    fun `a Plate Finals awards 3rd and 4th place (#525)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
-        // p1 (winner) is rated → 3rd place; p2 (loser) has no rating → no band → skipped.
         rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "3.5")
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
         seedCompletedFixture(
             eventId = event.id,
@@ -2186,17 +2146,16 @@ class EventServiceTest {
             placementBracket = PlacementBracket.PLATE_FINALS,
         )
 
-        // #907: finalize refuses while any APPROVED participant is unrated, so the only way an unrated
-        // player still reaches the awarder is off the roster — a fixture is created, then the player is
-        // removed from the event (removeParticipant has no guard against a participant with matches).
-        // That is a real, reachable state, and it is what keeps this skip-the-unrated path live.
-        service.removeParticipant(token = token(uid = "host"), eventId = event.id, userId = p2.id).shouldBeRight()
-
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // Unsanctioned Plate Finals: winner p1 → 3rd (20); the unrated loser p2 is skipped.
+        // Unsanctioned Plate Finals: winner p1 -> 3rd, loser p2 -> 4th.
+        //
+        // This test also used to assert that an UNRATED placer is skipped. That is unconstructable as of
+        // #912: a match player is always an approved participant (ensureEventParticipants at creation, and
+        // neither removal nor HOLD can drop a player who has played), and #907 refuses to finalize while
+        // any approved participant is unrated. The awarder's skip-the-unrated branch is now defensive only.
         awardRepo.listByUser(userId = p1.id).single().points shouldBe placementRate(place = 3)
-        awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 4)
     }
 
     @Test
@@ -2469,5 +2428,69 @@ class EventServiceTest {
         events.selfSignup(eventId = event.id, userId = pending.id)
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+    }
+
+    @Test
+    fun `a player who has played cannot be removed from the event (#912)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "3.5")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        val bystander = provision(uid = "p3")
+        service.addParticipant(token = token(uid = "host"), eventId = event.id, userId = bystander.id).shouldBeRight()
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+
+        // Removing them would drop them off the APPROVED roster the #907 finalize guard reads, while their
+        // match still exists — letting an unrated player reach the rating queue and abort the whole run.
+        service
+            .removeParticipant(token = token(uid = "host"), eventId = event.id, userId = p1.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+            .message shouldContain "cannot be removed"
+
+        // A participant who has NOT played is still removable — the guard is about play, not membership.
+        service.removeParticipant(token = token(uid = "host"), eventId = event.id, userId = bystander.id).shouldBeRight()
+    }
+
+    @Test
+    fun `a player who has played cannot be put on hold either (#912)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "3.5")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+
+        // HOLD takes them off the APPROVED roster just as effectively as removal, so it is the same hole
+        // through a different door.
+        service
+            .decideParticipant(token = token(uid = "host"), eventId = event.id, userId = p1.id, statusRaw = "HOLD")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+
+        // Re-approving is always fine: it puts them back ON the roster, which the guard exists to protect.
+        service
+            .decideParticipant(token = token(uid = "host"), eventId = event.id, userId = p1.id, statusRaw = "APPROVED")
+            .shouldBeRight()
+    }
+
+    @Test
+    fun `a soft-deleted fixture does not pin its players to the roster (#912)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "3.5")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        val match = seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+
+        matchRepo.setActive(matchId = match.id, active = false, disabledAt = LocalDateTime.now()).shouldBeRight()
+
+        // A deleted fixture is not play that happened, so it must not hold someone on the roster forever —
+        // otherwise a mistaken fixture would make its players permanently unremovable.
+        service.removeParticipant(token = token(uid = "host"), eventId = event.id, userId = p1.id).shouldBeRight()
     }
 }
