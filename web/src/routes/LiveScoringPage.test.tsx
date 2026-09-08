@@ -37,6 +37,8 @@ const recordMutate = vi.fn();
 const undoMutate = vi.fn();
 const claimMutate = vi.fn();
 const finalizeMutate = vi.fn();
+const exitFullscreen = vi.fn().mockResolvedValue(undefined);
+let finalizeOnSuccess: (() => void) | undefined;
 
 const liveView = {
   matchId: "m-1",
@@ -77,6 +79,14 @@ describe("LiveScoringPage", () => {
       value: vi.fn().mockResolvedValue(undefined),
       configurable: true,
     });
+    Object.defineProperty(document, "exitFullscreen", {
+      value: exitFullscreen,
+      configurable: true,
+    });
+    Object.defineProperty(document, "fullscreenElement", {
+      value: document.documentElement,
+      configurable: true,
+    });
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: false,
       media: query,
@@ -107,10 +117,12 @@ describe("LiveScoringPage", () => {
       mutate: claimMutate,
       isPending: false,
     });
-    usePostApiV1MatchesMatchIdLiveFinalize.mockReturnValue({
-      mutate: finalizeMutate,
-      isPending: false,
-    });
+    usePostApiV1MatchesMatchIdLiveFinalize.mockImplementation(
+      (opts?: { mutation?: { onSuccess?: () => void } }) => {
+        finalizeOnSuccess = opts?.mutation?.onSuccess;
+        return { mutate: finalizeMutate, isPending: false };
+      },
+    );
   });
 
   it("shows a rotate prompt in portrait and nothing else (#911)", () => {
@@ -295,5 +307,123 @@ describe("LiveScoringPage", () => {
 
     expect(screen.getByText(/6-7/)).toBeInTheDocument();
     expect(screen.getByText("Tiebreak")).toBeInTheDocument();
+  });
+  it("shows a loading state while the match is being fetched", () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({ data: undefined, isLoading: true });
+    renderPage();
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+  });
+
+  it("shows a loading state while the score is being fetched", async () => {
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: undefined,
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+    expect(screen.getByText("Loading score…")).toBeInTheDocument();
+  });
+
+  it("offers a way back to the match from each refusal", async () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "u1", capabilities: ["PLAYER"] },
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: "Back to the match" }));
+    // A dead end with no way out is the failure mode worth guarding: the umpire view fills the screen.
+    expect(screen.queryByText("You cannot score this match")).not.toBeInTheDocument();
+  });
+
+  it("offers Start match until the match has officially started (#911)", async () => {
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, hasStarted: false },
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    await user.click(screen.getByRole("button", { name: "Start match" }));
+    // Distinct from the first point on purpose — it is the anchor a match duration is measured from.
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "MATCH_STARTED" },
+    });
+  });
+
+  it("ends a set, starts a tiebreak, and records a default", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    await user.click(screen.getByRole("button", { name: "Set to 1" }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "SET_AWARDED", side: "TEAM1" },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Start tiebreak" }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "TIEBREAK_STARTED" },
+    });
+
+    await user.click(screen.getByRole("button", { name: "2 defaults" }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "DEFAULTED", side: "TEAM2" },
+    });
+  });
+
+  it("every action names the side it was pressed for, on both sides", async () => {
+    // The whole control row is symmetric, and a copy-paste slip that wired both buttons to TEAM1 would
+    // be invisible in a test that only ever presses one of each pair. So press the other one.
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    await user.click(screen.getByRole("button", { name: "Set to 2" }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "SET_AWARDED", side: "TEAM2" },
+    });
+
+    await user.click(screen.getByRole("button", { name: "2 retires" }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "RETIRED", side: "TEAM2" },
+    });
+
+    await user.click(screen.getByRole("button", { name: "1 defaults" }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "DEFAULTED", side: "TEAM1" },
+    });
+  });
+
+  it("finalizing submits, then leaves fullscreen and returns to the match", async () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "u1", capabilities: ["PLAYER", "SCORER", "HOST"] },
+    });
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        outcome: { kind: "COMPLETED", winner: "TEAM1", concededBy: null },
+      },
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    await user.click(screen.getByRole("button", { name: "Finalize" }));
+    expect(finalizeMutate).toHaveBeenCalledWith({ matchId: "m-1" });
+
+    // Leaving fullscreen on the way out matters: the umpire view is the only page that takes it, so
+    // failing to release it would strand the whole app full-screen.
+    finalizeOnSuccess?.();
+    expect(exitFullscreen).toHaveBeenCalled();
   });
 });
