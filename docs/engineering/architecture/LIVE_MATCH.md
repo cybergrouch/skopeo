@@ -447,6 +447,45 @@ rating change (#862's derivation view), not just here.
    probably should not be rated — which is a *different* answer from retirement, and is worth deciding
    before it is built rather than assuming symmetry.
 
+### Where each winner should live
+
+**Decided.** The models should carry only the **designated** match winner. The **derived** winner — who
+took a set — should be computed where it is used, next to the rating calculation, rather than stored.
+
+`setWinner` is already a pure function of data the set row holds:
+
+```kotlin
+team1Games > team2Games            -> team1
+team2Games > team1Games            -> team2
+else, tiebreak points decide       -> whoever has more
+otherwise                          -> no clear winner
+```
+
+Nothing else feeds it. So `match_sets.winner_team_id` is a **stored derivation** — a second source of
+truth for something its own row already determines, and nothing stops the two disagreeing.
+
+Checked against production: **959 sets, zero null winners, zero rows where the stored winner disagrees
+with the games**, and zero sets with tied games (so the tiebreak branch, while reachable through the
+API, has never been needed by real data). The column is fully reconstructible today, which is exactly
+when it is safe to stop storing it.
+
+The resulting split is clean:
+
+| | Nature | Where |
+|---|---|---|
+| **Match winner** | *designated* — declared at record time, and the only one a retirement changes | `matches.winner_team_id`, on the model |
+| **Set winner** | *derived* — a pure function of that set's games and tiebreak | computed for the rating calculation, not stored |
+
+This also removes the thing that makes retirement feel awkward. Once the set winner is derived rather
+than persisted, recording a partial set at 1–5 needs no decision about "who won" an unfinished set — the
+rating side derives the leader, and the match side takes the designated winner. The two stop competing
+for the same column.
+
+**Scope note.** This is a refactor of existing schema and of the calculator's input model, not
+LiveMatch-specific work, and it touches matches that are already rated. It is a sensible prerequisite
+and probably wants its own issue rather than riding along with the umpire view — but doing it *first*
+makes the retirement work substantially smaller.
+
 ### Points and awards follow the record, not the rating
 
 `EventFinalizeAwarder` reads `match.winnerTeamId`, so ranking points go to the opponent. That is
