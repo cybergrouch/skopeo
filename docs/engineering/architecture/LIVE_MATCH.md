@@ -250,16 +250,27 @@ deliberately, not something to keep by default.
 
 ### When it is disposed
 
-Deleting in the same transaction as finalize is the tidiest, but unforgiving: a mis-finalized match has
-nothing left to inspect. Preferred instead:
+**Decided: finalize never deletes the stack.** Disposal is always deferred to a separate sweep.
 
 1. Finalize writes the result via `uploadResult`, writes the audit summary, and marks the stack
-   **completed** rather than deleting it.
+   **completed**.
 2. A later sweep prunes completed stacks past a retention window.
 
-That also gives the **abandoned session** case somewhere to be handled (§11): a stack that never
+Deleting inside the finalize transaction would be tidier, and was rejected: a mis-finalized match would
+have nothing left to inspect, and finalize is the exact moment you are most likely to want to look. The
+cost of keeping it is a table that grows until the sweep runs, which is a much better problem.
+
+Separating the two also means **the sweep is the only thing that deletes**, so there is one place to
+reason about retention rather than two, and one place to fix if it is ever wrong.
+
+That gives the **abandoned session** case somewhere to be handled (§11) as well: a stack that never
 finalizes is the same cleanup problem, and a fixture must not be left stuck `IN_PROGRESS` because
-someone closed a laptop.
+someone closed a laptop. Note the sweep therefore has two distinct jobs — pruning *completed* stacks,
+and resolving *stale in-progress* ones — and they may well want different windows.
+
+**Open: the retention window itself.** Nothing here fixes a number. It wants to be long enough that a
+disputed result can still be inspected and short enough that the table does not accumulate several
+hundred rows per match indefinitely.
 
 ### What this means for score correction
 
@@ -313,9 +324,10 @@ retiring player. This is a product decision with rating consequences, not a UI s
   current-score document, so history is not exposed by default. Still worth confirming that no product
   requirement (a point-by-point replay, say) wants it later.
 - **Doubles.** Two sides fits, but serving rotates through four players. In scope for the first cut?
-- **An abandoned scoring session** must not leave a fixture stuck `IN_PROGRESS` forever. The stack
-  lifecycle in §8a is where this is handled — the retention sweep that prunes completed stacks is the
-  same mechanism that has to notice one that never finished.
+- **An abandoned scoring session** must not leave a fixture stuck `IN_PROGRESS` forever. §8a gives this
+  a home in the sweep, but two things are still unfixed: how long a stack may sit untouched before it
+  counts as abandoned, and what resolving it does — discard the stack and revert the fixture to
+  SCHEDULED, or leave it for a human. The retention window for *completed* stacks is open too.
 
 ---
 
