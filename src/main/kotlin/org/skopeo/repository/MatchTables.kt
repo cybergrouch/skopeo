@@ -81,7 +81,9 @@ internal object MatchSetsTable : UUIDTable(name = "match_sets") {
     val setNumber = integer(name = "set_number")
     val team1Games = integer(name = "team1_games")
     val team2Games = integer(name = "team2_games")
-    val winnerTeamId = reference(name = "winner_team_id", foreign = TeamsTable, onDelete = ReferenceOption.RESTRICT)
+
+    // No winner column (#917): who won a set is derived from these games and the tiebreak below, in
+    // mapper.entity. matches.winner_team_id above is a different thing — the DESIGNATED match winner.
     val hasTiebreak = bool(name = "has_tiebreak").default(defaultValue = false)
 }
 
@@ -89,5 +91,4 @@ internal object MatchSetTiebreaksTable : UUIDTable(name = "match_set_tiebreaks")
     val matchSetId = reference(name = "match_set_id", foreign = MatchSetsTable, onDelete = ReferenceOption.CASCADE)
     val team1Points = integer(name = "team1_points")
     val team2Points = integer(name = "team2_points")
-    val winnerTeamId = reference(name = "winner_team_id", foreign = TeamsTable, onDelete = ReferenceOption.RESTRICT)
 }

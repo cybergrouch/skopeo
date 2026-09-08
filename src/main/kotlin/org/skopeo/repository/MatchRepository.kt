@@ -126,7 +126,6 @@ class MatchRepository {
                         it[setNumber] = set.setNumber
                         it[team1Games] = set.team1Games
                         it[team2Games] = set.team2Games
-                        it[MatchSetsTable.winnerTeamId] = set.winnerTeamId
                         it[hasTiebreak] = hasTb
                     }.value
                 if (hasTb) {
@@ -134,7 +133,6 @@ class MatchRepository {
                         it[matchSetId] = setId
                         it[team1Points] = set.tiebreakTeam1Points!!
                         it[team2Points] = set.tiebreakTeam2Points!!
-                        it[MatchSetTiebreaksTable.winnerTeamId] = set.winnerTeamId
                     }
                 }
             }
@@ -930,7 +928,6 @@ private fun setsOf(matchId: UUID): List<MatchSetEntity> =
                 setNumber = setRow[MatchSetsTable.setNumber],
                 team1Games = setRow[MatchSetsTable.team1Games],
                 team2Games = setRow[MatchSetsTable.team2Games],
-                winnerTeamId = setRow[MatchSetsTable.winnerTeamId].value,
                 tiebreakTeam1Points = tb?.get(expression = MatchSetTiebreaksTable.team1Points),
                 tiebreakTeam2Points = tb?.get(expression = MatchSetTiebreaksTable.team2Points),
             )
