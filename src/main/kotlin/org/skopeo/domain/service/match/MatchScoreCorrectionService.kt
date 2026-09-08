@@ -152,6 +152,11 @@ class MatchScoreCorrectionService(
                 deriveOutcome(
                     team1Id = match.team1.teamId,
                     team2Id = match.team2.teamId,
+                    // No designated winner (#917): a correction re-derives from the corrected sets, which
+                    // is right for every match that can exist today. When retirement lands (#911) a
+                    // corrected retirement will need to carry its designation through rather than lose it
+                    // here — there is no way to tell "designated" from "derived" on a stored match yet,
+                    // and that flag arrives with the feature that needs it.
                     request = MatchResultRequest(sets = request.sets),
                 ).bind()
 

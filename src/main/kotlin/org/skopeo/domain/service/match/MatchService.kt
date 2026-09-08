@@ -896,8 +896,47 @@ internal fun deriveOutcome(
                     tiebreakTeam2Points = set.tiebreakTeam2Points,
                 )
             }
-        ensure(condition = team1Sets != team2Sets) { ServiceError.Validation(message = "the match has no clear winner (sets are tied)") }
-        resolved to if (team1Sets > team2Sets) team1Id else team2Id
+        // The MATCH winner may be designated (#917); the SET winners above never are. When one is given
+        // the sets-tied guard does not apply — it only ever protected the derivation, and a designated
+        // winner has nothing to derive. A retirement can legitimately stand at one set all.
+        val designated = designatedWinner(team1Id = team1Id, team2Id = team2Id, raw = request.winnerTeamId).bind()
+        if (designated != null) {
+            resolved to designated
+        } else {
+            ensure(condition = team1Sets != team2Sets) {
+                ServiceError.Validation(message = "the match has no clear winner (sets are tied)")
+            }
+            resolved to if (team1Sets > team2Sets) team1Id else team2Id
+        }
+    }
+
+/**
+ * Parse and validate an optional designated match winner (#917); null when the caller omitted it, which
+ * means "derive from the sets" and is the behaviour every existing caller gets.
+ *
+ * It must name one of the two teams actually playing. A typo'd or foreign id would otherwise record a
+ * winner who was not in the match, which nothing downstream would catch.
+ */
+private fun designatedWinner(
+    team1Id: UUID,
+    team2Id: UUID,
+    raw: String?,
+): Either<ServiceError, UUID?> =
+    either {
+        if (raw == null) {
+            null
+        } else {
+            val parsed =
+                try {
+                    UUID.fromString(raw)
+                } catch (_: IllegalArgumentException) {
+                    raise(r = ServiceError.Validation(message = "Invalid winner team id '$raw'"))
+                }
+            ensure(condition = parsed == team1Id || parsed == team2Id) {
+                ServiceError.Validation(message = "The designated winner must be one of the match's two teams")
+            }
+            parsed
+        }
     }
 
 private fun setWinner(
