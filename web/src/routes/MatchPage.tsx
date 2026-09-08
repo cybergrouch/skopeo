@@ -1,4 +1,5 @@
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { ContentLink } from "@/components/ContentLink";
 import { PlaceholderTag } from "@/components/PlaceholderTag";
 import { PublicPageLink } from "@/components/PublicPageLink";
@@ -23,7 +24,7 @@ import { ConfidenceValue } from "@/components/ConfidenceValue";
 import { Badge } from "@/components/ui/badge";
 import { MatchScoreCorrectionCard } from "@/components/MatchScoreCorrectionCard";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
-import { isAdministrator } from "@/auth/capabilities";
+import { canScore, isAdministrator } from "@/auth/capabilities";
 
 /** A player's name as a link to their public profile, falling back to the code or "Unknown". */
 function PlayerLink({ player }: { player: MatchPublicPlayer }) {
@@ -231,6 +232,15 @@ export function MatchPage() {
     match?.rated === true &&
     match?.isActive !== false;
 
+  // Offer live scoring while the match is still open (#911). Not once it is rated — the result is
+  // frozen then, and the server refuses. `match.id` is only revealed to callers who may act on the
+  // match, so its absence is itself part of the gate rather than a separate check.
+  const canScoreLive =
+    canScore(meQuery.data?.capabilities) &&
+    Boolean(match?.id) &&
+    match?.rated !== true &&
+    match?.isActive !== false;
+
   const score = match?.sets
     .map((s) => `${s.team1Games}-${s.team2Games}`)
     .join(" ");
@@ -331,6 +341,22 @@ export function MatchPage() {
                 ))}
               </div>
             ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {match && canScoreLive ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Live scoring</CardTitle>
+            <CardDescription>
+              Keep score point by point. Opens full-screen in landscape.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link to={`/matches/${match.publicCode}/score`}>
+              <Button>Score this match</Button>
+            </Link>
           </CardContent>
         </Card>
       ) : null}

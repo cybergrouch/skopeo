@@ -2179,6 +2179,54 @@ paths:
         '409':
           description: The match is disabled or already rated
 
+  /api/v1/matches/{matchId}/live/finalize:
+    parameters:
+      - name: matchId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Write the live score into the match as a real result (#911)
+      description: |
+        Replays the umpire's log and submits it through the EXISTING result path, so ratings, ranking
+        points and score correction keep working untouched. Returns a MatchResponse, not a live view:
+        after this the match IS the record.
+
+        Requires the match to have been declared over — record MATCH_AWARDED, RETIRED or DEFAULTED
+        first, or this answers 409.
+
+        SCORING AND FINALIZING ARE DIFFERENT RIGHTS. Keying points in needs only SCORER and is
+        club-agnostic; finalizing goes through the ordinary result gate and therefore keeps the #789 club
+        rule, because writing the permanent record is an organizer's act. A plain SCORER gets a 403 here.
+
+        The unbanked set is included only if it decided something: a set standing level (3-3, or 0-0
+        because nobody started) has no derivable winner since #917, and contributes no dominance anyway.
+        A walkover finalizes with no sets at all.
+
+        The log is NOT deleted. The umpire credit is folded into the match and the claim released;
+        disposal is left to a later sweep so a mis-finalized match can still be inspected.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The recorded match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchResponse'
+        '403':
+          description: >-
+            Caller may not record a result for this match — not an ADMINISTRATOR, not a named owner of
+            the event's club, and not the event's creator (#789). Being a SCORER is not sufficient.
+        '404':
+          description: No such match
+        '409':
+          description: The match has not been declared over, or is disabled or already rated
+
   /api/v1/matches/{matchId}/live/claim:
     parameters:
       - name: matchId
