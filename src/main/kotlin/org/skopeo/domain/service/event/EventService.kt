@@ -666,6 +666,34 @@ class EventService(
             toView(event = updated).toResponse()
         }
 
+    /**
+     * Refuse to take a player who has already played off the event's APPROVED roster (#912).
+     *
+     * `event.participantIds` resolves to APPROVED members only, and the #907 finalize guard is built on
+     * it — so removing or holding a player who has a match makes them invisible to that guard while their
+     * match still exists. An unrated player could then reach the rating queue, where
+     * `RatingCalculationService` raises and **aborts the entire run**, not just that match: every other
+     * pending match across every other event stops being rated until someone identifies the player.
+     *
+     * Closing this at the mutation points, rather than widening the finalize guard, is what keeps the
+     * invariant simple: a match's players are always a subset of the event's approved roster.
+     * `ensureEventParticipants` establishes that at fixture creation; these two guards preserve it.
+     * (Account merge re-points `team_users` and `event_participants` in one transaction, so it cannot
+     * diverge them either.)
+     */
+    private fun ensureHasNotPlayed(
+        eventId: UUID,
+        userId: UUID,
+        verb: String,
+    ): Either<ServiceError, Unit> =
+        either {
+            ensure(condition = !matches.hasPlayedInEvent(eventId = eventId, userId = userId)) {
+                ServiceError.Validation(
+                    message = "A player with a match in this event cannot be $verb it. Delete their fixtures first.",
+                )
+            }
+        }
+
     fun removeParticipant(
         token: VerifiedFirebaseToken,
         eventId: UUID,
@@ -678,6 +706,7 @@ class EventService(
                     ServiceError.NotFound(message = "Event $eventId not found")
                 }
             ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
+            ensureHasNotPlayed(eventId = eventId, userId = userId, verb = "removed from").bind()
             val updated =
                 ensureNotNull(value = events.removeParticipant(eventId = eventId, userId = userId)?.toDomain()) {
                     ServiceError.NotFound(message = "Event $eventId not found")
@@ -759,6 +788,11 @@ class EventService(
             ensureNotFinalized(event = event).bind()
             ensure(condition = status == EventParticipantStatus.APPROVED || status == EventParticipantStatus.HOLD) {
                 ServiceError.Validation(message = "A decision must be APPROVED or HOLD")
+            }
+            // HOLD takes a player off the APPROVED roster just as effectively as removal does, so it is the
+            // same hole through a different door (#912). Re-APPROVING is always fine.
+            if (status == EventParticipantStatus.HOLD) {
+                ensureHasNotPlayed(eventId = eventId, userId = userId, verb = "put on hold in").bind()
             }
             val approver = if (status == EventParticipantStatus.APPROVED) actor else null
             val updated =

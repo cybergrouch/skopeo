@@ -7,6 +7,7 @@ import arrow.core.Either
 import arrow.core.left
 import arrow.core.right
 import org.jetbrains.exposed.sql.ISqlExpressionBuilder
+import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.Op
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
@@ -259,6 +260,33 @@ class MatchRepository {
                 .where { MatchesTable.isActive and (MatchesTable.eventId eq eventId) }
                 .orderBy(MatchesTable.matchDate to SortOrder.DESC)
                 .map { loadMatch(id = it[MatchesTable.id].value)!! }
+        }
+
+    /**
+     * Whether [userId] appears on either side of any **active** match in [eventId] (#912).
+     *
+     * Backs the rule that a player who has already played cannot be taken off the event's roster. Asked in
+     * SQL rather than by loading the event's matches and scanning them in memory: the caller only needs a
+     * yes/no, and `loadMatch` assembles the full aggregate (teams, sides, sets, tiebreaks) per row.
+     *
+     * Disabled matches are excluded deliberately — a soft-deleted fixture is not play that happened, so it
+     * should not pin someone to the roster forever.
+     */
+    fun hasPlayedInEvent(
+        eventId: UUID,
+        userId: UUID,
+    ): Boolean =
+        transaction {
+            MatchesTable
+                .join(otherTable = TeamUsersTable, joinType = JoinType.INNER) {
+                    (TeamUsersTable.teamId eq MatchesTable.team1Id) or (TeamUsersTable.teamId eq MatchesTable.team2Id)
+                }.selectAll()
+                .where {
+                    MatchesTable.isActive and
+                        (MatchesTable.eventId eq eventId) and
+                        (TeamUsersTable.userId eq userId)
+                }.limit(count = 1)
+                .any()
         }
 
     /**
