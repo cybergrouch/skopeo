@@ -20,6 +20,7 @@ import org.skopeo.domain.model.TeamType
 import org.skopeo.repository.persistence.MatchAggregateEntity
 import org.skopeo.repository.persistence.MatchSetEntity
 import org.skopeo.repository.persistence.MatchSideEntity
+import java.util.UUID
 
 // Convert a raw MatchSideEntity to the domain MatchSide (a straight field copy).
 fun MatchSideEntity.toDomain(): MatchSide =
@@ -28,16 +29,53 @@ fun MatchSideEntity.toDomain(): MatchSide =
         userIds = userIds,
     )
 
-// Convert a raw MatchSetEntity to the domain MatchSetResult (a straight field copy).
-fun MatchSetEntity.toDomain(): MatchSetResult =
+/**
+ * Convert a raw `MatchSetEntity` to the domain `MatchSetResult`, **deriving** the set winner rather than
+ * copying the stored one (#917).
+ *
+ * Who won a set is a pure function of that set's own games and tiebreak points, so
+ * `match_sets.winner_team_id` is a stored derivation — a second source of truth for something the row
+ * already determines, with nothing preventing the two from disagreeing. Deriving here makes the games
+ * the only authority and leaves the column unread ahead of dropping it.
+ *
+ * This is the *derived* winner, and it is distinct from the **designated** match winner on `matches`.
+ * Today they always agree because both come from the sets; a retirement (#911) is the first case where
+ * they legitimately differ — the opponent is awarded the match while the retiring player may have been
+ * leading the unfinished set, and the rating should follow the tennis played.
+ */
+fun MatchSetEntity.toDomain(
+    team1Id: UUID,
+    team2Id: UUID,
+): MatchSetResult =
     MatchSetResult(
         setNumber = setNumber,
         team1Games = team1Games,
         team2Games = team2Games,
-        winnerTeamId = winnerTeamId,
+        winnerTeamId = derivedSetWinner(team1Id = team1Id, team2Id = team2Id),
         tiebreakTeam1Points = tiebreakTeam1Points,
         tiebreakTeam2Points = tiebreakTeam2Points,
     )
+
+/**
+ * Games decide the set; a tied set falls through to the tiebreak points. Mirrors the derivation applied
+ * at the recording boundary (`MatchService.setWinner`), which is the only other place the rule lives.
+ *
+ * A set with tied games and no deciding tiebreak cannot be recorded — `setWinner` rejects it — so the
+ * fallback here is unreachable for stored data. It returns the stored value rather than throwing, so a
+ * row that somehow predates or bypasses that validation still loads instead of breaking every read of
+ * the match.
+ */
+private fun MatchSetEntity.derivedSetWinner(
+    team1Id: UUID,
+    team2Id: UUID,
+): UUID =
+    when {
+        team1Games > team2Games -> team1Id
+        team2Games > team1Games -> team2Id
+        tiebreakTeam1Points != null && tiebreakTeam2Points != null && tiebreakTeam1Points != tiebreakTeam2Points ->
+            if (tiebreakTeam1Points > tiebreakTeam2Points) team1Id else team2Id
+        else -> winnerTeamId
+    }
 
 // Build the domain Match from the raw MatchAggregateEntity graph the repository returns: the `matches`
 // scalars plus the loaded sides/sets. The single boundary where the stored enum strings are parsed and
@@ -53,7 +91,7 @@ fun MatchAggregateEntity.toDomain(): Match =
         team1 = team1.toDomain(),
         team2 = team2.toDomain(),
         winnerTeamId = match.winnerTeamId,
-        sets = sets.map { it.toDomain() },
+        sets = sets.map { it.toDomain(team1Id = team1.teamId, team2Id = team2.teamId) },
         venue = match.venue,
         tournamentName = match.tournamentName,
         isActive = match.isActive,
