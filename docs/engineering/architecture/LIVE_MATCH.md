@@ -198,6 +198,55 @@ will not satisfy it unchanged (see §10).
 
 ---
 
+## 8a. Decision — the stack is working state, and it has a lifecycle
+
+**Decided.** The live stack is *not* a second store of scores. It exists because the engine needs an
+input to fold into a displayable score, and it is **disposable once the match is recorded**.
+
+### Where it lives, and what lives where
+
+| | Holds | Why there |
+|---|---|---|
+| **Postgres** | the event log (append-only, one row per umpire action) | the server folds it, it needs the per-match sequence + unique constraint from §2, and finalize is transactional with it |
+| **Firestore** | the *current derived score* only — one document per live match | spectators need the latest state, not the history; keeping the log out of Firestore also keeps the public surface small |
+| **`match_sets`** | the final result | the permanent record, written through the existing `uploadResult` (§8) |
+
+The log is never the answer to "what was the score of match X" once the match is over — `match_sets`
+is. That is what keeps this a front end rather than a parallel store.
+
+### The tension: "audit everything" versus "disposable"
+
+The feature asks for the stack so that *everything can be audited*, and also says it should be
+disposable. Those conflict if the raw log is simply deleted — the accountability goes with it.
+
+**Resolution: the durable audit is a summary in the existing domain audit log; the raw per-point stack
+is working state.** On finalize, record an `audit_log` entry (#100/#102) capturing who scored the match,
+how many actions were logged, how many were undone, and when it was finalized. That preserves the
+answerable questions — *who scored this, and did they correct themselves* — without keeping several
+hundred per-point rows per match forever.
+
+If per-point forensics later turn out to be genuinely needed, that is a retention decision to revisit
+deliberately, not something to keep by default.
+
+### When it is disposed
+
+Deleting in the same transaction as finalize is the tidiest, but unforgiving: a mis-finalized match has
+nothing left to inspect. Preferred instead:
+
+1. Finalize writes the result via `uploadResult`, writes the audit summary, and marks the stack
+   **completed** rather than deleting it.
+2. A later sweep prunes completed stacks past a retention window.
+
+That also gives the **abandoned session** case somewhere to be handled (§11): a stack that never
+finalizes is the same cleanup problem, and a fixture must not be left stuck `IN_PROGRESS` because
+someone closed a laptop.
+
+### What this means for score correction
+
+A post-finalize fix goes through the existing score-correction path (#776), not by reopening the stack.
+The stack is an input to recording a result, not a mechanism for revising one — otherwise it becomes
+the system of record by the back door, which §8 exists to prevent.
+
 ## 9. Decision — `SCORER` is a role set, not a hierarchy
 
 **Decided.**
@@ -243,7 +292,9 @@ retiring player. This is a product decision with rating consequences, not a UI s
 - **Does the spectator view need history**, or only the current score? History means the whole log is
   public; current-score-only is a far smaller surface.
 - **Doubles.** Two sides fits, but serving rotates through four players. In scope for the first cut?
-- **An abandoned scoring session** must not leave a fixture stuck `IN_PROGRESS` forever.
+- **An abandoned scoring session** must not leave a fixture stuck `IN_PROGRESS` forever. The stack
+  lifecycle in §8a is where this is handled — the retention sweep that prunes completed stacks is the
+  same mechanism that has to notice one that never finished.
 
 ---
 
@@ -258,7 +309,9 @@ its natural first user.
 
 1. `SCORER` capability, the `chk_capability` migration, and `SCORING_ROLES`.
 2. The pure scoring engine and its event model — no transport, no UI, exhaustively unit-tested.
-3. Persistence of the event log, and finalize → the existing `uploadResult`.
+3. Persistence of the event log — including its per-match sequence constraint (§2) and its lifecycle
+   (§8a: completed-marking, the audit summary, and the retention sweep) — and finalize → the existing
+   `uploadResult`.
 4. The umpire view.
 5. The spectator view, the Firebase Admin SDK dependency, and the Firestore security rules.
 
