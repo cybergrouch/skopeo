@@ -60,10 +60,11 @@ fun MatchSetEntity.toDomain(
  * Games decide the set; a tied set falls through to the tiebreak points. Mirrors the derivation applied
  * at the recording boundary (`MatchService.setWinner`), which is the only other place the rule lives.
  *
- * A set with tied games and no deciding tiebreak cannot be recorded — `setWinner` rejects it — so the
- * fallback here is unreachable for stored data. It returns the stored value rather than throwing, so a
- * row that somehow predates or bypasses that validation still loads instead of breaking every read of
- * the match.
+ * **Throws on an undecidable set**, which is unreachable for stored data: `setWinner` refuses to record
+ * a set that is tied on games with no deciding tiebreak, and V53 dropped the stored winner only after
+ * confirming production held none (959 sets, zero tied on games, zero tiebreaks). There is no longer a
+ * stored value to fall back to, and silently picking a side would put a fabricated result into the
+ * rating pipeline — failing loudly with the set number is the honest alternative.
  */
 private fun MatchSetEntity.derivedSetWinner(
     team1Id: UUID,
@@ -74,7 +75,10 @@ private fun MatchSetEntity.derivedSetWinner(
         team2Games > team1Games -> team2Id
         tiebreakTeam1Points != null && tiebreakTeam2Points != null && tiebreakTeam1Points != tiebreakTeam2Points ->
             if (tiebreakTeam1Points > tiebreakTeam2Points) team1Id else team2Id
-        else -> winnerTeamId
+        else -> {
+            val detail = "Set $setNumber is tied at $team1Games-$team2Games with no deciding tiebreak"
+            error(message = "$detail, so it has no winner to derive. This should be unrecordable (#917).")
+        }
     }
 
 // Build the domain Match from the raw MatchAggregateEntity graph the repository returns: the `matches`

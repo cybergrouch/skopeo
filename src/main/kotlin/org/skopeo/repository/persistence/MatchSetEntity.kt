@@ -3,8 +3,6 @@
 
 package org.skopeo.repository.persistence
 
-import java.util.UUID
-
 /**
  * Raw persistence view of a completed set's score (#633): mirrors the domain `MatchSetResult` field for
  * field, loaded from the `match_sets` row plus its optional `match_set_tiebreaks` sub-row. The dumb,
@@ -16,7 +14,6 @@ data class MatchSetEntity(
     val setNumber: Int,
     val team1Games: Int,
     val team2Games: Int,
-    val winnerTeamId: UUID,
     val tiebreakTeam1Points: Int?,
     val tiebreakTeam2Points: Int?,
 )
