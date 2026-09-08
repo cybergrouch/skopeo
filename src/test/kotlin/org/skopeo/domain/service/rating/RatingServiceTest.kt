@@ -186,6 +186,31 @@ class RatingServiceTest {
     }
 
     @Test
+    fun `a HOST or CLUB_OWNER may set a rating too (#907)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val owner = provisionUser(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        val player = provisionUser(uid = "player")
+
+        // A host holds a rater's capabilities: #907 turned standing practice into enforcement, so a
+        // self-rated player can be assented to from inside the Event Organizer.
+        service.setRating(token = token(uid = "host"), userId = player.id, value = "4.0").shouldBeRight()
+
+        // A club owner comes along via match management (#789 gave them the organizer surfaces). Gating
+        // on HOST alone would offer an owner a rating control that answers 403 — the #867 bug again.
+        service.setRating(token = token(uid = "owner"), userId = player.id, value = "3.5").shouldBeRight()
+
+        // Holding neither still does not rate.
+        val researcher = provisionUser(uid = "researcher", roles = setOf(Capability.PLAYER, Capability.RESEARCHER))
+        service
+            .setRating(token = token(uid = "researcher"), userId = player.id, value = "4.0")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        researcher.id.shouldNotBeNull()
+        host.id.shouldNotBeNull()
+        owner.id.shouldNotBeNull()
+    }
+
+    @Test
     fun `reading ratings and history is self-or-admin`() {
         admin(uid = "root")
         val player = provisionUser(uid = "player")

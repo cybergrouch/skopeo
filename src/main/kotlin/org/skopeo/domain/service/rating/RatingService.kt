@@ -11,6 +11,7 @@ import org.skopeo.common.dto.rating.RatingHistoryResponse
 import org.skopeo.common.dto.rating.UserRatingResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.RATING_ROLES
 import org.skopeo.domain.mapper.dto.rating.toResponse
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditAction
@@ -251,9 +252,7 @@ class RatingService(
     /** RATER-or-ADMINISTRATOR access (ADMINISTRATOR implicitly rates); returns the caller's id (the audit actor). */
     private fun requireRater(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain() ?: return ServiceError.Forbidden().left()
-        val canRate =
-            caller.capabilities.contains(element = Capability.RATER) ||
-                caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+        val canRate = caller.capabilities.any { it in RATING_ROLES }
         return if (canRate) caller.id.right() else ServiceError.Forbidden().left()
     }
 }

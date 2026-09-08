@@ -64,9 +64,9 @@ class PlaceholderService(
      * [initialRating] (#503) is optional and always may be omitted (a rating-less create always
      * succeeds). When present it is set in the same flow via [RatingService.setRating], so it inherits
      * that path's RATER/ADMINISTRATOR gate, NTRP-range validation, and audit. To keep the create-then-rate
-     * pair consistent, the RATER capability and the NTRP range are validated BEFORE the placeholder row is
-     * written, so a non-RATER caller passing a rating (or an out-of-range value) is rejected up front and
-     * no orphan placeholder is created.
+     * pair consistent, the NTRP range is validated BEFORE the placeholder row is written, so a caller
+     * passing an out-of-range value is rejected up front and no orphan placeholder is created. Since #907
+     * every match manager may rate, so there is no separate capability check on the rating itself.
      */
     fun createPlaceholder(
         token: VerifiedFirebaseToken,
@@ -82,7 +82,7 @@ class PlaceholderService(
             ensure(condition = sex in ALLOWED_SEXES) { ServiceError.Validation(message = "sex must be one of $ALLOWED_SEXES") }
             // Validate the optional rating (RATER gate + NTRP range) before creating, so a rejected rating
             // never leaves an orphan placeholder. A caller who omits [initialRating] skips all of this.
-            val ratingValue = initialRating?.let { validatedRating(caller = actorId, raw = it).bind() }
+            val ratingValue = initialRating?.let { validatedRating(raw = it).bind() }
             val created =
                 users.createPlaceholder(
                     command = CreatePlaceholderCommand(displayName = name, sex = sex, dateOfBirth = dateOfBirth?.asRedactable()),
@@ -107,17 +107,18 @@ class PlaceholderService(
         }
 
     /**
-     * Validate an optional initial rating (#503): the caller must hold RATER/ADMINISTRATOR and the value
-     * must be a numeric NTRP rating in 1.0–7.0. The chosen band is stored at its **midpoint** (#579),
-     * mirroring the rater set-rating route (`Level.bandMidpoint`) — so a placeholder created at band 3.0
-     * sits at 3.25 (centered), not the 3.0 floor where a single loss would immediately drop a band.
+     * Validate an optional initial rating (#503): the value must be a numeric NTRP rating in 1.0–7.0.
+     * The chosen band is stored at its **midpoint** (#579), mirroring the rater set-rating route
+     * (`Level.bandMidpoint`) — so a placeholder created at band 3.0 sits at 3.25 (centered), not the 3.0
+     * floor where a single loss would immediately drop a band.
+     *
+     * **No rating-capability check any more (#907).** It used to require RATER/ADMINISTRATOR, but
+     * `RATING_ROLES` is now composed from `MATCH_MANAGEMENT_ROLES` and `createPlaceholder` is already
+     * behind `requireMatchManager` — so every caller who can reach this can rate, and the check was
+     * unreachable. Deleting it beats leaving a branch no test can enter.
      */
-    private fun validatedRating(
-        caller: UUID,
-        raw: String,
-    ): Either<ServiceError, BigDecimal> =
+    private fun validatedRating(raw: String): Either<ServiceError, BigDecimal> =
         either {
-            ensure(condition = canRate(userId = caller)) { ServiceError.Forbidden() }
             val parsed =
                 try {
                     Rating.fromValue(value = raw) // rejects non-numeric / out-of-range with IllegalArgumentException
@@ -234,12 +235,6 @@ class PlaceholderService(
         } else {
             caller.id.right()
         }
-    }
-
-    /** True when [userId] holds RATER or ADMINISTRATOR (ADMINISTRATOR implicitly rates, #106). */
-    private fun canRate(userId: UUID): Boolean {
-        val caller = users.findById(id = userId).getOrNull()?.toDomain() ?: return false
-        return Capability.RATER in caller.capabilities || Capability.ADMINISTRATOR in caller.capabilities
     }
 
     /** HOST/CLUB_OWNER/ADMINISTRATOR (match-management); returns the caller's id (the audit actor). */
