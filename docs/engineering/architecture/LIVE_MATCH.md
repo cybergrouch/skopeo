@@ -373,19 +373,85 @@ widened. `V16__points_budget.sql` has the drop-and-recreate pattern.
 
 ---
 
-## 10. Open — how is a retirement or default rated?
+## 10. Decision — a retirement is a loss on the record and the real score for ratings
 
-**Not decided. Probably its own issue.**
+**Decided.** The two answers differ on purpose.
 
-Neither is representable today. `MatchStatus` is `SCHEDULED | IN_PROGRESS | COMPLETED | CANCELLED`, and
-nothing in the match DTOs or domain mentions retirement or a walkover.
+- **On the record**, the match is a **win for the opponent** of the retiring player.
+- **On the scoreline**, the actual score at the moment of retirement is kept, annotated `1-5 (ret)`.
+- **For ratings**, dominance is computed from that **actual score**, not from who was awarded the match.
 
-The harder half is that **the rating pipeline has no notion of one**. `RankingCalculator` computes from
-games won, so a match abandoned at 3–1 in the first set would otherwise be rated as a 3–1 win. The same
-question applies to ranking points and to the confidence model.
+### Rationale
 
-The options are roughly: not rated at all; rated at the score reached; or recorded as a loss for the
-retiring player. This is a product decision with rating consequences, not a UI state.
+Retirement decides the *consequence* of the match. It says nothing about the tennis played up to that
+point, and the rating is a measure of performance. A player leading 5–1 who pulls up injured
+demonstrably outplayed their opponent for that set; awarding the opponent the match should not also
+hand them the rating movement of a player who was being beaten.
+
+So in that example the retiring player is treated as the **winner for dominance purposes**, even though
+they lost the match.
+
+### This needs no calculator change
+
+The rating maths reads **`set.winnerTeamId` only**. The match-level `winnerTeamId` is passed into
+`RankingCalculationRequest` but is never read by `PerformanceBasedRankingCalculatorImpl` — the single
+use is per set:
+
+```kotlin
+val isWinner = set.winnerTeamId == teamId    // per set, not per match
+```
+
+So the split falls out of recording the data honestly:
+
+| | Value | Read by |
+|---|---|---|
+| `matches.winner_team_id` | the **opponent** | the record, the public page, ranking-point awards |
+| each set's `winner_team_id` | whoever actually led that set, including the partial one | the rating calculation |
+
+Record a retirement at 1–5 as a partial set whose winner is the player with 5, and the dominance
+credited is already correct. Nothing in the calculator has to learn what a retirement is.
+
+Put another way: **the existing algorithm already decides the rating winner — the player with the higher
+score — and that stays.** The new concept is a *match* winner that is designated rather than computed.
+Today those are the same value because the match winner is derived from the sets; a retirement is the
+first case where they legitimately differ.
+
+### The consequence to state loudly
+
+**A retiring player can gain rating from a match they lost.** That is the intent, and it will look like
+a bug to anyone who has not read this section — so it belongs in the UI copy and in whatever explains a
+rating change (#862's derivation view), not just here.
+
+### What still has to be built
+
+1. **Representation.** Neither retirement nor default exists today: `MatchStatus` is
+   `SCHEDULED | IN_PROGRESS | COMPLETED | CANCELLED`, and nothing in the match model mentions either. It
+   needs a completion reason and *which* player retired or defaulted.
+2. **The match winner becomes designatable; set winners stay derived.** This is the whole change, and
+   it is smaller than it sounds. Today `deriveOutcome` derives *both*:
+
+   ```kotlin
+   val winner = setWinner(...)                                   // per set, from games — KEEP
+   ensure(condition = team1Sets != team2Sets) { "sets are tied" } // only meaningful when deriving
+   resolved to if (team1Sets > team2Sets) team1Id else team2Id    // match winner — make designatable
+   ```
+
+   The per-set derivation is the rating algorithm and is untouched: higher games still wins the set, so
+   dominance keeps working exactly as it does now. What is added is an **optional designated match
+   winner** on the result request, used when a retirement or default is recorded. When it is supplied,
+   the sets-tied guard no longer applies — a retirement can legitimately stand at one set all, or at a
+   single unfinished set.
+3. **Display.** `1-5 (ret)` on the match page, the event page and anywhere a scoreline is rendered.
+4. **Default.** The same shape, but confirm the rating treatment matches: a default is usually a
+   no-show, so there may be no scoreline at all to compute dominance from. If so, a defaulted match
+   probably should not be rated — which is a *different* answer from retirement, and is worth deciding
+   before it is built rather than assuming symmetry.
+
+### Points and awards follow the record, not the rating
+
+`EventFinalizeAwarder` reads `match.winnerTeamId`, so ranking points go to the opponent. That is
+consistent with "retirement determines the post-match consequences" and needs no change — but it is the
+second place where the two notions of *winner* diverge, so it is worth a test that pins both at once.
 
 ---
 
