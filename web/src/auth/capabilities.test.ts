@@ -5,6 +5,7 @@ import {
   canManageMatches,
   canManagePointsBudget,
   canRate,
+  canScore,
   canSeeRawRatings,
   hasCapability,
   isAdministrator,
@@ -53,6 +54,18 @@ describe('capabilities', () => {
     expect(canRate([Capability.RESEARCHER])).toBe(false)
     expect(canRate([Capability.PLAYER])).toBe(false)
     expect(canRate(undefined)).toBe(false)
+  })
+
+  it('canScore is true for scorers and everyone who runs matches (#911)', () => {
+    expect(canScore([Capability.SCORER])).toBe(true)
+    // Mirrors SCORING_ROLES: composed from match management, so a club owner who does not also hold
+    // HOST may umpire — gating on HOST alone would show them a control the server answers 403 for (#867).
+    expect(canScore([Capability.HOST])).toBe(true)
+    expect(canScore([Capability.CLUB_OWNER])).toBe(true)
+    expect(canScore([Capability.ADMINISTRATOR])).toBe(true)
+    expect(canScore([Capability.PLAYER])).toBe(false)
+    expect(canScore([Capability.RESEARCHER])).toBe(false)
+    expect(canScore(undefined)).toBe(false)
   })
 
   it('canEditEndedEvents is true only for administrators and club owners (#310)', () => {

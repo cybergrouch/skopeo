@@ -33,7 +33,9 @@ import type { UserSummaryResponse } from '@/api/generated/model'
 
 // Roles an admin can grant/revoke here. ADMINISTRATOR is included (#194) but gated behind a confirm
 // step, since it's a high-impact grant; the backend also refuses to revoke a bootstrap admin.
-const GRANTABLE = ['HOST', 'CLUB_OWNER', 'RATER', 'RESEARCHER', 'ADMINISTRATOR'] as const
+// SCORER joins the list with #911 — without it the capability exists server-side but there is no way to
+// hand it to anyone. (POINTS_MANAGER is still absent; that predates #911 and is tracked separately.)
+const GRANTABLE = ['HOST', 'CLUB_OWNER', 'RATER', 'RESEARCHER', 'SCORER', 'ADMINISTRATOR'] as const
 type GrantableRole = (typeof GRANTABLE)[number]
 const ADMIN_ROLE: GrantableRole = 'ADMINISTRATOR'
 

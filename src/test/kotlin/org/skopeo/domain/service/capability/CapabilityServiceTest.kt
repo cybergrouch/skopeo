@@ -7,6 +7,7 @@ import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
@@ -299,5 +300,49 @@ class CapabilityServiceTest {
             .list(token = token(uid = "root"), userId = UUID.randomUUID())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `every Capability the enum declares can actually be granted (#911)`() {
+        // The trap this closes: `user_capabilities.chk_capability` enumerates the permitted strings, so
+        // adding a value to the Kotlin enum without a migration to widen the CHECK compiles, passes every
+        // unit test, and then fails at the moment an administrator tries to grant it in production. V16
+        // had to widen it for POINTS_MANAGER and V54 for SCORER; this asserts the pairing instead of
+        // trusting anyone to remember it.
+        //
+        // Driven off `Capability.entries` rather than a hand-written list, so the NEXT capability added
+        // without a migration fails here on the day it is added, with no test to update.
+        admin(uid = "root")
+        val player = provisionUser(uid = "player")
+
+        Capability.entries.forEach { capability ->
+            service
+                .grant(token = token(uid = "root"), userId = player.id, capabilityRaw = capability.name)
+                .shouldBeRight()
+                .grant
+                .capability shouldBe capability.name
+        }
+
+        service
+            .list(token = token(uid = "root"), userId = player.id)
+            .shouldBeRight()
+            .filter { it.isActive }
+            .map { it.capability }
+            .shouldContainAll(ts = Capability.entries.map { it.name })
+    }
+
+    @Test
+    fun `SCORER is grantable and revocable like any other non-baseline role (#911)`() {
+        admin(uid = "root")
+        val player = provisionUser(uid = "player")
+
+        service.grant(token = token(uid = "root"), userId = player.id, capabilityRaw = Capability.SCORER.name).shouldBeRight()
+        service.revoke(token = token(uid = "root"), userId = player.id, capabilityRaw = Capability.SCORER.name).shouldBeRight()
+
+        service
+            .list(token = token(uid = "root"), userId = player.id)
+            .shouldBeRight()
+            .none { it.capability == Capability.SCORER.name && it.isActive }
+            .shouldBeTrue()
     }
 }

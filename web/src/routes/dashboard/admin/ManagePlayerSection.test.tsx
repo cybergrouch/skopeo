@@ -216,7 +216,20 @@ describe('ManagePlayerSection', () => {
     await selectAlice()
     // Header shows the id (no display name); every grantable role offers Grant (no active capabilities).
     expect(screen.getByText(/u1/)).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /^Grant/ })).toHaveLength(5) // incl. ADMINISTRATOR (#194)
+    // Named rather than counted: a bare length told you the number was wrong but not which role was
+    // missing, and it had to be edited every time the list grew (SCORER, #911).
+    expect(
+      screen
+        .getAllByRole('button', { name: /^Grant/ })
+        .map((button) => button.getAttribute('aria-label') ?? button.textContent),
+    ).toEqual([
+      'Grant HOST',
+      'Grant CLUB_OWNER',
+      'Grant RATER',
+      'Grant RESEARCHER',
+      'Grant SCORER',
+      'Grant ADMINISTRATOR', // gated behind a confirm step (#194)
+    ])
   })
 
   it('grants and revokes roles', async () => {

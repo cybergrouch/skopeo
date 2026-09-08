@@ -13,6 +13,7 @@ overlap). They can be devolved into fine-grained permissions later.
 | `RATER` (#106) | Set/adjust initial ratings, work the pending-assessment list, and triage re-rate requests (approve/deny). |
 | `RESEARCHER` (#107) | Gates the player-research feature (player lists, standings/seeding tooling). Granted to every new user at sign-up. |
 | `POINTS_MANAGER` (#472) | Operate the Points Management tab: grant, adjust and revoke ranking-point awards, and read the ledger. |
+| `SCORER` (#911) | Umpire a live match: key in points from the courtside scoring view and finalize the result. Composed as `SCORING_ROLES = MATCH_MANAGEMENT_ROLES + SCORER`, so a HOST, CLUB_OWNER or ADMINISTRATOR may umpire without holding it. |
 | `ADMINISTRATOR` | Full administrative authority; **implicitly satisfies the RATER and RESEARCHER gates**, plus capability management, audit log, duplicate triage, etc. |
 
 ### Who can look a player up (#867)
