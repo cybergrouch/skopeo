@@ -481,10 +481,22 @@ than persisted, recording a partial set at 1–5 needs no decision about "who wo
 rating side derives the leader, and the match side takes the designated winner. The two stop competing
 for the same column.
 
-**Raised separately as #917.** It refactors existing schema and the calculator's input model, is not
-LiveMatch-specific, and touches matches that are already rated — so it does not ride along with the
-umpire view. Doing it *first* makes the retirement work substantially smaller, which is why it is a
-prerequisite rather than a follow-up.
+**Done — #917, shipped in three steps.** #918 moved the derivation into the entity→domain mapper so
+nothing read the stored value; #922 made the match winner designatable, defaulting to the derived one
+and lifting the sets-tied guard only when a designation is supplied; #923 dropped
+`match_sets.winner_team_id` and `match_set_tiebreaks.winner_team_id` in `V53`.
+
+So the split described above is live. `matches.winner_team_id` is the designated match winner and the
+only one a retirement changes; the set winner is derived from that set's games and tiebreak, wherever
+it is needed.
+
+Two consequences for the retirement work here:
+
+- **Recording a partial set no longer needs a decision about who "won" it** — the rating side derives
+  the leader, the match side takes the designated winner, and they no longer compete for one column.
+- **An undecidable set now throws rather than falling back to a stored value.** That is unreachable for
+  matches as they can be recorded today, and retirement is the thing that changes it — see the
+  level-partial-set question in §11.
 
 ### Points and awards follow the record, not the rating
 
@@ -503,6 +515,14 @@ second place where the two notions of *winner* diverge, so it is worth a test th
 - **Does the spectator view need history?** Largely settled by §6: the broadcast is a single
   current-score document, so history is not exposed by default. Still worth confirming that no product
   requirement (a point-by-point replay, say) wants it later.
+- **A retirement can produce a set with no winner.** A player pulling up at 3–3, or at 0–0 in a new
+  set, leaves a level partial set. `MatchService.setWinner` refuses to record one today, and since #917
+  there is no stored winner to fall back on, so the derivation throws. Three options, materially
+  different in cost: do not record the level set at all; make the set winner nullable (which ripples
+  into `PerformanceBasedRankingCalculatorImpl`, which assumes every set has one); or record it, derive
+  nothing, and have the rating skip it. The third looks right — a level set demonstrates nothing about
+  who was outplaying whom, so contributing no dominance is the correct semantics rather than a
+  workaround — but it wants deciding **before** the retirement work, not during it.
 - **Doubles.** Two sides fits, but serving rotates through four players. In scope for the first cut?
 - **An abandoned scoring session** must not leave a fixture stuck `IN_PROGRESS` forever. §8a gives this
   a home in the sweep, but two things are still unfixed: how long a stack may sit untouched before it
