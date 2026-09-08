@@ -371,6 +371,16 @@ capability hierarchy remains unbuilt and unraised.
 `chk_capability` CHECK enumerating the permitted values, so a `SCORER` grant is rejected until it is
 widened. `V16__points_budget.sql` has the drop-and-recreate pattern.
 
+**Shipped — step 1 of §13.** `Capability.SCORER`, `SCORING_ROLES = MATCH_MANAGEMENT_ROLES + SCORER`,
+and `V54__scorer_capability.sql`. The web mirror is `canScore` in `auth/capabilities.ts`, and `SCORER`
+joined `GRANTABLE` in `ManagePlayerSection` — without that last one the role exists server-side with no
+way to hand it to anybody.
+
+The "easy to miss" migration is now a test rather than a warning: `CapabilityServiceTest` grants **every**
+`Capability.entries` value against a real database, so the next capability added without widening the
+CHECK fails on the day it is added. That guard is the durable part of this step — the enum value itself
+was trivial.
+
 ---
 
 ## 10. Decision — a retirement is a loss on the record and the real score for ratings

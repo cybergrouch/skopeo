@@ -88,6 +88,25 @@ export function canRate(
 }
 
 /**
+ * Who may umpire a live match (#911): scorers, plus everyone who runs matches.
+ *
+ * `SCORER` was described as "inherited by HOST → CLUB_OWNER → ADMINISTRATOR", but there is no
+ * inheritance mechanism on either side of the stack — the backend composes role sets, and this mirrors
+ * `SCORING_ROLES` in `common/security/CapabilityRoles.kt`. Keep the two in step.
+ *
+ * CLUB_OWNER comes along via match management deliberately: #789 gave a named club owner the organizer
+ * surfaces, so gating on HOST alone would show that owner a scoring control the server would 403 — the
+ * #867 bug again. Whether a scorer may umpire a *particular* match is a separate, still-open question.
+ */
+export function canScore(
+  capabilities: readonly Capability[] | undefined,
+): boolean {
+  return (
+    hasCapability(capabilities, Capability.SCORER) || canManageMatches(capabilities)
+  );
+}
+
+/**
  * The Points Management tab is for points managers (#403 §5.1): the staff role over the points
  * economy — now the global award schedules (#552/#553) and the ranking-points ledger (#472), after the
  * per-club budget + per-event designation subsystem was removed (#559). ADMINISTRATOR is implicitly one.

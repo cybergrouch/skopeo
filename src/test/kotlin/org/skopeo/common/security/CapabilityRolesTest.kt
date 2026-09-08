@@ -96,6 +96,22 @@ class CapabilityRolesTest {
     }
 
     @Test
+    fun `scoring is match management plus scorers`() {
+        SCORING_ROLES shouldContainExactlyInAnyOrder
+            listOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR, Capability.SCORER)
+    }
+
+    @Test
+    fun `scoring is a superset of match management, so a club owner may umpire`() {
+        // Composed rather than re-listed (#911), for the #867 reason: #789 gave a named club owner the
+        // organizer surfaces, so gating on HOST alone would offer that owner a scoring control that 403s.
+        MATCH_MANAGEMENT_ROLES.all { it in SCORING_ROLES } shouldBe true
+        (SCORING_ROLES - MATCH_MANAGEMENT_ROLES) shouldBe setOf(element = Capability.SCORER)
+        // Keying in points is a staff job; a plain player does not umpire their own match.
+        SCORING_ROLES.contains(element = Capability.PLAYER) shouldBe false
+    }
+
+    @Test
     fun `no service declares its own capability set instead of reusing these`() {
         // The drift came from named private copies, so that is precisely what this catches: a
         // SCREAMING_CASE `val` built from a fresh `setOf(Capability…, …)` inside a service.

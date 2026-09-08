@@ -121,3 +121,23 @@ val PLAYER_SEARCH_ROLES: Set<Capability> =
  */
 val POINTS_MANAGEMENT_ROLES: Set<Capability> =
     setOf(Capability.POINTS_MANAGER, Capability.ADMINISTRATOR)
+
+/**
+ * Who may umpire a live match (#911) — match management plus scorers.
+ *
+ * The feature request described `SCORER` as "inherited by HOST → CLUB_OWNER → ADMINISTRATOR". There is
+ * no inheritance mechanism here; this codebase composes role **sets**, and [RATING_ROLES] (#908)
+ * established the pattern. Composing from [MATCH_MANAGEMENT_ROLES] produces exactly the described
+ * behaviour without inventing a hierarchy — a true capability hierarchy remains unbuilt and unraised.
+ *
+ * **Composed, not re-listed**, for the reason recorded on [PLAYER_SEARCH_ROLES]: #789 gave a named club
+ * owner the organizer surfaces, so a CLUB_OWNER who does not also hold HOST still runs events. Listing
+ * only HOST would offer that owner a scoring control that answers 403 — the #867 shape again.
+ *
+ * This is the *capability* half only. Whether a given SCORER may umpire a *particular* match is a
+ * separate axis and is still an open question in
+ * `docs/engineering/architecture/LIVE_MATCH.md` §11 — if it lands, it goes through
+ * [org.skopeo.domain.service.club.ClubAccess.mayOrganize] like every other event-scoped operation, not
+ * by widening this set.
+ */
+val SCORING_ROLES: Set<Capability> = MATCH_MANAGEMENT_ROLES + Capability.SCORER
