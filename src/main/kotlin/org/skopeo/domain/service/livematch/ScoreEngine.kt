@@ -46,6 +46,11 @@ object ScoreEngine {
      * Never receives an undo: [effective] resolves those before the fold, so this stays a plain tennis
      * step with no history awareness. "Un-applying" a point would need to know the state *before* it,
      * which a step function does not have — that asymmetry is the reason undo is resolved in the log.
+     *
+     * A **finished** match ignores further scoring, with [ScoreEvent.ServerAssigned] carved out as a
+     * record correction. A **paused** one does not: the umpire is authoritative, a forgotten
+     * [ScoreEvent.Resumed] is far likelier than a deliberate point during a rain delay, and dropping the
+     * point would be the worse failure. The pause is recorded in the state; a UI is free to prompt.
      */
     fun apply(
         state: ScoreState,
@@ -81,6 +86,10 @@ object ScoreEngine {
                 )
             is ScoreEvent.MatchAwarded ->
                 state.copy(outcome = LiveOutcome(kind = LiveOutcomeKind.COMPLETED, winner = event.side))
+            // Starting also clears a pause, so a restart after a suspension needs no separate Resumed.
+            is ScoreEvent.MatchStarted -> state.copy(hasStarted = true, isPaused = false)
+            is ScoreEvent.Paused -> state.copy(isPaused = true)
+            is ScoreEvent.Resumed -> state.copy(isPaused = false)
         }
     }
 
@@ -100,7 +109,16 @@ object ScoreEngine {
      * pass, no fixpoint iteration. Cancelling a sequence that does not exist, or one already cancelled, is
      * inert, which is exactly what "undo when there is nothing to undo" should do.
      */
-    fun effective(log: List<LoggedAction>): List<ScoreEvent> {
+    fun effective(log: List<LoggedAction>): List<ScoreEvent> = surviving(log = log).map { it.event }
+
+    /**
+     * [effective], but keeping each action's sequence.
+     *
+     * Callers that need to *name* an action — an undo has to say which sequence it cancels — must use
+     * this rather than matching on the event value. Two identical `PointWon(TEAM1)` rows are equal, so a
+     * value match cannot tell a cancelled one from a surviving one.
+     */
+    fun surviving(log: List<LoggedAction>): List<LoggedAction.Scored> {
         val undosByTarget = log.filterIsInstance<LoggedAction.Undone>().groupBy { it.targetSequence }
         val cancelled = mutableSetOf<Long>()
         log.sortedByDescending { it.sequence }.forEach { action ->
@@ -111,7 +129,6 @@ object ScoreEngine {
             .sortedBy { it.sequence }
             .filterIsInstance<LoggedAction.Scored>()
             .filter { it.sequence !in cancelled }
-            .map { it.event }
     }
 
     /**

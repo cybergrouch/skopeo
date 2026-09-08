@@ -25,7 +25,7 @@ import java.util.UUID
  * into a score is [org.skopeo.domain.service.livematch.ScoreEngine]'s job, and turning rows into
  * `LoggedAction`s is the entity mapper's.
  */
-class LiveMatchRepository {
+open class LiveMatchRepository {
     /** The whole log for [matchId], in sequence order. The only read pattern that matters. */
     fun log(matchId: UUID): List<LiveMatchEventEntity> =
         transaction {
@@ -49,7 +49,7 @@ class LiveMatchRepository {
      * check-then-insert has a window between the two, which is the whole bug being avoided.
      */
     @Suppress("LongParameterList")
-    fun append(
+    open fun append(
         matchId: UUID,
         sequence: Long,
         kind: String,

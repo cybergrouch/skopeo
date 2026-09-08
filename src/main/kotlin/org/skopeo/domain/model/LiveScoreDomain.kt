@@ -74,6 +74,28 @@ sealed interface ScoreEvent {
 
     /** The umpire declares the match won by [side] — the ordinary end of a match that was played out. */
     data class MatchAwarded(val side: TeamSide) : ScoreEvent
+
+    /**
+     * Play has officially begun (#911).
+     *
+     * Distinct from the first point: the gap between "the umpire opened the app" and "the players
+     * started" is exactly the interval that would otherwise corrupt a match-duration figure. Every log
+     * row is timestamped, so this is the anchor those timings are measured from.
+     */
+    data object MatchStarted : ScoreEvent
+
+    /**
+     * Play is suspended — rain, darkness, a court handover — without ending the match.
+     *
+     * The reason this exists rather than a staleness timeout: a paused match may resume **days** later
+     * on a court the host cannot yet book, so no timeout could tell "abandoned" from "waiting for
+     * weather" without being wrong in one direction. Saying so explicitly is the only honest answer, and
+     * it is what lets the log be kept until finalize rather than swept.
+     */
+    data object Paused : ScoreEvent
+
+    /** Play resumes after a [Paused]. The gap between the two is a rain delay, not playing time. */
+    data object Resumed : ScoreEvent
 }
 
 /**
@@ -146,6 +168,8 @@ data class ScoreState(
     val completedSets: List<CompletedSet> = emptyList(),
     val serverId: UUID? = null,
     val isTiebreak: Boolean = false,
+    val hasStarted: Boolean = false,
+    val isPaused: Boolean = false,
     val outcome: LiveOutcome? = null,
 ) {
     /** Whether the match has ended, however it ended. */
@@ -187,3 +211,17 @@ data class ScoreState(
         const val ADVANTAGE = "AD"
     }
 }
+
+/**
+ * What a caller sees of a live match: the score, who is scoring it, and how far the log has got.
+ *
+ * [sequence] is what makes a stale read detectable — a client holding a lower number knows it is behind,
+ * and it is the same value the spectator projection carries so a late-arriving broadcast cannot overwrite
+ * a newer one (`LIVE_MATCH.md` §6).
+ */
+data class LiveMatchView(
+    val matchId: UUID,
+    val state: ScoreState,
+    val sequence: Long,
+    val scorerId: UUID? = null,
+)

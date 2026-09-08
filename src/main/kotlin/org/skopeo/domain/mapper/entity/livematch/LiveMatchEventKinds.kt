@@ -30,6 +30,9 @@ object LiveMatchEventKinds {
     const val DEFAULTED = "DEFAULTED"
     const val MATCH_AWARDED = "MATCH_AWARDED"
     const val UNDONE = "UNDONE"
+    const val MATCH_STARTED = "MATCH_STARTED"
+    const val PAUSED = "PAUSED"
+    const val RESUMED = "RESUMED"
 }
 
 /** The stored `kind` for [event]. */
@@ -43,6 +46,9 @@ fun kindOf(event: ScoreEvent): String =
         is ScoreEvent.Retired -> LiveMatchEventKinds.RETIRED
         is ScoreEvent.Defaulted -> LiveMatchEventKinds.DEFAULTED
         is ScoreEvent.MatchAwarded -> LiveMatchEventKinds.MATCH_AWARDED
+        is ScoreEvent.MatchStarted -> LiveMatchEventKinds.MATCH_STARTED
+        is ScoreEvent.Paused -> LiveMatchEventKinds.PAUSED
+        is ScoreEvent.Resumed -> LiveMatchEventKinds.RESUMED
     }
 
 /** The stored `side` for [event], or null for the kinds that name no side. */
@@ -54,7 +60,12 @@ fun sideOf(event: ScoreEvent): String? =
         is ScoreEvent.Retired -> event.side.name
         is ScoreEvent.Defaulted -> event.side.name
         is ScoreEvent.MatchAwarded -> event.side.name
-        is ScoreEvent.TiebreakStarted, is ScoreEvent.ServerAssigned -> null
+        is ScoreEvent.TiebreakStarted,
+        is ScoreEvent.ServerAssigned,
+        is ScoreEvent.MatchStarted,
+        is ScoreEvent.Paused,
+        is ScoreEvent.Resumed,
+        -> null
     }
 
 /**
@@ -81,6 +92,9 @@ private fun LiveMatchEventEntity.toScoreEvent(): ScoreEvent =
         LiveMatchEventKinds.GAME_AWARDED -> ScoreEvent.GameAwarded(side = requiredSide())
         LiveMatchEventKinds.SET_AWARDED -> ScoreEvent.SetAwarded(side = requiredSide())
         LiveMatchEventKinds.TIEBREAK_STARTED -> ScoreEvent.TiebreakStarted
+        LiveMatchEventKinds.MATCH_STARTED -> ScoreEvent.MatchStarted
+        LiveMatchEventKinds.PAUSED -> ScoreEvent.Paused
+        LiveMatchEventKinds.RESUMED -> ScoreEvent.Resumed
         LiveMatchEventKinds.SERVER_ASSIGNED ->
             ScoreEvent.ServerAssigned(playerId = requireNotNull(value = playerId) { payloadError(field = "player_id") })
         LiveMatchEventKinds.RETIRED -> ScoreEvent.Retired(side = requiredSide())

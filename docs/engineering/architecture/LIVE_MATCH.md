@@ -373,9 +373,27 @@ finalizes is the same cleanup problem, and a fixture must not be left stuck `IN_
 someone closed a laptop. Note the sweep therefore has two distinct jobs — pruning *completed* stacks,
 and resolving *stale in-progress* ones — and they may well want different windows.
 
-**Open: the retention window itself.** Nothing here fixes a number. It wants to be long enough that a
-disputed result can still be inspected and short enough that the table does not accumulate several
-hundred rows per match indefinitely.
+**Decided (revising the above): the log is kept until the match is finalized. There is no staleness
+timeout, and the sweep loses one of its two jobs.**
+
+The "resolve stale in-progress stacks" half cannot be made to work. A match suspended for weather may
+resume **days** later, on a court the host cannot book yet — so any timeout would have to choose between
+sweeping away a match that is merely waiting and leaving a genuinely abandoned one forever. There is no
+number that gets both right, because the distinguishing fact is not elapsed time; it is whether anyone
+intends to come back.
+
+So the umpire says so instead. `PAUSED` / `RESUMED` make a suspension explicit, and a paused match is
+paused rather than stale. That also answers §11's abandoned-session question without a sweep: a fixture
+sitting in `IN_PROGRESS` for a fortnight is not a bug if it is paused.
+
+`MATCH_STARTED` joins them, separate from the first point on purpose: the interval between the umpire
+opening the app and the players actually starting is exactly what would corrupt a duration figure. Every
+row already carries `recorded_at`, so playing time is derivable as *(last event − `MATCH_STARTED`)* minus
+the pause intervals, and per-game and per-point pacing falls out of the same timestamps.
+
+**Still open:** the retention window for *completed* stacks — how long a finalized match's log is kept
+before pruning. That one is a genuine trade-off (long enough to inspect a disputed result, short enough
+that the table does not grow without bound) and nothing depends on it yet.
 
 ### Shipped — step 3a of §13, the persistence half
 
@@ -414,6 +432,29 @@ match so a second umpire takes over deliberately rather than by accident. It is 
 constraint already makes interleaved and lost writes impossible, so this is about not confusing two
 people. A hard lock was rejected because a courtside phone that dies must not strand the fixture behind a
 timeout nobody chose well.
+
+### Shipped — step 3b of §13, the service half
+
+`LiveMatchService`: claim/release, record, undo, and read. Every write is `read log → append one row →
+re-read → replay`, with nothing cached between requests — two Cloud Run instances would otherwise
+diverge.
+
+- **Append retries on a sequence collision.** The loser of a race must not simply take the next number:
+  the event that won may have changed what the umpire's action means, so it re-reads and recomputes.
+  Three attempts, then a `Conflict` — losing three in a row is not ordinary contention.
+- **Undo targets the last *surviving* action**, obtained from `ScoreEngine.surviving(log)` rather than by
+  scanning for the last non-marker row. Only the engine knows a redo can bring an earlier action back,
+  and matching on the event *value* would be wrong outright — two identical `PointWon(TEAM1)` rows are
+  equal, so a cancelled one is indistinguishable from a surviving one without its sequence.
+- **Undo with nothing to undo writes nothing and is not an error**, which is what a courtside double-tap
+  should do.
+- **`MatchStatus.IN_PROGRESS` finally has a writer.** Claiming a `SCHEDULED` fixture moves it there;
+  releasing the claim does *not* move it back, because the match is still being played.
+
+Not here, and deliberately: **finalize**. Two things block it and neither is small. `SetScoreRequest`
+enforces `MIN_GAMES_TO_WIN = 4`, so a set the engine will happily bank at 3-2 — the "end a set early"
+requirement — cannot be submitted through `uploadResult` at all. And retirement/default still have no
+representation (§10). Both belong with the retirement work rather than being half-solved here.
 
 ### What this means for score correction
 
@@ -602,10 +643,10 @@ second place where the two notions of *winner* diverge, so it is worth a test th
   who was outplaying whom, so contributing no dominance is the correct semantics rather than a
   workaround — but it wants deciding **before** the retirement work, not during it.
 - **Doubles.** Two sides fits, but serving rotates through four players. In scope for the first cut?
-- **An abandoned scoring session** must not leave a fixture stuck `IN_PROGRESS` forever. §8a gives this
-  a home in the sweep, but two things are still unfixed: how long a stack may sit untouched before it
-  counts as abandoned, and what resolving it does — discard the stack and revert the fixture to
-  SCHEDULED, or leave it for a human. The retention window for *completed* stacks is open too.
+- ~~**An abandoned scoring session** must not leave a fixture stuck `IN_PROGRESS` forever.~~
+  **Answered by `PAUSED`/`RESUMED` (§8a).** A suspension is now stated by the umpire rather than guessed
+  from elapsed time, so a fixture sitting in `IN_PROGRESS` is not evidence of abandonment. The retention
+  window for *completed* stacks remains open.
 
 ---
 
