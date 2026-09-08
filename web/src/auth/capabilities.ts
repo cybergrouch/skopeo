@@ -69,15 +69,21 @@ export function canEditEndedEvents(
 }
 
 /**
- * The Ratings tab is for raters: users who can set initial ratings and triage rating
- * work (#106). ADMINISTRATOR implicitly has RATER.
+ * Who may set a rating (#106, widened by #907): raters, plus everyone who runs matches.
+ *
+ * A HOST holds a rater's capabilities — hosts already acted as raters in practice, and #907 made that
+ * enforcement so a self-rated player can be assented to from inside the Event Organizer rather than by
+ * leaving for the Ratings tab. CLUB_OWNER comes along via match management for the reason recorded on
+ * the backend's RATING_ROLES: #789 gave a named club owner the organizer surfaces, so gating on HOST
+ * alone would show an owner a rating control that answers 403 — the #867 bug again.
+ *
+ * Mirrors `RATING_ROLES` in `common/security/CapabilityRoles.kt`; keep the two in step.
  */
 export function canRate(
   capabilities: readonly Capability[] | undefined,
 ): boolean {
   return (
-    hasCapability(capabilities, Capability.RATER) ||
-    hasCapability(capabilities, Capability.ADMINISTRATOR)
+    hasCapability(capabilities, Capability.RATER) || canManageMatches(capabilities)
   );
 }
 

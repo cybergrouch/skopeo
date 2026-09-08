@@ -43,11 +43,15 @@ describe('capabilities', () => {
     expect(canSeeRawRatings(undefined, false)).toBe(false)
   })
 
-  it('canRate is true for raters and administrators (#106)', () => {
+  it('canRate is true for raters, administrators and match managers (#106, #907)', () => {
     expect(canRate([Capability.RATER])).toBe(true)
     expect(canRate([Capability.ADMINISTRATOR])).toBe(true)
+    // #907: a host holds a rater's capabilities, and a club owner organizes events too (#789), so
+    // gating on HOST alone would show an owner a control the server answers 403 for (#867).
+    expect(canRate([Capability.HOST])).toBe(true)
+    expect(canRate([Capability.CLUB_OWNER])).toBe(true)
+    expect(canRate([Capability.RESEARCHER])).toBe(false)
     expect(canRate([Capability.PLAYER])).toBe(false)
-    expect(canRate([Capability.HOST])).toBe(false)
     expect(canRate(undefined)).toBe(false)
   })
 

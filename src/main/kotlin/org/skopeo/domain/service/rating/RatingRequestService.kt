@@ -12,7 +12,7 @@ import arrow.core.right
 import org.skopeo.common.dto.rating.RatingRequestPageResponse
 import org.skopeo.common.dto.rating.RatingRequestResponse
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.security.Capability
+import org.skopeo.common.security.RATING_ROLES
 import org.skopeo.domain.mapper.dto.rating.toResponse
 import org.skopeo.domain.mapper.entity.rating.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -197,9 +197,9 @@ class RatingRequestService(
 
     private fun requireRater(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain() ?: return ServiceError.Forbidden().left()
-        val canRate =
-            caller.capabilities.contains(element = Capability.RATER) ||
-                caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+        // Same set as RatingService (#907). Narrowing it here would be theatre: approving a re-rate
+        // request applies a rating through RatingService, which a host may now do directly anyway.
+        val canRate = caller.capabilities.any { it in RATING_ROLES }
         return if (canRate) caller.id.right() else ServiceError.Forbidden().left()
     }
 }

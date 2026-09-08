@@ -53,6 +53,26 @@ val CLUB_OWNER_OR_ADMIN: Set<Capability> =
     setOf(Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
 /**
+ * Who may set or adjust a player's rating (#106, widened by #907) — match management plus raters.
+ *
+ * A HOST holds a rater's capabilities. In practice hosts already act as raters; #907 is the point at
+ * which that stopped being convention and became enforcement, because rating a self-rated player is
+ * now something the Host does from inside the Event Organizer rather than by leaving for the Ratings
+ * tab.
+ *
+ * **Composed from [MATCH_MANAGEMENT_ROLES], which also admits CLUB_OWNER.** That is deliberate and is
+ * the lesson of #867, recorded on [PLAYER_SEARCH_ROLES] below: #789 gave a named club owner the
+ * organizer surfaces, so a CLUB_OWNER who does not *also* hold HOST organizes events too. Listing only
+ * HOST here would offer that owner an inline rating control that answers 403 — the exact shape of the
+ * bug #867 had to fix. Anyone trusted to run the event is trusted to assent to a self-rating in it.
+ *
+ * This is the *capability* half only. It says who may rate at all, not whose rating is authoritative,
+ * and it does not weaken [org.skopeo.domain.service.club.ClubAccess.mayOrganize] on any event-scoped
+ * operation.
+ */
+val RATING_ROLES: Set<Capability> = MATCH_MANAGEMENT_ROLES + Capability.RATER
+
+/**
  * Who may see a player's registered email (#630) — match management plus raters.
  *
  * **Composed, not re-listed**, so adding a role to match management cannot leave this behind. Deliberately

@@ -182,15 +182,30 @@ class PlaceholderServiceTest {
     }
 
     @Test
-    fun `a non-RATER host passing an initial rating is rejected and no placeholder is created`() {
+    fun `a host may create a placeholder with an initial rating (#907)`() {
         host(uid = "host")
 
+        // This used to be a Forbidden: the initial rating required RATER/ADMINISTRATOR. #907 gave match
+        // managers a rater's capabilities, and since createPlaceholder is already behind
+        // requireMatchManager, every caller who reaches it can now rate.
         service
-            .createPlaceholder(token = token(uid = "host"), displayName = "Nope", sex = "Male", initialRating = "4.0")
-            .shouldBeLeft()
-            .shouldBeInstanceOf<ServiceError.Forbidden>()
+            .createPlaceholder(token = token(uid = "host"), displayName = "Rated Placeholder", sex = "Male", initialRating = "4.0")
+            .shouldBeRight()
 
-        // The rejected rating left no orphan placeholder.
+        service.listPlaceholders(token = token(uid = "host")).shouldBeRight().size shouldBe 1
+    }
+
+    @Test
+    fun `an out-of-range initial rating is still rejected, leaving no orphan placeholder (#503)`() {
+        host(uid = "host")
+
+        // The NTRP-range half of the guard is the part that survives #907, and it still runs BEFORE the
+        // placeholder row is written — which is the whole reason the validation sits where it does.
+        service
+            .createPlaceholder(token = token(uid = "host"), displayName = "Nope", sex = "Male", initialRating = "9.0")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+
         service.listPlaceholders(token = token(uid = "host")).shouldBeRight() shouldBe emptyList()
     }
 
