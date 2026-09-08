@@ -3,6 +3,7 @@
 
 package org.skopeo.domain.model
 
+import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -104,6 +105,9 @@ data class EventParticipantRef(
     val sex: String? = null,
     val age: Int? = null,
     val rating: UserRating? = null,
+    // The self-rating claimed at sign-up (#75), still awaiting assent (#907). Null once [rating] exists,
+    // or for a participant who never proposed one (a placeholder, or a pre-#75 account).
+    val proposedRating: BigDecimal? = null,
     // The participant's standing (#201): APPROVED roster member, PENDING request, or HOLD (soft deny).
     val status: EventParticipantStatus = EventParticipantStatus.APPROVED,
     // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the roster

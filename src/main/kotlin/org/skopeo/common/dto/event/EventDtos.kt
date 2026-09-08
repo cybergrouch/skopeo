@@ -80,6 +80,9 @@ data class EventParticipantResponse(
     val sex: String? = null,
     val age: Int? = null,
     val rating: PublicRatingDto? = null,
+    // The self-rating this participant claimed at sign-up (#75), present only while no rater has
+    // assented to it (#907) and only for a viewer allowed the raw figure — a claim is not public.
+    val proposedRating: String? = null,
     // The participant's standing (#201): "APPROVED" | "PENDING" | "HOLD". Null on the public roster
     // (which lists approved members only).
     val status: String? = null,
