@@ -323,6 +323,34 @@ will not satisfy it unchanged (see §10).
 
 ---
 
+### Shipped — step 3e of §13, finalize
+
+`POST /api/v1/matches/{id}/live/finalize` replays the log, translates it into a `MatchResultRequest`,
+and submits it through the **existing** `uploadResult`. Ratings, ranking points and score correction
+therefore keep working untouched, which is the whole point of §8.
+
+Four things this forced, none of them anticipated above:
+
+- **Scoring and finalizing are different rights.** Keying points in is gated on `SCORING_ROLES`, flat
+  and club-agnostic. Finalizing goes through `uploadResult`, which keeps the #789 club rule — writing
+  the permanent record is an organizer's act, and LiveMatch deliberately does **not** weaken that gate
+  to reach it. So a plain `SCORER` scores and an organizer finalizes. A test pins the boundary. The
+  umpire view must hide or disable Finalize for a plain scorer, or it will offer a button that 403s —
+  the #867 shape.
+- **A level partial set is omitted from the record.** Since #917 the set winner is derived from the
+  games, so a set standing at 3-3 has no winner to derive and the recording path rejects it. Omitting it
+  loses nothing that matters: #925 established that a level set contributes zero dominance anyway. A
+  *decisive* partial set (1-3) IS recorded — §10 rates a retirement on the real score.
+- **`MatchResultRequest` had to stop demanding a set.** A walkover has none, and a player who pulls out
+  before the first game leaves nothing decisive either. Requiring one would have forced the caller to
+  invent a 0-0 nobody played. Same carve-out as the games floor: allowed only when a winner is
+  designated.
+- **`MatchResponse` had to start returning `completionReason`.** It was recorded but never exposed, so
+  no client could have rendered `1-3 (ret)` — the display work in §10 would have hit a wall.
+
+Finalize does **not** delete the log; it folds the umpire credit into `match_umpires` and releases the
+claim. Disposal stays with the sweep (§8a).
+
 ## 8a. Decision — the stack is working state, and it has a lifecycle
 
 **Decided.** The live stack is *not* a second store of scores. It exists because the engine needs an

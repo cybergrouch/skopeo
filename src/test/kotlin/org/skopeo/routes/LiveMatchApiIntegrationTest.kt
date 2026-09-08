@@ -5,6 +5,7 @@ package org.skopeo.routes
 
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -13,6 +14,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -38,6 +40,7 @@ import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.module
+import org.skopeo.repository.LiveMatchRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -93,6 +96,19 @@ class LiveMatchApiIntegrationTest {
 
     private fun seedScorer(uid: String = "ump"): String {
         seedUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.SCORER))
+        return TestFirebaseAuth.mintToken(uid = uid)
+    }
+
+    /**
+     * An umpire who may also **finalize**.
+     *
+     * Scoring and finalizing are different rights. Keying points in is gated on `SCORING_ROLES`, flat
+     * and club-agnostic. Finalizing goes through the existing `uploadResult`, which keeps the #789 club
+     * rule — writing the permanent record is an organizer's act, and LiveMatch deliberately does not
+     * weaken that gate to reach it. So a plain SCORER scores; an organizer finalizes.
+     */
+    private fun seedFinalizer(uid: String = "boss"): String {
+        seedUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.SCORER, Capability.ADMINISTRATOR))
         return TestFirebaseAuth.mintToken(uid = uid)
     }
 
@@ -330,6 +346,115 @@ class LiveMatchApiIntegrationTest {
             outcome?.kind shouldBe "RETIRED"
             outcome?.winner shouldBe "TEAM1"
             outcome?.concededBy shouldBe "TEAM2"
+        }
+
+    private suspend fun HttpClient.finalize(
+        token: String,
+        matchId: UUID,
+    ) = post(urlString = "/api/v1/matches/$matchId/live/finalize") {
+        header(key = HttpHeaders.Authorization, value = "Bearer $token")
+    }
+
+    @Test
+    fun `finalizing writes the live score into the match through uploadResult`() =
+        withApp { client ->
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+
+            // 6-0, 6-0 played out, then declared.
+            repeat(times = 2) {
+                repeat(times = 6) { _ ->
+                    repeat(times = 4) {
+                        client.postEvent(
+                            token = token,
+                            matchId = matchId,
+                            request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"),
+                        )
+                    }
+                }
+                client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"))
+            }
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "MATCH_AWARDED", side = "TEAM1"))
+
+            val finalized = client.finalize(token = token, matchId = matchId)
+            finalized.status shouldBe HttpStatusCode.OK
+            // A MatchResponse, not a live view: after this the match IS the record.
+            finalized.bodyAsText() shouldContain "COMPLETED"
+        }
+
+    @Test
+    fun `a plain SCORER may score but may not finalize`() =
+        withApp { client ->
+            // The boundary between the two rights, asserted rather than discovered. Scoring is flat and
+            // club-agnostic; finalizing writes the permanent record and keeps the #789 organizer gate.
+            val token = seedScorer()
+            val matchId = seedFixture()
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "MATCH_AWARDED", side = "TEAM1"))
+                .status shouldBe HttpStatusCode.Created
+
+            client.finalize(token = token, matchId = matchId).status shouldBe HttpStatusCode.Forbidden
+        }
+
+    @Test
+    fun `finalizing before the match is declared over is refused`() =
+        withApp { client ->
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+
+            client.finalize(token = token, matchId = matchId).status shouldBe HttpStatusCode.Conflict
+        }
+
+    @Test
+    fun `a retirement mid-set finalizes with the partial set on the record`() =
+        withApp { client ->
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+
+            // TEAM2 leads 3-1, then TEAM1 retires. Below the games floor, which #931 lifted for a
+            // designated winner — this is the case that needed it.
+            repeat(times = 3) {
+                repeat(times = 4) {
+                    client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM2"))
+                }
+            }
+            repeat(times = 4) {
+                client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+            }
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "RETIRED", side = "TEAM1"))
+
+            val finalized = client.finalize(token = token, matchId = matchId)
+            finalized.status shouldBe HttpStatusCode.OK
+            finalized.bodyAsText() shouldContain "RETIRED"
+        }
+
+    @Test
+    fun `a walkover finalizes with no sets at all`() =
+        withApp { client ->
+            // Nobody played. #911 needed MatchResultRequest to stop demanding a set when a winner is
+            // designated, or this would have forced the caller to invent a 0-0 nobody played.
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "DEFAULTED", side = "TEAM2"))
+
+            val finalized = client.finalize(token = token, matchId = matchId)
+            finalized.status shouldBe HttpStatusCode.OK
+            finalized.bodyAsText() shouldContain "DEFAULTED"
+        }
+
+    @Test
+    fun `finalizing credits the umpire and leaves the log intact`() =
+        withApp { client ->
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "MATCH_AWARDED", side = "TEAM1"))
+            client.finalize(token = token, matchId = matchId).status shouldBe HttpStatusCode.OK
+
+            // The credit is folded out because §8a makes the log disposable — but finalize itself does
+            // NOT delete it, so a mis-finalized match can still be inspected.
+            LiveMatchRepository().umpires(matchId = matchId).shouldHaveSize(size = 1)
+            LiveMatchRepository().log(matchId = matchId).shouldHaveSize(size = 1)
         }
 
     @Test

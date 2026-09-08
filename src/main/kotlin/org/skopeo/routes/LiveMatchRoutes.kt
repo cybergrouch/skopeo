@@ -38,6 +38,7 @@ fun Application.configureLiveMatchRoutes(service: LiveMatchService = LiveMatchSe
                 recordEvent(service = service)
                 undo(service = service)
                 claim(service = service)
+                finalize(service = service)
             }
         }
     }
@@ -100,6 +101,22 @@ private fun Route.claim(service: LiveMatchService) {
         respondMappingErrors {
             respondEither(result = service.release(token = verifiedToken(), matchId = uuidParam(name = "matchId"))) { view ->
                 call.respond(status = HttpStatusCode.OK, message = view)
+            }
+        }
+    }
+}
+
+/**
+ * Write the live score into the match as a real result.
+ *
+ * Returns a `MatchResponse`, not a live view: after this the match IS the record, and handing back a
+ * live scoreboard would suggest the log is still the answer to "what was the score". It is not (§8a).
+ */
+private fun Route.finalize(service: LiveMatchService) {
+    post(path = "/finalize") {
+        respondMappingErrors {
+            respondEither(result = service.finalize(token = verifiedToken(), matchId = uuidParam(name = "matchId"))) { match ->
+                call.respond(status = HttpStatusCode.OK, message = match)
             }
         }
     }
