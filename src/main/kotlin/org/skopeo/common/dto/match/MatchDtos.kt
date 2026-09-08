@@ -70,14 +70,21 @@ data class SetScoreRequest(
     init {
         // Shape validation at the boundary (#116): games can never be negative.
         require(value = team1Games >= 0 && team2Games >= 0) { "games must be non-negative" }
-        // A set decided on games must be won with at least MIN_GAMES_TO_WIN games (#213). Sets with
-        // equal games are decided by the tiebreak (e.g. a match tiebreak) and are exempt from the floor.
-        if (team1Games != team2Games) {
-            val winnerGames = if (team1Games > team2Games) team1Games else team2Games
-            require(value = winnerGames >= MIN_GAMES_TO_WIN) {
-                "a set won on games must be won with at least $MIN_GAMES_TO_WIN games"
-            }
-        }
+    }
+
+    /**
+     * Whether this set clears the games floor (#213) — at least [MIN_GAMES_TO_WIN] games for the winner.
+     *
+     * Sets with equal games are decided by the tiebreak (e.g. a match tiebreak) and are exempt.
+     *
+     * Checked by [MatchResultRequest] rather than here, because whether the floor applies at all depends
+     * on the *match*: a designated winner means the match did not end normally, and an abandoned set can
+     * legitimately stand at 3-2. A set on its own cannot know that.
+     */
+    internal fun clearsGamesFloor(): Boolean {
+        if (team1Games == team2Games) return true
+        val winnerGames = if (team1Games > team2Games) team1Games else team2Games
+        return winnerGames >= MIN_GAMES_TO_WIN
     }
 }
 
@@ -95,13 +102,28 @@ data class MatchResultRequest(
      * tennis that was played rather than the paperwork.
      *
      * When supplied, the "sets are tied" guard does not apply — a retirement can legitimately stand at
-     * one set all, or at a single unfinished set.
+     * one set all, or at a single unfinished set. **Nor does the per-set games floor** — see [init].
      */
     val winnerTeamId: String? = null,
 ) {
     init {
         // Shape validation at the boundary (#116): a result must report at least one set.
         require(value = sets.isNotEmpty()) { "at least one set is required" }
+        // The games floor (#213) says a set won on games needs at least MIN_GAMES_TO_WIN of them. It
+        // lives here rather than on SetScoreRequest because whether it applies is a property of the
+        // MATCH, not of the set: a designated winner means this did not end normally (#917), and an
+        // abandoned set can legitimately stand at 3-2 — which is exactly what #911 produces when an
+        // umpire ends a set early or a player retires mid-set.
+        //
+        // The same carve-out #917 already made for the "sets are tied" guard, for the same reason. A
+        // result with no designation is still a normally-completed match and is still held to the floor,
+        // so nothing that was rejected before is accepted now unless it says why.
+        if (winnerTeamId == null) {
+            require(value = sets.all { it.clearsGamesFloor() }) {
+                "a set won on games must be won with at least $MIN_GAMES_TO_WIN games, " +
+                    "unless a match winner is designated (a retirement, default, or a set ended early)"
+            }
+        }
     }
 }
 

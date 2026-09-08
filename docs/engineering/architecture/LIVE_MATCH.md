@@ -561,10 +561,20 @@ rating change (#862's derivation view), not just here.
    the sets-tied guard no longer applies — a retirement can legitimately stand at one set all, or at a
    single unfinished set.
 3. **Display.** `1-5 (ret)` on the match page, the event page and anywhere a scoreline is rendered.
-4. **Default.** The same shape, but confirm the rating treatment matches: a default is usually a
-   no-show, so there may be no scoreline at all to compute dominance from. If so, a defaulted match
-   probably should not be rated — which is a *different* answer from retirement, and is worth deciding
-   before it is built rather than assuming symmetry.
+4. **Default — decided: a defaulted match is not rated.** A default is usually a no-show, so there is
+   commonly no scoreline at all to compute dominance from, and rating one would mean inventing a
+   performance nobody gave. This is deliberately a *different* answer from retirement, which **is** rated
+   on the real score: a retirement has tennis behind it and a default does not. The match still counts on
+   the record — the opponent wins it — and ranking points follow the record, per the section below.
+
+**Prerequisite done: the games floor no longer blocks an abandoned set.** `SetScoreRequest` enforced
+`MIN_GAMES_TO_WIN = 4`, so a set standing at 3-2 — what an early-ended set or an early retirement
+actually produces — was rejected at the DTO boundary before any service saw it. The check now lives on
+`MatchResultRequest` and is lifted when a match winner is designated, the same carve-out #917 made for
+the sets-tied guard and for the same reason: a designation is the result saying it did not end normally.
+Without one the floor still applies, so nothing previously rejected is now accepted.
+
+(Note 1-5 was never blocked — the winner has five games. The floor only bites below four.)
 
 ### Where each winner should live
 
