@@ -324,6 +324,67 @@ class ScoreEngineTest {
     }
 
     @Test
+    fun `an official start is distinct from the first point`() {
+        // The gap between opening the app and the players starting is what would otherwise corrupt a
+        // duration figure, so the start is its own event rather than inferred from the first point.
+        val fresh = ScoreState()
+        fresh.hasStarted shouldBe false
+
+        val started = state(ScoreEvent.MatchStarted)
+        started.hasStarted shouldBe true
+        started.pointsTeam1 shouldBe 0
+
+        // Scoring without a start is still allowed — the engine is permissive, and an umpire who forgets
+        // to tap Start should not lose the point.
+        stateOf(events = points(side = TeamSide.TEAM1, times = 1)).hasStarted shouldBe false
+    }
+
+    @Test
+    fun `pause and resume toggle without touching the score`() {
+        val played = points(side = TeamSide.TEAM1, times = 2)
+        val paused = stateOf(events = played + listOf(element = ScoreEvent.Paused))
+        paused.isPaused shouldBe true
+        paused.displayPoints(side = TeamSide.TEAM1) shouldBe "30"
+
+        val resumed = stateOf(events = played + listOf(ScoreEvent.Paused, ScoreEvent.Resumed))
+        resumed.isPaused shouldBe false
+        resumed.displayPoints(side = TeamSide.TEAM1) shouldBe "30"
+    }
+
+    @Test
+    fun `scoring while paused still counts`() {
+        // Deliberate: a forgotten Resumed is likelier than a real point during a rain delay, and dropping
+        // the point is the worse failure. The flag stays set so a UI can prompt.
+        val scoredWhilePaused =
+            stateOf(
+                events = listOf(element = ScoreEvent.Paused) + points(side = TeamSide.TEAM1, times = 1),
+            )
+        scoredWhilePaused.displayPoints(side = TeamSide.TEAM1) shouldBe "15"
+        scoredWhilePaused.isPaused shouldBe true
+    }
+
+    @Test
+    fun `starting clears a pause, so a restart needs no separate resume`() {
+        val restarted = stateOf(events = listOf(ScoreEvent.MatchStarted, ScoreEvent.Paused, ScoreEvent.MatchStarted))
+        restarted.isPaused shouldBe false
+        restarted.hasStarted shouldBe true
+    }
+
+    @Test
+    fun `a pause survives being folded across games and sets`() {
+        val paused =
+            stateOf(
+                events =
+                    listOf(ScoreEvent.MatchStarted, ScoreEvent.Paused) +
+                        (1..6).flatMap { points(side = TeamSide.TEAM1, times = 4) } +
+                        listOf(element = ScoreEvent.SetAwarded(side = TeamSide.TEAM1)),
+            )
+        // Nothing in game or set completion resets the pause — only Resumed or MatchStarted does.
+        paused.isPaused shouldBe true
+        paused.completedSets.shouldHaveSize(size = 1)
+    }
+
+    @Test
     fun `replay of a whole match folds to the same state as applying step by step`() {
         // replay is a fold over apply, not a second traversal — this is the assertion that they cannot
         // drift, which is the classic way event-sourced scoring goes wrong (#911 §7).

@@ -164,6 +164,30 @@ class MatchRepository {
         }
 
     /**
+     * Move a match to [status]. Used by live scoring to mark a fixture `IN_PROGRESS` (#911) — the first
+     * user of a status that has existed in the enum since the beginning and been written by nothing.
+     *
+     * Deliberately narrow: it writes the status column and nothing else. Completing a match still goes
+     * through `uploadResult`, which has a result to record and a winner to derive; this is only for the
+     * transition that carries no other data.
+     */
+    fun setStatus(
+        matchId: UUID,
+        status: String,
+    ): Either<ServiceError, MatchAggregateEntity> =
+        transaction {
+            val updated =
+                MatchesTable.update(where = { MatchesTable.id eq matchId }) {
+                    it[MatchesTable.status] = status
+                }
+            if (updated == 0) {
+                ServiceError.NotFound(message = "Match $matchId not found").left()
+            } else {
+                loadMatchOrThrow(id = matchId).right()
+            }
+        }
+
+    /**
      * Set (or clear, when null) a fixture's per-side handicaps (#486). The service has validated the
      * range and the unrated guard; a missing id returns NotFound.
      */
