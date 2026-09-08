@@ -119,8 +119,14 @@ data class MatchResultRequest(
     val completionReason: String? = null,
 ) {
     init {
-        // Shape validation at the boundary (#116): a result must report at least one set.
-        require(value = sets.isNotEmpty()) { "at least one set is required" }
+        // Shape validation at the boundary (#116): a result must report at least one set — UNLESS a
+        // winner is designated (#911). A walkover has no set to report, and a player who pulls out
+        // before the first game leaves nothing decisive to record either. Requiring a set there would
+        // force the caller to invent a 0-0 that nobody played. Same carve-out, same reason, as the games
+        // floor below: a designation is the result saying it did not end normally.
+        if (winnerTeamId == null) {
+            require(value = sets.isNotEmpty()) { "at least one set is required" }
+        }
         // The games floor (#213) says a set won on games needs at least MIN_GAMES_TO_WIN of them. It
         // lives here rather than on SetScoreRequest because whether it applies is a property of the
         // MATCH, not of the set: a designated winner means this did not end normally (#917), and an
@@ -206,6 +212,13 @@ data class MatchResponse(
     val matchType: String,
     val matchDate: String,
     val status: String,
+    /**
+     * How the match ended (#911): `COMPLETED`, `RETIRED` or `DEFAULTED`.
+     *
+     * A separate axis from [status], which only says *whether* it ended. This is what a scoreline needs
+     * to render `1-3 (ret)` rather than a bare `1-3` that reads like a played-out result.
+     */
+    val completionReason: String,
     val team1: MatchSideResponse,
     val team2: MatchSideResponse,
     val winnerTeamId: String? = null,

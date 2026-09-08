@@ -7389,6 +7389,14 @@ components:
         status:
           type: string
           enum: [SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED]
+        completionReason:
+          type: string
+          enum: [COMPLETED, RETIRED, DEFAULTED]
+          description: >-
+            How the match ended (#911) -- a separate axis from status, which only says whether it ended.
+            This is what a scoreline needs to render "1-3 (ret)" rather than a bare "1-3" that reads like
+            a played-out result. The conceding side is not returned: it is whichever side is not
+            winnerTeamId, because a player who retires always loses.
         team1:
           $ref: '#/components/schemas/MatchSideResponse'
         team2:

@@ -23,6 +23,7 @@ fun Match.toResponse(): MatchResponse =
         matchType = matchType.name,
         matchDate = matchDate.toString(),
         status = status.name,
+        completionReason = completionReason.name,
         team1 = MatchSideResponse(teamId = team1.teamId.toString(), userIds = team1.userIds.map { it.toString() }),
         team2 = MatchSideResponse(teamId = team2.teamId.toString(), userIds = team2.userIds.map { it.toString() }),
         winnerTeamId = winnerTeamId?.toString(),

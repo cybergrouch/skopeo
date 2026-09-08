@@ -7,9 +7,13 @@ import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
+import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.dto.livematch.LiveMatchResponse
 import org.skopeo.common.dto.livematch.LiveScoreEventRequest
+import org.skopeo.common.dto.match.MatchResponse
+import org.skopeo.common.dto.match.MatchResultRequest
+import org.skopeo.common.dto.match.SetScoreRequest
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.SCORING_ROLES
 import org.skopeo.domain.mapper.dto.livematch.toResponse
@@ -19,15 +23,23 @@ import org.skopeo.domain.mapper.entity.livematch.sideOf
 import org.skopeo.domain.mapper.entity.livematch.toLoggedAction
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
+import org.skopeo.domain.model.CompletedSet
 import org.skopeo.domain.model.LiveMatchView
+import org.skopeo.domain.model.LiveOutcome
+import org.skopeo.domain.model.LiveOutcomeKind
 import org.skopeo.domain.model.LoggedAction
+import org.skopeo.domain.model.MatchCompletionReason
 import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.model.ScoreEvent
+import org.skopeo.domain.model.ScoreState
+import org.skopeo.domain.model.TeamSide
 import org.skopeo.domain.model.User
+import org.skopeo.domain.service.match.MatchService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.LiveMatchRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.repository.persistence.MatchUmpireEntity
 import java.util.UUID
 
 /**
@@ -54,6 +66,7 @@ class LiveMatchService(
     private val live: LiveMatchRepository = LiveMatchRepository(),
     private val matches: MatchRepository = MatchRepository(),
     private val users: UserRepository = UserRepository(),
+    private val results: MatchService = MatchService(),
 ) {
     /**
      * Take (or take over) the scoring of [matchId], moving the fixture to `IN_PROGRESS`.
@@ -146,6 +159,53 @@ class LiveMatchService(
                     )
                 }.bind()
             }
+        }
+
+    /**
+     * Write the live score into the match as a real result (#911 §8).
+     *
+     * **Goes through the existing `uploadResult`**, which is the whole point: ratings (#403), ranking
+     * points, and score correction (#776) keep working untouched, and LiveMatch stays a front end to
+     * result recording rather than a parallel store.
+     *
+     * The log is **not** deleted here. Finalize marks the match recorded and leaves the stack for a
+     * later sweep — a mis-finalized match would otherwise have nothing left to inspect, and finalize is
+     * the exact moment you most want to look (§8a).
+     *
+     * The umpire credit IS folded out now, into `match_umpires`, because that has to outlive the log.
+     */
+    fun finalize(
+        token: VerifiedFirebaseToken,
+        matchId: UUID,
+    ): Either<ServiceError, MatchResponse> =
+        either {
+            scorer(token = token).bind()
+            val match = scorableMatch(matchId = matchId).bind()
+            val state = ScoreEngine.replay(log = live.loggedActions(matchId = matchId))
+            val outcome =
+                ensureNotNull(value = state.outcome) {
+                    ServiceError.Conflict(
+                        message =
+                            "The match has not been declared over. Record a MATCH_AWARDED, RETIRED or " +
+                                "DEFAULTED action before finalizing.",
+                    )
+                }
+            val sides = mapOf(TeamSide.TEAM1 to match.team1.teamId, TeamSide.TEAM2 to match.team2.teamId)
+            val recorded =
+                results
+                    .uploadResult(
+                        token = token,
+                        matchId = matchId,
+                        request =
+                            MatchResultRequest(
+                                sets = recordableSets(state = state),
+                                winnerTeamId = sides.getValue(key = outcome.winner).toString(),
+                                completionReason = outcome.toCompletionReason().name,
+                            ),
+                    ).bind()
+            live.recordUmpires(matchId = matchId, umpires = live.umpireCredit(matchId = matchId))
+            live.releaseClaim(matchId = matchId)
+            recorded
         }
 
     /** The current score and who is scoring it, for the wire. Readable by anyone who can see the match. */
@@ -241,3 +301,71 @@ private fun LiveMatchRepository.loggedActions(matchId: UUID): List<LoggedAction>
  */
 private fun LiveMatchRepository.lastUndoableSequence(matchId: UUID): Long? =
     ScoreEngine.surviving(log = loggedActions(matchId = matchId)).maxOfOrNull { it.sequence }
+
+/**
+ * How the live outcome reads on the permanent record.
+ *
+ * A retirement and a default both hand the match to the opponent, and the record says which — the two
+ * are rated differently (§10), so collapsing them here would lose the distinction the rating pipeline
+ * depends on.
+ */
+private fun LiveOutcome.toCompletionReason(): MatchCompletionReason =
+    when (kind) {
+        LiveOutcomeKind.COMPLETED -> MatchCompletionReason.COMPLETED
+        LiveOutcomeKind.RETIRED -> MatchCompletionReason.RETIRED
+        LiveOutcomeKind.DEFAULTED -> MatchCompletionReason.DEFAULTED
+    }
+
+/**
+ * The sets worth writing to the record: every banked set, plus the unfinished one **if it decided
+ * anything**.
+ *
+ * The partial set is included because §10 rates a retirement on the real score — a player who retires
+ * down 1-3 was being outplayed, and dropping that would rate the match as if the games had not happened.
+ *
+ * A **level** partial set (3-3, or 0-0 because nobody had started) is omitted instead. Not an oversight:
+ * since #917 the set winner is derived from the games, and a level set has no winner to derive — the
+ * recording path would reject it. Omitting loses nothing that matters, because #925 established that a
+ * level set contributes zero dominance anyway. It is the same conclusion reached from the other end.
+ */
+private fun recordableSets(state: ScoreState): List<SetScoreRequest> =
+    (state.completedSets.map { it.toRequest() } + state.currentSetIfDecisive()).filterNotNull()
+
+private fun CompletedSet.toRequest(): SetScoreRequest =
+    SetScoreRequest(
+        team1Games = gamesTeam1,
+        team2Games = gamesTeam2,
+        tiebreakTeam1Points = tiebreakTeam1Points,
+        tiebreakTeam2Points = tiebreakTeam2Points,
+    )
+
+/** The unbanked set, when its games (or its tiebreak) actually separate the two sides. */
+private fun ScoreState.currentSetIfDecisive(): SetScoreRequest? {
+    val tiebreakDecides = isTiebreak && pointsTeam1 != pointsTeam2
+    if (gamesTeam1 == gamesTeam2 && !tiebreakDecides) return null
+    return SetScoreRequest(
+        team1Games = gamesTeam1,
+        team2Games = gamesTeam2,
+        tiebreakTeam1Points = pointsTeam1.takeIf { isTiebreak },
+        tiebreakTeam2Points = pointsTeam2.takeIf { isTiebreak },
+    )
+}
+
+/**
+ * Who umpired, folded out of the log so it outlives it (§8a).
+ *
+ * Counts every row a person wrote, including undo markers: correcting yourself is umpiring. The window
+ * is their first to last action, which is what separates "umpired the match" from "tapped one point
+ * during a handover".
+ */
+private fun LiveMatchRepository.umpireCredit(matchId: UUID): List<MatchUmpireEntity> =
+    log(matchId = matchId)
+        .groupBy { it.recordedBy }
+        .map { (userId, rows) ->
+            MatchUmpireEntity(
+                userId = userId,
+                eventsRecorded = rows.size,
+                firstRecordedAt = rows.minOf { it.recordedAt },
+                lastRecordedAt = rows.maxOf { it.recordedAt },
+            )
+        }
