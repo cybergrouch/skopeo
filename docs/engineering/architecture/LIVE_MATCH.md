@@ -277,6 +277,36 @@ Two rules follow from §2 and §8a, and both are easy to violate later "for perf
 **No snapshotting.** A match is a few hundred events, so folding the whole log on every write costs
 microseconds. Introducing snapshots would add a second thing that can be stale for no measurable gain.
 
+### Shipped — step 2 of §13
+
+`ScoreEngine` (`domain/service/livematch/`) and its event model (`domain/model/LiveScoreDomain.kt`),
+exactly as described above: `apply` holds the rules, `effective` is the only layer that knows undo
+exists, and `replay` is a fold over `apply` rather than a second traversal. No I/O, no transport, no UI.
+
+Decisions taken while building it, none of which the section above had settled:
+
+- **Where the permissive boundary actually falls.** `apply` advances points and closes a **game** by the
+  ordinary deuce/advantage rule; the **set**, the **tiebreak** and the **match** are declared. Six games
+  does not end a set — the umpire does. That follows from #911 requiring a set be endable below six and
+  the UI not presume a tiebreak target: auto-closing at six would fight the umpire in any short-set or
+  pro-set format. It does mean the engine will accept a set banked at 2-1 and a tiebreak sitting at 7-0,
+  which is pinned by test rather than left to be discovered.
+- **Undo resolution is recursive, and resolved in one pass.** A marker is in force unless it has itself
+  been cancelled, which is what makes undo-of-undo a redo. Walking sequences in *descending* order
+  settles it without fixpoint iteration, because a marker always has a higher sequence than its target.
+  A marker aimed at a sequence that does not exist, or at one already cancelled, is inert.
+- **Undo is not last-in-first-out.** A marker names its target, so an earlier action can be struck out
+  with everything after it still counting.
+- **Doubles is in the first cut.** The only thing that differs is the server, so `ServerAssigned` names a
+  **player** rather than a side. Nothing auto-rotates: whose turn it is is a format rule, and the umpire
+  is the authority. Points, games and sets are per *side* and need no doubles-specific handling.
+- **A finished match ignores further scoring**, with `ServerAssigned` carved out as a record correction.
+  Safe rather than a trap, because the concluding event is undoable like any other — undoing a
+  mis-tapped retirement puts the match back in play.
+
+Left for step 3, deliberately: the log is a `List<LoggedAction>` handed in by the caller. Nothing here
+persists it, allocates a sequence number, or knows about a match id.
+
 ---
 
 ## 8. Decision — finalize goes through the existing result path
