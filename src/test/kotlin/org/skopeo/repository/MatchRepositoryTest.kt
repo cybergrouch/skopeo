@@ -1037,4 +1037,22 @@ class MatchRepositoryTest {
         // Before #898 this list came back saturday-first, keyed on match_date.
         matches.listPendingCalculation().map { it.toDomain().id } shouldBe listOf(sunday, saturday)
     }
+
+    @Test
+    fun `setStatus moves a fixture and reports an unknown id as not found (#911)`() {
+        val u1 = newUser(uid = "status-1")
+        val u2 = newUser(uid = "status-2")
+        val id = fixture(u1 = u1, u2 = u2, date = LocalDate.of(2026, 3, 1)).id
+
+        matches
+            .setStatus(matchId = id, status = MatchStatus.IN_PROGRESS.name)
+            .shouldBeRight()
+            .toDomain()
+            .status shouldBe MatchStatus.IN_PROGRESS
+
+        matches
+            .setStatus(matchId = UUID.randomUUID(), status = MatchStatus.IN_PROGRESS.name)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
 }

@@ -314,6 +314,53 @@ class LiveMatchServiceTest {
     }
 
     @Test
+    fun `a rated match cannot be scored, because its result already fed ratings and points`() {
+        val id = umpire()
+        val matchId = fixture()
+        matches.markRated(matchId = matchId, ratedAt = java.time.LocalDateTime.now(), ratedBy = id)
+
+        service
+            .record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    @Test
+    fun `losing the sequence race three times is reported rather than retried forever`() {
+        // Sustained contention, faked by a repository whose append never wins. The real path retries
+        // because the winning event may have changed what the umpire's action means — but spinning
+        // courtside would be worse than saying so, hence a bounded attempt count.
+        umpire()
+        val matchId = fixture()
+        val alwaysLoses =
+            object : LiveMatchRepository() {
+                var attempts = 0
+
+                override fun append(
+                    matchId: UUID,
+                    sequence: Long,
+                    kind: String,
+                    side: String?,
+                    playerId: UUID?,
+                    targetSequence: Long?,
+                    recordedBy: UUID,
+                    recordedAt: java.time.LocalDateTime,
+                ): Boolean {
+                    attempts += 1
+                    return false
+                }
+            }
+
+        LiveMatchService(live = alwaysLoses)
+            .record(token = token(uid = "ump"), matchId = matchId, event = point(side = TeamSide.TEAM1))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+
+        // Bounded, and it really did try more than once.
+        alwaysLoses.attempts shouldBe 3
+    }
+
+    @Test
     fun `an unknown match is not found`() {
         umpire()
         service
