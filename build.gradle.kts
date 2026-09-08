@@ -304,6 +304,11 @@ tasks.jacocoTestReport {
                         "**/routes/RatingRoutes*.*",
                         "**/routes/RatingRequestRoutes*.*",
                         "**/routes/MatchRoutes*.*",
+                        // Handlers ARE tested (LiveMatchApiIntegrationTest, 14 tests over the real
+                        // Firebase JWT path), but JaCoCo can't attribute coverage to the Ktor suspend
+                        // route lambdas run in testApplication (see RankingRoutes). The scoring rules
+                        // themselves are measured: ScoreEngine and LiveMatchService are not excluded.
+                        "**/routes/LiveMatchRoutes*.*",
                         "**/routes/EventRoutes*.*",
                         // Same story as EventRoutes: the by-code handlers ARE tested
                         // (EventPublicViewApiIntegrationTest), but JaCoCo can't attribute coverage to the
@@ -371,6 +376,10 @@ tasks.jacocoTestCoverageVerification {
                     // (EventByCodeRoutesKt.publicEventByCode.1.1) that the path-based exclusion below
                     // does not always reach. Covered by EventPublicViewApiIntegrationTest.
                     "*.EventByCodeRoutesKt.*",
+                    // Same story for live scoring (#911): JaCoCo reports the Ktor suspend route lambdas
+                    // under synthesized names (LiveMatchRoutesKt.undo.1.1.1) that the path-based
+                    // exclusion does not always reach. Covered by LiveMatchApiIntegrationTest.
+                    "*.LiveMatchRoutesKt.*",
                 )
         }
     }
@@ -400,6 +409,7 @@ tasks.jacocoTestCoverageVerification {
                         "**/routes/RatingRoutes*.*",
                         "**/routes/RatingRequestRoutes*.*",
                         "**/routes/MatchRoutes*.*",
+                        "**/routes/LiveMatchRoutes*.*",
                         "**/routes/EventRoutes*.*",
                         "**/routes/EventTeamRoutes*.*",
                         "**/routes/ClubRoutes*.*",
