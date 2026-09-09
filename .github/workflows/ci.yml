@@ -116,6 +116,85 @@ jobs:
           header: coverage-backend
           path: backend-comment.md
 
+  # Build the runtime image and actually START it.
+  #
+  # This exists because of a specific class of failure the test job cannot see: `build` runs the suite
+  # on the runner's JVM and never enters the container, so a dependency shipping PRECOMPILED NATIVE code
+  # can be perfectly green in CI and segfault the moment the image boots.
+  #
+  # That is not hypothetical. firebase-admin (#911) pulls in gRPC, whose bundled netty-tcnative .so is
+  # built against glibc; the runtime image was Alpine (musl), and the JVM died in
+  # netty_internal_tcnative_SSLContext_JNI_OnLoad before the server ever listened. Every test passed.
+  # Only starting the image catches it, and the next production deploy would have been the thing that
+  # found out.
+  #
+  # Deliberately runs with NO Firebase credentials: that is the supported default (the broadcaster
+  # degrades to a no-op), so this also proves the app boots without a Firestore project.
+  image-smoke:
+    name: Image boots
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: SkopeoDb
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the runtime image
+        run: docker build -t skopeo:ci .
+
+      - name: Start it
+        run: |
+          docker run -d --name skopeo-ci --network host \
+            -e DATABASE_URL=jdbc:postgresql://localhost:5432/SkopeoDb \
+            -e DATABASE_USER=postgres \
+            -e DATABASE_PASSWORD=postgres \
+            skopeo:ci
+
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://localhost:8080/health > /dev/null; then
+              echo "healthy after ${i}s"
+              exit 0
+            fi
+            # Fail fast rather than burning the full timeout: a container that has already exited is
+            # never going to answer, and the logs are the useful output.
+            if [ "$(docker inspect -f '{{.State.Running}}' skopeo-ci)" != "true" ]; then
+              echo "::error::the container exited before serving /health"
+              docker logs skopeo-ci
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "::error::/health did not respond within 30s"
+          docker logs skopeo-ci
+          exit 1
+
+      - name: Assert the JVM did not die in native code
+        # A SIGSEGV can leave a container running long enough to look alive, so check explicitly rather
+        # than inferring from the health probe.
+        run: |
+          if docker logs skopeo-ci 2>&1 | grep -qE "SIGSEGV|A fatal error has been detected"; then
+            echo "::error::the JVM crashed in native code"
+            docker logs skopeo-ci
+            exit 1
+          fi
+
+      - name: Logs on failure
+        if: failure()
+        run: docker logs skopeo-ci || true
+
   # Secret scan: block commits that introduce API keys, tokens, or credentials.
   # gitleaks-action scans the commits in the push / PR (not full history), reads
   # .gitleaks.toml (which allowlists the already-rotated historical leak), and

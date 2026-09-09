@@ -5,13 +5,54 @@
 This guide covers deploying Skopeo API using Docker containers. The application is packaged as a Docker image using a multi-stage build for optimal size and security.
 
 **Image Details:**
-- Base: Alpine Linux with OpenJDK 17 JRE
-- Size: ~200MB (runtime image)
+- Base: **Debian (Ubuntu Noble) with OpenJDK 17 JRE — glibc, not Alpine/musl**
+- Size: ~250MB (runtime image)
 - Port: 8080
 - Health Check: Built-in using `/health` endpoint
 - User: Non-root (appuser)
 
 ---
+
+## Why the base image is Debian and not Alpine
+
+It was Alpine until #911, and the switch is load-bearing rather than cosmetic.
+
+`firebase-admin` (the live-score broadcast) pulls in gRPC, which ships **netty-tcnative as a precompiled
+native `.so` built against glibc**. Loading it on musl segfaults the JVM during startup — in
+`netty_internal_tcnative_SSLContext_JNI_OnLoad`, before the server ever listens — so the container
+crash-loops with no Kotlin stack trace to explain why.
+
+**The test suite cannot catch this.** It runs on the host JVM and never enters the image. The
+`image-smoke` CI job exists for exactly this class of failure: it builds the image, starts it, and waits
+for `/health`. Anything that adds a dependency with bundled native code needs that job to pass, not just
+the tests.
+
+Two consequences of the Debian base worth knowing if you edit the Dockerfile:
+
+- User creation is `groupadd`/`useradd`, not Alpine's BusyBox `addgroup`/`adduser`.
+- The Debian JRE image ships **neither `wget` nor `curl`**, so `curl` is installed explicitly for the
+  `HEALTHCHECK`. Without it the container reports unhealthy forever while the app runs perfectly.
+
+## Running against Firestore locally
+
+The live-score broadcast (#911) needs Google credentials. **Run the backend on the host rather than in
+the container**, keeping Postgres in Docker:
+
+```bash
+docker compose up -d postgres
+FIREBASE_PROJECT_ID=<your project> ./gradlew run
+```
+
+The SDK finds Application Default Credentials at `~/.config/gcloud/application_default_credentials.json`
+automatically — nothing to configure.
+
+**Do not mount that file into the container.** It holds a long-lived refresh token for your *personal*
+Google account, valid across every project you can reach, and mounting it exposes it to every transitive
+dependency in the image. Production has no such file at all: Cloud Run uses a service account with
+`roles/datastore.user`, which is both narrower and impossible to leak.
+
+Without credentials the broadcaster degrades to a no-op and logs once at startup. That is the supported
+default — every other feature works, spectators simply have nothing to watch.
 
 ## Quick Start
 

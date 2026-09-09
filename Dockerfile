@@ -36,7 +36,16 @@ RUN ./gradlew clean installDist --no-daemon $GRADLE_TOOLCHAIN_ARGS
 # ============================================================================
 # Stage 2: Runtime
 # ============================================================================
-FROM eclipse-temurin:17-jre-alpine
+# Debian (glibc), NOT Alpine (musl) — and this is load-bearing.
+#
+# firebase-admin (#911) pulls in gRPC, which ships netty-tcnative as a PRECOMPILED NATIVE .so built
+# against glibc. Loading it on musl segfaults the JVM during startup, in
+# netty_internal_tcnative_SSLContext_JNI_OnLoad, before the server ever listens — so the container
+# crash-loops with no Kotlin stack trace to explain it.
+#
+# The host test suite cannot catch this: it runs on the developer's JVM and never enters the image.
+# Anything that adds a dependency with bundled native code has to be exercised in the container.
+FROM eclipse-temurin:17-jre-noble
 
 LABEL maintainer="Skopeo Team"
 LABEL description="Skopeo API - Dynamic tennis ranking calculation service"
@@ -44,8 +53,11 @@ LABEL version="1.0"
 
 WORKDIR /app
 
-# Create non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Create non-root user for security. Debian's adduser, not Alpine's BusyBox applet.
+RUN groupadd --system appgroup && useradd --system --gid appgroup --no-create-home appuser \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the application distribution from build stage
 COPY --from=builder /build/build/install/skopeo .
@@ -59,9 +71,11 @@ USER appuser
 # Expose application port
 EXPOSE 8080
 
-# Health check using the /health endpoint
+# Health check using the /health endpoint. curl is installed above because the Debian JRE image, unlike
+# the Alpine one, ships neither wget nor curl — an unfixed HEALTHCHECK would report the container
+# permanently unhealthy while the app ran perfectly.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+  CMD curl --fail --silent --show-error http://localhost:8080/health || exit 1
 
 # Run the application using the startup script
 ENTRYPOINT ["/app/bin/skopeo"]
