@@ -16,18 +16,24 @@ export function LiveScoringBoard({
   view,
   flipped,
   busy,
+  team1Name,
+  team2Name,
   onPoint,
 }: {
   view: LiveMatchResponse
   /** View-only side swap for when the players change ends. NEVER recorded — see #911 §6. */
   flipped: boolean
   busy: boolean
+  team1Name: string
+  team2Name: string
   onPoint: (side: 'TEAM1' | 'TEAM2') => void
 }) {
   const sides = [
-    { id: 'TEAM1' as const, points: view.pointsTeam1, games: view.gamesTeam1 },
-    { id: 'TEAM2' as const, points: view.pointsTeam2, games: view.gamesTeam2 },
+    { id: 'TEAM1' as const, name: team1Name, points: view.pointsTeam1, games: view.gamesTeam1 },
+    { id: 'TEAM2' as const, name: team2Name, points: view.pointsTeam2, games: view.gamesTeam2 },
   ]
+  // The label travels WITH its side through the flip (#937). A flip that moved the scores but left the
+  // names would be worse than no labels at all — it would confidently say the wrong thing.
   const ordered = flipped ? [sides[1], sides[0]] : sides
 
   return (
@@ -37,13 +43,18 @@ export function LiveScoringBoard({
           key={side.id}
           type="button"
           disabled={busy}
-          aria-label={`Point to ${side.id}`}
+          aria-label={`Point to ${side.name}`}
           onClick={() => onPoint(side.id)}
-          className="flex min-h-0 flex-col items-center justify-center rounded-lg bg-muted
-                     transition-colors hover:bg-muted/70 active:bg-muted/50 disabled:opacity-60"
+          className="flex min-h-0 flex-col items-center justify-center gap-[0.5dvh] rounded-lg bg-muted
+                     px-[1dvw] transition-colors hover:bg-muted/70 active:bg-muted/50 disabled:opacity-60"
         >
-          <span className="text-[14dvh] font-bold leading-none tabular-nums">{side.points}</span>
-          <span className="mt-[1dvh] text-[4dvh] leading-none text-muted-foreground tabular-nums">
+          {/* Truncated rather than wrapped: a long doubles pairing must not grow the row and push the
+              action bar off a screen that is not allowed to scroll. */}
+          <span className="max-w-full truncate text-[3.4dvh] font-semibold leading-none">
+            {side.name}
+          </span>
+          <span className="text-[13dvh] font-bold leading-none tabular-nums">{side.points}</span>
+          <span className="text-[3.6dvh] leading-none text-muted-foreground tabular-nums">
             {side.games} {side.games === 1 ? 'game' : 'games'}
           </span>
         </button>
