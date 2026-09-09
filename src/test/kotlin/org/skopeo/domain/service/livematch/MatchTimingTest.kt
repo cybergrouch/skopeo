@@ -6,6 +6,7 @@ package org.skopeo.domain.service.livematch
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.skopeo.domain.mapper.entity.livematch.LiveMatchEventKinds
+import org.skopeo.domain.model.MatchTiming
 import org.skopeo.repository.persistence.LiveMatchEventEntity
 import java.time.LocalDateTime
 import java.util.UUID

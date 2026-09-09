@@ -5,21 +5,10 @@ package org.skopeo.domain.service.livematch
 
 import org.skopeo.domain.mapper.entity.livematch.LiveMatchEventKinds
 import org.skopeo.domain.mapper.entity.livematch.toLoggedAction
+import org.skopeo.domain.model.MatchTiming
 import org.skopeo.repository.persistence.LiveMatchEventEntity
 import java.time.Duration
 import java.time.LocalDateTime
-
-/**
- * How long a match has actually been played (#937).
- *
- * @property elapsedSeconds playing time so far, **excluding** every suspension.
- * @property isRunning whether the clock is currently advancing — false before the start, while paused,
- *  and once the match has ended. A client ticks locally while this is true and stops when it is not.
- */
-data class MatchTiming(
-    val elapsedSeconds: Long,
-    val isRunning: Boolean,
-)
 
 /**
  * Elapsed playing time, folded from the log's timestamps (#937).

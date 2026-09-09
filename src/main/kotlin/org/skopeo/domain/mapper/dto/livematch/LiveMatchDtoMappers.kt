@@ -9,8 +9,8 @@ import org.skopeo.common.dto.livematch.LiveSetResponse
 import org.skopeo.domain.model.CompletedSet
 import org.skopeo.domain.model.LiveMatchView
 import org.skopeo.domain.model.LiveOutcome
+import org.skopeo.domain.model.MatchTiming
 import org.skopeo.domain.model.TeamSide
-import org.skopeo.domain.service.livematch.MatchTiming
 
 /**
  * The live score as the wire sees it (#911).
