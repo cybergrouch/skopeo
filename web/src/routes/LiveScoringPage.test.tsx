@@ -242,6 +242,27 @@ describe("LiveScoringPage", () => {
     expect(screen.getByText(/Match #3/)).toBeInTheDocument();
   });
 
+  it("falls back to just the match number when the event has no name", async () => {
+    // MatchPublicResponse.event is optional in the contract, so the label must degrade to something
+    // usable rather than rendering "undefined ·" in front of the number.
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        id: "m-1",
+        publicCode: "MTCH01",
+        matchNumber: 3,
+        team1: [{ displayName: "Ana", publicCode: "AAA111" }],
+        team2: [{ displayName: "Bob", publicCode: "BBB222" }],
+      },
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    expect(screen.getByText(/Match #3/)).toBeInTheDocument();
+    expect(screen.queryByText(/·/)).not.toBeInTheDocument();
+  });
+
   it("shows the set IN PROGRESS, not the number banked (#937)", async () => {
     // Off by one is the entire point of showing it: with one set banked, they are playing the second.
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
