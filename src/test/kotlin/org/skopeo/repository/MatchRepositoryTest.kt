@@ -1039,6 +1039,38 @@ class MatchRepositoryTest {
     }
 
     @Test
+    fun `a match being scored is still awaiting a result (#945)`() {
+        // The test whose absence let #945 ship. listAwaitingResults matched SCHEDULED exactly, which was
+        // correct for as long as nothing wrote IN_PROGRESS — then #930 gave live scoring its first
+        // writer and a match being played vanished from its event: out of "awaiting" because its status
+        // had changed, and not in "recorded" because it had no sets yet.
+        val u1 = newUser(uid = "live-1")
+        val u2 = newUser(uid = "live-2")
+        val eventId = fixtureEventId(u1, u2)
+        val id = fixture(u1 = u1, u2 = u2, date = LocalDate.of(2026, 4, 1), eventId = eventId).id
+
+        matches.listAwaitingResults(eventId = eventId).map { it.toDomain().id } shouldContain id
+
+        matches.setStatus(matchId = id, status = MatchStatus.IN_PROGRESS.name).shouldBeRight()
+
+        matches.listAwaitingResults(eventId = eventId).map { it.toDomain().id } shouldContain id
+    }
+
+    @Test
+    fun `a cancelled fixture is not awaiting anything (#945)`() {
+        // The other half of widening the filter: "not SCHEDULED" is not the same as "awaiting". Keying on
+        // a null completed_at would have swept this in.
+        val u1 = newUser(uid = "cancelled-1")
+        val u2 = newUser(uid = "cancelled-2")
+        val eventId = fixtureEventId(u1, u2)
+        val id = fixture(u1 = u1, u2 = u2, date = LocalDate.of(2026, 4, 2), eventId = eventId).id
+
+        matches.setStatus(matchId = id, status = MatchStatus.CANCELLED.name).shouldBeRight()
+
+        matches.listAwaitingResults(eventId = eventId).map { it.toDomain().id } shouldNotContain id
+    }
+
+    @Test
     fun `setStatus moves a fixture and reports an unknown id as not found (#911)`() {
         val u1 = newUser(uid = "status-1")
         val u2 = newUser(uid = "status-2")

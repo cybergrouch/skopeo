@@ -8,11 +8,17 @@ type StatusBadge = { label: string; variant: 'default' | 'secondary' | 'outline'
 /**
  * The read-only lifecycle status of a fixture (#361), mirroring the organizer's derivation: a match
  * the calculation has committed is "Rated"; one with a recorded result but not yet rated is "Awaiting
- * rating"; anything else is still "Scheduled".
+ * rating"; one being scored right now is "In progress"; anything else is still "Scheduled".
+ *
+ * IN_PROGRESS fell through to "Scheduled" until #945, because the status had no writer until #930 and
+ * the fallback was written for a world where it could not occur.
  */
 function statusBadge(match: MatchPublicResponse): StatusBadge {
   if (match.rated) return { label: 'Rated', variant: 'default' }
   if (match.status === 'COMPLETED') return { label: 'Awaiting rating', variant: 'secondary' }
+  // "Live" rather than "In progress": it is what the spectator scoreboard already calls this state, and
+  // it does not collide with the section heading of the same name.
+  if (match.status === 'IN_PROGRESS') return { label: 'Live', variant: 'default' }
   return { label: 'Scheduled', variant: 'outline' }
 }
 
@@ -79,16 +85,31 @@ function MatchSection({
  * `RecordedResultsSection` instead: same split, different surface, so the two are not interchangeable.
  */
 export function EventMatchSections({ matches }: { matches: MatchPublicResponse[] }) {
+  // Split on status FIRST, then on whether a result exists. Ordering matters: a match being scored has
+  // no sets yet, so a sets-only split would file it under "awaiting" — which is how #945 arose.
+  const inProgress = matches.filter((m) => m.status === 'IN_PROGRESS')
+  const rest = matches.filter((m) => m.status !== 'IN_PROGRESS')
+
   return (
     <>
+      {/* First, and rendered only when there is one: while an event is running the matches actually
+          being played are the most interesting thing on the page. An always-present empty section would
+          spend that space on nothing for the other 99% of an event's life. */}
+      {inProgress.length > 0 ? (
+        <MatchSection
+          title="In progress"
+          matches={inProgress}
+          emptyText=""
+        />
+      ) : null}
       <MatchSection
         title="Awaiting results"
-        matches={matches.filter((m) => m.sets.length === 0)}
+        matches={rest.filter((m) => m.sets.length === 0)}
         emptyText="No fixtures awaiting results."
       />
       <MatchSection
         title="Recorded results"
-        matches={matches.filter((m) => m.sets.length > 0)}
+        matches={rest.filter((m) => m.sets.length > 0)}
         emptyText="No recorded results yet."
       />
     </>
