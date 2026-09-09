@@ -593,10 +593,22 @@ class MatchRepository {
         }
 
     /**
-     * Active fixtures still scheduled and awaiting result entry, regardless of match date.
+     * Active fixtures awaiting result entry, regardless of match date.
      * The schedule is only suggestive — a fixture can be played anytime, so it is eligible for
      * results as soon as it exists. When [createdBy] is non-null, scoped to fixtures that user
      * created (HOST oversight). Ordered oldest match date first so overdue fixtures surface on top.
+     *
+     * **`SCHEDULED` *or* `IN_PROGRESS`, not `SCHEDULED` alone (#945).** This matched `SCHEDULED` exactly
+     * for as long as nothing ever wrote `IN_PROGRESS` — which was true from the beginning until #930
+     * gave live scoring its first writer. From that moment, claiming a match for scoring dropped it out
+     * of this list while it still had no sets to put it in the recorded list, so a match being played
+     * vanished from its event entirely until the result was written.
+     *
+     * The lesson is about the shape rather than the value: "awaiting a result" is the *absence* of a
+     * recorded one, and enumerating the statuses that imply it will break again the next time a status
+     * gains a writer. It is spelled out here rather than narrowed because the alternative — keying on
+     * `completed_at IS NULL` — would also pick up CANCELLED fixtures, which genuinely are not awaiting
+     * anything.
      */
     fun listAwaitingResults(
         createdBy: UUID? = null,
@@ -608,7 +620,7 @@ class MatchRepository {
                 .where {
                     val base =
                         MatchesTable.isActive and
-                            (MatchesTable.status eq MatchStatus.SCHEDULED.name)
+                            (MatchesTable.status inList AWAITING_RESULT_STATUSES)
                     // An event scope shows every awaiting fixture in the event (any creator); otherwise
                     // a HOST is scoped to their own fixtures.
                     when {
@@ -957,6 +969,13 @@ private fun sideOf(teamId: UUID): MatchSideEntity =
                 .orderBy(TeamUsersTable.position to SortOrder.ASC)
                 .map { it[TeamUsersTable.userId].value },
     )
+
+/**
+ * The statuses that mean "played or playable, but no result recorded yet" (#945).
+ *
+ * CANCELLED is deliberately absent: a cancelled fixture is not awaiting anything.
+ */
+private val AWAITING_RESULT_STATUSES = listOf(MatchStatus.SCHEDULED.name, MatchStatus.IN_PROGRESS.name)
 
 /** Load a match's sets as raw [MatchSetEntity] rows, each with its optional tiebreak sub-row. */
 private fun setsOf(matchId: UUID): List<MatchSetEntity> =
