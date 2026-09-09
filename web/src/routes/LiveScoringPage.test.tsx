@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { LiveScoringPage } from "./LiveScoringPage";
 
 const {
+  useDeleteApiV1MatchesMatchIdLiveClaim,
   useGetApiV1MatchesCodeCode,
   useGetApiV1MatchesMatchIdLive,
   usePostApiV1MatchesMatchIdLiveClaim,
@@ -13,6 +14,7 @@ const {
   usePostApiV1MatchesMatchIdLiveUndo,
   useGetApiV1UsersMe,
 } = vi.hoisted(() => ({
+  useDeleteApiV1MatchesMatchIdLiveClaim: vi.fn(),
   useGetApiV1MatchesCodeCode: vi.fn(),
   useGetApiV1MatchesMatchIdLive: vi.fn(),
   usePostApiV1MatchesMatchIdLiveClaim: vi.fn(),
@@ -23,6 +25,7 @@ const {
 }));
 
 vi.mock("@/api/generated/matches/matches", () => ({
+  useDeleteApiV1MatchesMatchIdLiveClaim,
   useGetApiV1MatchesCodeCode,
   useGetApiV1MatchesMatchIdLive,
   usePostApiV1MatchesMatchIdLiveClaim,
@@ -37,6 +40,7 @@ const recordMutate = vi.fn();
 const undoMutate = vi.fn();
 const claimMutate = vi.fn();
 const finalizeMutate = vi.fn();
+const releaseMutate = vi.fn();
 const exitFullscreen = vi.fn().mockResolvedValue(undefined);
 let finalizeOnSuccess: (() => void) | undefined;
 
@@ -98,7 +102,14 @@ describe("LiveScoringPage", () => {
       data: { id: "u1", capabilities: ["PLAYER", "SCORER"] },
     });
     useGetApiV1MatchesCodeCode.mockReturnValue({
-      data: { id: "m-1", publicCode: "MTCH01", matchNumber: 3 },
+      data: {
+        id: "m-1",
+        publicCode: "MTCH01",
+        matchNumber: 3,
+        event: { publicCode: "EVT001", name: "Summer Open" },
+        team1: [{ displayName: "Ana", publicCode: "AAA111" }],
+        team2: [{ displayName: "Bob", publicCode: "BBB222" }],
+      },
       isLoading: false,
     });
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
@@ -115,6 +126,10 @@ describe("LiveScoringPage", () => {
     });
     usePostApiV1MatchesMatchIdLiveClaim.mockReturnValue({
       mutate: claimMutate,
+      isPending: false,
+    });
+    useDeleteApiV1MatchesMatchIdLiveClaim.mockReturnValue({
+      mutate: releaseMutate,
       isPending: false,
     });
     usePostApiV1MatchesMatchIdLiveFinalize.mockImplementation(
@@ -137,7 +152,7 @@ describe("LiveScoringPage", () => {
 
     expect(screen.getByText("Rotate your device")).toBeInTheDocument();
     // The board must not render at all — the requirement is landscape-only, not landscape-preferred.
-    expect(screen.queryByLabelText("Point to TEAM1")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Point to Ana")).not.toBeInTheDocument();
   });
 
   it("refuses a viewer without the SCORER role", () => {
@@ -171,7 +186,7 @@ describe("LiveScoringPage", () => {
     renderPage();
     await start(user);
 
-    await user.click(screen.getByLabelText("Point to TEAM2"));
+    await user.click(screen.getByLabelText("Point to Bob"));
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
       data: { kind: "POINT_WON", side: "TEAM2" },
@@ -197,7 +212,66 @@ describe("LiveScoringPage", () => {
 
     // A flip must never reach the log: events name a side, so a recorded flip would corrupt history.
     expect(recordMutate).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Point to TEAM1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Point to Ana")).toBeInTheDocument();
+  });
+
+  it("labels each side with its players, and the label follows the flip (#937)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // Two anonymous tap targets is how a point gets recorded for the wrong player.
+    const before = screen.getAllByRole("button", { name: /^Point to/ });
+    expect(before[0]).toHaveAccessibleName("Point to Ana");
+    expect(before[1]).toHaveAccessibleName("Point to Bob");
+
+    await user.click(screen.getByRole("button", { name: "Switch sides" }));
+
+    // The label must travel WITH its side. A flip that moved the scores but not the names would be
+    // worse than no labels — it would confidently say the wrong thing.
+    const after = screen.getAllByRole("button", { name: /^Point to/ });
+    expect(after[0]).toHaveAccessibleName("Point to Bob");
+    expect(after[1]).toHaveAccessibleName("Point to Ana");
+  });
+
+  it("shows the event name and match number, for an umpire running several courts (#937)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+    expect(screen.getByText(/Summer Open/)).toBeInTheDocument();
+    expect(screen.getByText(/Match #3/)).toBeInTheDocument();
+  });
+
+  it("shows the set IN PROGRESS, not the number banked (#937)", async () => {
+    // Off by one is the entire point of showing it: with one set banked, they are playing the second.
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        sets: [
+          { gamesTeam1: 6, gamesTeam2: 4, winner: "TEAM1", tiebreakTeam1Points: null, tiebreakTeam2Points: null },
+        ],
+      },
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+    expect(screen.getByText("Set 2")).toBeInTheDocument();
+  });
+
+  it("leaving releases the claim and the display locks, without finalizing (#937)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    await user.click(screen.getByRole("button", { name: "← Back" }));
+
+    // Somebody who left is not scoring the match, so the claim must not linger.
+    expect(releaseMutate).toHaveBeenCalledWith({ matchId: "m-1" });
+    // ...and the app must not stay full-screen and rotation-locked after navigating away.
+    expect(exitFullscreen).toHaveBeenCalled();
+    // Leaving mid-match is not finalizing. Before #937 this was the only way out, which made it a trap.
+    expect(finalizeMutate).not.toHaveBeenCalled();
   });
 
   it("undo posts to its own endpoint, because the server picks the target", async () => {

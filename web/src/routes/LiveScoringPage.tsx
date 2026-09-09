@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
+  useDeleteApiV1MatchesMatchIdLiveClaim,
   useGetApiV1MatchesCodeCode,
   useGetApiV1MatchesMatchIdLive,
   usePostApiV1MatchesMatchIdLiveClaim,
@@ -10,7 +11,10 @@ import {
   usePostApiV1MatchesMatchIdLiveFinalize,
   usePostApiV1MatchesMatchIdLiveUndo,
 } from '@/api/generated/matches/matches'
-import type { LiveScoreEventRequestKind } from '@/api/generated/model'
+import type {
+  LiveScoreEventRequestKind,
+  MatchPublicPlayer,
+} from '@/api/generated/model'
 import { useGetApiV1UsersMe } from '@/api/generated/users/users'
 import { canManageMatches, canScore } from '@/auth/capabilities'
 import { useLockedLandscape } from '@/features/livematch/useLockedLandscape'
@@ -21,6 +25,12 @@ import {
 } from '@/features/livematch/LiveScoringBoard'
 
 type Side = 'TEAM1' | 'TEAM2'
+
+/** A side's players as one label, e.g. "Ana & Bea". Falls back so a placeholder still reads as someone. */
+function sideName(players: MatchPublicPlayer[] | undefined): string {
+  const names = (players ?? []).map((p) => p.displayName ?? p.publicCode ?? 'Unknown')
+  return names.length > 0 ? names.join(' & ') : 'Unknown'
+}
 
 /**
  * The umpire's scoring view (#911 step 4).
@@ -68,6 +78,9 @@ export function LiveScoringPage() {
   const undo = usePostApiV1MatchesMatchIdLiveUndo({
     mutation: { ...afterWrite, onError: onError('Could not undo') },
   })
+  const release = useDeleteApiV1MatchesMatchIdLiveClaim({
+    mutation: { onError: onError('Could not release the match') },
+  })
   const finalize = usePostApiV1MatchesMatchIdLiveFinalize({
     mutation: {
       onSuccess: () => {
@@ -83,6 +96,22 @@ export function LiveScoringPage() {
   const capabilities = me?.capabilities
   const send = (kind: LiveScoreEventRequestKind, side?: Side) =>
     record.mutate({ matchId, data: { kind, ...(side ? { side } : {}) } })
+
+  /**
+   * Leave without finalizing (#937).
+   *
+   * Three things, in this order. Release the claim, because somebody who has left the view is not
+   * scoring the match and a stale claim would tell the next umpire otherwise. Release the display locks,
+   * or the whole app stays full-screen and rotation-locked after navigating away. Then go back.
+   *
+   * The score is already persisted server-side, so nothing is lost and re-entering resumes exactly where
+   * this left off.
+   */
+  const leave = async () => {
+    if (matchId) release.mutate({ matchId })
+    await exit()
+    navigate(`/matches/${code}`)
+  }
 
   if (isPortrait) {
     return (
@@ -152,7 +181,20 @@ export function LiveScoringPage() {
   return (
     <div className="flex h-[100dvh] w-[100dvw] flex-col overflow-hidden bg-background px-[1.5dvw] py-[1dvh]">
       <div className="flex shrink-0 items-center justify-between gap-[1dvw]">
-        <CompletedSets view={view} />
+        <div className="flex min-w-0 items-center gap-[1.2dvw]">
+          <Button size="sm" variant="ghost" onClick={() => void leave()}>
+            ← Back
+          </Button>
+          {/* Which match this screen is, for an umpire running several courts (#937). */}
+          <span className="truncate text-[2.2dvh] text-muted-foreground">
+            {match.event?.name ? `${match.event.name} · ` : ''}Match #{match.matchNumber}
+          </span>
+          {/* The set IN PROGRESS, which is one more than the number banked. */}
+          <span className="whitespace-nowrap text-[2.2dvh] font-semibold">
+            Set {view.sets.length + 1}
+          </span>
+          <CompletedSets view={view} />
+        </div>
         <div className="flex items-center gap-[1dvw] text-[2.2dvh] text-muted-foreground">
           {view.isPaused && <span className="font-semibold text-amber-600">Paused</span>}
           {view.isTiebreak && <span className="font-semibold">Tiebreak</span>}
@@ -168,6 +210,8 @@ export function LiveScoringPage() {
         view={view}
         flipped={flipped}
         busy={busy}
+        team1Name={sideName(match.team1)}
+        team2Name={sideName(match.team2)}
         onPoint={(side) => send('POINT_WON', side)}
       />
 
