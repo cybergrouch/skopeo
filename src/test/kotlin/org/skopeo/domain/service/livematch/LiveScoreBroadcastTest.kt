@@ -101,6 +101,63 @@ class LiveScoreBroadcastTest {
     }
 
     @Test
+    fun `the emitted document names its fields exactly as the client reads them`() {
+        // Asserting the DOCUMENT, not just the payload object. These strings are the wire contract with
+        // the spectator client: nothing on the Kotlin side breaks if one is renamed, and the scoreboard
+        // silently shows blanks. The previous test checked the object and left that untested.
+        val document =
+            view(
+                sets =
+                    listOf(
+                        element =
+                            LiveSetResponse(
+                                gamesTeam1 = 6,
+                                gamesTeam2 = 7,
+                                winner = "TEAM2",
+                                tiebreakTeam1Points = 5,
+                                tiebreakTeam2Points = 7,
+                            ),
+                    ),
+            ).toBroadcast().asDocument()
+
+        @Suppress("UNCHECKED_CAST")
+        val sets = document["sets"] as List<Map<String, Any?>>
+        sets.shouldHaveSize(size = 1)
+        sets.single() shouldBe
+            mapOf(
+                "gamesTeam1" to 6,
+                "gamesTeam2" to 7,
+                "tiebreakTeam1Points" to 5,
+                "tiebreakTeam2Points" to 7,
+            )
+    }
+
+    @Test
+    fun `a set with no tiebreak emits null rather than omitting the keys`() {
+        // Same reason the top-level nulls are kept: the document is overwritten wholesale, so a key that
+        // disappears would leave a previous set's tiebreak behind on the client.
+        val document =
+            view(
+                sets =
+                    listOf(
+                        element =
+                            LiveSetResponse(
+                                gamesTeam1 = 6,
+                                gamesTeam2 = 4,
+                                winner = "TEAM1",
+                                tiebreakTeam1Points = null,
+                                tiebreakTeam2Points = null,
+                            ),
+                    ),
+            ).toBroadcast().asDocument()
+
+        @Suppress("UNCHECKED_CAST")
+        val sets = document["sets"] as List<Map<String, Any?>>
+        sets.single().keys shouldContain "tiebreakTeam1Points"
+        sets.single()["tiebreakTeam1Points"] shouldBe null
+    }
+
+    @Test
     fun `the outcome is flattened, so a spectator sees the winner once the match ends`() {
         val payload =
             view(outcome = LiveOutcomeResponse(kind = "RETIRED", winner = "TEAM1", concededBy = "TEAM2"))
