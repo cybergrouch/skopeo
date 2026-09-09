@@ -47,6 +47,11 @@ const PlayerMatchesPage = lazy(() =>
 const MatchPage = lazy(() =>
   import("@/routes/MatchPage").then((m) => ({ default: m.MatchPage })),
 );
+const LiveScoringPage = lazy(() =>
+  import("@/routes/LiveScoringPage").then((m) => ({
+    default: m.LiveScoringPage,
+  })),
+);
 const EventPage = lazy(() =>
   import("@/routes/EventPage").then((m) => ({ default: m.EventPage })),
 );
@@ -120,6 +125,11 @@ function App() {
                   element={<PlayerMatchesPage />}
                 />
                 <Route path="/matches/:code" element={<MatchPage />} />
+                {/* The umpire view (#911): locked landscape, full-screen, no page shell. */}
+                <Route
+                  path="/matches/:code/score"
+                  element={<LiveScoringPage />}
+                />
                 <Route path="/events/:code" element={<EventPage />} />
                 <Route path="/clubs/:code" element={<ClubPage />} />
                 <Route

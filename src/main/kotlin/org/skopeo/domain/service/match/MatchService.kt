@@ -24,6 +24,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.CLUB_OWNER_OR_ADMIN
 import org.skopeo.common.security.Capability
 import org.skopeo.common.security.MATCH_MANAGEMENT_ROLES
+import org.skopeo.common.security.SCORING_ROLES
 import org.skopeo.domain.mapper.dto.match.toPublicResponse
 import org.skopeo.domain.mapper.dto.match.toResponse
 import org.skopeo.domain.mapper.dto.rating.toResponse
@@ -564,8 +565,11 @@ class MatchService(
                 ratingChanges = ratingChanges,
                 headToHead = headToHead,
                 event = event,
-                // Only an ADMINISTRATOR may correct a rated score (#776), so only they get the id to act on.
-                revealId = callerIsAdministrator(token = token),
+                // The id is revealed to viewers who have an ACTION to take on this match, and to nobody
+                // else. An ADMINISTRATOR may correct a rated score (#776); a scorer needs it to open the
+                // umpire view, because the live API is keyed by the match id while this page is keyed by
+                // its public code (#911). Same rule, one more reason to satisfy it.
+                revealId = callerMayActOnMatch(token = token),
             )
         }
 
@@ -716,14 +720,19 @@ class MatchService(
         token?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }.canSeeRawRatingOrFalse()
 
     /**
-     * Whether the (possibly absent) caller holds ADMINISTRATOR (#776). An anonymous or unprovisioned
-     * caller is simply not one, so the public page stays fully renderable without a token.
+     * Whether this caller has something to *do* with the match, and therefore needs its internal id.
+     *
+     * Administrators correct scores (#776); scorers open the umpire view (#911). Deliberately narrower
+     * than "is signed in": the id is not secret, but handing it to every viewer would make it an
+     * alternative public identifier, and `publicCode` exists so it is not one. An anonymous or
+     * unprovisioned caller has no capabilities, so the public page stays fully renderable without a
+     * token (#776).
      */
-    private fun callerIsAdministrator(token: VerifiedFirebaseToken?): Boolean =
+    private fun callerMayActOnMatch(token: VerifiedFirebaseToken?): Boolean =
         token
             ?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }
             ?.capabilities
-            ?.contains(element = Capability.ADMINISTRATOR) == true
+            ?.any { it in SCORING_ROLES } == true
 
     /**
      * The match result plus the stored per-player calculation behind it (#97), for the detail view

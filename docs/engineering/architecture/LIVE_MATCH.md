@@ -351,6 +351,40 @@ Four things this forced, none of them anticipated above:
 Finalize does **not** delete the log; it folds the umpire credit into `match_umpires` and releases the
 claim. Disposal stays with the sweep (§8a).
 
+### Shipped — step 4 of §13, the umpire view
+
+`/matches/:code/score`, outside the page shell. **Locked landscape, full-screen, no scrolling in either
+axis** — one flex column sized in `dvh`, board on `flex-1`, everything else `shrink-0`, so nothing can
+push anything off-screen at any aspect ratio.
+
+`useLockedLandscape` does three separate jobs because no single API does all of them:
+
+| | |
+|---|---|
+| Fullscreen | `requestFullscreen`, from a user gesture — hence the "Start scoring" button |
+| Orientation | `screen.orientation.lock('landscape')`, **best-effort** |
+| No scroll | `overflow: hidden` pinned on `documentElement` and `body` while mounted |
+
+**The portrait guard is the guarantee, not a fallback.** iOS Safari does not support
+`screen.orientation.lock` at all, so a rotate prompt that replaces the entire page is the only thing
+that actually holds landscape everywhere. `dvh` rather than `vh` throughout: a collapsing mobile address
+bar changes `vh` and would drop the action row below the fold at the worst moment.
+
+Two rules carried in from the backend, both of which would otherwise have produced bugs:
+
+- **Finalize is hidden from a plain `SCORER`.** Scoring and finalizing are different rights (#934), and
+  offering a button that 403s is the #867 shape.
+- **Points are never computed here.** The server sends them rendered, so deuce has one implementation
+  and the umpire view cannot disagree with the spectator view about the same match.
+
+**Switching sides is display-only state** and is never sent — a test asserts no request is made, because
+a recorded flip would corrupt a log whose events name sides (§6).
+
+Reaching the view needed one backend change: `MatchPublicResponse.id` was revealed to ADMINISTRATOR only
+(#776, for score correction), but the page is addressed by public code while the live API is keyed by
+id. The rule is now "callers who have an action to take on this match", which is what #776 always meant
+— scoring is simply a second such action. A plain player still gets nothing.
+
 ## 8a. Decision — the stack is working state, and it has a lifecycle
 
 **Decided.** The live stack is *not* a second store of scores. It exists because the engine needs an

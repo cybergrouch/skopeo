@@ -222,7 +222,7 @@ class MatchScoreCorrectionApiIntegrationTest {
         }
 
     @Test
-    fun `the public match page reveals the internal match id to an administrator only (#776)`() =
+    fun `the public match page reveals the internal match id only to callers who may act (#776, #911)`() =
         withApp { client ->
             val (adminToken, hostToken, match) = client.ratedMatch()
 
@@ -233,10 +233,33 @@ class MatchScoreCorrectionApiIntegrationTest {
                     }.body<MatchPublicResponse>()
                     .id
 
-            // Only an ADMINISTRATOR can act on the correction endpoint, so only they are handed the id.
+            // The rule is "has an action to take on this match", not "is an administrator". #776 made it
+            // administrators because correcting a rated score was the only such action; #911 added
+            // scoring, which a HOST may also do — so a host now gets the id too.
+            //
+            // That is a WIDENING and worth being explicit about: a host could already record results on
+            // this match, so handing them its id grants no authority they lacked. What has NOT changed is
+            // the part #776 cared about — a host still cannot correct a rated score, which the test below
+            // asserts separately, and the id is still withheld from anyone with no action at all.
             idSeenBy(token = adminToken) shouldBe match.id
-            idSeenBy(token = hostToken).shouldBeNull()
+            idSeenBy(token = hostToken) shouldBe match.id
             idSeenBy(token = null).shouldBeNull()
+        }
+
+    @Test
+    fun `a plain player is never handed the internal match id (#776)`() =
+        withApp { client ->
+            // The floor the widening must not fall through: no capability to act, no id. publicCode
+            // exists so the internal id is not an alternative public identifier.
+            val (_, _, match) = client.ratedMatch()
+            val playerToken = seedStaff(uid = "bystander", roles = emptySet())
+
+            client
+                .get(urlString = "/api/v1/matches/code/${match.publicCode}") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                }.body<MatchPublicResponse>()
+                .id
+                .shouldBeNull()
         }
 
     @Test
