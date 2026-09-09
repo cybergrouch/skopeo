@@ -371,7 +371,7 @@ describe("LiveScoringPage", () => {
     renderPage();
     await start(user);
 
-    await user.click(screen.getByRole("button", { name: "1 retires" }));
+    await user.click(screen.getByRole("button", { name: "Ana retires" }));
     // The side that retired, not the winner — the server turns it into a win for the opponent.
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
@@ -470,7 +470,7 @@ describe("LiveScoringPage", () => {
     renderPage();
     await start(user);
 
-    await user.click(screen.getByRole("button", { name: "Set to 1" }));
+    await user.click(screen.getByRole("button", { name: "Set to Ana" }));
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
       data: { kind: "SET_AWARDED", side: "TEAM1" },
@@ -482,11 +482,49 @@ describe("LiveScoringPage", () => {
       data: { kind: "TIEBREAK_STARTED" },
     });
 
-    await user.click(screen.getByRole("button", { name: "2 defaults" }));
+    await user.click(screen.getByRole("button", { name: "Bob defaults" }));
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
       data: { kind: "DEFAULTED", side: "TEAM2" },
     });
+  });
+
+  it("awards the game to either side (#944)", async () => {
+    // GAME_AWARDED was wired end to end server-side with no client reference at all. Without it the
+    // only route to a game is tapping four points, which records points that were never played — fine
+    // for the games figure, fiction for the per-set detail a player is shown when they ask why their
+    // rating moved.
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    await user.click(screen.getByRole("button", { name: "Game to Ana" }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "GAME_AWARDED", side: "TEAM1" },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Game to Bob" }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "GAME_AWARDED", side: "TEAM2" },
+    });
+  });
+
+  it("per-side actions follow the flip along with their side (#944)", async () => {
+    // They sit under the board halves now, so a flip must carry them too — otherwise "Game" under the
+    // left half would award the right-hand player, which is the mistake side labels exist to prevent.
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    const before = screen.getAllByRole("button", { name: /^Game to/ });
+    expect(before[0]).toHaveAccessibleName("Game to Ana");
+
+    await user.click(screen.getByRole("button", { name: "Switch sides" }));
+
+    const after = screen.getAllByRole("button", { name: /^Game to/ });
+    expect(after[0]).toHaveAccessibleName("Game to Bob");
   });
 
   it("every action names the side it was pressed for, on both sides", async () => {
@@ -496,19 +534,19 @@ describe("LiveScoringPage", () => {
     renderPage();
     await start(user);
 
-    await user.click(screen.getByRole("button", { name: "Set to 2" }));
+    await user.click(screen.getByRole("button", { name: "Set to Bob" }));
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
       data: { kind: "SET_AWARDED", side: "TEAM2" },
     });
 
-    await user.click(screen.getByRole("button", { name: "2 retires" }));
+    await user.click(screen.getByRole("button", { name: "Bob retires" }));
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
       data: { kind: "RETIRED", side: "TEAM2" },
     });
 
-    await user.click(screen.getByRole("button", { name: "1 defaults" }));
+    await user.click(screen.getByRole("button", { name: "Ana defaults" }));
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
       data: { kind: "DEFAULTED", side: "TEAM1" },
