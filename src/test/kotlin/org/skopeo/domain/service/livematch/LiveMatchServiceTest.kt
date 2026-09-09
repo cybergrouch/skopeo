@@ -383,7 +383,8 @@ class LiveMatchServiceTest {
         sent.size shouldBe beforeNoOpUndo
         // claim, record, undo, release.
         beforeNoOpUndo shouldBe 4
-        sent.last().matchId shouldBe matchId.toString()
+        // Keyed by the public code, never the internal id: the document is world-readable.
+        sent.last().publicCode.isNotBlank() shouldBe true
     }
 
     @Test

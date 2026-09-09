@@ -42,9 +42,9 @@ class LiveScoreBroadcastTest {
 
     @Test
     fun `the projection carries the scoreboard`() {
-        val payload = view().toBroadcast()
+        val payload = view().toBroadcast(publicCode = "MTCH01")
 
-        payload.matchId shouldBe "m-1"
+        payload.publicCode shouldBe "MTCH01"
         payload.sequence shouldBe 7L
         payload.pointsTeam1 shouldBe "40"
         payload.pointsTeam2 shouldBe "30"
@@ -55,10 +55,23 @@ class LiveScoreBroadcastTest {
     }
 
     @Test
+    fun `the document carries the public code and NOT the internal id`() {
+        // The collection is world-readable, and the internal id is withheld from ordinary viewers
+        // precisely so it is not an alternative public identifier (#776/#911). Publishing it here would
+        // hand it to everyone through the back door — and a spectator could not use it anyway, since the
+        // page they arrived from is addressed by code.
+        val document = view().toBroadcast(publicCode = "MTCH01").asDocument()
+
+        document["publicCode"] shouldBe "MTCH01"
+        document.keys.contains(element = "matchId") shouldBe false
+        document.values.none { it == "m-1" } shouldBe true
+    }
+
+    @Test
     fun `the projection does NOT carry the scorer, because that is the umpire's business`() {
         // The document is world-readable. Who is holding the phone is not a spectator's concern, and
         // once it is in the payload it is on a public surface.
-        val payload = view(scorerId = "ump-1").toBroadcast()
+        val payload = view(scorerId = "ump-1").toBroadcast(publicCode = "MTCH01")
         payload.asDocument().keys.contains(element = "scorerId") shouldBe false
     }
 
@@ -66,14 +79,14 @@ class LiveScoreBroadcastTest {
     fun `the document has no action log, so undo reaches spectators as a changed score`() {
         // §6: the broadcast is state, not keystrokes. A spectator should see the score go back, not an
         // operation they have to interpret — and the append-only log never has to be public.
-        val keys = view().toBroadcast().asDocument().keys
+        val keys = view().toBroadcast(publicCode = "MTCH01").asDocument().keys
         keys.none { it.contains(other = "log", ignoreCase = true) } shouldBe true
         keys.none { it.contains(other = "event", ignoreCase = true) } shouldBe true
     }
 
     @Test
     fun `the sequence rides along so a stale client can tell it is behind`() {
-        val document = view(sequence = 42).toBroadcast().asDocument()
+        val document = view(sequence = 42).toBroadcast(publicCode = "MTCH01").asDocument()
         document.keys shouldContain "sequence"
         document["sequence"] shouldBe 42L
     }
@@ -93,7 +106,7 @@ class LiveScoreBroadcastTest {
                                 tiebreakTeam2Points = 7,
                             ),
                     ),
-            ).toBroadcast()
+            ).toBroadcast(publicCode = "MTCH01")
 
         payload.sets.shouldHaveSize(size = 1)
         payload.sets.single().tiebreakTeam1Points shouldBe 5
@@ -118,7 +131,7 @@ class LiveScoreBroadcastTest {
                                 tiebreakTeam2Points = 7,
                             ),
                     ),
-            ).toBroadcast().asDocument()
+            ).toBroadcast(publicCode = "MTCH01").asDocument()
 
         @Suppress("UNCHECKED_CAST")
         val sets = document["sets"] as List<Map<String, Any?>>
@@ -149,7 +162,7 @@ class LiveScoreBroadcastTest {
                                 tiebreakTeam2Points = null,
                             ),
                     ),
-            ).toBroadcast().asDocument()
+            ).toBroadcast(publicCode = "MTCH01").asDocument()
 
         @Suppress("UNCHECKED_CAST")
         val sets = document["sets"] as List<Map<String, Any?>>
@@ -161,7 +174,7 @@ class LiveScoreBroadcastTest {
     fun `the outcome is flattened, so a spectator sees the winner once the match ends`() {
         val payload =
             view(outcome = LiveOutcomeResponse(kind = "RETIRED", winner = "TEAM1", concededBy = "TEAM2"))
-                .toBroadcast()
+                .toBroadcast(publicCode = "MTCH01")
 
         payload.outcomeKind shouldBe "RETIRED"
         payload.outcomeWinner shouldBe "TEAM1"
@@ -171,7 +184,7 @@ class LiveScoreBroadcastTest {
     fun `nulls are kept in the document, so a field that became null is cleared on overwrite`() {
         // The document is overwritten wholesale rather than merged. Dropping null keys would leave a
         // stale outcome or server id behind on a match that was un-finalized or had its server cleared.
-        val document = view(outcome = null).toBroadcast().asDocument()
+        val document = view(outcome = null).toBroadcast(publicCode = "MTCH01").asDocument()
         document.keys shouldContain "outcomeKind"
         document["outcomeKind"] shouldBe null
     }
@@ -180,6 +193,6 @@ class LiveScoreBroadcastTest {
     fun `the no-op broadcaster is inert, because most environments have no Firestore`() {
         // Not a test double: it is the DEFAULT. Local development and CI have no Firestore project and
         // live scoring must work fully without one.
-        NoOpLiveScoreBroadcaster.publish(payload = view().toBroadcast())
+        NoOpLiveScoreBroadcaster.publish(payload = view().toBroadcast(publicCode = "MTCH01"))
     }
 }

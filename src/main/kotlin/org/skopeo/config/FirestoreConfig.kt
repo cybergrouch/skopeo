@@ -13,7 +13,13 @@ import org.skopeo.domain.service.livematch.LiveScoreBroadcaster
 import org.skopeo.domain.service.livematch.LiveScorePayload
 import org.skopeo.domain.service.livematch.NoOpLiveScoreBroadcaster
 
-/** The Firestore collection holding one live-score document per match (#911). */
+/**
+ * The Firestore collection holding one live-score document per match (#911).
+ *
+ * Documents are keyed by the match's **public code**, not its internal id: the collection is
+ * world-readable, and the internal id is withheld from ordinary viewers precisely so it is not an
+ * alternative public identifier. The code is also the only identifier a spectator has.
+ */
 const val LIVE_SCORES_COLLECTION = "liveScores"
 
 /**
@@ -80,10 +86,10 @@ internal class FirestoreLiveScoreBroadcaster(private val firestore: Firestore) :
         runCatching {
             firestore
                 .collection(LIVE_SCORES_COLLECTION)
-                .document(payload.matchId)
+                .document(payload.publicCode)
                 .set(payload.asDocument())
         }.onFailure { error ->
-            logger.warn(throwable = error) { "Could not broadcast the live score for match ${payload.matchId}" }
+            logger.warn(throwable = error) { "Could not broadcast the live score for match ${payload.publicCode}" }
         }
     }
 }

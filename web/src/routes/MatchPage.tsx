@@ -18,6 +18,7 @@ import type {
 } from "@/api/generated/model";
 import { ShareCard } from "@/components/ShareCard";
 import { MatchPointsCard } from "@/features/match/MatchPointsCard";
+import { LiveScoreCard } from "@/features/livematch/LiveScoreCard";
 import { PublicPageShell } from "@/components/PublicPageShell";
 import { formatConfidence } from "@/lib/confidence";
 import { ConfidenceValue } from "@/components/ConfidenceValue";
@@ -343,6 +344,16 @@ export function MatchPage() {
             ) : null}
           </CardContent>
         </Card>
+      ) : null}
+
+      {/* Renders nothing unless the match is actually being scored (#911) — the normal state for almost
+          every fixture, and an empty scoreboard would read as a fault. */}
+      {match ? (
+        <LiveScoreCard
+          publicCode={match.publicCode}
+          team1Name={match.team1.map(playerName).join(" & ")}
+          team2Name={match.team2.map(playerName).join(" & ")}
+        />
       ) : null}
 
       {match && canScoreLive ? (

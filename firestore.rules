@@ -18,7 +18,10 @@ service cloud.firestore {
     // Live scores: world-readable, because the spectator view is public and shareable exactly like the
     // match page it mirrors. The document holds only the scoreboard — no umpire identity, no action log
     // — so there is nothing here that is not already on the public match page once the match is over.
-    match /liveScores/{matchId} {
+    // Keyed by the match's PUBLIC code, not its internal id. The internal id is withheld from ordinary
+    // viewers precisely so it is not an alternative public identifier, and a world-readable collection
+    // path is about as public as an identifier gets. The code is also the only one a spectator has.
+    match /liveScores/{publicCode} {
       allow read: if true;
       allow write: if false;
     }
