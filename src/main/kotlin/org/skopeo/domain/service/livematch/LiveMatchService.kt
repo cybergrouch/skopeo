@@ -67,6 +67,13 @@ class LiveMatchService(
     private val matches: MatchRepository = MatchRepository(),
     private val users: UserRepository = UserRepository(),
     private val results: MatchService = MatchService(),
+    /**
+     * Where spectators are told the score changed (#911 §3).
+     *
+     * Defaults to the no-op, which is the honest default: local development and CI have no Firestore
+     * project. A deployed instance is handed the real one at startup.
+     */
+    private val broadcast: LiveScoreBroadcaster = NoOpLiveScoreBroadcaster,
 ) {
     /**
      * Take (or take over) the scoring of [matchId], moving the fixture to `IN_PROGRESS`.
@@ -86,7 +93,7 @@ class LiveMatchService(
             if (match.status == MatchStatus.SCHEDULED) {
                 matches.setStatus(matchId = matchId, status = MatchStatus.IN_PROGRESS.name)
             }
-            view(matchId = matchId).toResponse()
+            published(matchId = matchId)
         }
 
     /** Give up the scoring of [matchId]. The fixture stays `IN_PROGRESS` — the match is still being played. */
@@ -98,7 +105,7 @@ class LiveMatchService(
             scorer(token = token).bind()
             scorableMatch(matchId = matchId).bind()
             live.releaseClaim(matchId = matchId)
-            view(matchId = matchId).toResponse()
+            published(matchId = matchId)
         }
 
     /**
@@ -147,7 +154,9 @@ class LiveMatchService(
             scorableMatch(matchId = matchId).bind()
             val target = live.lastUndoableSequence(matchId = matchId)
             if (target == null) {
-                view(matchId = matchId).toResponse()
+                // Nothing changed, so nothing to broadcast: a courtside double-tap must not push a
+                // redundant document at every spectator.
+                live.view(matchId = matchId).toResponse()
             } else {
                 appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
                     live.append(
@@ -209,18 +218,19 @@ class LiveMatchService(
         }
 
     /** The current score and who is scoring it, for the wire. Readable by anyone who can see the match. */
-    fun scoreboard(matchId: UUID): LiveMatchResponse = view(matchId = matchId).toResponse()
+    fun scoreboard(matchId: UUID): LiveMatchResponse = live.view(matchId = matchId).toResponse()
 
-    /** The current score and who is scoring it. Internal — the wire gets [scoreboard]. */
-    internal fun view(matchId: UUID): LiveMatchView {
-        val log = live.loggedActions(matchId = matchId)
-        return LiveMatchView(
-            matchId = matchId,
-            state = ScoreEngine.replay(log = log),
-            sequence = log.maxOfOrNull { it.sequence } ?: 0L,
-            scorerId = live.scorer(matchId = matchId)?.scorerId,
-        )
-    }
+    /**
+     * The score after a write, having told spectators about it.
+     *
+     * Every mutating path goes through here so there is exactly one place the broadcast can be
+     * forgotten — and it is the same place the response is built, so the two cannot disagree about what
+     * the score is. The broadcast is best-effort by contract and cannot fail the write: the log is
+     * already committed, and trading a recorded point for a stale scoreboard would be the wrong way
+     * round.
+     */
+    private fun published(matchId: UUID): LiveMatchResponse =
+        live.view(matchId = matchId).toResponse().also { broadcast.publish(payload = it.toBroadcast()) }
 
     private fun appendWithRetry(
         token: VerifiedFirebaseToken,
@@ -241,7 +251,7 @@ class LiveMatchService(
                     message = "Could not record the action after $MAX_APPEND_ATTEMPTS attempts; another scorer is writing.",
                 )
             }
-            view(matchId = matchId).toResponse()
+            published(matchId = matchId)
         }
 
     /** The caller, if they may score at all. A flat capability check — see the class note. */
@@ -369,3 +379,14 @@ private fun LiveMatchRepository.umpireCredit(matchId: UUID): List<MatchUmpireEnt
                 lastRecordedAt = rows.maxOf { it.recordedAt },
             )
         }
+
+/** The current score and who is scoring it. Internal — the wire gets [scoreboard]. */
+internal fun LiveMatchRepository.view(matchId: UUID): LiveMatchView {
+    val log = loggedActions(matchId = matchId)
+    return LiveMatchView(
+        matchId = matchId,
+        state = ScoreEngine.replay(log = log),
+        sequence = log.maxOfOrNull { it.sequence } ?: 0L,
+        scorerId = scorer(matchId = matchId)?.scorerId,
+    )
+}

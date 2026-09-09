@@ -1,0 +1,33 @@
+rules_version = '2';
+
+// Firestore is used for ONE thing: fanning live match scores out to spectators (#911).
+//
+// The security model is deliberately trivial, and that is the point of the design rather than a
+// shortcut. Capabilities live in Postgres, not in Firebase custom claims, so these rules cannot see
+// whether somebody holds SCORER or passes the #789 club rule. Trying to express authorization here
+// would mean mirroring the capability model into custom claims and keeping two systems in step.
+//
+// So the umpire never writes to Firestore. They POST to the API, the server authorizes the write against
+// Postgres, and the SERVER writes the document. Firestore is read-only fan-out. Authorization stays in
+// one place and these rules only have to say "nobody writes".
+//
+// The Admin SDK bypasses rules entirely, so denying all writes here does not impede the server.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Live scores: world-readable, because the spectator view is public and shareable exactly like the
+    // match page it mirrors. The document holds only the scoreboard — no umpire identity, no action log
+    // — so there is nothing here that is not already on the public match page once the match is over.
+    match /liveScores/{matchId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Nothing else belongs in Firestore. An explicit deny rather than an absent rule, so that adding a
+    // collection is a deliberate act with its own rule instead of something that silently inherits
+    // whatever the default happens to be.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
