@@ -28,6 +28,7 @@ import org.skopeo.domain.model.LiveMatchView
 import org.skopeo.domain.model.LiveOutcome
 import org.skopeo.domain.model.LiveOutcomeKind
 import org.skopeo.domain.model.LoggedAction
+import org.skopeo.domain.model.Match
 import org.skopeo.domain.model.MatchCompletionReason
 import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.model.ScoreEvent
@@ -93,7 +94,7 @@ class LiveMatchService(
             if (match.status == MatchStatus.SCHEDULED) {
                 matches.setStatus(matchId = matchId, status = MatchStatus.IN_PROGRESS.name)
             }
-            published(matchId = matchId)
+            published(match = match)
         }
 
     /** Give up the scoring of [matchId]. The fixture stays `IN_PROGRESS` — the match is still being played. */
@@ -103,9 +104,9 @@ class LiveMatchService(
     ): Either<ServiceError, LiveMatchResponse> =
         either {
             scorer(token = token).bind()
-            scorableMatch(matchId = matchId).bind()
+            val match = scorableMatch(matchId = matchId).bind()
             live.releaseClaim(matchId = matchId)
-            published(matchId = matchId)
+            published(match = match)
         }
 
     /**
@@ -229,8 +230,11 @@ class LiveMatchService(
      * already committed, and trading a recorded point for a stale scoreboard would be the wrong way
      * round.
      */
-    private fun published(matchId: UUID): LiveMatchResponse =
-        live.view(matchId = matchId).toResponse().also { broadcast.publish(payload = it.toBroadcast()) }
+    private fun published(match: Match): LiveMatchResponse =
+        live
+            .view(matchId = match.id)
+            .toResponse()
+            .also { broadcast.publish(payload = it.toBroadcast(publicCode = match.publicCode)) }
 
     private fun appendWithRetry(
         token: VerifiedFirebaseToken,
@@ -239,7 +243,7 @@ class LiveMatchService(
     ): Either<ServiceError, LiveMatchResponse> =
         either {
             val caller = scorer(token = token).bind()
-            scorableMatch(matchId = matchId).bind()
+            val match = scorableMatch(matchId = matchId).bind()
             var attempt = 0
             var written = false
             while (attempt < MAX_APPEND_ATTEMPTS && !written) {
@@ -251,7 +255,7 @@ class LiveMatchService(
                     message = "Could not record the action after $MAX_APPEND_ATTEMPTS attempts; another scorer is writing.",
                 )
             }
-            published(matchId = matchId)
+            published(match = match)
         }
 
     /** The caller, if they may score at all. A flat capability check — see the class note. */

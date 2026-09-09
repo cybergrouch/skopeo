@@ -163,6 +163,30 @@ the server — that asymmetry is what makes the rules trivial.
 
 Nothing reads the document yet; the spectator UI is 5b.
 
+### Shipped — step 5b of §13, the spectator view
+
+`LiveScoreCard` on the public match page, subscribed to `liveScores/{publicCode}` with `onSnapshot`.
+Read-only, push-driven, and **renders nothing unless a live document exists** — the normal state for
+almost every fixture, where an empty scoreboard would read as a fault.
+
+**A correction to 5a, found by building against it.** The document was keyed by the internal match id
+and carried it in the payload — on a world-readable collection. Two problems at once: a spectator has no
+way to know that id (it is withheld from ordinary viewers precisely so it is not an alternative public
+identifier, #776/#911), and publishing it world-readable would have handed it out anyway. Both the key
+and the payload field are now the **public code**, which is the identifier a spectator actually has.
+
+Reconnect needs no handling at all: the document is current state rather than a stream of events, so a
+spectator who was offline just reads the latest one. No gap to fill, no ordering to reconstruct. That is
+the practical payoff of §6's "broadcast state, not keystrokes", and it is why the hook is as short as it
+is.
+
+Two things the UI does not do, on purpose: it never computes a score (the server sends `40`/`AD`/tiebreak
+ordinals rendered, so this view cannot disagree with the umpire's), and it never writes.
+
+`MatchPage`'s test now mocks the card. The card imports `@/lib/firebase`, which initializes the SDK at
+module load — an unmocked import fails in CI with `auth/invalid-api-key` while passing locally off
+`.env.local`. That trap has caught this repo before.
+
 ## 5. Decision — native apps are unaffected, and slightly better off
 
 **Decided** in the context of possible future Android/iOS apps.

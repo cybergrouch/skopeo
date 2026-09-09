@@ -25,6 +25,13 @@ vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
 vi.mock("@/components/MatchScoreCorrectionCard", () => ({
   MatchScoreCorrectionCard: () => <div>Correct this score</div>,
 }));
+// The live scoreboard subscribes to Firestore, which pulls in @/lib/firebase and initializes the SDK at
+// module load. CI has no real Firebase config, so an unmocked import fails with auth/invalid-api-key
+// there while passing locally off .env.local — a trap this repo has hit before. The card has its own
+// test; here it must simply not reach Firebase.
+vi.mock("@/features/livematch/LiveScoreCard", () => ({
+  LiveScoreCard: () => null,
+}));
 // The page renders PublicPageNav (#193), which reads auth; default to anonymous here.
 vi.mock("@/auth/useAuth", () => ({ useAuth: () => ({ user: null }) }));
 

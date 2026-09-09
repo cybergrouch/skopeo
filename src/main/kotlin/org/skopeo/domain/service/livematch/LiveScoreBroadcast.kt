@@ -32,7 +32,15 @@ fun interface LiveScoreBroadcaster {
  * internal. Keeping the public surface to one small document is also what makes reconnect a plain read.
  */
 data class LiveScorePayload(
-    val matchId: String,
+    /**
+     * The match's **public** code, not its internal id.
+     *
+     * This document is world-readable, and the internal id is deliberately withheld from ordinary
+     * viewers (#776/#911) precisely so it is not an alternative public identifier. Keying and carrying
+     * the public code keeps that true — and it is also the only identifier a spectator *has*, since the
+     * page they arrived from is addressed by code.
+     */
+    val publicCode: String,
     val sequence: Long,
     val pointsTeam1: String,
     val pointsTeam2: String,
@@ -49,7 +57,7 @@ data class LiveScorePayload(
     /** Firestore takes a plain map; nulls are kept so a field that *became* null is cleared on overwrite. */
     fun asDocument(): Map<String, Any?> =
         mapOf(
-            "matchId" to matchId,
+            "publicCode" to publicCode,
             "sequence" to sequence,
             "pointsTeam1" to pointsTeam1,
             "pointsTeam2" to pointsTeam2,
@@ -84,11 +92,13 @@ data class LiveScorePayloadSet(
 /**
  * The projection, as a pure function so it can be tested without Firestore or a network.
  *
- * Note `scorerId` is dropped on purpose: it is the umpire's view, not the spectators'.
+ * Note `scorerId` is dropped on purpose: it is the umpire's view, not the spectators'. So is the
+ * internal `matchId`: [publicCode] is passed in instead, because this ends up on a world-readable
+ * document and the internal id is not a public identifier.
  */
-fun LiveMatchResponse.toBroadcast(): LiveScorePayload =
+fun LiveMatchResponse.toBroadcast(publicCode: String): LiveScorePayload =
     LiveScorePayload(
-        matchId = matchId,
+        publicCode = publicCode,
         sequence = sequence,
         pointsTeam1 = pointsTeam1,
         pointsTeam2 = pointsTeam2,
