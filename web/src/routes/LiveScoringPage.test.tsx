@@ -326,14 +326,31 @@ describe("LiveScoringPage", () => {
   });
 
   it("offers a way back to the match from each refusal", async () => {
+    // Both refusals, because the test name says each and a page that fills the screen with no way out
+    // is the failure mode worth guarding. Covering only one would let the other become a dead end.
+    const user = userEvent.setup();
+
     useGetApiV1UsersMe.mockReturnValue({
       data: { id: "u1", capabilities: ["PLAYER"] },
     });
-    const user = userEvent.setup();
+    const noRole = renderPage();
+    await user.click(screen.getByRole("button", { name: "Back to the match" }));
+    expect(screen.queryByText("You cannot score this match")).not.toBeInTheDocument();
+    noRole.unmount();
+
+    // ...and the one where the caller may score but the id was never revealed.
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "u1", capabilities: ["PLAYER", "SCORER"] },
+    });
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { publicCode: "MTCH01", matchNumber: 3 },
+      isLoading: false,
+    });
     renderPage();
     await user.click(screen.getByRole("button", { name: "Back to the match" }));
-    // A dead end with no way out is the failure mode worth guarding: the umpire view fills the screen.
-    expect(screen.queryByText("You cannot score this match")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Match not available for scoring"),
+    ).not.toBeInTheDocument();
   });
 
   it("offers Start match until the match has officially started (#911)", async () => {
