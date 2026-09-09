@@ -41,6 +41,7 @@ import org.skopeo.repository.LiveMatchRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.repository.persistence.MatchUmpireEntity
+import java.time.LocalDateTime
 import java.util.UUID
 
 /**
@@ -68,6 +69,13 @@ class LiveMatchService(
     private val matches: MatchRepository = MatchRepository(),
     private val users: UserRepository = UserRepository(),
     private val results: MatchService = MatchService(),
+    /**
+     * Where "now" comes from, for the match clock (#937).
+     *
+     * Injected rather than read inline so [matchTiming] stays a pure fold and its tests do not depend on
+     * wall time. Production passes the real clock.
+     */
+    private val clock: () -> LocalDateTime = LocalDateTime::now,
     /**
      * Where spectators are told the score changed (#911 §3).
      *
@@ -136,6 +144,9 @@ class LiveMatchService(
                     side = sideOf(event = event),
                     playerId = (event as? ScoreEvent.ServerAssigned)?.playerId,
                     recordedBy = callerId,
+                    // The SAME clock the elapsed time is folded with. Two notions of "now" — one
+                    // stamping rows, one measuring them — is how a match clock ends up reading zero.
+                    recordedAt = clock(),
                 )
             }.bind()
         }
@@ -157,7 +168,7 @@ class LiveMatchService(
             if (target == null) {
                 // Nothing changed, so nothing to broadcast: a courtside double-tap must not push a
                 // redundant document at every spectator.
-                live.view(matchId = matchId).toResponse()
+                live.responseFor(matchId = matchId, now = clock())
             } else {
                 appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
                     live.append(
@@ -166,6 +177,7 @@ class LiveMatchService(
                         kind = LiveMatchEventKinds.UNDONE,
                         targetSequence = target,
                         recordedBy = callerId,
+                        recordedAt = clock(),
                     )
                 }.bind()
             }
@@ -219,7 +231,7 @@ class LiveMatchService(
         }
 
     /** The current score and who is scoring it, for the wire. Readable by anyone who can see the match. */
-    fun scoreboard(matchId: UUID): LiveMatchResponse = live.view(matchId = matchId).toResponse()
+    fun scoreboard(matchId: UUID): LiveMatchResponse = live.responseFor(matchId = matchId, now = clock())
 
     /**
      * The score after a write, having told spectators about it.
@@ -232,8 +244,7 @@ class LiveMatchService(
      */
     private fun published(match: Match): LiveMatchResponse =
         live
-            .view(matchId = match.id)
-            .toResponse()
+            .responseFor(matchId = match.id, now = clock())
             .also { broadcast.publish(payload = it.toBroadcast(publicCode = match.publicCode)) }
 
     private fun appendWithRetry(
@@ -394,3 +405,9 @@ internal fun LiveMatchRepository.view(matchId: UUID): LiveMatchView {
         scorerId = scorer(matchId = matchId)?.scorerId,
     )
 }
+
+/** The wire view plus its clock, in one place so the two cannot be assembled inconsistently. */
+private fun LiveMatchRepository.responseFor(
+    matchId: UUID,
+    now: LocalDateTime,
+): LiveMatchResponse = view(matchId = matchId).toResponse(timing = matchTiming(rows = log(matchId = matchId), now = now))

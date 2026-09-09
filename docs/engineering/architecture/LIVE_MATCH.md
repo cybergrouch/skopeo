@@ -432,6 +432,39 @@ Reaching the view needed one backend change: `MatchPublicResponse.id` was reveal
 id. The rule is now "callers who have an action to take on this match", which is what #776 always meant
 — scoring is simply a second such action. A plain player still gets nothing.
 
+### The match clock (#937)
+
+Elapsed **playing** time, excluding every suspension:
+
+```
+(end − MATCH_STARTED) − Σ(RESUMED − PAUSED)
+```
+
+The data was already there — that is why `MATCH_STARTED` is its own event and why every row carries
+`recorded_at`. What was missing was exposing it. `matchTiming` is a pure fold taking `now`, for the same
+reason the scoring engine is pure.
+
+Three decisions inside it, each a choice rather than an obvious reading:
+
+- **It respects undo.** An undone `PAUSED` did not happen, so a mis-tapped pause must not silently
+  subtract playing time that was never suspended. Computed over the *surviving* actions.
+- **It freezes when the match ends**, not when it is finalized — a finished match must not accrue
+  minutes because nobody has written the result yet.
+- **It can never read negative.** Two Cloud Run instances mean two clocks; a row stamped slightly ahead
+  of `now` reads zero rather than counting down.
+
+The service now stamps rows with **the same clock** it measures them against. Two notions of "now" — one
+writing timestamps, one reading them — is precisely how a match clock ends up stuck at zero, which is
+what the first run of the end-to-end test did.
+
+Client-side the clock ticks locally and re-syncs on every response, rather than comparing a server
+instant against the browser's. Counting ticks since arrival never compares the two clocks, so it cannot
+inherit skew; the trade is that a backgrounded tab under-counts, which is the right way round — the
+number is only ever *behind*, and the next response corrects it.
+
+It is on the spectator document too. Two scalars, and how long a match has been going is exactly what a
+watcher wants; it reveals nothing the finished match page would not.
+
 ## 8a. Decision — the stack is working state, and it has a lifecycle
 
 **Decided.** The live stack is *not* a second store of scores. It exists because the engine needs an

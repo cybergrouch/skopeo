@@ -37,6 +37,8 @@ class LiveScoreBroadcastTest {
         gamesTeam1 = 4,
         gamesTeam2 = 3,
         sets = sets,
+        elapsedSeconds = 125,
+        isRunning = true,
         outcome = outcome,
     )
 
@@ -65,6 +67,15 @@ class LiveScoreBroadcastTest {
         document["publicCode"] shouldBe "MTCH01"
         document.keys.contains(element = "matchId") shouldBe false
         document.values.none { it == "m-1" } shouldBe true
+    }
+
+    @Test
+    fun `the clock rides along, so a spectator sees how long the match has been going`() {
+        // Two scalars, included deliberately: it is exactly what a spectator wants and reveals nothing
+        // the finished match page would not, so it does not meaningfully widen the small public surface.
+        val document = view().toBroadcast(publicCode = "MTCH01").asDocument()
+        document["elapsedSeconds"] shouldBe 125L
+        document["isRunning"] shouldBe true
     }
 
     @Test

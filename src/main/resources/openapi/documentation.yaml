@@ -7171,6 +7171,20 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LiveSetResponse'
+        elapsedSeconds:
+          type: integer
+          format: int64
+          description: >-
+            Playing time so far in seconds, EXCLUDING every suspension (#937). Measured from
+            MATCH_STARTED rather than the first point, because the gap between an umpire opening the app
+            and the players starting would otherwise corrupt the figure. Frozen once the match ends, so
+            a finished match does not keep accruing minutes while nobody finalizes it.
+        isRunning:
+          type: boolean
+          description: >-
+            Whether the clock is advancing. False before the start, while paused, and once the match has
+            ended. A client ticks locally while this is true rather than polling; every response
+            re-syncs it.
         outcome:
           $ref: '#/components/schemas/LiveOutcomeResponse'
 

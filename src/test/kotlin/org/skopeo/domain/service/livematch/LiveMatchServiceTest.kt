@@ -404,6 +404,38 @@ class LiveMatchServiceTest {
     }
 
     @Test
+    fun `the clock runs from the official start and stops while paused (#937)`() {
+        // A fixed clock, so this asserts the fold rather than how long the test took to run.
+        var now = java.time.LocalDateTime.of(2026, 3, 1, 10, 0, 0)
+        val timed = LiveMatchService(clock = { now })
+        umpire()
+        val matchId = fixture()
+
+        // Nothing before the official start, however much has happened.
+        timed.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1)).shouldBeRight()
+        timed.scoreboard(matchId = matchId).elapsedSeconds shouldBe 0L
+
+        timed.record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "MATCH_STARTED")).shouldBeRight()
+        now = now.plusMinutes(5)
+        timed.scoreboard(matchId = matchId).let {
+            it.elapsedSeconds shouldBe 300L
+            it.isRunning shouldBe true
+        }
+
+        timed.record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "PAUSED")).shouldBeRight()
+        now = now.plusHours(3)
+        // A rain delay is not playing time, and the client must stop ticking through it.
+        timed.scoreboard(matchId = matchId).let {
+            it.elapsedSeconds shouldBe 300L
+            it.isRunning shouldBe false
+        }
+
+        timed.record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "RESUMED")).shouldBeRight()
+        now = now.plusMinutes(2)
+        timed.scoreboard(matchId = matchId).elapsedSeconds shouldBe 420L
+    }
+
+    @Test
     fun `an unknown match is not found`() {
         umpire()
         service
