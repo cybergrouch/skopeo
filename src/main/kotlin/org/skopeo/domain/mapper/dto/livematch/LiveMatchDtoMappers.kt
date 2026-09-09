@@ -10,6 +10,7 @@ import org.skopeo.domain.model.CompletedSet
 import org.skopeo.domain.model.LiveMatchView
 import org.skopeo.domain.model.LiveOutcome
 import org.skopeo.domain.model.TeamSide
+import org.skopeo.domain.service.livematch.MatchTiming
 
 /**
  * The live score as the wire sees it (#911).
@@ -17,7 +18,7 @@ import org.skopeo.domain.model.TeamSide
  * Points are **rendered here**, not on the client: `displayPoints` is the one implementation of deuce and
  * advantage, and handing out raw counts would invite every client to grow a second one.
  */
-fun LiveMatchView.toResponse(): LiveMatchResponse =
+fun LiveMatchView.toResponse(timing: MatchTiming): LiveMatchResponse =
     LiveMatchResponse(
         matchId = matchId.toString(),
         sequence = sequence,
@@ -31,6 +32,8 @@ fun LiveMatchView.toResponse(): LiveMatchResponse =
         gamesTeam1 = state.gamesTeam1,
         gamesTeam2 = state.gamesTeam2,
         sets = state.completedSets.map { it.toResponse() },
+        elapsedSeconds = timing.elapsedSeconds,
+        isRunning = timing.isRunning,
         outcome = state.outcome?.toResponse(),
     )
 

@@ -23,6 +23,7 @@ import {
   LiveScoringBoard,
   ScoringActions,
 } from '@/features/livematch/LiveScoringBoard'
+import { MatchClock } from '@/features/livematch/MatchClock'
 
 type Side = 'TEAM1' | 'TEAM2'
 
@@ -196,6 +197,11 @@ export function LiveScoringPage() {
           <CompletedSets view={view} />
         </div>
         <div className="flex items-center gap-[1dvw] text-[2.2dvh] text-muted-foreground">
+          <MatchClock
+            elapsedSeconds={view.elapsedSeconds ?? 0}
+            isRunning={view.isRunning ?? false}
+            className="text-[2.4dvh] font-semibold tabular-nums text-foreground"
+          />
           {view.isPaused && <span className="font-semibold text-amber-600">Paused</span>}
           {view.isTiebreak && <span className="font-semibold">Tiebreak</span>}
           {!view.hasStarted && (

@@ -19,6 +19,9 @@ export interface LiveScore {
   isTiebreak: boolean
   isPaused: boolean
   hasStarted: boolean
+  /** Playing time so far, excluding suspensions (#937). Optional: documents written before it existed. */
+  elapsedSeconds?: number
+  isRunning?: boolean
   serverId: string | null
   outcomeKind: string | null
   outcomeWinner: string | null

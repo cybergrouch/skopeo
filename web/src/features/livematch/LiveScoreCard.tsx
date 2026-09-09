@@ -6,6 +6,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { MatchClock } from './MatchClock'
 import { useLiveScore } from './useLiveScore'
 
 /** How a finished match reads on the scoreboard. */
@@ -77,6 +78,11 @@ export function LiveScoreCard({
         <div className="flex items-center justify-between gap-3">
           <CardTitle>Live score</CardTitle>
           <div className="flex items-center gap-2">
+            <MatchClock
+              elapsedSeconds={score.elapsedSeconds ?? 0}
+              isRunning={score.isRunning ?? false}
+              className="text-sm tabular-nums text-muted-foreground"
+            />
             {score.isTiebreak && !finished && <Badge variant="secondary">Tiebreak</Badge>}
             <Badge variant={finished ? 'secondary' : 'default'}>{status}</Badge>
           </div>

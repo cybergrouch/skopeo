@@ -66,5 +66,21 @@ data class LiveMatchResponse(
     val gamesTeam1: Int,
     val gamesTeam2: Int,
     val sets: List<LiveSetResponse>,
+    /**
+     * Playing time so far in seconds, **excluding every suspension** (#937).
+     *
+     * Measured from `MATCH_STARTED` rather than the first point — the gap between an umpire opening the
+     * app and the players starting is exactly what would corrupt the figure. Frozen once the match ends,
+     * so a finished match does not keep accruing minutes while nobody finalizes it.
+     */
+    val elapsedSeconds: Long = 0,
+    /**
+     * Whether the clock is advancing. False before the start, while paused, and once the match has ended.
+     *
+     * A client ticks locally while this is true and stops when it is not, rather than polling — the value
+     * is re-synced by every response, and between responses a local tick is both accurate and free of
+     * clock skew.
+     */
+    val isRunning: Boolean = false,
     val outcome: LiveOutcomeResponse? = null,
 )

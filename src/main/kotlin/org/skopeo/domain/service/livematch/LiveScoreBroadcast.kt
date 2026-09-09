@@ -50,6 +50,15 @@ data class LiveScorePayload(
     val isTiebreak: Boolean,
     val isPaused: Boolean,
     val hasStarted: Boolean,
+    /**
+     * Playing time and whether it is advancing (#937).
+     *
+     * Included on the public document deliberately: how long a match has been going is exactly the sort
+     * of thing a spectator wants, and it reveals nothing the finished match page would not. It is two
+     * scalars, so it does not meaningfully widen the small public surface §6 argues for.
+     */
+    val elapsedSeconds: Long,
+    val isRunning: Boolean,
     val serverId: String?,
     val outcomeKind: String?,
     val outcomeWinner: String?,
@@ -67,6 +76,8 @@ data class LiveScorePayload(
             "isTiebreak" to isTiebreak,
             "isPaused" to isPaused,
             "hasStarted" to hasStarted,
+            "elapsedSeconds" to elapsedSeconds,
+            "isRunning" to isRunning,
             "serverId" to serverId,
             "outcomeKind" to outcomeKind,
             "outcomeWinner" to outcomeWinner,
@@ -116,6 +127,8 @@ fun LiveMatchResponse.toBroadcast(publicCode: String): LiveScorePayload =
         isTiebreak = isTiebreak,
         isPaused = isPaused,
         hasStarted = hasStarted,
+        elapsedSeconds = elapsedSeconds,
+        isRunning = isRunning,
         serverId = serverId,
         outcomeKind = outcome?.kind,
         outcomeWinner = outcome?.winner,
