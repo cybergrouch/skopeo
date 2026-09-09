@@ -792,26 +792,40 @@ second place where the two notions of *winner* diverge, so it is worth a test th
 
 ## 11. Other open questions
 
-- **Who may umpire a given match** — any `SCORER`, or only one scoped to that event's club, the way
-  every other event-scoped operation goes through `ClubAccess.mayOrganize` (#789)?
-- **One umpire at a time?** Two devices scoring the same match needs either a lock or last-write-wins,
-  and last-write-wins on an event log is a mess.
-- **Does the spectator view need history?** Largely settled by §6: the broadcast is a single
-  current-score document, so history is not exposed by default. Still worth confirming that no product
-  requirement (a point-by-point replay, say) wants it later.
-- **A retirement can produce a set with no winner.** A player pulling up at 3–3, or at 0–0 in a new
-  set, leaves a level partial set. `MatchService.setWinner` refuses to record one today, and since #917
-  there is no stored winner to fall back on, so the derivation throws. Three options, materially
-  different in cost: do not record the level set at all; make the set winner nullable (which ripples
-  into `PerformanceBasedRankingCalculatorImpl`, which assumes every set has one); or record it, derive
-  nothing, and have the rating skip it. The third looks right — a level set demonstrates nothing about
-  who was outplaying whom, so contributing no dominance is the correct semantics rather than a
-  workaround — but it wants deciding **before** the retirement work, not during it.
-- **Doubles.** Two sides fits, but serving rotates through four players. In scope for the first cut?
+Kept as a record of what was asked and how it was settled, because "we considered that" is the part
+that gets lost.
+
+- ~~**Who may umpire a given match?**~~ **Answered (#929): any `SCORER`, on any match.** Deliberately the
+  one event-scoped operation outside the #789 club gate — an umpire pool moves between clubs. The cost
+  to keep in mind is that `SCORING_ROLES` composes `MATCH_MANAGEMENT_ROLES`, so every HOST and
+  CLUB_OWNER can score any live match. If that proves too wide, narrow to `{SCORER, ADMINISTRATOR}`
+  rather than re-scoping per club.
+- ~~**One umpire at a time?**~~ **Answered (#929): a soft claim with takeover, not a lock.** The unique
+  sequence constraint already makes interleaved and lost writes impossible, so the claim exists to stop
+  two people confusing each other. A hard lock was rejected because a courtside phone that dies must not
+  strand a fixture behind a timeout nobody chose well.
+- ~~**Does the spectator view need history?**~~ **Answered: no.** §6 broadcasts a single current-score
+  document, and #938 confirmed the practical payoff — reconnect is a plain read with no gap to fill. A
+  point-by-point replay would be a new feature reading the log, not a change to this.
+- ~~**A retirement can produce a set with no winner.**~~ **Answered (#934), and the third option was
+  right.** A level partial set is simply not recorded: since #917 the set winner is derived from the
+  games, so a level set has none to derive. #925 reached the same conclusion from the rating side — a
+  level set contributes zero dominance, so omitting it loses nothing. A *decisive* partial set (1-3) is
+  recorded, because §10 rates a retirement on the real score.
+- ~~**Doubles.**~~ **Answered (#928): in scope, and it cost almost nothing.** The only asymmetry is the
+  server, so `ServerAssigned` names a **player** rather than a side. Points, games and sets are per side
+  and needed no doubles-specific handling at all.
 - ~~**An abandoned scoring session** must not leave a fixture stuck `IN_PROGRESS` forever.~~
-  **Answered by `PAUSED`/`RESUMED` (§8a).** A suspension is now stated by the umpire rather than guessed
-  from elapsed time, so a fixture sitting in `IN_PROGRESS` is not evidence of abandonment. The retention
-  window for *completed* stacks remains open.
+  **Answered (#930) by `PAUSED`/`RESUMED`.** A suspension is stated by the umpire rather than guessed
+  from elapsed time, so a fixture sitting in `IN_PROGRESS` is not evidence of abandonment.
+
+**Still open, and tracked elsewhere:**
+
+- **The retention sweep for completed stacks, and its window** — the one part of §8a that is designed
+  but unbuilt. Raised as **#939**, along with the reasoning for why the sweep now has one job rather
+  than two.
+- **The serving indicator has no UI.** `SERVER_ASSIGNED` and `serverId` are wired end to end, but
+  nothing sets or displays the server. Tracked with the other umpire-view refinements in #937.
 
 ---
 
@@ -822,7 +836,7 @@ its natural first user.
 
 ---
 
-## 13. Suggested sequencing
+## 13. Sequencing — all five steps shipped
 
 1. `SCORER` capability, the `chk_capability` migration, and `SCORING_ROLES`.
 2. The pure scoring engine and its event model — no transport, no UI, exhaustively unit-tested.
@@ -831,6 +845,20 @@ its natural first user.
    `uploadResult`.
 4. The umpire view.
 5. The spectator view, the Firebase Admin SDK dependency, and the Firestore security rules.
+
+**All five landed**, in this order:
+
+| Step | |
+|---|---|
+| 1. `SCORER`, `chk_capability`, `SCORING_ROLES` | #927 |
+| 2. The pure scoring engine and its event model | #928 |
+| 3. Log persistence, the service, the API, completion reason, finalize | #929, #930, #932, #933, #934 |
+| 4. The umpire view | #935 |
+| 5. The Firestore broadcast and the spectator view | #936, #938 |
+
+Two prerequisites were found along the way and shipped as their own changes: the games floor had to stop
+rejecting an abandoned set (#931), and `MatchResponse` had to start returning `completionReason` or no
+scoreline could render `1-3 (ret)` (#934).
 
 Steps 1–3 carry no Firestore dependency, so the transport work does not block starting. Step 3 is where
 the per-match sequence number and its unique constraint belong — the concurrency concern in §2 is the one
