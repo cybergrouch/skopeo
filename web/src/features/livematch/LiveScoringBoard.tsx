@@ -1,6 +1,8 @@
 import { Button } from '@/components/ui/button'
 import type { LiveMatchResponse } from '@/api/generated/model'
 
+type Side = 'TEAM1' | 'TEAM2'
+
 /**
  * The scoreboard and the two tap targets (#911).
  *
@@ -19,6 +21,10 @@ export function LiveScoringBoard({
   team1Name,
   team2Name,
   onPoint,
+  onGame,
+  onEndSet,
+  onRetire,
+  onDefault,
 }: {
   view: LiveMatchResponse
   /** View-only side swap for when the players change ends. NEVER recorded — see #911 §6. */
@@ -26,7 +32,11 @@ export function LiveScoringBoard({
   busy: boolean
   team1Name: string
   team2Name: string
-  onPoint: (side: 'TEAM1' | 'TEAM2') => void
+  onPoint: (side: Side) => void
+  onGame: (side: Side) => void
+  onEndSet: (side: Side) => void
+  onRetire: (side: Side) => void
+  onDefault: (side: Side) => void
 }) {
   const sides = [
     { id: 'TEAM1' as const, name: team1Name, points: view.pointsTeam1, games: view.gamesTeam1 },
@@ -35,29 +45,78 @@ export function LiveScoringBoard({
   // The label travels WITH its side through the flip (#937). A flip that moved the scores but left the
   // names would be worse than no labels at all — it would confidently say the wrong thing.
   const ordered = flipped ? [sides[1], sides[0]] : sides
+  const finished = view.outcome != null
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-2 gap-[1dvh]">
       {ordered.map((side) => (
-        <button
-          key={side.id}
-          type="button"
-          disabled={busy}
-          aria-label={`Point to ${side.name}`}
-          onClick={() => onPoint(side.id)}
-          className="flex min-h-0 flex-col items-center justify-center gap-[0.5dvh] rounded-lg bg-muted
-                     px-[1dvw] transition-colors hover:bg-muted/70 active:bg-muted/50 disabled:opacity-60"
-        >
-          {/* Truncated rather than wrapped: a long doubles pairing must not grow the row and push the
-              action bar off a screen that is not allowed to scroll. */}
-          <span className="max-w-full truncate text-[3.4dvh] font-semibold leading-none">
-            {side.name}
-          </span>
-          <span className="text-[13dvh] font-bold leading-none tabular-nums">{side.points}</span>
-          <span className="text-[3.6dvh] leading-none text-muted-foreground tabular-nums">
-            {side.games} {side.games === 1 ? 'game' : 'games'}
-          </span>
-        </button>
+        <div key={side.id} className="flex min-h-0 flex-col gap-[0.6dvh]">
+          <button
+            type="button"
+            disabled={busy}
+            aria-label={`Point to ${side.name}`}
+            onClick={() => onPoint(side.id)}
+            className="flex min-h-0 flex-1 flex-col items-center justify-center gap-[0.5dvh] rounded-lg
+                       bg-muted px-[1dvw] transition-colors hover:bg-muted/70 active:bg-muted/50
+                       disabled:opacity-60"
+          >
+            {/* Truncated rather than wrapped: a long doubles pairing must not grow the row and push the
+                action bar off a screen that is not allowed to scroll. */}
+            <span className="max-w-full truncate text-[3.4dvh] font-semibold leading-none">
+              {side.name}
+            </span>
+            <span className="text-[13dvh] font-bold leading-none tabular-nums">{side.points}</span>
+            <span className="text-[3.6dvh] leading-none text-muted-foreground tabular-nums">
+              {side.games} {side.games === 1 ? 'game' : 'games'}
+            </span>
+          </button>
+
+          {/*
+            Per-side actions live UNDER their side rather than in the shared row (#944). Two reasons: a
+            single row could not hold twelve buttons on a screen that is not allowed to scroll, and
+            sitting beneath the named side makes "Game" unambiguous without repeating the name on every
+            button. They cannot be nested inside the tap target above — a button inside a button is
+            invalid HTML and the inner clicks would not be reachable.
+          */}
+          <div className="flex shrink-0 flex-wrap justify-center gap-[0.6dvw]">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || finished}
+              aria-label={`Game to ${side.name}`}
+              onClick={() => onGame(side.id)}
+            >
+              Game
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || finished}
+              aria-label={`Set to ${side.name}`}
+              onClick={() => onEndSet(side.id)}
+            >
+              Set
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy || finished}
+              aria-label={`${side.name} retires`}
+              onClick={() => onRetire(side.id)}
+            >
+              Retire
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy || finished}
+              aria-label={`${side.name} defaults`}
+              onClick={() => onDefault(side.id)}
+            >
+              Default
+            </Button>
+          </div>
+        </div>
       ))}
     </div>
   )
@@ -85,16 +144,16 @@ export function CompletedSets({ view }: { view: LiveMatchResponse }) {
   )
 }
 
-/** The umpire's controls. Kept to one row so the board keeps the rest of the screen. */
+/**
+ * The **match-wide** controls. Per-side actions live under their side of the board (#944), which is what
+ * keeps this row short enough to fit a screen that cannot scroll.
+ */
 export function ScoringActions({
   view,
   busy,
   canFinalize,
   onUndo,
-  onEndSet,
   onTiebreak,
-  onRetire,
-  onDefault,
   onPauseResume,
   onFlip,
   onFinalize,
@@ -108,10 +167,7 @@ export function ScoringActions({
    */
   canFinalize: boolean
   onUndo: () => void
-  onEndSet: (side: 'TEAM1' | 'TEAM2') => void
   onTiebreak: () => void
-  onRetire: (side: 'TEAM1' | 'TEAM2') => void
-  onDefault: (side: 'TEAM1' | 'TEAM2') => void
   onPauseResume: () => void
   onFlip: () => void
   onFinalize: () => void
@@ -121,12 +177,6 @@ export function ScoringActions({
     <div className="flex shrink-0 flex-wrap items-center gap-[0.8dvw] py-[0.6dvh]">
       <Button size="sm" variant="secondary" disabled={busy} onClick={onUndo}>
         Undo
-      </Button>
-      <Button size="sm" variant="outline" disabled={busy || finished} onClick={() => onEndSet('TEAM1')}>
-        Set to 1
-      </Button>
-      <Button size="sm" variant="outline" disabled={busy || finished} onClick={() => onEndSet('TEAM2')}>
-        Set to 2
       </Button>
       <Button
         size="sm"
@@ -142,18 +192,6 @@ export function ScoringActions({
       {/* A display preference only. Never recorded, so the log cannot be corrupted by a flip (#911 §6). */}
       <Button size="sm" variant="ghost" disabled={busy} onClick={onFlip}>
         Switch sides
-      </Button>
-      <Button size="sm" variant="ghost" disabled={busy || finished} onClick={() => onRetire('TEAM1')}>
-        1 retires
-      </Button>
-      <Button size="sm" variant="ghost" disabled={busy || finished} onClick={() => onRetire('TEAM2')}>
-        2 retires
-      </Button>
-      <Button size="sm" variant="ghost" disabled={busy || finished} onClick={() => onDefault('TEAM1')}>
-        1 defaults
-      </Button>
-      <Button size="sm" variant="ghost" disabled={busy || finished} onClick={() => onDefault('TEAM2')}>
-        2 defaults
       </Button>
       {canFinalize && (
         <Button size="sm" disabled={busy || !finished} onClick={onFinalize} className="ml-auto">

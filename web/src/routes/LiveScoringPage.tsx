@@ -219,6 +219,10 @@ export function LiveScoringPage() {
         team1Name={sideName(match.team1)}
         team2Name={sideName(match.team2)}
         onPoint={(side) => send('POINT_WON', side)}
+        onGame={(side) => send('GAME_AWARDED', side)}
+        onEndSet={(side) => send('SET_AWARDED', side)}
+        onRetire={(side) => send('RETIRED', side)}
+        onDefault={(side) => send('DEFAULTED', side)}
       />
 
       <ScoringActions
@@ -226,10 +230,7 @@ export function LiveScoringPage() {
         busy={busy}
         canFinalize={canManageMatches(capabilities)}
         onUndo={() => undo.mutate({ matchId })}
-        onEndSet={(side) => send('SET_AWARDED', side)}
         onTiebreak={() => send('TIEBREAK_STARTED')}
-        onRetire={(side) => send('RETIRED', side)}
-        onDefault={(side) => send('DEFAULTED', side)}
         onPauseResume={() => send(view.isPaused ? 'RESUMED' : 'PAUSED')}
         onFlip={() => setFlipped((f) => !f)}
         onFinalize={() => finalize.mutate({ matchId })}
