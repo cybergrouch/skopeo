@@ -36,8 +36,10 @@ import org.skopeo.common.logging.REQUEST_ID_MDC_KEY
 import org.skopeo.common.logging.RequestLog
 import org.skopeo.common.logging.cloudTraceField
 import org.skopeo.config.DatabaseConfig
+import org.skopeo.config.liveScoreBroadcaster
 import org.skopeo.domain.service.capability.CapabilityService
 import org.skopeo.domain.service.client.ApiClientService
+import org.skopeo.domain.service.livematch.LiveMatchService
 import org.skopeo.domain.service.user.UserService
 import org.skopeo.routes.configureApiClientRoutes
 import org.skopeo.routes.configureAuditRoutes
@@ -130,7 +132,18 @@ fun Application.module(
     configureRatingRoutes()
     configureRatingRequestRoutes()
     configureMatchRoutes()
-    configureLiveMatchRoutes()
+    // The spectator broadcast is resolved once at startup and handed in. Absent Firestore credentials
+    // is a supported state — local development and CI have none — so this yields a no-op rather than
+    // failing the boot (#911).
+    configureLiveMatchRoutes(
+        service =
+            LiveMatchService(
+                broadcast =
+                    liveScoreBroadcaster(
+                        projectId = environment.config.propertyOrNull(path = "firebase.projectId")?.getString(),
+                    ),
+            ),
+    )
     configureEventRoutes()
     configureEventTeamRoutes()
     configureClubRoutes()

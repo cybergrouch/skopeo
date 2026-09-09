@@ -5,6 +5,7 @@ package org.skopeo.domain.service.livematch
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -359,6 +360,46 @@ class LiveMatchServiceTest {
 
         // Bounded, and it really did try more than once.
         alwaysLoses.attempts shouldBe 3
+    }
+
+    @Test
+    fun `every write tells spectators, and a no-op undo does not`() {
+        // One place can forget the broadcast, so one test covers all of it. The no-op undo matters
+        // separately: a courtside double-tap must not push a redundant document at every spectator.
+        val sent = mutableListOf<LiveScorePayload>()
+        val watched = LiveMatchService(broadcast = { payload -> sent += payload })
+        umpire()
+        val matchId = fixture()
+
+        watched.claim(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
+        watched.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1)).shouldBeRight()
+        watched.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
+        watched.release(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
+        val beforeNoOpUndo = sent.size
+
+        // Nothing left to undo: no state change, so no broadcast.
+        watched.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
+
+        sent.size shouldBe beforeNoOpUndo
+        // claim, record, undo, release.
+        beforeNoOpUndo shouldBe 4
+        sent.last().matchId shouldBe matchId.toString()
+    }
+
+    @Test
+    fun `a failing broadcast never fails the umpire's write`() {
+        // The log is the system of record and the broadcast is a projection of it. Trading a recorded
+        // point for a stale scoreboard would be exactly the wrong way round, so the contract is that a
+        // broadcaster swallows its own failures — and the service must not depend on it doing so.
+        val exploding = LiveMatchService(broadcast = { error(message = "Firestore is down") })
+        umpire()
+        val matchId = fixture()
+
+        shouldThrow<IllegalStateException> {
+            exploding.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
+        }
+        // The point still landed: the append is committed before anything is published.
+        live.log(matchId = matchId).shouldHaveSize(size = 1)
     }
 
     @Test

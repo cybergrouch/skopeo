@@ -1,35 +1,60 @@
 {
   "hosting": {
     "public": "web/dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "rewrites": [
       {
         "source": "/matches/*",
-        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+        "run": {
+          "serviceId": "skopeo",
+          "region": "asia-southeast1"
+        }
       },
       {
         "source": "/players/*",
-        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+        "run": {
+          "serviceId": "skopeo",
+          "region": "asia-southeast1"
+        }
       },
       {
         "source": "/events/*",
-        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+        "run": {
+          "serviceId": "skopeo",
+          "region": "asia-southeast1"
+        }
       },
       {
         "source": "/swagger",
-        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+        "run": {
+          "serviceId": "skopeo",
+          "region": "asia-southeast1"
+        }
       },
       {
         "source": "/swagger/**",
-        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+        "run": {
+          "serviceId": "skopeo",
+          "region": "asia-southeast1"
+        }
       },
       {
         "source": "/openapi.yaml",
-        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+        "run": {
+          "serviceId": "skopeo",
+          "region": "asia-southeast1"
+        }
       },
       {
         "source": "/api/**",
-        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+        "run": {
+          "serviceId": "skopeo",
+          "region": "asia-southeast1"
+        }
       },
       {
         "source": "**",
@@ -65,5 +90,8 @@
         ]
       }
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
   }
 }

@@ -140,6 +140,29 @@ hold un-POSTed events locally and retry — but it is work that Firestore-direct
 
 ---
 
+### Shipped — step 5a of §13, the broadcast
+
+The server writes `liveScores/{matchId}` on every state change; `firestore.rules` allows the world to
+read it and **nobody** to write it. The Admin SDK bypasses rules, so denying all writes does not impede
+the server — that asymmetry is what makes the rules trivial.
+
+- **The projection is a pure function** (`toBroadcast`), so what spectators receive is tested without
+  Firestore or a network. It drops `scorerId` deliberately: the document is world-readable, and who is
+  holding the phone is not a spectator's concern.
+- **Absent credentials is a supported state, not a failure.** Local development and CI have no Firestore
+  project, so the default is a no-op broadcaster and live scoring works fully without one. A deployment
+  with unusable credentials logs and degrades rather than failing to boot.
+- **Broadcasting can never fail a write.** The log is the system of record and the document is a
+  projection of it; trading a recorded point for a stale scoreboard would be the wrong way round. The
+  Firestore broadcaster swallows its own failures, and a test asserts the point still lands even when the
+  broadcaster throws.
+- **A no-op undo broadcasts nothing.** A courtside double-tap changes no state, so it must not push a
+  redundant document at every spectator.
+- Credentials come from the Cloud Run service account via Application Default Credentials. No key file
+  to mount or rotate — a key that never exists cannot leak.
+
+Nothing reads the document yet; the spectator UI is 5b.
+
 ## 5. Decision — native apps are unaffected, and slightly better off
 
 **Decided** in the context of possible future Android/iOS apps.

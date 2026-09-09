@@ -66,6 +66,22 @@ dependencies {
     // Per-client rate limiting for partner API traffic (#225/#598)
     implementation("io.ktor:ktor-server-rate-limit-jvm:$ktorVersion")
 
+    // The Firebase Admin SDK, added for ONE thing: writing live scores to Firestore as the spectator
+    // broadcast channel (#911). The artifact also bundles Firebase Auth, and that half is deliberately
+    // unused — ID tokens keep being verified against Google's public keys (JWKS) below, which needs no
+    // SDK and, more importantly, no credentials.
+    //
+    // Nor does Firestore participate in authorization. Its rules *could* branch on request.auth and
+    // custom claims, but our capabilities live in Postgres and #789's per-club rule cannot be expressed
+    // as a claim at all. Mirroring them into claims would mean two systems to keep in step. So the
+    // server authorizes every write and Firestore is read-only fan-out (see firestore.rules).
+    //
+    // The broadcast has to leave Cloud Run entirely. It runs --min-instances=1 --max-instances=2, so an
+    // in-process SSE/WebSocket registry is broken by construction: the umpire's POST lands on one
+    // instance while a spectator's stream is held by the other, and the event never crosses. Firestore
+    // fans out server-push with no sockets to operate and no instance affinity.
+    implementation("com.google.firebase:firebase-admin:9.4.3")
+
     // Authentication — verify Firebase-issued JWTs against Google's public keys
     implementation("io.ktor:ktor-server-auth-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-auth-jwt-jvm:$ktorVersion")
