@@ -43,10 +43,9 @@ class OpenPlayPointsCalculatorTest {
     ) = OpenPlayPointsCalculator.compute(
         band1 = band1,
         band2 = band2,
-        team1Id = t1,
+        sides = OpenPlayPointsCalculator.Sides(team1Id = t1, concedingTeamId = conceding),
         sets = sets,
         config = config,
-        concedingTeamId = conceding,
     )
 
     @Test

@@ -172,12 +172,16 @@ class AwardDerivationAssembler(
             OpenPlayPointsCalculator.scoreSets(
                 band1 = if (recipientIsTeam1) inputs.teamBand else inputs.opponentBand,
                 band2 = if (recipientIsTeam1) inputs.opponentBand else inputs.teamBand,
-                team1Id = match.team1.teamId,
+                // Must match the awarder exactly (#972). The #892 guard below compares this arithmetic
+                // to what was paid, so a conceding side omitted here would report an honest award as
+                // unreproducible.
+                sides =
+                    OpenPlayPointsCalculator.Sides(
+                        team1Id = match.team1.teamId,
+                        concedingTeamId = match.concedingTeamId(),
+                    ),
                 sets = match.sets,
                 config = config,
-                // Must match the awarder exactly (#972). The #892 guard below compares this arithmetic
-                // to what was paid, so omitting it here would report an honest award as unreproducible.
-                concedingTeamId = match.concedingTeamId(),
             )
         val sets =
             scored.map { set ->

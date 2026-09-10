@@ -32,6 +32,23 @@ internal object OpenPlayPointsCalculator {
     )
 
     /**
+     * Which side is which, for a match being scored.
+     *
+     * The two travel together because they are one question — *which side is this?* — and because
+     * [concedingTeamId] is only meaningful relative to [team1Id]: the calculator infers team2 as "the
+     * other one", so a conceding id has no reading without knowing which side team1 is.
+     *
+     * [concedingTeamId] is `null` for a match that played out, and otherwise the side that retired or
+     * defaulted. `Match.concedingTeamId()` computes it. Deliberately not defaulted: a caller that
+     * omitted it would skip the retirement rule and pay a retiring player for the set they walked out
+     * of (#972), so the compiler asks at every call site instead.
+     */
+    data class Sides(
+        val team1Id: UUID,
+        val concedingTeamId: UUID?,
+    )
+
+    /**
      * One set's scoring, as the calculator saw it (#862).
      *
      * This exists so a derivation shown to a reader **is** the computation that paid them, not a parallel
@@ -58,22 +75,17 @@ internal object OpenPlayPointsCalculator {
      * Score each set, in order — the per-set detail behind a match's points (#862).
      *
      * @param band1 team1's entry band (e.g. "4.0"); [band2] team2's. Compared numerically.
-     * @param team1Id team1's id, matched against each set's winner (team2 is inferred as the other side).
+     * @param sides which side is team1, and which (if any) conceded — see [Sides].
      * @param config the admin-configurable margin-bracket schedule.
-     * @param concedingTeamId the side that retired or defaulted, else `null` — see [payableForAbandoned].
-     *  **Required rather than defaulted on purpose (#972):** every caller must state it, because a
-     *  caller that quietly omitted it would skip the retirement rule and pay a retiring player for the
-     *  set they walked out of. A default would make that the silent option; this way the compiler asks.
-     *  `Match.concedingTeamId()` computes it.
      */
     fun scoreSets(
         band1: String,
         band2: String,
-        team1Id: UUID,
+        sides: Sides,
         sets: List<MatchSetResult>,
         config: OpenPlayPointsConfig,
-        concedingTeamId: UUID?,
     ): List<SetScoring> {
+        val team1Id = sides.team1Id
         val b1 = band1.toBigDecimal()
         val b2 = band2.toBigDecimal()
         val equalBands = b1.compareTo(other = b2) == 0
@@ -94,7 +106,7 @@ internal object OpenPlayPointsCalculator {
                     set = set,
                     team1WonSet = team1WonSet,
                     team1Id = team1Id,
-                    conceding = concedingTeamId,
+                    conceding = sides.concedingTeamId,
                     cell = cell,
                 )
             SetScoring(
@@ -115,20 +127,12 @@ internal object OpenPlayPointsCalculator {
     fun compute(
         band1: String,
         band2: String,
-        team1Id: UUID,
+        sides: Sides,
         sets: List<MatchSetResult>,
         config: OpenPlayPointsConfig,
-        concedingTeamId: UUID?,
     ): TeamPoints {
         val scored =
-            scoreSets(
-                band1 = band1,
-                band2 = band2,
-                team1Id = team1Id,
-                sets = sets,
-                config = config,
-                concedingTeamId = concedingTeamId,
-            )
+            scoreSets(band1 = band1, band2 = band2, sides = sides, sets = sets, config = config)
         return TeamPoints(
             team1 = scored.sumOf { it.team1Points },
             team2 = scored.sumOf { it.team2Points },

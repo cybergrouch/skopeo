@@ -425,10 +425,13 @@ class EventFinalizeAwarder(
                 OpenPlayPointsCalculator.compute(
                     band1 = band1,
                     band2 = band2,
-                    team1Id = match.team1.teamId,
+                    sides =
+                        OpenPlayPointsCalculator.Sides(
+                            team1Id = match.team1.teamId,
+                            concedingTeamId = match.concedingTeamId(),
+                        ),
                     sets = match.sets,
                     config = config,
-                    concedingTeamId = match.concedingTeamId(),
                 )
             awardCount +=
                 awardBothSides(
