@@ -83,19 +83,65 @@ describe("LiveScoreCard", () => {
     expect(screen.getByText("This match has finished.")).toBeInTheDocument();
   });
 
-  it("says how a match ended when it was not played out", () => {
+  it("marks WHICH player retired, next to their name (#951)", () => {
+    // Ana is not the winner, so Ana is the one who retired — derived, because the document
+    // deliberately does not carry the conceding side (#933).
     useLiveScore.mockReturnValue({
       ...score,
       outcomeKind: "RETIRED",
       outcomeWinner: "TEAM2",
     });
     renderCard();
-    // A bare "Final" over a 1-3 scoreline would misrepresent what happened.
-    expect(screen.getByText("Final — retired")).toBeInTheDocument();
+
+    expect(screen.getByText("(Retired)")).toBeInTheDocument();
+    // On the player, not in the badge: a badge saying "retired" leaves the reader to work out who by
+    // reasoning backwards from the winner.
+    expect(screen.getByText("Final")).toBeInTheDocument();
+    expect(screen.queryByText("Final — retired")).not.toBeInTheDocument();
+  });
+
+  it("puts the marker on the loser even when the winner is the other side (#951)", () => {
+    // The assertion that catches an inverted derivation. Same test as above with the sides swapped —
+    // marking the WINNER as retired is the failure this guards, and it is invisible with one fixture.
+    useLiveScore.mockReturnValue({
+      ...score,
+      outcomeKind: "RETIRED",
+      outcomeWinner: "TEAM1",
+    });
+    const { container } = renderCard();
+
+    const rows = container.querySelectorAll("div.flex.items-baseline");
+    expect(rows[0].textContent).toContain("Ana");
+    expect(rows[0].textContent).not.toContain("(Retired)");
+    expect(rows[1].textContent).toContain("Bob");
+    expect(rows[1].textContent).toContain("(Retired)");
+  });
+
+  it("marks a default the same way, with its own wording (#951)", () => {
+    useLiveScore.mockReturnValue({
+      ...score,
+      outcomeKind: "DEFAULTED",
+      outcomeWinner: "TEAM1",
+    });
+    renderCard();
+    expect(screen.getByText("(Default)")).toBeInTheDocument();
+    expect(screen.getByText("Final")).toBeInTheDocument();
+  });
+
+  it("marks nobody when the match was played out", () => {
+    useLiveScore.mockReturnValue({
+      ...score,
+      outcomeKind: "COMPLETED",
+      outcomeWinner: "TEAM1",
+    });
+    renderCard();
+    expect(screen.queryByText("(Retired)")).not.toBeInTheDocument();
+    expect(screen.queryByText("(Default)")).not.toBeInTheDocument();
   });
 
   it("falls back to Final for an outcome it does not recognise", () => {
-    // Forward-compatibility: a new completion reason on the server must not blank the badge.
+    // Forward-compatibility: a new completion reason on the server must not blank the badge, and must
+    // not invent a marker for a state this build has never heard of.
     useLiveScore.mockReturnValue({
       ...score,
       outcomeKind: "SOMETHING_NEW",

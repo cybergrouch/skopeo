@@ -9,11 +9,16 @@ import { Badge } from '@/components/ui/badge'
 import { MatchClock } from './MatchClock'
 import { useLiveScore } from './useLiveScore'
 
-/** How a finished match reads on the scoreboard. */
-const OUTCOME_LABEL: Record<string, string> = {
-  COMPLETED: 'Final',
-  RETIRED: 'Final — retired',
-  DEFAULTED: 'Final — default',
+/**
+ * How an abnormal ending reads **next to the player it happened to** (#951).
+ *
+ * On the player rather than in the badge, because it is a property of a person: a badge saying
+ * "Final — retired" tells a spectator that somebody retired and leaves them to work out who by
+ * reasoning backwards from the winner. Matches the `1-3 (ret)` convention used on the match page.
+ */
+const CONCEDED_LABEL: Record<string, string> = {
+  RETIRED: '(Retired)',
+  DEFAULTED: '(Default)',
 }
 
 function SideScore({
@@ -21,15 +26,23 @@ function SideScore({
   points,
   games,
   isWinner,
+  conceded,
 }: {
   name: string
   points: string
   games: number
   isWinner: boolean
+  /** `(Retired)` / `(Default)` when this is the side that conceded; absent otherwise. */
+  conceded?: string
 }) {
   return (
     <div className="flex items-baseline justify-between gap-4">
-      <span className={isWinner ? 'font-semibold' : undefined}>{name}</span>
+      <span className={isWinner ? 'font-semibold' : undefined}>
+        {name}
+        {conceded ? (
+          <span className="ml-1 font-normal text-muted-foreground">{conceded}</span>
+        ) : null}
+      </span>
       <span className="flex items-baseline gap-3 tabular-nums">
         <span className="text-muted-foreground">{games}</span>
         <span className="w-10 text-right text-2xl font-bold">{points}</span>
@@ -64,8 +77,19 @@ export function LiveScoreCard({
   if (!score) return null
 
   const finished = score.outcomeKind != null
+  // Which side conceded is DERIVED, not sent: a player who retires always loses, so it is whichever
+  // side is not the winner. #933 deliberately does not store it, because a stored copy could disagree
+  // with the winner and nothing could adjudicate between them.
+  const concededLabel = score.outcomeKind
+    ? CONCEDED_LABEL[score.outcomeKind]
+    : undefined
+  const concededSide = concededLabel
+    ? score.outcomeWinner === 'TEAM1'
+      ? 'TEAM2'
+      : 'TEAM1'
+    : undefined
   const status = finished
-    ? (OUTCOME_LABEL[score.outcomeKind as string] ?? 'Final')
+    ? 'Final'
     : score.isPaused
       ? 'Suspended'
       : score.hasStarted
@@ -106,12 +130,14 @@ export function LiveScoreCard({
           points={score.pointsTeam1}
           games={score.gamesTeam1}
           isWinner={score.outcomeWinner === 'TEAM1'}
+          conceded={concededSide === 'TEAM1' ? concededLabel : undefined}
         />
         <SideScore
           name={team2Name}
           points={score.pointsTeam2}
           games={score.gamesTeam2}
           isWinner={score.outcomeWinner === 'TEAM2'}
+          conceded={concededSide === 'TEAM2' ? concededLabel : undefined}
         />
       </CardContent>
     </Card>
