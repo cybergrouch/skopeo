@@ -738,4 +738,43 @@ describe("MatchPage", () => {
     renderAt();
     expect(screen.getByText(/Not yet played/)).toBeInTheDocument();
   });
+
+  it("hides the scoring card once a result is recorded, before rating (#952)", () => {
+    // The window this closes: rating happens when the EVENT is finalized (#403), days later. Until
+    // then a finished match kept offering "Score this match".
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "u1", capabilities: ["PLAYER", "SCORER"] },
+    });
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        id: "m-1",
+        status: "COMPLETED",
+        rated: false,
+        sets: [{ setNumber: 1, team1Games: 6, team2Games: 4 }],
+      },
+      isLoading: false,
+    });
+    renderAt();
+
+    expect(
+      screen.queryByRole("link", { name: /Score this match/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Live scoring")).not.toBeInTheDocument();
+  });
+
+  it("still offers scoring on a fixture with no result yet (#952)", () => {
+    // The line is "has a recorded result", not "has been started" — the guard must not remove the
+    // card from every match.
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "u1", capabilities: ["PLAYER", "SCORER"] },
+    });
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, id: "m-1", status: "IN_PROGRESS", rated: false, sets: [] },
+      isLoading: false,
+    });
+    renderAt();
+
+    expect(screen.getByText("Live scoring")).toBeInTheDocument();
+  });
 });

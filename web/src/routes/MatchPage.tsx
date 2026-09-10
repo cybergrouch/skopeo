@@ -235,9 +235,14 @@ export function MatchPage() {
   // Offer live scoring while the match is still open (#911). Not once it is rated — the result is
   // frozen then, and the server refuses. `match.id` is only revealed to callers who may act on the
   // match, so its absence is itself part of the gate rather than a separate check.
+  // Offer live scoring only while there is no recorded result (#952). `rated` was the old test and it
+  // is the wrong line: rating happens when the EVENT is finalized (#403), which can be days after the
+  // match was recorded — so a finished match kept offering "Score this match" throughout. The server
+  // refuses either way; this stops the button being there to press.
   const canScoreLive =
     canScore(meQuery.data?.capabilities) &&
     Boolean(match?.id) &&
+    match?.status !== "COMPLETED" &&
     match?.rated !== true &&
     match?.isActive !== false;
 

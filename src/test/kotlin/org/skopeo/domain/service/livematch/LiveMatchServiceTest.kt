@@ -436,6 +436,57 @@ class LiveMatchServiceTest {
     }
 
     @Test
+    fun `a match with a recorded result cannot be scored, even before it is rated (#952)`() {
+        // THE window this closes. Rating happens when the EVENT is finalized (#403), which can be days
+        // after the match was recorded — and `ratedAt` was the only guard, so throughout that gap a
+        // match with a full scoreline could still be claimed and scored.
+        umpire()
+        val matchId = fixture()
+        matches.setStatus(matchId = matchId, status = MatchStatus.COMPLETED.name).shouldBeRight()
+
+        // Deliberately NOT rated: that is the point of the test.
+        matches.findById(matchId = matchId).shouldBeRight().toDomain().ratedAt shouldBe null
+
+        service
+            .record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+        service
+            .claim(token = token(uid = "ump"), matchId = matchId)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+        service
+            .undo(token = token(uid = "ump"), matchId = matchId)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    @Test
+    fun `a finished match's scoreboard is still readable (#952)`() {
+        // The guard must not blind the spectator view: refusing to SCORE a recorded match is not the
+        // same as refusing to SHOW it, and `scoreboard` deliberately does not go through that gate.
+        umpire()
+        val matchId = fixture()
+        service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
+        matches.setStatus(matchId = matchId, status = MatchStatus.COMPLETED.name).shouldBeRight()
+
+        service.scoreboard(matchId = matchId).pointsTeam1 shouldBe "15"
+    }
+
+    @Test
+    fun `a match still in progress is unaffected by the guard (#952)`() {
+        // The line is "has a recorded result", not "has been started" — scoring a claimed match must
+        // keep working, which is the thing the guard could most easily break.
+        umpire()
+        val matchId = fixture()
+        service.claim(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
+
+        service
+            .record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
+            .shouldBeRight()
+    }
+
+    @Test
     fun `an unknown match is not found`() {
         umpire()
         service
