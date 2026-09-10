@@ -6,10 +6,12 @@ package org.skopeo.domain.service.standings
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
+import arrow.core.raise.ensure
 import arrow.core.right
 import org.skopeo.common.dto.standings.StandingsCalculationResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.ClientPrincipal
 import org.skopeo.common.security.POINTS_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.standings.toResponse
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -69,26 +71,61 @@ class StandingsCalculationService(
     ): Either<ServiceError, StandingsCalculationResponse> =
         either {
             val actorId = requireAnyOf(token = token, allowed = POINTS_MANAGEMENT_ROLES).bind()
-            val now = LocalDateTime.now()
-            val groups = recompute(asOf = now)
-
-            if (!dryRun) {
-                commit(groups = groups, asOf = now, publishedBy = actorId)
-            } else {
-                audit.record(
-                    write =
-                        AuditWrite(
-                            actorUserId = actorId,
-                            action = AuditAction.STANDINGS_RECALCULATED,
-                            entityType = AuditEntityType.STANDINGS,
-                            entityId = null,
-                            summary = "Previewed points-based standings recompute for ${groups.size} groups",
-                            details = recomputeDetails(groups = groups),
-                        ),
-                )
-            }
-            StandingsCalculationOutcome(dryRun = dryRun, groups = groups).toResponse()
+            run(actor = Actor(userId = actorId, clientId = null), dryRun = dryRun)
         }
+
+    /**
+     * The same recompute, driven by an **API client** rather than a person (#389) — the scheduled run.
+     *
+     * The key must carry a points-management scope, the same authority a human needs. Least privilege
+     * (#597): a key scoped to something else cannot publish standings just because it is a valid key.
+     *
+     * The audit actor is the **client**, with no user — `AuditWrite.actorUserId` is nullable for exactly
+     * this ("SYSTEM / self-driven"), and #975 surfaces the client so the entry names the scheduler
+     * rather than reading as an anonymous system action. No service *user* is invented for the purpose:
+     * a real `users` row would then appear in user lists, pending-rating lists and Account Management.
+     */
+    fun calculate(
+        principal: ClientPrincipal,
+        dryRun: Boolean,
+    ): Either<ServiceError, StandingsCalculationResponse> =
+        either {
+            ensure(condition = principal.scopes.any { it in POINTS_MANAGEMENT_ROLES }) { ServiceError.Forbidden() }
+            run(actor = Actor(userId = null, clientId = principal.clientId), dryRun = dryRun)
+        }
+
+    /** Who drove a run: a person or an API client. Exactly one is set; both feed the audit trail. */
+    private data class Actor(
+        val userId: UUID?,
+        val clientId: UUID?,
+    )
+
+    /** The recompute itself, once the caller has been authorized and reduced to an audit actor. */
+    private fun run(
+        actor: Actor,
+        dryRun: Boolean,
+    ): StandingsCalculationResponse {
+        val now = LocalDateTime.now()
+        val groups = recompute(asOf = now)
+
+        if (!dryRun) {
+            commit(groups = groups, asOf = now, publishedBy = actor)
+        } else {
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = actor.userId,
+                        actorClientId = actor.clientId,
+                        action = AuditAction.STANDINGS_RECALCULATED,
+                        entityType = AuditEntityType.STANDINGS,
+                        entityId = null,
+                        summary = "Previewed points-based standings recompute for ${groups.size} groups",
+                        details = recomputeDetails(groups = groups),
+                    ),
+            )
+        }
+        return StandingsCalculationOutcome(dryRun = dryRun, groups = groups).toResponse()
+    }
 
     /**
      * Recompute the ranked (band, sex) groups from the ledger as of [asOf]: sum each active player's
@@ -168,7 +205,7 @@ class StandingsCalculationService(
     private fun commit(
         groups: List<GroupStanding>,
         asOf: LocalDateTime,
-        publishedBy: UUID,
+        publishedBy: Actor,
     ) {
         val writes =
             groups.flatMap { group ->
@@ -199,7 +236,8 @@ class StandingsCalculationService(
         audit.record(
             write =
                 AuditWrite(
-                    actorUserId = publishedBy,
+                    actorUserId = publishedBy.userId,
+                    actorClientId = publishedBy.clientId,
                     action = AuditAction.STANDINGS_RECALCULATED,
                     entityType = AuditEntityType.STANDINGS,
                     entityId = snapshotId,
@@ -210,7 +248,8 @@ class StandingsCalculationService(
         audit.record(
             write =
                 AuditWrite(
-                    actorUserId = publishedBy,
+                    actorUserId = publishedBy.userId,
+                    actorClientId = publishedBy.clientId,
                     action = AuditAction.STANDINGS_PUBLISHED,
                     entityType = AuditEntityType.STANDINGS,
                     entityId = snapshotId,
