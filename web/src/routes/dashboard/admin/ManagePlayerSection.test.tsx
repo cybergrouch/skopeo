@@ -216,8 +216,9 @@ describe('ManagePlayerSection', () => {
     await selectAlice()
     // Header shows the id (no display name); every grantable role offers Grant (no active capabilities).
     expect(screen.getByText(/u1/)).toBeInTheDocument()
-    // Named rather than counted: a bare length told you the number was wrong but not which role was
-    // missing, and it had to be edited every time the list grew (SCORER, #911).
+    // Named rather than counted: a bare length told you the number was wrong but not WHICH role was
+    // missing — which is exactly how POINTS_MANAGER went unnoticed for a year (#926). The list is
+    // derived from the enum now, so this asserts the derivation's output, not a hand-kept literal.
     expect(
       screen
         .getAllByRole('button', { name: /^Grant/ })
@@ -227,9 +228,20 @@ describe('ManagePlayerSection', () => {
       'Grant CLUB_OWNER',
       'Grant RATER',
       'Grant RESEARCHER',
+      'Grant POINTS_MANAGER',
       'Grant SCORER',
-      'Grant ADMINISTRATOR', // gated behind a confirm step (#194)
+      'Grant ADMINISTRATOR', // last on purpose: high-impact, behind a confirm step (#194)
     ])
+  })
+
+  it('offers POINTS_MANAGER, which was ungrantable from the UI for a year (#926)', async () => {
+    // The list was a hand-written literal and drifted twice: #403 added POINTS_MANAGER and never
+    // touched this file, so the only way to appoint one was a direct API call — and nobody noticed,
+    // because ADMINISTRATOR also satisfies the Points Management tab's own gate.
+    await selectAlice()
+    expect(
+      screen.getByRole('button', { name: 'Grant POINTS_MANAGER' }),
+    ).toBeInTheDocument()
   })
 
   it('grants and revokes roles', async () => {
