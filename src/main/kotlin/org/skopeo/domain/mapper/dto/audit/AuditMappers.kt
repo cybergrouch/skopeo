@@ -3,10 +3,12 @@
 
 package org.skopeo.domain.mapper.dto.audit
 
+import org.skopeo.common.dto.audit.AuditClientResponse
 import org.skopeo.common.dto.audit.AuditEntryResponse
 import org.skopeo.common.dto.audit.AuditLogResponse
 import org.skopeo.common.dto.audit.AuditMatchResponse
 import org.skopeo.common.dto.audit.AuditPersonResponse
+import org.skopeo.domain.model.AuditClientRef
 import org.skopeo.domain.model.AuditEntryView
 import org.skopeo.domain.model.AuditLogViewPage
 import org.skopeo.domain.model.AuditMatchRef
@@ -28,9 +30,12 @@ private fun AuditEntryView.toResponse(): AuditEntryResponse =
         details = entry.details,
         comment = entry.comment,
         actor = actor?.toResponse(),
+        actorClient = actorClient?.toResponse(),
         target = target?.toResponse(),
         matchTarget = matchTarget?.toResponse(),
     )
+
+private fun AuditClientRef.toResponse(): AuditClientResponse = AuditClientResponse(clientId = clientId.toString(), name = name)
 
 private fun AuditPersonRef.toResponse(): AuditPersonResponse =
     AuditPersonResponse(

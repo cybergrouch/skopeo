@@ -15,6 +15,7 @@ import org.skopeo.domain.mapper.dto.audit.toResponse
 import org.skopeo.domain.mapper.entity.audit.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditCategory
+import org.skopeo.domain.model.AuditClientRef
 import org.skopeo.domain.model.AuditEntityType
 import org.skopeo.domain.model.AuditEntry
 import org.skopeo.domain.model.AuditEntryView
@@ -26,6 +27,7 @@ import org.skopeo.domain.model.actions
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
+import org.skopeo.repository.ApiClientRepository
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
@@ -48,6 +50,7 @@ class AuditService(
     private val audit: AuditRepository = AuditRepository(),
     private val users: UserRepository = UserRepository(),
     private val matches: MatchRepository = MatchRepository(),
+    private val clients: ApiClientRepository = ApiClientRepository(),
 ) {
     /** Append a provenance record. Best-effort companion to a domain write; never the primary action. */
     fun record(write: AuditWrite) {
@@ -73,6 +76,7 @@ class AuditService(
             val items = entities.map { it.toDomain() }
             val refs = resolveRefs(entries = items)
             val matchRefs = resolveMatchRefs(entries = items)
+            val clientRefs = resolveClientRefs(entries = items)
             val views =
                 items.map { entry ->
                     val isMatch = entry.entityType == AuditEntityType.MATCH
@@ -81,6 +85,7 @@ class AuditService(
                         actor = entry.actorUserId?.let { refs[it] },
                         target = if (entry.entityType in USER_TARGET_TYPES) entry.entityId?.let { refs[it] } else null,
                         matchTarget = if (isMatch) entry.entityId?.let { matchRefs[it] } else null,
+                        actorClient = entry.actorClientId?.let { clientRefs[it] },
                     )
                 }
             AuditLogViewPage(items = views, total = total.toInt()).toResponse()
@@ -98,6 +103,18 @@ class AuditService(
                 ServiceError.NotFound(message = "No audit entry $id")
             }
         }
+
+    /**
+     * Resolve every acting API client on the page to its name, in one lookup (#975).
+     *
+     * Separate from [resolveRefs] because a client is not a user — different table, different id space
+     * — and an entry can carry both: a delegated call (#597) is driven by an application *on behalf of*
+     * a person, and the log should say so rather than pick one.
+     */
+    private fun resolveClientRefs(entries: List<AuditEntry>): Map<UUID, AuditClientRef> =
+        clients
+            .findClientsByIds(ids = entries.mapNotNull { it.actorClientId }.distinct())
+            .associate { it.client.id to AuditClientRef(clientId = it.client.id, name = it.client.name) }
 
     /** Resolve every actor and user-typed target id on the page to a name + code, in one lookup. */
     private fun resolveRefs(entries: List<AuditEntry>): Map<UUID, AuditPersonRef> {

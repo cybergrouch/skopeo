@@ -223,4 +223,54 @@ describe('ActivityLogSection', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(patchMutate).toHaveBeenCalledWith({ id: 'a1', data: { comment: 'updated note' } })
   })
+  // ---- Who drove the action (#975) -------------------------------------------------------------
+
+  it('names the application on a machine-driven entry, instead of "System" (#975)', () => {
+    // Before #975 actorClientId was persisted and then dropped on the way out, so a client-driven
+    // entry fell through to PersonCell's null branch and rendered as "System" — indistinguishable
+    // from the app's own background work.
+    useGetApiV1Audit.mockReturnValue(
+      page([
+        entry({
+          actor: null,
+          actorClient: { clientId: 'c1', name: 'Standings Scheduler' },
+        }),
+      ]),
+    )
+    renderSection()
+
+    expect(screen.getByText('Standings Scheduler')).toBeInTheDocument()
+    expect(screen.queryByText('System')).not.toBeInTheDocument()
+    expect(screen.getByText('App')).toBeInTheDocument()
+  })
+
+  it('shows both the person and the application on a delegated call (#975)', () => {
+    // #597's shape: an application acting on behalf of a user. Showing only one would lose the
+    // distinction the capability intersection exists to express.
+    useGetApiV1Audit.mockReturnValue(
+      page([entry({ actorClient: { clientId: 'c1', name: 'Partner App' } })]),
+    )
+    renderSection()
+
+    expect(screen.getByText('Admin (ADM123)')).toBeInTheDocument()
+    expect(screen.getByText(/via Partner App/)).toBeInTheDocument()
+  })
+
+  it('still reads "System" when there is genuinely neither (#975)', () => {
+    // The label keeps its meaning rather than becoming a catch-all for "not a person".
+    useGetApiV1Audit.mockReturnValue(page([entry({ actor: null, actorClient: null })]))
+    renderSection()
+
+    expect(screen.getByText('System')).toBeInTheDocument()
+    expect(screen.queryByText('App')).not.toBeInTheDocument()
+  })
+
+  it('leaves an ordinary user-driven entry unchanged (#975)', () => {
+    useGetApiV1Audit.mockReturnValue(page([entry()]))
+    renderSection()
+
+    expect(screen.getByText('Admin (ADM123)')).toBeInTheDocument()
+    expect(screen.queryByText('App')).not.toBeInTheDocument()
+  })
+
 })

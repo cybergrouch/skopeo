@@ -24,6 +24,13 @@ data class AuditPersonResponse(
     val isDeleted: Boolean = false,
 )
 
+/** An API client resolved to its name (#975) — the application behind a machine-driven entry. */
+@Serializable
+data class AuditClientResponse(
+    val clientId: String,
+    val name: String,
+)
+
 /** A match-typed target resolved to its public code + date, so the row links to the public match page (#136). */
 @Serializable
 data class AuditMatchResponse(
@@ -45,6 +52,9 @@ data class AuditEntryResponse(
     val details: Map<String, String?> = emptyMap(),
     val comment: String? = null,
     val actor: AuditPersonResponse? = null,
+    // The API client behind the action (#975). Present alongside [actor] on a delegated call (#597),
+    // and alone on a machine-driven one — where [actor] is legitimately absent.
+    val actorClient: AuditClientResponse? = null,
     val target: AuditPersonResponse? = null,
     val matchTarget: AuditMatchResponse? = null,
 )

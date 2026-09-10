@@ -67,6 +67,48 @@ function PersonCell({ p }: { p: AuditPersonResponse | null | undefined }) {
   )
 }
 
+/**
+ * A small "App" chip, so a machine-driven entry is distinguishable at a glance (#975). Same shape as
+ * {@link PlaceholderTag}'s chips, in a neutral colour — this is a fact about the actor, not a warning.
+ */
+function AppTag() {
+  return (
+    <span className="ml-1.5 inline-flex items-center rounded-full border border-border bg-muted px-1.5 py-0.5 align-middle text-[0.65rem] font-medium leading-none text-muted-foreground">
+      App
+    </span>
+  )
+}
+
+/**
+ * Who drove the action (#975) — a person, an application, or both.
+ *
+ * Four cases, and the two-actor one is why this is not just {@link PersonCell}. A delegated call (#597)
+ * is an application acting *on behalf of* a person, so both are shown: collapsing them would lose the
+ * distinction the capability-intersection model exists to express.
+ *
+ * "System" now means what it says. Before this, an entry driven by an API client rendered as "System"
+ * because `actorClientId` was persisted and then dropped on the way out — so a partner integration's
+ * writes were indistinguishable from the app's own.
+ */
+function ActorCell({ entry }: { entry: AuditEntryResponse }) {
+  const client = entry.actorClient
+  if (!client) return <PersonCell p={entry.actor} />
+  if (!entry.actor)
+    return (
+      <>
+        {client.name}
+        <AppTag />
+      </>
+    )
+  return (
+    <>
+      <PersonCell p={entry.actor} />
+      <span className="text-muted-foreground"> via {client.name}</span>
+      <AppTag />
+    </>
+  )
+}
+
 /** The target cell: a match link for match entries (#136), a user link for user entries, else "—". */
 function TargetCell({ entry }: { entry: AuditEntryResponse }) {
   if (entry.matchTarget) {
@@ -198,7 +240,7 @@ export function ActivityLogSection() {
                         {new Date(entry.occurredAt).toLocaleString()}
                       </td>
                       <td className="py-2 pr-3">
-                        <PersonCell p={entry.actor} />
+                        <ActorCell entry={entry} />
                       </td>
                       <td className="py-2 pr-3">{entry.summary}</td>
                       <td className="py-2 pr-3">
