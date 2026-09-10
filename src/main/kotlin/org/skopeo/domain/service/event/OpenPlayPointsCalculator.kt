@@ -60,6 +60,11 @@ internal object OpenPlayPointsCalculator {
      * @param band1 team1's entry band (e.g. "4.0"); [band2] team2's. Compared numerically.
      * @param team1Id team1's id, matched against each set's winner (team2 is inferred as the other side).
      * @param config the admin-configurable margin-bracket schedule.
+     * @param concedingTeamId the side that retired or defaulted, else `null` — see [payableForAbandoned].
+     *  **Required rather than defaulted on purpose (#972):** every caller must state it, because a
+     *  caller that quietly omitted it would skip the retirement rule and pay a retiring player for the
+     *  set they walked out of. A default would make that the silent option; this way the compiler asks.
+     *  `Match.concedingTeamId()` computes it.
      */
     fun scoreSets(
         band1: String,
@@ -67,7 +72,7 @@ internal object OpenPlayPointsCalculator {
         team1Id: UUID,
         sets: List<MatchSetResult>,
         config: OpenPlayPointsConfig,
-        concedingTeamId: UUID? = null,
+        concedingTeamId: UUID?,
     ): List<SetScoring> {
         val b1 = band1.toBigDecimal()
         val b2 = band2.toBigDecimal()
@@ -113,7 +118,7 @@ internal object OpenPlayPointsCalculator {
         team1Id: UUID,
         sets: List<MatchSetResult>,
         config: OpenPlayPointsConfig,
-        concedingTeamId: UUID? = null,
+        concedingTeamId: UUID?,
     ): TeamPoints {
         val scored =
             scoreSets(
