@@ -104,11 +104,19 @@ function MatchResultRow({
   // a scheduled fixture starts as the entry form. Once rated (#138) it is frozen: read-only, no edit.
   const recorded = match.sets.length > 0;
   const rated = match.ratedAt != null;
+  // Has play begun (#970)? IN_PROGRESS or COMPLETED. This mirrors the server's `playHasBegun` gate, and
+  // it is deliberately NOT `sets.length` or `ratedAt`: a match being scored right now has neither, and
+  // rating happens at event finalization days later. Both of those proxies let the controls below stay
+  // on for a contest already under way.
+  const playHasBegun =
+    match.status === "IN_PROGRESS" || match.status === "COMPLETED";
   const [editing, setEditing] = useState(false);
-  // Changing who plays (#957). Only while there is no recorded result — after that the server refuses,
-  // because changing who played would rewrite the history ratings and points are computed from.
+  // Changing who plays (#957), and deleting the fixture, both alter WHAT the match is rather than what
+  // it scored — so both stop the moment play begins. The server refuses either way (#970); hiding them
+  // keeps the UI from offering something that will be rejected.
   const [editingPlayers, setEditingPlayers] = useState(false);
-  const canEditPlayers = !readOnly && !recorded && !rated;
+  const canEditPlayers = !readOnly && !playHasBegun;
+  const canDelete = !readOnly && !playHasBegun;
   // A fresh fixture starts with a single empty set row (#571) — most results are single-set, so hosts
   // needn't delete a spare row; the "Add set" control adds more when needed.
   const [rows, setRows] = useState<SetRow[]>(
@@ -135,7 +143,10 @@ function MatchResultRow({
     try {
       await remove.mutateAsync({ id: match.id, data: { isActive: false } });
     } catch (error) {
-      toastError("Could not delete the fixture.", { cause: error, duration: 8000 });
+      toastError("Could not delete the fixture.", {
+        cause: error,
+        duration: 8000,
+      });
       setConfirmingDelete(false);
     }
   }
@@ -157,7 +168,8 @@ function MatchResultRow({
       await upload.mutateAsync({ id: match.id, data: { sets } });
       setEditing(false);
     } catch (error) {
-      toastError("Could not save the result. Each set needs a clear winner.", { cause: error,
+      toastError("Could not save the result. Each set needs a clear winner.", {
+        cause: error,
         duration: 8000,
       });
     }
@@ -178,7 +190,7 @@ function MatchResultRow({
     .join(", ");
 
   // Delete control with a confirm step (#138); offered both while entering scores and when collapsed.
-  const deleteControls = confirmingDelete ? (
+  const deleteControls = !canDelete ? null : confirmingDelete ? (
     <>
       <Button
         type="button"
@@ -342,7 +354,7 @@ function MatchResultRow({
               </Button>
             ) : null}
             {editPlayersControl}
-              {deleteControls}
+            {deleteControls}
           </div>
         </>
       ) : (

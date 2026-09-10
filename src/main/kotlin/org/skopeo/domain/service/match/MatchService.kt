@@ -457,8 +457,12 @@ class MatchService(
         either {
             val caller = staffCaller(token = token).bind()
             val match = matches.findById(matchId = matchId).bind().toDomain()
-            ensure(condition = active || match.ratedAt == null) {
-                ServiceError.Conflict(message = "Cannot disable a match that has already been rated")
+            // Disabling only: re-enabling a soft-deleted fixture stays open whatever its status.
+            // `ratedAt` was the whole gate here and is the wrong question (#970) — rating happens at
+            // event finalization days later (#952), so a match being scored right now, or one an umpire
+            // has just finalized, was deletable out from under them.
+            if (!active) {
+                ensurePlayNotBegun(match = match, operation = "This fixture cannot be deleted").bind()
             }
             // An evented fixture inherits its event's club rule (#789).
             organizer.ensureForEventId(eventId = match.eventId, caller = caller).bind()
