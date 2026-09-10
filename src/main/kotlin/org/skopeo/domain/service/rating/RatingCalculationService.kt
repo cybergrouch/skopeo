@@ -43,7 +43,7 @@ import org.skopeo.domain.service.calculator.AuditEntry
 import org.skopeo.domain.service.calculator.RankingCalculator
 import org.skopeo.domain.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.domain.service.user.displayName
+import org.skopeo.domain.service.user.nameForMessage
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import java.math.BigDecimal
@@ -309,10 +309,7 @@ class RatingCalculationService(
         }
 
     /** A player's display name for an error message, falling back to their public code (never null). */
-    private fun nameOf(userId: UUID): String {
-        val user = users.findById(id = userId).getOrNull()?.toDomain() ?: return "User $userId"
-        return user.displayName() ?: user.publicCode
-    }
+    private fun nameOf(userId: UUID): String = users.findById(id = userId).getOrNull()?.toDomain()?.nameForMessage() ?: "User $userId"
 
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()

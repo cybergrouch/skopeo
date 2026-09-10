@@ -40,6 +40,7 @@ import org.skopeo.domain.service.settings.SettingsService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
+import org.skopeo.domain.service.user.nameForMessage
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.PointsConfigRepository
@@ -102,7 +103,7 @@ class RankingPointService(
                 users.findById(
                     id = command.userId,
                 ).mapLeft { ServiceError.Validation(message = "Unknown user ${command.userId}") }.bind().toDomain()
-            ensure(condition = target.isActive) { ServiceError.Validation(message = "User ${command.userId} is not active") }
+            ensure(condition = target.isActive) { ServiceError.Validation(message = "${target.nameForMessage()} is not active") }
 
             val validFrom = command.validFrom ?: LocalDateTime.now()
             val validUntil = command.validUntil ?: command.pointClass.defaultValidUntil(from = validFrom)
@@ -114,7 +115,7 @@ class RankingPointService(
             val resolvedBand = command.band?.ifBlank { null } ?: currentBand(userId = command.userId)
             val band =
                 ensureNotNull(value = resolvedBand) {
-                    ServiceError.Validation(message = "User ${command.userId} has no rating; supply an explicit band")
+                    ServiceError.Validation(message = "${target.nameForMessage()} has no rating; supply an explicit band")
                 }
 
             val award =
@@ -183,12 +184,12 @@ class RankingPointService(
                 users.findById(
                     id = command.userId,
                 ).mapLeft { ServiceError.Validation(message = "Unknown user ${command.userId}") }.bind().toDomain()
-            ensure(condition = target.isActive) { ServiceError.Validation(message = "User ${command.userId} is not active") }
+            ensure(condition = target.isActive) { ServiceError.Validation(message = "${target.nameForMessage()} is not active") }
 
             // Band tagged from the player's current rating; an unrated player has nothing to tag → Validation.
             val band =
                 ensureNotNull(value = currentBand(userId = command.userId)) {
-                    ServiceError.Validation(message = "User ${command.userId} has no rating; cannot band-tag the adjustment")
+                    ServiceError.Validation(message = "${target.nameForMessage()} has no rating; cannot band-tag the adjustment")
                 }
 
             val award =
