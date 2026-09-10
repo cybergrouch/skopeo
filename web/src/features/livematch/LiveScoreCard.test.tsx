@@ -173,4 +173,29 @@ describe("LiveScoreCard", () => {
     renderCard();
     expect(screen.queryByText("Tiebreak")).not.toBeInTheDocument();
   });
+
+  it("shows who is serving while the match is live (#943)", () => {
+    useLiveScore.mockReturnValue({ ...score, serverName: "Ana" });
+    renderCard();
+    expect(screen.getByText(/Ana to serve/)).toBeInTheDocument();
+  });
+
+  it("stops showing a server once the match has ended (#943)", () => {
+    // "to serve" on a finished match describes something that is not going to happen.
+    useLiveScore.mockReturnValue({
+      ...score,
+      serverName: "Ana",
+      outcomeKind: "COMPLETED",
+      outcomeWinner: "TEAM1",
+    });
+    renderCard();
+    expect(screen.queryByText(/to serve/)).not.toBeInTheDocument();
+  });
+
+  it("says nothing when no server has been set", () => {
+    // The normal state until an umpire sets one; an empty "to serve" line would read as a fault.
+    useLiveScore.mockReturnValue({ ...score, serverName: null });
+    renderCard();
+    expect(screen.queryByText(/to serve/)).not.toBeInTheDocument();
+  });
 });

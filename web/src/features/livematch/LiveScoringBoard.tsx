@@ -122,6 +122,47 @@ export function LiveScoringBoard({
   )
 }
 
+/**
+ * Who is serving, and a one-tap way to change it (#943).
+ *
+ * A **cycle** rather than a dropdown: the candidates are the two or four players in this match, and an
+ * umpire mid-game wants one tap, not a menu. The alternative — re-picking from a list every game — is
+ * enough friction that the field simply stops being maintained, and a serving indicator nobody updates
+ * is worse than none because the scoreboard then shows something confidently wrong.
+ *
+ * Nothing auto-rotates. Whose turn it is is a format rule and the umpire is the authority (#928); this
+ * only makes saying so cheap.
+ */
+export function ServerControl({
+  view,
+  busy,
+  onAssign,
+}: {
+  view: LiveMatchResponse
+  busy: boolean
+  onAssign: (playerId: string) => void
+}) {
+  const players = view.players ?? []
+  if (players.length === 0) return null
+
+  const current = players.findIndex((p) => p.userId === view.serverId)
+  const next = players[(current + 1) % players.length]
+
+  return (
+    <Button
+      size="sm"
+      variant={view.serverId ? 'secondary' : 'outline'}
+      disabled={busy}
+      aria-label={
+        view.serverName ? `Serving: ${view.serverName}. Tap to change.` : 'Set who is serving'
+      }
+      onClick={() => onAssign(next.userId)}
+    >
+      {view.serverName ? `Serving: ${view.serverName}` : 'Set server'}
+    </Button>
+  )
+}
+
 /** The banked sets, one chip each. Capped so a five-setter cannot push the layout off-screen. */
 export function CompletedSets({ view }: { view: LiveMatchResponse }) {
   if (view.sets.length === 0) return null

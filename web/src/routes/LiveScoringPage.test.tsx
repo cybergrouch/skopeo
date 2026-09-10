@@ -44,8 +44,14 @@ const releaseMutate = vi.fn();
 const exitFullscreen = vi.fn().mockResolvedValue(undefined);
 let finalizeOnSuccess: (() => void) | undefined;
 
+const players = [
+  { userId: "p-1", name: "Ana", side: "TEAM1" },
+  { userId: "p-2", name: "Bob", side: "TEAM2" },
+];
+
 const liveView = {
   matchId: "m-1",
+  players,
   sequence: 3,
   scorerId: "u1",
   hasStarted: true,
@@ -614,5 +620,62 @@ describe("LiveScoringPage", () => {
     // failing to release it would strand the whole app full-screen.
     finalizeOnSuccess?.();
     expect(exitFullscreen).toHaveBeenCalled();
+  });
+
+  it("offers to set a server when none is chosen (#943)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    await user.click(screen.getByRole("button", { name: "Set who is serving" }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "SERVER_ASSIGNED", playerId: "p-1" },
+    });
+  });
+
+  it("cycles to the next player rather than opening a menu (#943)", async () => {
+    // One tap, because re-picking from a list every game is enough friction that the field stops
+    // being maintained — and a serving indicator nobody updates is worse than none.
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, serverId: "p-1", serverName: "Ana" },
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    await user.click(screen.getByRole("button", { name: /Serving: Ana/ }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "SERVER_ASSIGNED", playerId: "p-2" },
+    });
+  });
+
+  it("wraps around to the first player from the last (#943)", async () => {
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, serverId: "p-2", serverName: "Bob" },
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    await user.click(screen.getByRole("button", { name: /Serving: Bob/ }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "SERVER_ASSIGNED", playerId: "p-1" },
+    });
+  });
+
+  it("renders no server control when the roster is unknown", async () => {
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, players: [] },
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+    expect(screen.queryByRole("button", { name: /Serving|Set who is serving/ })).not.toBeInTheDocument();
   });
 });

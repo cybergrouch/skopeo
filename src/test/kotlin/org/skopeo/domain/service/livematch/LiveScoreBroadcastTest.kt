@@ -32,6 +32,7 @@ class LiveScoreBroadcastTest {
         isPaused = false,
         isTiebreak = false,
         serverId = "p-1",
+        serverName = "Ana",
         pointsTeam1 = "40",
         pointsTeam2 = "30",
         gamesTeam1 = 4,
@@ -53,7 +54,19 @@ class LiveScoreBroadcastTest {
         payload.gamesTeam1 shouldBe 4
         payload.gamesTeam2 shouldBe 3
         payload.hasStarted shouldBe true
-        payload.serverId shouldBe "p-1"
+        payload.serverName shouldBe "Ana"
+    }
+
+    @Test
+    fun `the document carries the server's NAME, never their user id (#943)`() {
+        // Same reasoning that keyed the document by public code (#938): it is world-readable, and an
+        // internal user id has no business on it — publicCode exists precisely so the internal id is
+        // not a public identifier. A spectator wants a name anyway.
+        val document = view().toBroadcast(publicCode = "MTCH01").asDocument()
+
+        document["serverName"] shouldBe "Ana"
+        document.keys.contains(element = "serverId") shouldBe false
+        document.values.none { it == "p-1" } shouldBe true
     }
 
     @Test

@@ -22,6 +22,7 @@ import {
   CompletedSets,
   LiveScoringBoard,
   ScoringActions,
+  ServerControl,
 } from '@/features/livematch/LiveScoringBoard'
 import { MatchClock } from '@/features/livematch/MatchClock'
 
@@ -220,6 +221,13 @@ export function LiveScoringPage() {
           <CompletedSets view={view} />
         </div>
         <div className="flex items-center gap-[1dvw] text-[2.2dvh] text-muted-foreground">
+          <ServerControl
+            view={view}
+            busy={busy}
+            onAssign={(playerId) =>
+              record.mutate({ matchId, data: { kind: 'SERVER_ASSIGNED', playerId } })
+            }
+          />
           <MatchClock
             elapsedSeconds={view.elapsedSeconds ?? 0}
             isRunning={view.isRunning ?? false}
