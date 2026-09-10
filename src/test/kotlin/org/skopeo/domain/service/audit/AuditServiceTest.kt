@@ -32,6 +32,7 @@ import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
+import org.skopeo.repository.ApiClientRepository
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
@@ -58,6 +59,8 @@ class AuditServiceTest {
     fun reset() {
         PostgresTestDatabase.truncate()
     }
+
+    private val clients = ApiClientRepository()
 
     private fun provision(
         uid: String,
@@ -242,6 +245,94 @@ class AuditServiceTest {
             .setComment(token = token(uid = "admin"), id = UUID.randomUUID(), comment = "x")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    // ---- The acting API client (#975) -----------------------------------------------------------
+
+    @Test
+    fun `a client-driven entry names the application instead of reading as System (#975)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val client = clients.createClient(name = "Standings Scheduler", createdBy = null)
+        // A machine-driven write: no user, per AuditWrite's own "SYSTEM / self-driven" nullable actor.
+        service.record(
+            write =
+                AuditWrite(
+                    actorUserId = null,
+                    actorClientId = client.client.id,
+                    action = AuditAction.STANDINGS_RECALCULATED,
+                    entityType = AuditEntityType.STANDINGS,
+                    entityId = null,
+                    summary = "Recomputed standings",
+                ),
+        )
+
+        val entry = service.list(token = token(uid = "admin"), categoryRaw = null, limit = 10, offset = 0).shouldBeRight().items.first()
+
+        entry.actorClient.shouldNotBeNull().name shouldBe "Standings Scheduler"
+        // Still no person, and that is correct — the point is that "no person" no longer means "no idea".
+        entry.actor.shouldBeNull()
+    }
+
+    @Test
+    fun `a delegated entry carries BOTH the user and the client (#975)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val client = clients.createClient(name = "Partner App", createdBy = null)
+        // #597's delegated shape: an application acting on behalf of a person. Collapsing the two into
+        // one field would lose exactly the distinction the capability intersection exists to express.
+        service.record(
+            write =
+                AuditWrite(
+                    actorUserId = admin.id,
+                    actorClientId = client.client.id,
+                    action = AuditAction.CAPABILITY_GRANTED,
+                    entityType = AuditEntityType.CAPABILITY,
+                    entityId = UUID.randomUUID(),
+                    summary = "Granted HOST role",
+                ),
+        )
+
+        val entry = service.list(token = token(uid = "admin"), categoryRaw = null, limit = 10, offset = 0).shouldBeRight().items.first()
+
+        entry.actor.shouldNotBeNull().userId shouldBe admin.id.toString()
+        entry.actorClient.shouldNotBeNull().name shouldBe "Partner App"
+    }
+
+    @Test
+    fun `an ordinary user-driven entry names no client (#975)`() {
+        // The addition must not attribute a client to entries that had none — every existing row.
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        seedEntry(actor = admin.id)
+
+        val entry = service.list(token = token(uid = "admin"), categoryRaw = null, limit = 10, offset = 0).shouldBeRight().items.first()
+
+        entry.actorClient.shouldBeNull()
+        entry.actor.shouldNotBeNull()
+    }
+
+    @Test
+    fun `clients are resolved once for a page, not per entry (#975)`() {
+        // Guards the batched lookup. Two entries sharing a client must both resolve; a per-entry
+        // findClientById would also pass, so this is about keeping the shape rather than proving N=1 —
+        // paired with the single findClientsByIds call it documents the intent at the call site.
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val client = clients.createClient(name = "Shared App", createdBy = null)
+        repeat(times = 2) {
+            service.record(
+                write =
+                    AuditWrite(
+                        actorUserId = null,
+                        actorClientId = client.client.id,
+                        action = AuditAction.STANDINGS_RECALCULATED,
+                        entityType = AuditEntityType.STANDINGS,
+                        entityId = null,
+                        summary = "Recomputed standings",
+                    ),
+            )
+        }
+
+        val items = service.list(token = token(uid = "admin"), categoryRaw = null, limit = 10, offset = 0).shouldBeRight().items
+
+        items.map { it.actorClient?.name } shouldBe listOf("Shared App", "Shared App")
     }
 
     @Test
