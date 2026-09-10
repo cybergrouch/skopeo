@@ -346,6 +346,49 @@ describe('AwaitingResultsSection', () => {
     )
   })
 
+  // ---- Lifecycle gates (#970) ---------------------------------------------------------------
+  //
+  // Both of these passed against the old code, which keyed on sets.length and ratedAt. A match being
+  // scored has neither, so the controls stayed on for a contest already under way — and the server
+  // permitted both operations, so this was not merely a cosmetic mismatch.
+
+  it('hides Change players and Delete fixture while a match is being scored (#970)', async () => {
+    useGetApiV1Matches.mockReturnValue({
+      data: [{ ...match, status: 'IN_PROGRESS' }],
+      isLoading: false,
+    })
+    renderSection()
+
+    // Swapping a player mid-match desynchronises the umpire's screen, the score log and the
+    // spectator broadcast, which all keep the roster they started with.
+    expect(screen.queryByRole('button', { name: 'Change players' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete fixture' })).not.toBeInTheDocument()
+  })
+
+  it('hides them on a finished match too, before it is rated (#970)', async () => {
+    // The window the old gate left open, and it is days long: rating happens at event finalization.
+    useGetApiV1Matches.mockReturnValue({
+      data: [{ ...match, status: 'COMPLETED' }],
+      isLoading: false,
+    })
+    renderSection()
+
+    expect(screen.queryByRole('button', { name: 'Change players' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete fixture' })).not.toBeInTheDocument()
+  })
+
+  it('still offers both on a scheduled fixture (#970)', async () => {
+    // The gate must not over-apply: an unplayed fixture is exactly what these controls are for.
+    useGetApiV1Matches.mockReturnValue({
+      data: [{ ...match, status: 'SCHEDULED' }],
+      isLoading: false,
+    })
+    renderSection()
+
+    expect(screen.getByRole('button', { name: 'Change players' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete fixture' })).toBeInTheDocument()
+  })
+
   it('deletes a fixture after a confirm step', async () => {
     const user = userEvent.setup()
     renderSection()

@@ -412,6 +412,12 @@ class MatchService(
      * Set (or clear) a fixture's per-side rating handicaps (#486). Staff-only and only while the fixture
      * is unrated (a rated match is frozen). Each value has already been range-validated at the boundary
      * (`0 < h <= 1.0`); a null side clears that side's handicap. Audited as FIXTURE_HANDICAP_SET.
+     *
+     * **Deliberately not gated on `playHasBegun` (#970).** `ratedAt` is the right question *here*,
+     * unlike for the line-up and delete gates. A handicap is an input to the rating, not a statement
+     * about what the match is, and correcting one after the result is in but before the calculation
+     * runs is the intended workflow — the same window a score correction uses. Gating on play would
+     * remove a legitimate fix and protect nothing: the rating has not consumed the value yet.
      */
 
     fun setHandicaps(
@@ -482,6 +488,15 @@ class MatchService(
      * renumbered 1..k, so untouched matches keep theirs and nothing collides. That is what closes the
      * partial-reorder gap the old tiebreaker had — two subsets could each be numbered from zero and
      * silently produce duplicates — without forcing a caller to submit matches it does not render.
+     *
+     * **Deliberately not gated on `playHasBegun` (#970), unlike the line-up and delete gates.** Two
+     * reasons. Reordering changes neither who is playing nor whether the fixture exists, so it is not
+     * the class of change those gates protect. And the gate would be collective: one match in progress
+     * would block reordering the whole event, which is disproportionate to the harm.
+     *
+     * The harm is real but small — `match_number` is an identifier people say out loud (#898), so
+     * renumbering a match already under way is confusing. Worth revisiting if it bites; recorded here
+     * so the omission is a decision rather than another missed status.
      *
      * Rated matches are frozen (#337), so a batch containing one is refused.
      */
