@@ -69,7 +69,14 @@ vi.mock('@/api/generated/users/users', () => ({ useGetApiV1Users }))
 // dnd-kit relies on layout measurement that jsdom can't provide; stub it to passthrough components
 // and capture the DndContext onDragEnd so a test can simulate a drop.
 vi.mock('@/features/match/EditFixturePlayersDialog', () => ({
-  EditFixturePlayersDialog: () => <div>Change who is playing</div>,
+  // Must be able to close: otherwise the section's onClose closure is never invoked and "open the
+  // editor, change your mind, come back" goes untested — which is a route a user takes constantly.
+  EditFixturePlayersDialog: ({ onClose }: { onClose: () => void }) => (
+    <div>
+      Change who is playing
+      <button onClick={onClose}>Close editor</button>
+    </div>
+  ),
 }))
 vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd: (e: unknown) => void }) => {
@@ -398,6 +405,11 @@ describe('AwaitingResultsSection', () => {
     const control = await screen.findByRole('button', { name: 'Change players' })
     await user.click(control)
     expect(screen.getByText('Change who is playing')).toBeInTheDocument()
+
+    // ...and closing returns to the row rather than stranding the organizer in the editor.
+    await user.click(screen.getByRole('button', { name: 'Close editor' }))
+    expect(screen.queryByText('Change who is playing')).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Change players' })).toBeInTheDocument()
   })
 })
 

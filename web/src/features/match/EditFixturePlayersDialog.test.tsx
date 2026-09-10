@@ -19,11 +19,17 @@ vi.mock("@/components/PlayerPicker", () => ({
     onSelect,
   }: {
     label: string;
-    onSelect: (p: { id: string; displayName: string }) => void;
+    onSelect: (p: { id: string; displayName: string | null }) => void;
   }) => (
-    <button onClick={() => onSelect({ id: "u-new", displayName: "Cara" })}>
-      {label}
-    </button>
+    <>
+      <button onClick={() => onSelect({ id: "u-new", displayName: "Cara" })}>
+        {label}
+      </button>
+      {/* A placeholder player legitimately has no display name (#496). */}
+      <button onClick={() => onSelect({ id: "u-anon", displayName: null })}>
+        {label} (unnamed)
+      </button>
+    </>
   ),
 }));
 
@@ -183,5 +189,17 @@ describe("EditFixturePlayersDialog", () => {
       id: "m-1",
       data: { team1: ["u-1"], team2: ["u-new"] },
     });
+  });
+
+  it("shows a placeholder with no display name as Unknown rather than blank", async () => {
+    // Placeholder players (#496) have no display name, and a blank row would look like a rendering
+    // fault rather than a real, selectable person.
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.click(screen.getByRole("button", { name: "Remove Ana from Side 1" }));
+    await user.click(screen.getByRole("button", { name: "Add to Side 1 (unnamed)" }));
+
+    expect(screen.getByText("Unknown")).toBeInTheDocument();
   });
 });
