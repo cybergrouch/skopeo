@@ -126,7 +126,9 @@ The first row is the point of the rule: a player must not bank a dominant set an
 
 **Walkover / default with no sets played:** nothing to either side, because there is no set to score.
 
-- **Retirement / walkover (tournament):** placement is unaffected — the recorded winner of a placement match still receives that placement's points (and the loser their placement's points), since tournament points depend on placement, not on games played.
+**Retirement / default (tournament).** Placement is unaffected, and no special handling is needed: tournament points depend on **placement, not on games played**. The placement match's *designated* winner takes that placement's points — in a retirement that is, by definition, the player who did **not** retire — and the loser takes theirs (Championship Finals pay 1st/2nd, Plate Finals 3rd/4th).
+
+The open-play deterrent deliberately does **not** carry over. A beaten finalist finished second whether or not they retired, and placement records where a player ended the draw rather than how the last set was going. This is also why the two paths need different code: placement already reads the designated match winner, while open play reads the per-set games.
 
 ### Generalized algorithm (implementation spec)
 
