@@ -537,6 +537,35 @@ the pause intervals, and per-game and per-point pacing falls out of the same tim
 before pruning. That one is a genuine trade-off (long enough to inspect a disputed result, short enough
 that the table does not grow without bound) and nothing depends on it yet.
 
+### Shipped — the retention sweep (#939)
+
+`POST /api/v1/live-matches/sweep`, ADMINISTRATOR only, **dry run by default**. The default matters more
+here than on the rating or standings triggers, because this is the only endpoint that deletes.
+
+**Both conditions are derived, not stored.** A match is prunable when it has a recorded result *and*
+nothing has been appended to its log since the cutoff. There is no "completed" marker on the stack and
+there should not be: the match's status already says whether it finished, and the log's newest
+timestamp already says how long it has sat, so a marker would be a third thing that can go stale.
+
+**Age is never sufficient.** `SCHEDULED` and `IN_PROGRESS` are excluded however old the log, because a
+match suspended for weather may resume days later — sweeping one would delete a live session mid-match.
+Two tests pin this, and both fail if the status filter is removed.
+
+**Retention: 91 days**, matching the default award-validity window. A disputed result is worth
+inspecting for as long as the ranking points it produced are live; tying the two together gives the
+number a reason rather than making it a round figure someone liked. Overridable per call, floored at
+one day so `0` cannot mean "delete everything finished".
+
+The spectator document is deleted alongside, which also clears any field since removed from the payload
+(`matchId` #938, `serverId` #943) on a document nobody has rewritten.
+
+Safe because the umpire credit was folded into `match_umpires` at finalize (#929): **disposal loses the
+keystrokes, never the attribution.**
+
+**It must never be pointed at `audit_log`.** That table is the record itself rather than working state;
+deleting from it is not tidying up but deciding to stop being able to answer "who did what". #939 has
+the reasoning and the measurements showing there is nothing to solve there anyway.
+
 ### Shipped — step 3a of §13, the persistence half
 
 `V55` adds three tables, and the third one exists because of a hole this section had.

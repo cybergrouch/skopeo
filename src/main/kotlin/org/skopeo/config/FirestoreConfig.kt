@@ -92,4 +92,11 @@ internal class FirestoreLiveScoreBroadcaster(private val firestore: Firestore) :
             logger.warn(throwable = error) { "Could not broadcast the live score for match ${payload.publicCode}" }
         }
     }
+
+    override fun discard(publicCode: String) {
+        runCatching { firestore.collection(LIVE_SCORES_COLLECTION).document(publicCode).delete() }
+            .onFailure { error ->
+                logger.warn(throwable = error) { "Could not discard the live score document for $publicCode" }
+            }
+    }
 }

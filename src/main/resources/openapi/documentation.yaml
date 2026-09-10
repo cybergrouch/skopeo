@@ -2057,6 +2057,48 @@ paths:
         '409':
           description: The match is disabled, or already rated (the result is frozen)
 
+  /api/v1/live-matches/sweep:
+    post:
+      summary: Prune the scoring logs of finished matches (ADMINISTRATOR only, #939)
+      description: |
+        `live_match_events` is WORKING STATE, not a record: the match is the record and the log exists
+        only as an input for computing a score. Finalize deliberately keeps it so a mis-finalized match
+        can still be inspected, which means something else has to remove it eventually — otherwise the
+        table grows by a few hundred rows per scored match forever.
+
+        DRY RUN BY DEFAULT, and more deliberately here than elsewhere: this is the only endpoint that
+        deletes. An absent or unparseable body reports what it WOULD do; only an explicit
+        `{"dryRun": false}` removes anything.
+
+        AGE IS NEVER SUFFICIENT. A match must have a recorded result to be prunable. One suspended for
+        weather may resume days later (#930), and sweeping it would delete a live scoring session
+        mid-match — so SCHEDULED and IN_PROGRESS are excluded however old the log.
+
+        Safe because the umpire credit was folded into the match at finalize: disposal loses the
+        keystrokes, never the attribution. The spectator document is deleted alongside, which also
+        clears any field since removed from the payload on a document nobody has rewritten.
+
+        This does NOT touch the activity log. That table is the record itself — see #939.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LiveMatchSweepRequest'
+      responses:
+        '200':
+          description: What the sweep did, or would do
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveMatchSweepResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/matches/{matchId}/live:
     parameters:
       - name: matchId
@@ -7139,6 +7181,36 @@ components:
           description: >-
             Required for SERVER_ASSIGNED, and only then. A player rather than a side, because in doubles
             the serve rotates through four people. Nothing auto-rotates — the umpire is the authority.
+
+    LiveMatchSweepRequest:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+          default: true
+          description: Only an explicit false deletes. The default is the safe reading of an absent body.
+        retentionDays:
+          type: integer
+          nullable: true
+          description: >-
+            Override the retention window (default 91 days, matching the award-validity window so a
+            disputed result is inspectable for as long as the points it produced are live). Floored at
+            1, so 0 cannot mean "delete everything finished". Present mainly so an operator can WIDEN it
+            during an incident without a deploy.
+
+    LiveMatchSweepResponse:
+      type: object
+      required: [dryRun, retentionDays, prunedMatches, prunedRows]
+      properties:
+        dryRun:
+          type: boolean
+        retentionDays:
+          type: integer
+        prunedMatches:
+          type: integer
+        prunedRows:
+          type: integer
+          description: Log rows removed. Zero on a dry run, however many matches were listed.
 
     LivePlayerResponse:
       type: object
