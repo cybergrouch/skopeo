@@ -12,6 +12,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -51,6 +52,12 @@ import org.skopeo.testsupport.seedClub
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+
+/** Bound on every wait in the #919 concurrency test, so a lost race fails the run rather than hanging it. */
+private const val RACE_TIMEOUT_SECONDS = 30L
 
 class MatchRepositoryTest {
     companion object {
@@ -1070,6 +1077,85 @@ class MatchRepositoryTest {
             }
         }
     }
+
+    /**
+     * The race `nextMatchNumber`'s KDoc describes, actually run (#919).
+     *
+     * `nextMatchNumber` is `max(match_number) + 1`, so two creations in one event can read the same max
+     * and compute the same number. The comment says `idx_matches_event_number` turns that into a
+     * constraint violation rather than a silent duplicate — until now a comment was the only thing
+     * asserting it, and nothing would notice if the failure were "helpfully" replaced by a retry that
+     * reused the stale max.
+     *
+     * It matters because `match_number` is an identifier people say out loud during an event (#898).
+     * Two matches called "#2" on a draw sheet is not a cosmetic glitch.
+     *
+     * **The assertion is the invariant, not a particular outcome.** Both landings are correct: the
+     * threads may genuinely collide (one insert violates the index) or they may serialize (both succeed,
+     * taking 2 and 3). Asserting "exactly one fails" would be asserting a scheduling accident, and would
+     * flake. What must never happen — and what this pins — is two rows sharing a number, or a collision
+     * that leaves the sequence unable to continue.
+     *
+     * The #898 test above pins the uniqueness of the index itself, deterministically. This covers the
+     * concurrent path to it.
+     *
+     * **The collision is real, not hypothetical.** Dropping `idx_matches_event_number` and re-running
+     * turns this red on every attempt, with both threads reporting `Success(2)` and the event left
+     * holding numbers `[1, 2, 2]` — so the barrier does put two creations inside `nextMatchNumber`'s
+     * window, and the index is demonstrably what prevents the duplicate.
+     */
+    @Test
+    fun `two concurrent fixture creations in one event never share a number (#919)`() {
+        val u1 = newUser(uid = "race-1")
+        val u2 = newUser(uid = "race-2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 3, 1), members = listOf(u1, u2))
+        // Seed one so both racers read max = 1 and both want to be #2.
+        fixture(u1 = u1, u2 = u2, date = LocalDate.of(2026, 2, 1), eventId = eventId)
+
+        val lineUp = CyclicBarrier(2)
+        val pool = Executors.newFixedThreadPool(2)
+        val outcomes =
+            try {
+                (1..2)
+                    .map {
+                        pool.submit<Result<Int>> {
+                            runCatching {
+                                // Release both threads into createFixture together; without this they
+                                // would almost always run end to end and never overlap at all.
+                                lineUp.await(RACE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                                fixture(u1 = u1, u2 = u2, date = LocalDate.of(2026, 2, 2), eventId = eventId)
+                                    .matchNumber
+                            }
+                        }
+                    }.map { it.get(RACE_TIMEOUT_SECONDS, TimeUnit.SECONDS) }
+            } finally {
+                pool.shutdownNow()
+            }
+
+        val numbers = numbersIn(eventId = eventId)
+        withClue(clue = "landed as $outcomes, leaving numbers $numbers") {
+            // The whole point: whatever happened, no two matches in this event share a number.
+            numbers shouldBe numbers.distinct()
+            // At least one creation must get through. A race that lost BOTH writes would satisfy
+            // uniqueness while quietly dropping an organizer's fixture.
+            outcomes.count { it.isSuccess } shouldBeGreaterThanOrEqual 1
+        }
+
+        // The sequence is still usable afterwards — the "retry" half of #919: a caller coming back after
+        // a violation gets the next free number, not the stale max it computed before.
+        fixture(u1 = u1, u2 = u2, date = LocalDate.of(2026, 2, 3), eventId = eventId).matchNumber shouldBe
+            numbers.max() + 1
+    }
+
+    /** Every match number currently recorded against [eventId], ascending. */
+    private fun numbersIn(eventId: UUID): List<Int> =
+        transaction {
+            MatchesTable
+                .select(columns = listOf(element = MatchesTable.matchNumber))
+                .where { MatchesTable.eventId eq eventId }
+                .map { it[MatchesTable.matchNumber] }
+                .sorted()
+        }
 
     @Test
     fun `renumbering swaps two adjacent numbers without tripping the unique index (#898)`() {
