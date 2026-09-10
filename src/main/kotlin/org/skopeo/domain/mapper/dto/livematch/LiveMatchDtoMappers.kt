@@ -5,6 +5,7 @@ package org.skopeo.domain.mapper.dto.livematch
 
 import org.skopeo.common.dto.livematch.LiveMatchResponse
 import org.skopeo.common.dto.livematch.LiveOutcomeResponse
+import org.skopeo.common.dto.livematch.LivePlayerResponse
 import org.skopeo.common.dto.livematch.LiveSetResponse
 import org.skopeo.domain.model.CompletedSet
 import org.skopeo.domain.model.LiveMatchView
@@ -18,7 +19,10 @@ import org.skopeo.domain.model.TeamSide
  * Points are **rendered here**, not on the client: `displayPoints` is the one implementation of deuce and
  * advantage, and handing out raw counts would invite every client to grow a second one.
  */
-fun LiveMatchView.toResponse(timing: MatchTiming): LiveMatchResponse =
+fun LiveMatchView.toResponse(
+    timing: MatchTiming,
+    players: List<LivePlayerResponse> = emptyList(),
+): LiveMatchResponse =
     LiveMatchResponse(
         matchId = matchId.toString(),
         sequence = sequence,
@@ -27,6 +31,8 @@ fun LiveMatchView.toResponse(timing: MatchTiming): LiveMatchResponse =
         isPaused = state.isPaused,
         isTiebreak = state.isTiebreak,
         serverId = state.serverId?.toString(),
+        serverName = state.serverId?.let { id -> players.firstOrNull { it.userId == id.toString() }?.name },
+        players = players,
         pointsTeam1 = state.displayPoints(side = TeamSide.TEAM1),
         pointsTeam2 = state.displayPoints(side = TeamSide.TEAM2),
         gamesTeam1 = state.gamesTeam1,

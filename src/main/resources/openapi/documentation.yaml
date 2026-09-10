@@ -7082,6 +7082,20 @@ components:
             Required for SERVER_ASSIGNED, and only then. A player rather than a side, because in doubles
             the serve rotates through four people. Nothing auto-rotates — the umpire is the authority.
 
+    LivePlayerResponse:
+      type: object
+      description: A player in a live match, for the server picker (#943).
+      required: [userId, name, side]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        side:
+          type: string
+          enum: [TEAM1, TEAM2]
+
     LiveSetResponse:
       type: object
       description: One banked set of a live match (#911).
@@ -7157,6 +7171,18 @@ components:
           type: string
           format: uuid
           nullable: true
+        serverName:
+          type: string
+          nullable: true
+          description: The server's display name, so a client need not resolve the id itself (#943).
+        players:
+          type: array
+          description: >-
+            Both sides' players, for the umpire's server picker (#943). Here rather than looked up
+            separately because MatchPublicPlayer carries no user id, so there is nothing to map a
+            serverId back to without it. Static per match and small enough to ride along.
+          items:
+            $ref: '#/components/schemas/LivePlayerResponse'
         pointsTeam1:
           type: string
           description: 0, 15, 30, 40 or AD — or a plain ordinal while isTiebreak is true.

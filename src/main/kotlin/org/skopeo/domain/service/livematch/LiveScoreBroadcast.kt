@@ -59,7 +59,14 @@ data class LiveScorePayload(
      */
     val elapsedSeconds: Long,
     val isRunning: Boolean,
-    val serverId: String?,
+    /**
+     * The server's **display name**, not their user id (#943).
+     *
+     * This document is world-readable. An internal user id has no business on it — `publicCode` exists
+     * precisely so the internal id is not a public identifier, which is the same reasoning that keyed
+     * the document itself by public code (#938). A spectator wants a name anyway.
+     */
+    val serverName: String?,
     val outcomeKind: String?,
     val outcomeWinner: String?,
 ) {
@@ -78,7 +85,7 @@ data class LiveScorePayload(
             "hasStarted" to hasStarted,
             "elapsedSeconds" to elapsedSeconds,
             "isRunning" to isRunning,
-            "serverId" to serverId,
+            "serverName" to serverName,
             "outcomeKind" to outcomeKind,
             "outcomeWinner" to outcomeWinner,
         )
@@ -129,7 +136,7 @@ fun LiveMatchResponse.toBroadcast(publicCode: String): LiveScorePayload =
         hasStarted = hasStarted,
         elapsedSeconds = elapsedSeconds,
         isRunning = isRunning,
-        serverId = serverId,
+        serverName = serverName,
         outcomeKind = outcome?.kind,
         outcomeWinner = outcome?.winner,
     )

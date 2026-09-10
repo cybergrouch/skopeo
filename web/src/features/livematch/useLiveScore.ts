@@ -22,7 +22,8 @@ export interface LiveScore {
   /** Playing time so far, excluding suspensions (#937). Optional: documents written before it existed. */
   elapsedSeconds?: number
   isRunning?: boolean
-  serverId: string | null
+  /** The server's display NAME — the document never carries a user id (#943). */
+  serverName?: string | null
   outcomeKind: string | null
   outcomeWinner: string | null
 }

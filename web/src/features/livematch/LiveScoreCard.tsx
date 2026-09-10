@@ -118,6 +118,12 @@ export function LiveScoreCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
+        {score.serverName && !finished ? (
+          <p className="text-sm text-muted-foreground">
+            <span aria-hidden="true">🎾 </span>
+            {score.serverName} to serve
+          </p>
+        ) : null}
         {score.sets.length > 0 && (
           <p className="text-sm text-muted-foreground tabular-nums">
             {score.sets

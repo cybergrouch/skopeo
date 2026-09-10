@@ -10,6 +10,7 @@ import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.dto.livematch.LiveMatchResponse
+import org.skopeo.common.dto.livematch.LivePlayerResponse
 import org.skopeo.common.dto.livematch.LiveScoreEventRequest
 import org.skopeo.common.dto.match.MatchResponse
 import org.skopeo.common.dto.match.MatchResultRequest
@@ -37,6 +38,7 @@ import org.skopeo.domain.model.TeamSide
 import org.skopeo.domain.model.User
 import org.skopeo.domain.service.match.MatchService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
+import org.skopeo.domain.service.user.displayName
 import org.skopeo.repository.LiveMatchRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
@@ -168,7 +170,7 @@ class LiveMatchService(
             if (target == null) {
                 // Nothing changed, so nothing to broadcast: a courtside double-tap must not push a
                 // redundant document at every spectator.
-                live.responseFor(matchId = matchId, now = clock())
+                live.responseFor(matchId = matchId, now = clock(), players = rosterOf(matches = matches, users = users, matchId = matchId))
             } else {
                 appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
                     live.append(
@@ -231,7 +233,8 @@ class LiveMatchService(
         }
 
     /** The current score and who is scoring it, for the wire. Readable by anyone who can see the match. */
-    fun scoreboard(matchId: UUID): LiveMatchResponse = live.responseFor(matchId = matchId, now = clock())
+    fun scoreboard(matchId: UUID): LiveMatchResponse =
+        live.responseFor(matchId = matchId, now = clock(), players = rosterOf(matches = matches, users = users, matchId = matchId))
 
     /**
      * The score after a write, having told spectators about it.
@@ -244,7 +247,7 @@ class LiveMatchService(
      */
     private fun published(match: Match): LiveMatchResponse =
         live
-            .responseFor(matchId = match.id, now = clock())
+            .responseFor(matchId = match.id, now = clock(), players = rosterOf(matches = matches, users = users, matchId = match.id))
             .also { broadcast.publish(payload = it.toBroadcast(publicCode = match.publicCode)) }
 
     private fun appendWithRetry(
@@ -429,4 +432,33 @@ internal fun LiveMatchRepository.view(matchId: UUID): LiveMatchView {
 private fun LiveMatchRepository.responseFor(
     matchId: UUID,
     now: LocalDateTime,
-): LiveMatchResponse = view(matchId = matchId).toResponse(timing = matchTiming(rows = log(matchId = matchId), now = now))
+    players: List<LivePlayerResponse> = emptyList(),
+): LiveMatchResponse =
+    view(matchId = matchId).toResponse(
+        timing = matchTiming(rows = log(matchId = matchId), now = now),
+        players = players,
+    )
+
+/**
+ * Both sides' players, id and name, for the umpire's server picker (#943).
+ *
+ * Resolved here rather than carried in `ScoreState`: it is a property of the *match*, not of the
+ * score, and the engine has no business knowing anyone's name.
+ */
+private fun rosterOf(
+    matches: MatchRepository,
+    users: UserRepository,
+    matchId: UUID,
+): List<LivePlayerResponse> {
+    val match = matches.findById(matchId = matchId).getOrNull()?.toDomain() ?: return emptyList()
+    val named = { ids: List<UUID>, side: TeamSide ->
+        ids.map { id ->
+            LivePlayerResponse(
+                userId = id.toString(),
+                name = users.findById(id = id).getOrNull()?.toDomain()?.displayName() ?: "Unknown",
+                side = side.name,
+            )
+        }
+    }
+    return named(match.team1.userIds, TeamSide.TEAM1) + named(match.team2.userIds, TeamSide.TEAM2)
+}

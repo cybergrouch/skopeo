@@ -22,6 +22,20 @@ data class LiveScoreEventRequest(
     val playerId: String? = null,
 )
 
+/**
+ * A player in the match, for the umpire's server picker (#943).
+ *
+ * On the live response rather than looked up separately because the umpire view is addressed by match
+ * and already holds this response — and `MatchPublicPlayer` carries no user id, so there is nothing to
+ * map a `serverId` back to without it.
+ */
+@Serializable
+data class LivePlayerResponse(
+    val userId: String,
+    val name: String,
+    val side: String,
+)
+
 /** One banked set in the live view. Mirrors what will become a `MatchSetResult` at finalize. */
 @Serializable
 data class LiveSetResponse(
@@ -61,6 +75,10 @@ data class LiveMatchResponse(
     val isPaused: Boolean,
     val isTiebreak: Boolean,
     val serverId: String? = null,
+    /** The server's display name, so a client need not resolve the id itself. */
+    val serverName: String? = null,
+    /** Both sides' players, for the server picker. Static per match; small enough to ride along. */
+    val players: List<LivePlayerResponse> = emptyList(),
     val pointsTeam1: String,
     val pointsTeam2: String,
     val gamesTeam1: Int,
