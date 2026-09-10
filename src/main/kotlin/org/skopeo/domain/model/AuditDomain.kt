@@ -265,6 +265,18 @@ data class AuditPersonRef(
     val deleted: Boolean = false,
 )
 
+/**
+ * An API client resolved to its name (#975), for an action a machine drove rather than a person.
+ *
+ * `audit_log.actor_client_id` has existed since #599 and was never surfaced, so a client-driven entry
+ * read as having no actor at all — indistinguishable from a system action. This is what makes the
+ * trail able to answer *which* application, rather than only "not a person".
+ */
+data class AuditClientRef(
+    val clientId: UUID,
+    val name: String,
+)
+
 /** A match id resolved to its public code + date, so a match-targeted entry can link to its page (#136). */
 data class AuditMatchRef(
     val matchId: UUID,
@@ -281,6 +293,10 @@ data class AuditEntryView(
     val actor: AuditPersonRef?,
     val target: AuditPersonRef?,
     val matchTarget: AuditMatchRef? = null,
+    // The API client that drove the action (#975), resolved to a name. Alongside [actor], never instead
+    // of it: a delegated call (#597) has BOTH a user and a client, and collapsing them would lose the
+    // distinction the capability-intersection model exists to express.
+    val actorClient: AuditClientRef? = null,
 )
 
 /** A page of resolved audit views (newest first) plus the total, for the trace viewer. */

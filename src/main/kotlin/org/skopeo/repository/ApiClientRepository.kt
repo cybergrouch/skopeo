@@ -64,6 +64,17 @@ class ApiClientRepository {
             }
         }
 
+    /**
+     * Clients for a set of ids, in one query (#975) — the activity log resolves every acting client on
+     * a page at once, the same way it batches user refs. Absent ids are simply missing from the result.
+     */
+    fun findClientsByIds(ids: List<UUID>): List<ApiClientAggregateEntity> =
+        if (ids.isEmpty()) {
+            emptyList()
+        } else {
+            transaction { ApiClientsTable.selectAll().where { ApiClientsTable.id inList ids }.map { it.toApiClientAggregate() } }
+        }
+
     /** All clients, newest first, each with its keys. */
     fun listClients(): List<ApiClientAggregateEntity> =
         transaction {

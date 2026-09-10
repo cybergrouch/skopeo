@@ -9319,6 +9319,19 @@ components:
           type: string
           nullable: true
 
+    AuditClientResponse:
+      type: object
+      description: An API client resolved to its name (#975) — the application behind a machine-driven entry.
+      required:
+        - clientId
+        - name
+      properties:
+        clientId:
+          type: string
+          format: uuid
+        name:
+          type: string
+
     AuditPersonResponse:
       type: object
       description: A user resolved to a display name + player code (or just the id if unresolved).
@@ -9399,6 +9412,14 @@ components:
           nullable: true
           allOf:
             - $ref: '#/components/schemas/AuditPersonResponse'
+        actorClient:
+          nullable: true
+          description: >-
+            The API client (application) behind the action (#975). Present *alongside* `actor` on a
+            delegated call (#597), and alone on a machine-driven one — where `actor` is legitimately
+            absent, because `actorUserId` is nullable for system/self-driven actions.
+          allOf:
+            - $ref: '#/components/schemas/AuditClientResponse'
         target:
           nullable: true
           allOf:
