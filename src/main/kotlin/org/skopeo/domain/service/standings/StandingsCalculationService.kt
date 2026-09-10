@@ -10,6 +10,7 @@ import arrow.core.right
 import org.skopeo.common.dto.standings.StandingsCalculationResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.common.security.POINTS_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.standings.toResponse
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditAction
@@ -37,7 +38,8 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 /**
- * The points-based standings recompute trigger (ADMINISTRATOR only, #146 phase 2). It rebuilds the
+ * The points-based standings recompute trigger (POINTS_MANAGER or ADMINISTRATOR, #146 phase 2,
+ * widened in #389). It rebuilds the
  * standings snapshot **from the ranking-points ledger** rather than ratings: it reads the awards that
  * count as of now (ACTIVE and in their validity window), sums each active player's points per
  * (band, sex) using the award's own band and sex (band-tagged, decision D2), ranks each group by
@@ -66,17 +68,17 @@ class StandingsCalculationService(
         dryRun: Boolean,
     ): Either<ServiceError, StandingsCalculationResponse> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val actorId = requireAnyOf(token = token, allowed = POINTS_MANAGEMENT_ROLES).bind()
             val now = LocalDateTime.now()
             val groups = recompute(asOf = now)
 
             if (!dryRun) {
-                commit(groups = groups, asOf = now, publishedBy = adminId)
+                commit(groups = groups, asOf = now, publishedBy = actorId)
             } else {
                 audit.record(
                     write =
                         AuditWrite(
-                            actorUserId = adminId,
+                            actorUserId = actorId,
                             action = AuditAction.STANDINGS_RECALCULATED,
                             entityType = AuditEntityType.STANDINGS,
                             entityId = null,
@@ -261,11 +263,32 @@ class StandingsCalculationService(
     /** The award's persisted sex tag; the ledger stores "Unspecified" for a sexless target — map it to null. */
     private fun normalizeSex(sex: String): String? = if (sex == "Unspecified") null else sex
 
-    /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). Mirrors ClubService.requireAdmin. */
-    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
+    /**
+     * Points-management access — POINTS_MANAGER **or** ADMINISTRATOR — returning the caller's id for the
+     * audit actor.
+     *
+     * Widened from ADMINISTRATOR-only in #389. A POINTS_MANAGER can already grant, adjust and revoke
+     * awards, and those awards **are** the ledger this recompute reads; someone who can change the
+     * inputs can already change the standings, so letting them run the recompute that reflects their own
+     * changes is not an escalation. The Points Management tab is gated on exactly this pair.
+     *
+     * It also lets the scheduled trigger (#389) hold a POINTS_MANAGER-scoped API key rather than a
+     * blanket-admin one — a leaked scheduler config then exposes points operations, not the project.
+     *
+     * Mirrors `RankingPointService.requireAnyOf`, which is private to that class. Three services now
+     * carry a copy of this shape (ClubService too); worth extracting one day, but not as a rider on a
+     * gate change.
+     */
+    private fun requireAnyOf(
+        token: VerifiedFirebaseToken,
+        allowed: Set<Capability>,
+    ): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-        val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
-        return if (caller == null || !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
+        return if (caller == null || caller.capabilities.none { it in allowed }) {
+            ServiceError.Forbidden().left()
+        } else {
+            caller.id.right()
+        }
     }
 
     /** The (band, sex) race a set of awards contributes to — the aggregation key. */

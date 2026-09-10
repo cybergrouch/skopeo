@@ -16,7 +16,9 @@ import org.skopeo.common.dto.standings.StandingsCalculationRequest
 import org.skopeo.domain.service.standings.StandingsCalculationService
 
 /**
- * Points-based standings recompute trigger (ADMINISTRATOR only, #146 phase 2). Mirrors the rating
+ * Points-based standings recompute trigger (POINTS_MANAGER or ADMINISTRATOR, #146 phase 2 —
+ * widened in #389 so a scheduled run can hold a points-scoped key rather than blanket admin).
+ * Mirrors the rating
  * calculation route: `dryRun` defaults to true (an empty/unparseable body is a dry run) and previews
  * with no writes; an explicit `{"dryRun": false}` publishes a POINTS snapshot. The route stays thin —
  * the recompute + persistence live in [StandingsCalculationService].

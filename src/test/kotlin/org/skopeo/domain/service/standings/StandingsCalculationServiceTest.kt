@@ -223,6 +223,56 @@ class StandingsCalculationServiceTest {
         page.entries.single().orderingValue shouldBe BigDecimal("100.0000")
     }
 
+    // ---- Who may trigger a recompute (#389) -----------------------------------------------------
+    //
+    // This suite had no authorization test at all, so the gate was unpinned before and after the
+    // widening. All four exist so the boundary is stated rather than implied.
+
+    @Test
+    fun `a points manager can recompute and publish, not just an administrator (#389)`() {
+        // Widened from ADMINISTRATOR-only. A POINTS_MANAGER can already grant, adjust and revoke the
+        // awards this recompute reads, so running the recompute that reflects their own changes is not
+        // an escalation. It is also what lets the scheduled trigger hold a points-scoped API key rather
+        // than a blanket-admin one.
+        provision(uid = "pm", roles = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
+        val player = provision(uid = "player")
+        grant(userId = player.id, points = "100")
+
+        service.calculate(token = token(uid = "pm"), dryRun = false).shouldBeRight()
+
+        snapshots.latestPublishedPreferringPoints().shouldNotBeNull()
+    }
+
+    @Test
+    fun `an administrator can still recompute (#389)`() {
+        // The widening must not become a swap: administrators keep the access they had.
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        grant(userId = player.id, points = "100")
+
+        service.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
+    }
+
+    @Test
+    fun `a plain player cannot recompute (#389)`() {
+        provision(uid = "nobody")
+
+        service.calculate(token = token(uid = "nobody"), dryRun = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `an unrelated capability does not admit a caller (#389)`() {
+        // The widening is to POINTS_MANAGER specifically, not to "any privileged role". Without this a
+        // future change to the allowed set could quietly let RATER or HOST publish standings.
+        provision(uid = "rater", roles = setOf(Capability.PLAYER, Capability.RATER))
+
+        service.calculate(token = token(uid = "rater"), dryRun = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
     @Test
     fun `aggregation sums band-tagged points per (band, sex) and ranks descending`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
