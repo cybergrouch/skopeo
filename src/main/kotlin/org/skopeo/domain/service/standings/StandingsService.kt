@@ -226,6 +226,7 @@ class StandingsService(
 
         val result =
             snapshots.page(snapshotId = snapshotId, band = chosen.band, sex = chosen.sex, limit = request.limit, offset = request.offset)
+        val header = snapshots.headerOf(snapshotId = snapshotId)
         val today = LocalDate.now()
         val shownIds = result.entries.map { it.userId }
         val byId = users.findAllByIds(ids = shownIds).map { it.toDomain() }.associateBy { it.id }
@@ -260,6 +261,10 @@ class StandingsService(
             allBands = StandingsBand.entries.reversed(),
             revealRates = request.revealRates,
             source = SnapshotSource.POINTS,
+            // How current this page is (#974). Only the POINTS source carries it: RATING is computed on
+            // read, so "when was it calculated" has no meaning there beyond "now".
+            computedAt = header?.computedAt,
+            asOf = header?.asOf,
         )
     }
 

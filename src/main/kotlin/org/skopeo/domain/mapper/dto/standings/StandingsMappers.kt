@@ -24,6 +24,8 @@ fun StandingsView.toResponse(): StandingsPageResponse =
         groups = groups.map { StandingsGroupResponse(band = it.band.code, label = it.band.label, sex = it.sex) },
         bands = allBands.map { StandingsBandResponse(code = it.code, label = it.label) },
         source = source.name,
+        computedAt = computedAt?.toString(),
+        asOf = asOf?.toString(),
     )
 
 fun LocateView.toResponse(): StandingsLocateResponse =
