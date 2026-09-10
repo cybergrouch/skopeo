@@ -4,13 +4,10 @@
 package org.skopeo.domain.service.standings
 
 import arrow.core.Either
-import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
-import arrow.core.right
 import org.skopeo.common.dto.standings.StandingsCalculationResponse
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.security.Capability
 import org.skopeo.common.security.ClientPrincipal
 import org.skopeo.common.security.POINTS_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.standings.toResponse
@@ -32,6 +29,7 @@ import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
+import org.skopeo.domain.service.user.requireAnyOf
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.StandingsSnapshotRepository
 import org.skopeo.repository.UserRepository
@@ -70,7 +68,7 @@ class StandingsCalculationService(
         dryRun: Boolean,
     ): Either<ServiceError, StandingsCalculationResponse> =
         either {
-            val actorId = requireAnyOf(token = token, allowed = POINTS_MANAGEMENT_ROLES).bind()
+            val actorId = requireAnyOf(users = users, token = token, allowed = POINTS_MANAGEMENT_ROLES).bind()
             run(actor = Actor(userId = actorId, clientId = null), dryRun = dryRun)
         }
 
@@ -259,13 +257,6 @@ class StandingsCalculationService(
         )
     }
 
-    /** Summary details shared by the preview/recompute/publish audit entries: group + ranked-player counts. */
-    private fun recomputeDetails(groups: List<GroupStanding>): Map<String, String?> =
-        mapOf(
-            "groups" to groups.size.toString(),
-            "players" to groups.sumOf { it.entries.size }.toString(),
-        )
-
     /** One player's rank inputs within a group: points, plus the tie-break keys (rating, confidence). */
     private data class RankInput(
         val user: User,
@@ -297,38 +288,11 @@ class StandingsCalculationService(
                 }
             }
 
-    private fun standingName(user: User): String = user.displayName() ?: user.publicCode
-
-    /** The award's persisted sex tag; the ledger stores "Unspecified" for a sexless target — map it to null. */
-    private fun normalizeSex(sex: String): String? = if (sex == "Unspecified") null else sex
-
-    /**
-     * Points-management access — POINTS_MANAGER **or** ADMINISTRATOR — returning the caller's id for the
-     * audit actor.
-     *
-     * Widened from ADMINISTRATOR-only in #389. A POINTS_MANAGER can already grant, adjust and revoke
-     * awards, and those awards **are** the ledger this recompute reads; someone who can change the
-     * inputs can already change the standings, so letting them run the recompute that reflects their own
-     * changes is not an escalation. The Points Management tab is gated on exactly this pair.
-     *
-     * It also lets the scheduled trigger (#389) hold a POINTS_MANAGER-scoped API key rather than a
-     * blanket-admin one — a leaked scheduler config then exposes points operations, not the project.
-     *
-     * Mirrors `RankingPointService.requireAnyOf`, which is private to that class. Three services now
-     * carry a copy of this shape (ClubService too); worth extracting one day, but not as a rider on a
-     * gate change.
-     */
-    private fun requireAnyOf(
-        token: VerifiedFirebaseToken,
-        allowed: Set<Capability>,
-    ): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-        return if (caller == null || caller.capabilities.none { it in allowed }) {
-            ServiceError.Forbidden().left()
-        } else {
-            caller.id.right()
-        }
-    }
+    // Authorization is POINTS_MANAGEMENT_ROLES — POINTS_MANAGER or ADMINISTRATOR — via the shared
+    // `requireAnyOf` (#389). Widened from ADMINISTRATOR-only: a POINTS_MANAGER can already grant,
+    // adjust and revoke the awards this recompute reads, so running the recompute that reflects their
+    // own changes is not an escalation, and it lets the scheduled trigger hold a points-scoped key
+    // rather than a blanket-admin one.
 
     /** The (band, sex) race a set of awards contributes to — the aggregation key. */
     private data class GroupKey(
@@ -336,3 +300,19 @@ class StandingsCalculationService(
         val sex: String?,
     )
 }
+
+// The pure helpers below are file-level rather than members: each needs only its arguments, and
+// StandingsCalculationService sits at detekt's per-class function limit — a class that keeps absorbing
+// small helpers is exactly what that limit exists to notice.
+
+/** Summary details shared by the preview/recompute/publish audit entries: group + ranked-player counts. */
+private fun recomputeDetails(groups: List<GroupStanding>): Map<String, String?> =
+    mapOf(
+        "groups" to groups.size.toString(),
+        "players" to groups.sumOf { it.entries.size }.toString(),
+    )
+
+private fun standingName(user: User): String = user.displayName() ?: user.publicCode
+
+/** The award's persisted sex tag; the ledger stores "Unspecified" for a sexless target — map it to null. */
+private fun normalizeSex(sex: String): String? = if (sex == "Unspecified") null else sex
