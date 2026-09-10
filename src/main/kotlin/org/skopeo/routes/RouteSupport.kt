@@ -11,6 +11,7 @@ import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.callid.callId
+import io.ktor.server.request.header
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.response.respond
@@ -18,6 +19,9 @@ import io.ktor.server.routing.RoutingContext
 import kotlinx.serialization.SerializationException
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.redaction.asRedactable
+import org.skopeo.common.security.ClientAuthResult
+import org.skopeo.common.security.ClientPrincipal
+import org.skopeo.domain.service.client.ApiClientService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import java.util.UUID
 
@@ -157,5 +161,38 @@ internal suspend fun RoutingContext.respondMappingErrors(block: suspend () -> Un
                     requestId = call.callId,
                 ),
         )
+    }
+}
+
+/** The header a partner integration authenticates with (#225). */
+internal const val API_KEY_HEADER = "X-Api-Key"
+
+/**
+ * Resolve the `X-Api-Key` header to a [ClientPrincipal], or respond with the right status and return
+ * null (the caller then stops). Missing/malformed/unknown → 401; revoked/expired/suspended → 403. This
+ * is the call-level client-identity resolver, kept separate from the Firebase JWT auth provider (#596).
+ *
+ * Shared rather than private to `ApiClientRoutes` since #389: the standings recompute is the first
+ * *business* route to accept a key, and a second copy of the 401/403 mapping is how two callers end up
+ * describing the same rejection differently.
+ */
+internal suspend fun RoutingContext.resolveClient(service: ApiClientService): ClientPrincipal? {
+    val raw = call.request.header(name = API_KEY_HEADER).orEmpty()
+    return when (val result = service.authenticate(rawKey = raw)) {
+        is ClientAuthResult.Authenticated -> result.principal
+        ClientAuthResult.Missing, ClientAuthResult.Invalid -> {
+            call.respond(
+                status = HttpStatusCode.Unauthorized,
+                message = errorBody(error = "Unauthorized", message = "A valid $API_KEY_HEADER is required"),
+            )
+            null
+        }
+        ClientAuthResult.Forbidden -> {
+            call.respond(
+                status = HttpStatusCode.Forbidden,
+                message = errorBody(error = "Forbidden", message = "This API key is not permitted"),
+            )
+            null
+        }
     }
 }

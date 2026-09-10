@@ -4,11 +4,9 @@
 package org.skopeo.domain.service.ranking
 
 import arrow.core.Either
-import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
-import arrow.core.right
 import org.skopeo.common.dto.ranking.AdjustRankingPointsRequest
 import org.skopeo.common.dto.ranking.AwardDerivationResponse
 import org.skopeo.common.dto.ranking.AwardedPointsPageResponse
@@ -41,6 +39,7 @@ import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
 import org.skopeo.domain.service.user.nameForMessage
+import org.skopeo.domain.service.user.requireAnyOf
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.PointsConfigRepository
@@ -85,7 +84,7 @@ class RankingPointService(
         request: GrantRankingPointsRequest,
     ): Either<ServiceError, RankingPointAwardResponse> =
         either {
-            val adminId = requireAnyOf(token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
+            val adminId = requireAnyOf(users = users, token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
             val command = request.toCommand(userId = userId)
             ensure(condition = command.points > BigDecimal.ZERO) {
                 ServiceError.Validation(message = "Points must be greater than zero")
@@ -162,7 +161,7 @@ class RankingPointService(
         request: AdjustRankingPointsRequest,
     ): Either<ServiceError, RankingPointAwardResponse> =
         either {
-            val adminId = requireAnyOf(token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
+            val adminId = requireAnyOf(users = users, token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
             val command = request.toCommand(userId = userId)
             // Signed: a positive value awards, a negative value deducts — but zero is a no-op → reject it.
             ensure(condition = command.points.signum() != 0) {
@@ -256,7 +255,7 @@ class RankingPointService(
         reason: String?,
     ): Either<ServiceError, Unit> =
         either {
-            val adminId = requireAnyOf(token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
+            val adminId = requireAnyOf(users = users, token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
             val marker =
                 ensureNotNull(
                     value =
@@ -292,7 +291,7 @@ class RankingPointService(
         userId: UUID,
     ): Either<ServiceError, List<RankingPointAwardResponse>> =
         either {
-            requireAnyOf(token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
+            requireAnyOf(users = users, token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
             users.findById(id = userId).mapLeft { ServiceError.NotFound(message = "User $userId not found") }.bind().toDomain()
             awards.listByUser(userId = userId).map { it.toDomain().toResponse() }
         }
@@ -355,7 +354,7 @@ class RankingPointService(
         awardId: UUID,
     ): Either<ServiceError, AwardDerivationResponse> =
         either {
-            requireAnyOf(token = token, allowed = POINTS_MANAGEMENT_ROLES).bind()
+            requireAnyOf(users = users, token = token, allowed = POINTS_MANAGEMENT_ROLES).bind()
             val award =
                 ensureNotNull(value = awards.findById(id = awardId)?.toDomain()) {
                     ServiceError.NotFound(message = "Award $awardId not found")
@@ -375,7 +374,7 @@ class RankingPointService(
         offset: Int?,
     ): Either<ServiceError, AwardedPointsPageResponse> =
         either {
-            requireAnyOf(token = token, allowed = POINTS_MANAGEMENT_ROLES).bind()
+            requireAnyOf(users = users, token = token, allowed = POINTS_MANAGEMENT_ROLES).bind()
             val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
             val pageOffset = (offset ?: 0).coerceAtLeast(minimumValue = 0)
             val (rowEntities, total) = awards.listAwards(limit = pageSize, offset = pageOffset)
@@ -413,17 +412,6 @@ class RankingPointService(
      * One gate parameterised by the role set, rather than one function per role: the two it replaced
      * differed only in that set, and the set is what a reader wants to see at the call site anyway.
      */
-    private fun requireAnyOf(
-        token: VerifiedFirebaseToken,
-        allowed: Set<Capability>,
-    ): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-        return if (caller == null || caller.capabilities.none { it in allowed }) {
-            ServiceError.Forbidden().left()
-        } else {
-            caller.id.right()
-        }
-    }
 }
 
 /**

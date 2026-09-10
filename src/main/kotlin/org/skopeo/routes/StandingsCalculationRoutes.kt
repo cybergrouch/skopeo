@@ -13,6 +13,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.common.dto.standings.StandingsCalculationRequest
+import org.skopeo.domain.service.client.ApiClientService
 import org.skopeo.domain.service.standings.StandingsCalculationService
 
 /**
@@ -23,15 +24,33 @@ import org.skopeo.domain.service.standings.StandingsCalculationService
  * with no writes; an explicit `{"dryRun": false}` publishes a POINTS snapshot. The route stays thin —
  * the recompute + persistence live in [StandingsCalculationService].
  */
-fun Application.configureStandingsCalculationRoutes(service: StandingsCalculationService = StandingsCalculationService()) {
+fun Application.configureStandingsCalculationRoutes(
+    service: StandingsCalculationService = StandingsCalculationService(),
+    clients: ApiClientService = ApiClientService(),
+) {
     routing {
-        authenticate(FIREBASE_AUTH) {
+        // `optional = true` so BOTH credentials reach the handler (#389). A Firebase token is used when
+        // present; otherwise the request must carry an `X-Api-Key`. It cannot be a required Firebase
+        // block, because Cloud Scheduler has no way to mint a Firebase ID token — and it cannot be
+        // key-only, because this is the same endpoint an administrator drives from the dashboard.
+        authenticate(FIREBASE_AUTH, optional = true) {
             post(path = "/api/v1/standings/calculations") {
                 respondMappingErrors {
                     // No/unparseable body → a dry run (the safe default; only an explicit false commits).
                     val request =
                         runCatching { call.receiveNullable<StandingsCalculationRequest>() }.getOrNull() ?: StandingsCalculationRequest()
-                    respondEither(result = service.calculate(token = verifiedToken(), dryRun = request.dryRun)) { outcome ->
+                    // A person takes precedence: if someone presents a token, the run is attributed to
+                    // them. Falling back to the key only when there is no user keeps the audit actor
+                    // unambiguous rather than depending on which credential the client happened to send.
+                    val token = optionalVerifiedToken()
+                    val result =
+                        if (token != null) {
+                            service.calculate(token = token, dryRun = request.dryRun)
+                        } else {
+                            val principal = resolveClient(service = clients) ?: return@respondMappingErrors
+                            service.calculate(principal = principal, dryRun = request.dryRun)
+                        }
+                    respondEither(result = result) { outcome ->
                         call.respond(status = HttpStatusCode.OK, message = outcome)
                     }
                 }
