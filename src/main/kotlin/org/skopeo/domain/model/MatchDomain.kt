@@ -99,6 +99,26 @@ enum class MatchCompletionReason {
 }
 
 /**
+ * Has play begun on this match (#970) — `IN_PROGRESS` or `COMPLETED`.
+ *
+ * The lifecycle question behind every gate that must refuse to change a contest already under way:
+ * who is playing, and whether the fixture exists at all. Both are settled the moment play starts, not
+ * when the rating runs.
+ *
+ * **`ratedAt` is the wrong question and was the bug.** Rating happens at *event* finalization, days
+ * later (#952), so a gate keyed on it leaves the whole match and its aftermath unprotected. `#960` and
+ * `#961` fixed two instances of that; this is the predicate so there is not a fourth.
+ *
+ * `CANCELLED` is deliberately excluded: a cancelled fixture never became a contest, so deleting or
+ * re-crewing it takes nothing away.
+ *
+ * Note `IN_PROGRESS` only became reachable when #930 gave live scoring its first writer. Gates written
+ * before then enumerated `SCHEDULED` and `COMPLETED` and were complete at the time — which is exactly
+ * how #945 and #970 happened. Prefer this over re-enumerating statuses at a call site.
+ */
+fun Match.playHasBegun(): Boolean = status == MatchStatus.IN_PROGRESS || status == MatchStatus.COMPLETED
+
+/**
  * The side that conceded, for a match that did not play out (#972) — else `null`.
  *
  * Derived rather than stored, and deliberately so: a player who retires or defaults always loses, so

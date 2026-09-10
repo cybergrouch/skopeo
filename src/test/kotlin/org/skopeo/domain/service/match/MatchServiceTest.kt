@@ -355,6 +355,83 @@ class MatchServiceTest {
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
 
+    // ---- Lifecycle gates (#970) -----------------------------------------------------------------
+    //
+    // Every one of these passed BEFORE the fix, because the gate was keyed on `ratedAt` — which is only
+    // set at event finalization, days after the match (#952). IN_PROGRESS in particular was not a
+    // writable state until #930, so the original gate never had to consider it.
+
+    @Test
+    fun `a match being scored right now cannot be deleted (#970)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        matchRepo.setStatus(matchId = UUID.fromString(match.id), status = MatchStatus.IN_PROGRESS.name).shouldBeRight()
+
+        val error =
+            service
+                .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false)
+                .shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Conflict>()
+
+        // The message must say WHY, or an organizer hunts for a permission problem they do not have.
+        error.message shouldContain "being scored"
+    }
+
+    @Test
+    fun `a match with a recorded result cannot be deleted, even before it is rated (#970)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
+
+        // Deliberately NOT rated: that is the window the old gate left open, and it is days long (#952).
+        service
+            .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    @Test
+    fun `re-enabling a soft-deleted fixture stays open whatever its status (#970)`() {
+        // The gate is on deleting, not on touching is_active. Disabling a SCHEDULED fixture and putting
+        // it back must keep working, or the fix would strand anything already soft-deleted.
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+
+        service.setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false).shouldBeRight()
+        matchRepo.setStatus(matchId = UUID.fromString(match.id), status = MatchStatus.COMPLETED.name).shouldBeRight()
+
+        service
+            .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = true)
+            .shouldBeRight()
+            .isActive shouldBe true
+    }
+
+    @Test
+    fun `a cancelled fixture can still be deleted (#970)`() {
+        // CANCELLED is deliberately outside the gate: a fixture that never became a contest takes
+        // nothing away when removed. Without this the predicate could quietly widen to "not SCHEDULED".
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        matchRepo.setStatus(matchId = UUID.fromString(match.id), status = MatchStatus.CANCELLED.name).shouldBeRight()
+
+        service
+            .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false)
+            .shouldBeRight()
+            .isActive shouldBe false
+    }
+
     @Test
     fun `a host can set and clear per-side handicaps on an unrated fixture (#486)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))

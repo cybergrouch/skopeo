@@ -485,8 +485,13 @@ class ClubScopedEventAuthzTest {
             .setHandicaps(token = ownerToken, matchId = match.id, team1Handicap = BigDecimal("0.9"), team2Handicap = null)
             .shouldBeRight()
         matchService.reorder(token = ownerToken, matchIds = listOf(element = match.id)).shouldBeRight()
-        matchService.uploadResult(token = ownerToken, matchId = match.id, request = straightSets()).shouldBeRight()
+        // Delete BEFORE recording a result. This test's subject is the club rule, not the lifecycle —
+        // and since #970 a played match can no longer be deleted at all, so asserting the owner's
+        // permission has to happen while the fixture is still deletable. Re-enabled immediately because
+        // uploadResult refuses a disabled match.
         matchService.setActive(token = ownerToken, matchId = match.id, active = false).shouldBeRight()
+        matchService.setActive(token = ownerToken, matchId = match.id, active = true).shouldBeRight()
+        matchService.uploadResult(token = ownerToken, matchId = match.id, request = straightSets()).shouldBeRight()
     }
 
     @Test

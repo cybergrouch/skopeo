@@ -14,9 +14,11 @@ import org.skopeo.common.security.MATCH_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.Event
 import org.skopeo.domain.model.Match
+import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.isExpired
+import org.skopeo.domain.model.playHasBegun
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.UserRepository
 import java.time.LocalDate
@@ -61,6 +63,37 @@ internal fun ensureEditableLineUp(
             ServiceError.Validation(
                 message = "A ${match.matchFormat.name} fixture needs $expected player(s) per side",
             )
+        }
+    }
+
+/**
+ * Refuse an operation that would change a contest already under way (#970).
+ *
+ * Covers the two operations that alter *what the match is* rather than what it scored: who is playing
+ * (#957) and whether the fixture exists (soft delete). Both are settled once play begins.
+ *
+ * The message names the state, because "not allowed" without saying why sends an organizer looking for
+ * a permission problem they do not have. [operation] completes the sentence, e.g. "Players cannot be
+ * changed".
+ *
+ * Deliberately NOT applied to `uploadResult`: `LiveMatchService.finalize` records the umpire's result
+ * on a match that is `IN_PROGRESS` by construction, so gating that path here would break the very flow
+ * this issue protects. Re-recording a result is also the intended correction route (#969 covers how it
+ * is *presented*).
+ */
+internal fun ensurePlayNotBegun(
+    match: Match,
+    operation: String,
+): Either<ServiceError, Unit> =
+    either {
+        ensure(condition = !match.playHasBegun()) {
+            val because =
+                if (match.status == MatchStatus.IN_PROGRESS) {
+                    "it is being scored right now"
+                } else {
+                    "it has already been played"
+                }
+            ServiceError.Conflict(message = "$operation on this match because $because.")
         }
     }
 

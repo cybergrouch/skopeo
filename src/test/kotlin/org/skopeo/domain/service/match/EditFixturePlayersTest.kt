@@ -7,7 +7,10 @@ import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -28,10 +31,12 @@ import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.MatchesTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.fixtureEventId
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 /**
@@ -150,6 +155,54 @@ class EditFixturePlayersTest {
             .updateFixturePlayers(token = token(uid = "boss"), matchId = matchId, request = request(team1 = spare, team2 = away))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    @Test
+    fun `a match being scored right now cannot have its players changed (#970)`() {
+        // The gap this issue was filed for. The old gate named COMPLETED explicitly and so let
+        // IN_PROGRESS straight through — a status that was not writable until #930 gave live scoring
+        // its first writer, so the enumeration was complete when it was written and silently stopped
+        // being so. Swapping a player mid-match also desynchronises the umpire's screen, the score log
+        // and the spectator broadcast, which all keep the roster they started with.
+        val matchId = fixture()
+        matches.setStatus(matchId = matchId, status = MatchStatus.IN_PROGRESS.name).shouldBeRight()
+
+        val error =
+            service
+                .updateFixturePlayers(token = token(uid = "boss"), matchId = matchId, request = request(team1 = spare, team2 = away))
+                .shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Conflict>()
+
+        error.message shouldContain "being scored"
+    }
+
+    @Test
+    fun `a rated match still refuses a line-up change (#970)`() {
+        // The old gate carried an explicit `ratedAt == null` clause alongside the status check. Dropping
+        // it as redundant is only safe if rating implies COMPLETED, which the pending-calculation query
+        // enforces — this pins that equivalence rather than trusting it.
+        val matchId = fixture()
+        matches.setStatus(matchId = matchId, status = MatchStatus.COMPLETED.name).shouldBeRight()
+        transaction {
+            MatchesTable.update(where = { MatchesTable.id eq matchId }) { it[ratedAt] = LocalDateTime.now() }
+        }
+
+        service
+            .updateFixturePlayers(token = token(uid = "boss"), matchId = matchId, request = request(team1 = spare, team2 = away))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    @Test
+    fun `a cancelled fixture can still be re-crewed (#970)`() {
+        // CANCELLED sits outside the gate on purpose: nothing was contested, so changing who was down to
+        // play takes nothing away. Guards the predicate against widening to "anything but SCHEDULED".
+        val matchId = fixture()
+        matches.setStatus(matchId = matchId, status = MatchStatus.CANCELLED.name).shouldBeRight()
+
+        service
+            .updateFixturePlayers(token = token(uid = "boss"), matchId = matchId, request = request(team1 = spare, team2 = away))
+            .shouldBeRight()
     }
 
     @Test

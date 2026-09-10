@@ -16,7 +16,6 @@ import org.skopeo.domain.model.AuditAction
 import org.skopeo.domain.model.AuditEntityType
 import org.skopeo.domain.model.AuditWrite
 import org.skopeo.domain.model.Match
-import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.event.EventOrganizerGate
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
@@ -50,9 +49,14 @@ class FixturePlayerService(
      * fixture a new number — "Match 3" becomes "Match 12" on the draw sheet people are reading from —
      * and since the number *is* the calculation order, the position has to be rebuilt by hand.
      *
-     * **Refused once a result is recorded.** Changing who played after the fact would rewrite the
-     * history ratings and points were computed from. `COMPLETED` is the line rather than `ratedAt`, for
-     * the same reason as #952: rating happens at event finalization, days later.
+     * **Refused once play has begun.** Changing who played would rewrite the history ratings and points
+     * were computed from — and mid-match it also desynchronises the umpire's screen, the live-score log
+     * and the spectator broadcast, which all keep the roster they started with.
+     *
+     * `ratedAt` is not the line, for the reason in #952: rating happens at event finalization, days
+     * later. This originally named `COMPLETED` explicitly and so missed `IN_PROGRESS` entirely (#970) —
+     * a status that did not exist as a writable state until #930. The shared `playHasBegun` predicate
+     * replaces the enumeration.
      */
     fun updateFixturePlayers(
         token: VerifiedFirebaseToken,
@@ -63,11 +67,7 @@ class FixturePlayerService(
             val caller = staffCallerOf(users = users, token = token).bind()
             val match = matches.findById(matchId = matchId).bind().toDomain()
             ensure(condition = match.isActive) { ServiceError.Conflict(message = "Match is disabled") }
-            ensure(condition = match.status != MatchStatus.COMPLETED && match.ratedAt == null) {
-                ServiceError.Conflict(
-                    message = "Cannot change the players on a match that already has a recorded result",
-                )
-            }
+            ensurePlayNotBegun(match = match, operation = "Players cannot be changed").bind()
 
             val event = events.getById(id = match.eventId).toDomain()
             organizer.ensure(event = event, caller = caller).bind()
