@@ -4,14 +4,18 @@
 package org.skopeo.repository
 
 import org.jetbrains.exposed.exceptions.ExposedSQLException
+import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.max
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.upsert
+import org.skopeo.domain.model.MatchStatus
 import org.skopeo.repository.persistence.LiveMatchEventEntity
 import org.skopeo.repository.persistence.LiveMatchScorerEntity
 import org.skopeo.repository.persistence.MatchUmpireEntity
@@ -195,3 +199,42 @@ open class LiveMatchRepository {
             recordedAt = this[LiveMatchEventsTable.recordedAt],
         )
 }
+
+/**
+ * A match in one of these states is still being played, however old its log (#939).
+ *
+ * The same two values as `AWAITING_RESULT_STATUSES` in `MatchRepository`, deliberately not shared:
+ * that one answers "is this awaiting a result?" and this one answers "is this finished?". They give
+ * the same answer today and might not always — a CANCELLED match is not awaiting a result but is
+ * certainly finished — so one constant serving both would hide the day they diverge.
+ */
+private val UNFINISHED_STATUSES = listOf(MatchStatus.SCHEDULED.name, MatchStatus.IN_PROGRESS.name)
+
+/**
+ * Matches whose scoring log is prunable: the match has a **recorded result** and nothing has been
+ * appended since [before] (#939).
+ *
+ * **Both conditions are derived, not stored.** There is no "completed" flag on the stack, and there
+ * should not be: the match's own status already says whether it finished, and the log's own newest
+ * timestamp already says how long it has sat. A marker describing those would be a third thing that
+ * can go stale.
+ *
+ * `SCHEDULED` and `IN_PROGRESS` are excluded, which is the guard that matters: a match suspended for
+ * weather may resume **days** later (#930), and sweeping it would delete a live scoring session
+ * mid-match. Age alone is never sufficient — the match must be *finished*.
+ */
+fun LiveMatchRepository.prunableMatches(before: LocalDateTime): List<UUID> =
+    transaction {
+        val newest = LiveMatchEventsTable.recordedAt.max()
+        LiveMatchEventsTable
+            .join(
+                otherTable = MatchesTable,
+                joinType = JoinType.INNER,
+                onColumn = LiveMatchEventsTable.matchId,
+                otherColumn = MatchesTable.id,
+            ).select(LiveMatchEventsTable.matchId, newest)
+            .where { MatchesTable.status notInList UNFINISHED_STATUSES }
+            .groupBy(LiveMatchEventsTable.matchId)
+            .having { newest less before }
+            .map { it[LiveMatchEventsTable.matchId].value }
+    }

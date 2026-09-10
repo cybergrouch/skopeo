@@ -22,6 +22,18 @@ import org.skopeo.common.dto.livematch.LiveMatchResponse
 fun interface LiveScoreBroadcaster {
     /** Publish [payload]. Best-effort by contract: implementations must not throw. */
     fun publish(payload: LiveScorePayload)
+
+    /**
+     * Remove a match's document entirely (#939).
+     *
+     * Called by the retention sweep, not by finalize — finalize deliberately keeps everything so a
+     * mis-finalized match can still be inspected (§8a). Also the tidy-up for documents still carrying
+     * fields since removed from the payload (`matchId` #938, `serverId` #943): the whole document goes,
+     * so there is nothing left to be stale.
+     *
+     * Best-effort like [publish]: a spectator document that outlives its match is untidy, not broken.
+     */
+    fun discard(publicCode: String) = Unit
 }
 
 /**
@@ -150,4 +162,6 @@ fun LiveMatchResponse.toBroadcast(publicCode: String): LiveScorePayload =
  */
 object NoOpLiveScoreBroadcaster : LiveScoreBroadcaster {
     override fun publish(payload: LiveScorePayload) = Unit
+
+    override fun discard(publicCode: String) = Unit
 }

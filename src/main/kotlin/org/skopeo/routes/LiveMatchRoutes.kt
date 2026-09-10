@@ -8,6 +8,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
+import io.ktor.server.request.receiveNullable
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
@@ -16,8 +17,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.common.dto.livematch.LiveMatchSweepRequest
 import org.skopeo.common.dto.livematch.LiveScoreEventRequest
 import org.skopeo.domain.service.livematch.LiveMatchService
+import org.skopeo.domain.service.livematch.LiveMatchSweepService
 
 /**
  * Live scoring for a match (#911) — the umpire's surface.
@@ -30,9 +33,24 @@ import org.skopeo.domain.service.livematch.LiveMatchService
  * The read is authenticated for now. It is the umpire's and organizer's view; the *public* spectator
  * scoreboard is a Firestore projection written by the server, not this endpoint.
  */
-fun Application.configureLiveMatchRoutes(service: LiveMatchService = LiveMatchService()) {
+fun Application.configureLiveMatchRoutes(
+    service: LiveMatchService = LiveMatchService(),
+    sweep: LiveMatchSweepService = LiveMatchSweepService(),
+) {
     routing {
         authenticate(FIREBASE_AUTH) {
+            // Retention sweep (#939), ADMINISTRATOR only. Mirrors the rating and standings triggers,
+            // including dry-run-by-default — which matters more here, since this one deletes.
+            post(path = "/api/v1/live-matches/sweep") {
+                respondMappingErrors {
+                    val request =
+                        runCatching { call.receiveNullable<LiveMatchSweepRequest>() }.getOrNull()
+                            ?: LiveMatchSweepRequest()
+                    respondEither(result = sweep.sweep(token = verifiedToken(), request = request)) { outcome ->
+                        call.respond(status = HttpStatusCode.OK, message = outcome)
+                    }
+                }
+            }
             route(path = "/api/v1/matches/{matchId}/live") {
                 readScore(service = service)
                 recordEvent(service = service)

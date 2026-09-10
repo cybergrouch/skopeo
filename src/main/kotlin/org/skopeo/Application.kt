@@ -40,6 +40,7 @@ import org.skopeo.config.liveScoreBroadcaster
 import org.skopeo.domain.service.capability.CapabilityService
 import org.skopeo.domain.service.client.ApiClientService
 import org.skopeo.domain.service.livematch.LiveMatchService
+import org.skopeo.domain.service.livematch.LiveMatchSweepService
 import org.skopeo.domain.service.user.UserService
 import org.skopeo.routes.configureApiClientRoutes
 import org.skopeo.routes.configureAuditRoutes
@@ -135,15 +136,18 @@ fun Application.module(
     // The spectator broadcast is resolved once at startup and handed in. Absent Firestore credentials
     // is a supported state — local development and CI have none — so this yields a no-op rather than
     // failing the boot (#911).
-    configureLiveMatchRoutes(
-        service =
-            LiveMatchService(
-                broadcast =
-                    liveScoreBroadcaster(
-                        projectId = environment.config.propertyOrNull(path = "firebase.projectId")?.getString(),
-                    ),
-            ),
-    )
+    run {
+        val broadcaster =
+            liveScoreBroadcaster(
+                projectId = environment.config.propertyOrNull(path = "firebase.projectId")?.getString(),
+            )
+        configureLiveMatchRoutes(
+            service = LiveMatchService(broadcast = broadcaster),
+            // The sweep gets the SAME broadcaster: it deletes the spectator document alongside the log,
+            // and a second instance would be a second place for credentials to be absent (#939).
+            sweep = LiveMatchSweepService(broadcast = broadcaster),
+        )
+    }
     configureEventRoutes()
     configureEventTeamRoutes()
     configureClubRoutes()
