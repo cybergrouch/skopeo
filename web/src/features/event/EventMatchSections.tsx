@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import type { MatchPublicResponse } from '@/api/generated/model'
 import { Badge } from '@/components/ui/badge'
 import { playerLabel } from '@/lib/playerLabel'
+import { scoreline } from '@/lib/scoreline'
 
 type StatusBadge = { label: string; variant: 'default' | 'secondary' | 'outline' }
 
@@ -26,7 +27,7 @@ function statusBadge(match: MatchPublicResponse): StatusBadge {
 function MatchRow({ match }: { match: MatchPublicResponse }) {
   const side = (players: MatchPublicResponse['team1']) =>
     players.map((pl) => playerLabel(pl.displayName, pl.publicCode, '')).join(' & ')
-  const score = match.sets.map((s) => `${s.team1Games}-${s.team2Games}`).join(' ')
+  const score = scoreline(match.sets, match.completionReason, match.status === 'COMPLETED')
   const badge = statusBadge(match)
   return (
     <li>

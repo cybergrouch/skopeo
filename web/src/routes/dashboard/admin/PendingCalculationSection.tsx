@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { scoreline } from '@/lib/scoreline'
 import { toast } from 'sonner'
 import { toastError } from '@/observability/toastError'
 import { useQueryClient } from '@tanstack/react-query'
@@ -110,7 +111,7 @@ function MatchRow({
 }) {
   const player1 = match.team1.userIds.map(nameOf).join(', ')
   const player2 = match.team2.userIds.map(nameOf).join(', ')
-  const scores = match.sets.map((s) => `${s.team1Games}-${s.team2Games}`).join(' ')
+  const scores = scoreline(match.sets, match.completionReason)
   const winner = winnerName(match, nameOf)
   return (
     <li className="rounded-lg border text-sm">

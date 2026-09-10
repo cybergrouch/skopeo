@@ -289,6 +289,14 @@ data class MatchPublicResponse(
     /** 1-based identifier within the event ("Match #3"), unique per event (#898). */
     val matchNumber: Int,
     val status: String,
+    /**
+     * How the match ended (#954): `COMPLETED`, `RETIRED` or `DEFAULTED`.
+     *
+     * A separate axis from [status], which only says *whether* it ended. Without it the public page
+     * cannot render `1-3 (ret)`, and — worse — a retirement before any decisive set has no sets at all,
+     * so the scoreline had nothing to show and fell back to claiming the match was never played.
+     */
+    val completionReason: String = "COMPLETED",
     // True once the rating calculation has committed this match (#361): lets a list view derive the
     // Scheduled / Awaiting rating / Rated status without the precise rating changes. On the standalone
     // match page the [ratingChanges] carry the detail; in an event's match list they aren't populated.
@@ -354,6 +362,8 @@ data class MatchPublicHeadToHeadEntry(
     val publicCode: String,
     val matchDate: String,
     val status: String,
+    /** How it ended (#954), so a past meeting reads the same here as on its own page. */
+    val completionReason: String = "COMPLETED",
     val rated: Boolean,
     val matchFormat: String,
     val sets: List<MatchPublicSet>,
