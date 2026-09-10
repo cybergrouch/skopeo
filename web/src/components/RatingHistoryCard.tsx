@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { scoreline } from "@/lib/scoreline";
 import type { RatingHistoryResponse } from "@/api/generated/model";
 import { useGetApiV1MatchesIdCalculation } from "@/api/generated/matches/matches";
 import { CollapsibleCard } from "@/components/CollapsibleCard";
@@ -50,9 +51,7 @@ function MatchCalculationDetail({ matchId }: { matchId: string }) {
 
   const nameOf = (id: string) =>
     data.changes.find((c) => c.userId === id)?.displayName ?? id.slice(0, 8);
-  const scores = data.match.sets
-    .map((s) => `${s.team1Games}-${s.team2Games}`)
-    .join(" ");
+  const scores = scoreline(data.match.sets);
   const winnerSide =
     data.match.winnerTeamId === data.match.team1.teamId
       ? data.match.team1

@@ -1022,6 +1022,7 @@ private fun headToHeadEntry(
         publicCode = meeting.publicCode,
         matchDate = meeting.matchDate.toString(),
         status = meeting.status.name,
+        completionReason = meeting.completionReason.name,
         rated = meeting.ratedAt != null,
         matchFormat = meeting.matchFormat.name,
         sets = meeting.sets.map { orientSet(set = it, refIsTeam1 = refIsTeam1) },

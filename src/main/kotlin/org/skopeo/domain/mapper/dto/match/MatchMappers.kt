@@ -77,6 +77,7 @@ fun Match.toPublicResponse(
         matchDate = matchDate.toString(),
         matchNumber = matchNumber,
         status = status.name,
+        completionReason = completionReason.name,
         rated = ratedAt != null,
         // Public transparency signal (#776): this match's score was corrected after it had been rated.
         reRated = reRatedAt != null,

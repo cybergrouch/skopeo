@@ -694,4 +694,48 @@ describe("MatchPage", () => {
     expect(screen.getByText(/margin 2/)).toBeInTheDocument();
     expect(screen.getAllByText(/Set 1/)).toHaveLength(1);
   });
+
+  it("says what happened when a finished match has no sets at all (#954)", () => {
+    // The reported bug: a player retiring before any decisive set leaves nothing recordable (#934), and
+    // the page claimed the match was never played — about a match that was over and had a winner.
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        status: "COMPLETED",
+        completionReason: "RETIRED",
+        sets: [],
+        winner: "TEAM2",
+      },
+      isLoading: false,
+    });
+    renderAt();
+
+    expect(screen.getByText(/Retired/)).toBeInTheDocument();
+    expect(screen.queryByText(/Not yet played/)).not.toBeInTheDocument();
+  });
+
+  it("marks a retirement in the scoreline rather than reading as an ordinary loss (#954)", () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        status: "COMPLETED",
+        completionReason: "RETIRED",
+        sets: [{ setNumber: 1, team1Games: 1, team2Games: 3 }],
+        winner: "TEAM2",
+      },
+      isLoading: false,
+    });
+    renderAt();
+    expect(screen.getByText(/1-3 \(ret\)/)).toBeInTheDocument();
+  });
+
+  it("still says Not yet played for a fixture that genuinely has not been (#954)", () => {
+    // The distinction the fix turns on: "no sets" is not the same as "not played".
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, status: "SCHEDULED", completionReason: "COMPLETED", sets: [] },
+      isLoading: false,
+    });
+    renderAt();
+    expect(screen.getByText(/Not yet played/)).toBeInTheDocument();
+  });
 });

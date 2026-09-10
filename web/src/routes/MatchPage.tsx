@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { MatchScoreCorrectionCard } from "@/components/MatchScoreCorrectionCard";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import { canScore, isAdministrator } from "@/auth/capabilities";
+import { scoreline } from "@/lib/scoreline";
 
 /** A player's name as a link to their public profile, falling back to the code or "Unknown". */
 function PlayerLink({ player }: { player: MatchPublicPlayer }) {
@@ -183,9 +184,7 @@ function HeadToHeadCard({ match }: { match: MatchPublicResponse }) {
         ) : (
           <ul className="space-y-2">
             {h2h.meetings.map((meeting) => {
-              const score = meeting.sets
-                .map((s) => `${s.team1Games}-${s.team2Games}`)
-                .join(" ");
+              const score = scoreline(meeting.sets, meeting.completionReason);
               const won = winnerName(meeting.winnerPublicCode);
               // Show whether the meeting was singles or doubles (#285), e.g. "mixed doubles".
               const format = meeting.matchFormat
@@ -242,9 +241,11 @@ export function MatchPage() {
     match?.rated !== true &&
     match?.isActive !== false;
 
-  const score = match?.sets
-    .map((s) => `${s.team1Games}-${s.team2Games}`)
-    .join(" ");
+  // A finished match with no sets is a real state, not an absent one (#954): a player retiring before
+  // any decisive set leaves nothing recordable, and this used to render as "Not yet played" on a match
+  // that was over and had a winner.
+  const isFinished = match?.status === "COMPLETED";
+  const score = scoreline(match?.sets, match?.completionReason, isFinished);
 
   return (
     <PublicPageShell>
@@ -311,7 +312,7 @@ export function MatchPage() {
             <Side players={match.team2} isWinner={match.winner === "TEAM2"} />
             <div>
               <span className="font-medium">Score:</span>{" "}
-              {score ? score : "Not yet played"}
+              {score ?? "Not yet played"}
             </div>
             {/* Rating handicap (#486): shown transparently to participants. */}
             {match.team1Handicap || match.team2Handicap ? (

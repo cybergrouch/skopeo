@@ -8067,6 +8067,14 @@ components:
           description: 1-based identifier within the event ("Match #3"), unique per event (#898). Display order derives from it.
         status:
           type: string
+        completionReason:
+          type: string
+          enum: [COMPLETED, RETIRED, DEFAULTED]
+          description: >-
+            How the match ended (#954) -- a separate axis from status, which only says whether it ended.
+            Without it a public scoreline cannot render "1-3 (ret)", and a retirement before any decisive
+            set has no sets at all, so the scoreline had nothing to show and fell back to claiming the
+            match was never played.
         rated:
           type: boolean
           description: >-
@@ -8186,6 +8194,10 @@ components:
           format: date
         status:
           type: string
+        completionReason:
+          type: string
+          enum: [COMPLETED, RETIRED, DEFAULTED]
+          description: How it ended (#954), so a past meeting reads the same here as on its own page.
         rated:
           type: boolean
         matchFormat:
