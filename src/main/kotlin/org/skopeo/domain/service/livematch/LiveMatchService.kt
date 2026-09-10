@@ -292,6 +292,25 @@ class LiveMatchService(
             ensure(condition = match.ratedAt == null) {
                 ServiceError.Conflict(message = "Cannot score a match that has already been rated")
             }
+            // Finalize ends live scoring (#952). `ratedAt` was the only guard here, and it is the wrong
+            // line: rating happens when the EVENT is finalized (#403), which can be days after the match
+            // was recorded. In between, a match with a full scoreline could still be claimed and scored.
+            //
+            // Refused rather than allowed-with-care, because the alternative is two ways to change one
+            // recorded result. The live log is working state (§8a) and the match is the record;
+            // corrections go through the ordinary result-editing path that everything else uses. Two
+            // routes to the same edit is how they drift.
+            //
+            // Note this guard is safe for finalize itself: it runs BEFORE uploadResult, when the match
+            // is still SCHEDULED or IN_PROGRESS. Reading the score is unaffected — `scoreboard` does not
+            // come through here, so a finished match's scoreboard stays visible.
+            ensure(condition = match.status != MatchStatus.COMPLETED) {
+                ServiceError.Conflict(
+                    message =
+                        "This match already has a recorded result. Live scoring is finished; correct the " +
+                            "score through the match result instead.",
+                )
+            }
             match
         }
 
