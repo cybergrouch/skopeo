@@ -157,20 +157,43 @@ export function LiveScoringPage() {
   }
 
   if (!started) {
-    // Fullscreen must come from a user gesture, so it cannot happen on mount.
+    // Fullscreen must come from a user gesture, so this screen cannot be skipped — which makes it the
+    // only confirmation an umpire gets, and the last chance to notice they opened the wrong court.
+    // Starting CLAIMS the match (displacing whoever held it) and moves the fixture to IN_PROGRESS, so
+    // "Match #1" alone is far too little to confirm against: every event has one, and an umpire running
+    // several courts sees the same string on all of them (#956).
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 p-8 text-center">
-        <p className="text-xl font-semibold">Match #{match.matchNumber}</p>
-        <Button
-          size="lg"
-          onClick={async () => {
-            await enter()
-            claim.mutate({ matchId: match.id as string })
-            setStarted(true)
-          }}
-        >
-          Start scoring
-        </Button>
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-5 p-8 text-center">
+        <div className="space-y-1">
+          {match.event?.name ? (
+            <p className="text-sm uppercase tracking-wide text-muted-foreground">
+              {match.event.name}
+            </p>
+          ) : null}
+          <p className="text-xl font-semibold">Match #{match.matchNumber}</p>
+          {/* The part that actually confirms it: a glance tells you whether these are the players in
+              front of you. Same helper as the in-view labels, so the two cannot disagree. */}
+          <p className="text-lg">
+            {sideName(match.team1)}
+            <span className="px-2 text-muted-foreground">vs</span>
+            {sideName(match.team2)}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={() => navigate(`/matches/${code}`)}>
+            Back
+          </Button>
+          <Button
+            size="lg"
+            onClick={async () => {
+              await enter()
+              claim.mutate({ matchId: match.id as string })
+              setStarted(true)
+            }}
+          >
+            Start scoring
+          </Button>
+        </div>
       </div>
     )
   }

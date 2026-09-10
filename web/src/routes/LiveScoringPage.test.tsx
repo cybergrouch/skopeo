@@ -174,6 +174,45 @@ describe("LiveScoringPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("identifies the match before scoring starts, not just its number (#956)", async () => {
+    // This screen cannot be skipped (fullscreen needs a gesture), so it is the ONLY confirmation an
+    // umpire gets — and starting claims the match, displacing whoever held it.
+    renderPage();
+
+    expect(screen.getByText("Summer Open")).toBeInTheDocument();
+    expect(screen.getByText("Match #3")).toBeInTheDocument();
+    // The players are the part that actually confirms the right court.
+    expect(screen.getByText(/Ana/)).toBeInTheDocument();
+    expect(screen.getByText(/Bob/)).toBeInTheDocument();
+  });
+
+  it("offers a way off the confirm screen without claiming the match (#956)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    // Leaving must not claim: the whole point of the screen is that you might be on the wrong court.
+    expect(claimMutate).not.toHaveBeenCalled();
+  });
+
+  it("degrades cleanly when the event has no name (#956)", async () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        id: "m-1",
+        publicCode: "MTCH01",
+        matchNumber: 3,
+        team1: [{ displayName: "Ana", publicCode: "AAA111" }],
+        team2: [{ displayName: "Bob", publicCode: "BBB222" }],
+      },
+      isLoading: false,
+    });
+    renderPage();
+
+    // MatchPublicResponse.event is optional; the layout must not render an empty heading.
+    expect(screen.getByText("Match #3")).toBeInTheDocument();
+    expect(screen.getByText(/Ana/)).toBeInTheDocument();
+  });
+
   it("claims the match when scoring starts, since fullscreen needs a gesture", async () => {
     const user = userEvent.setup();
     renderPage();
