@@ -4,6 +4,7 @@
 package org.skopeo.domain.service.event
 
 import org.skopeo.common.contract.BandRelation
+import org.skopeo.common.contract.OpenPlayMarginPoints
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.domain.model.MatchSetResult
 import java.util.UUID
@@ -28,6 +29,23 @@ internal object OpenPlayPointsCalculator {
     data class TeamPoints(
         val team1: Int,
         val team2: Int,
+    )
+
+    /**
+     * Which side is which, for a match being scored.
+     *
+     * The two travel together because they are one question — *which side is this?* — and because
+     * [concedingTeamId] is only meaningful relative to [team1Id]: the calculator infers team2 as "the
+     * other one", so a conceding id has no reading without knowing which side team1 is.
+     *
+     * [concedingTeamId] is `null` for a match that played out, and otherwise the side that retired or
+     * defaulted. `Match.concedingTeamId()` computes it. Deliberately not defaulted: a caller that
+     * omitted it would skip the retirement rule and pay a retiring player for the set they walked out
+     * of (#972), so the compiler asks at every call site instead.
+     */
+    data class Sides(
+        val team1Id: UUID,
+        val concedingTeamId: UUID?,
     )
 
     /**
@@ -57,16 +75,17 @@ internal object OpenPlayPointsCalculator {
      * Score each set, in order — the per-set detail behind a match's points (#862).
      *
      * @param band1 team1's entry band (e.g. "4.0"); [band2] team2's. Compared numerically.
-     * @param team1Id team1's id, matched against each set's winner (team2 is inferred as the other side).
+     * @param sides which side is team1, and which (if any) conceded — see [Sides].
      * @param config the admin-configurable margin-bracket schedule.
      */
     fun scoreSets(
         band1: String,
         band2: String,
-        team1Id: UUID,
+        sides: Sides,
         sets: List<MatchSetResult>,
         config: OpenPlayPointsConfig,
     ): List<SetScoring> {
+        val team1Id = sides.team1Id
         val b1 = band1.toBigDecimal()
         val b2 = band2.toBigDecimal()
         val equalBands = b1.compareTo(other = b2) == 0
@@ -82,13 +101,21 @@ internal object OpenPlayPointsCalculator {
                 }
             val margin = marginInSet(set = set, team1WonSet = team1WonSet)
             val cell = config.cell(relation = relation, margin = margin)
+            val payable =
+                payableForAbandoned(
+                    set = set,
+                    team1WonSet = team1WonSet,
+                    team1Id = team1Id,
+                    conceding = sides.concedingTeamId,
+                    cell = cell,
+                )
             SetScoring(
                 setNumber = index + 1,
                 margin = margin,
                 relation = relation,
                 team1WonSet = team1WonSet,
-                winnerPoints = cell.winnerPoints,
-                loserPoints = cell.loserPoints,
+                winnerPoints = payable.winnerPoints,
+                loserPoints = payable.loserPoints,
             )
         }
     }
@@ -100,11 +127,12 @@ internal object OpenPlayPointsCalculator {
     fun compute(
         band1: String,
         band2: String,
-        team1Id: UUID,
+        sides: Sides,
         sets: List<MatchSetResult>,
         config: OpenPlayPointsConfig,
     ): TeamPoints {
-        val scored = scoreSets(band1 = band1, band2 = band2, team1Id = team1Id, sets = sets, config = config)
+        val scored =
+            scoreSets(band1 = band1, band2 = band2, sides = sides, sets = sets, config = config)
         return TeamPoints(
             team1 = scored.sumOf { it.team1Points },
             team2 = scored.sumOf { it.team2Points },
@@ -137,4 +165,50 @@ internal object OpenPlayPointsCalculator {
         tiebreak: Int?,
         set: MatchSetResult,
     ): Int = if (set.team1Games == 0 && set.team2Games == 0 && tiebreak != null) tiebreak else games
+
+    /**
+     * What an **abandoned** set pays (#972) — the retirement rule applied to the schedule cell.
+     *
+     * For the set play stopped during:
+     *
+     * - the **conceding side receives nothing** — not even the loser points an ordinary set pays them.
+     *   A player must not bank a dominant set and then walk away with its points;
+     * - the **opponent receives the normal margin-based winner points, but only if they were ahead on
+     *   games**;
+     * - level or behind, and **the set pays nobody**.
+     *
+     * Stated once, which is how it is implemented below: **an abandoned set pays only when the
+     * designation and the games agree.** The designated match winner is always the non-conceding side,
+     * so "the opponent was also ahead" is exactly "the games-derived set winner is not the conceder".
+     *
+     * `margin` and `relation` are left alone on purpose. They describe the tennis that was actually
+     * played, so the derivation panel (#862) still explains the score honestly even where the payout is
+     * zero — an unexplained zero is the failure #862 exists to prevent.
+     *
+     * The **rating never passes through here**: it reads the games-derived winner directly, because S10
+     * rates a retirement on the real score. A player who retires while being outplayed still loses
+     * rating for it; this only stops them being *paid* for the set they walked out of.
+     *
+     * Sets completed before the retirement are not marked [MatchSetResult.abandoned] and fall straight
+     * through unchanged.
+     */
+    private fun payableForAbandoned(
+        set: MatchSetResult,
+        team1WonSet: Boolean,
+        team1Id: UUID,
+        conceding: UUID?,
+        cell: OpenPlayMarginPoints,
+    ): OpenPlayMarginPoints {
+        // `conceding == null` means the match ended normally, so nothing here applies. Belt and braces:
+        // a set can only be abandoned on a match that named a winner, but a caller that forgets to pass
+        // it should under-apply the rule rather than mis-attribute a payout.
+        if (!set.abandoned || conceding == null) return cell
+        // Did the side that conceded also lead on games? team1 leads iff `team1WonSet`; the conceder is
+        // team1 iff `conceding == team1Id`. Equality of those two is exactly "the conceder was ahead".
+        val concederWasAhead = team1WonSet == (conceding == team1Id)
+        return cell.copy(
+            winnerPoints = if (concederWasAhead) 0 else cell.winnerPoints,
+            loserPoints = 0,
+        )
+    }
 }

@@ -12,6 +12,7 @@ import org.skopeo.domain.model.Match
 import org.skopeo.domain.model.PlacementBracket
 import org.skopeo.domain.model.PointClass
 import org.skopeo.domain.model.RankingPointAward
+import org.skopeo.domain.model.concedingTeamId
 import org.skopeo.domain.service.event.OpenPlayPointsCalculator
 import org.skopeo.domain.service.settings.PointsScheduleHistory
 import org.skopeo.repository.ClubRepository
@@ -171,7 +172,14 @@ class AwardDerivationAssembler(
             OpenPlayPointsCalculator.scoreSets(
                 band1 = if (recipientIsTeam1) inputs.teamBand else inputs.opponentBand,
                 band2 = if (recipientIsTeam1) inputs.opponentBand else inputs.teamBand,
-                team1Id = match.team1.teamId,
+                // Must match the awarder exactly (#972). The #892 guard below compares this arithmetic
+                // to what was paid, so a conceding side omitted here would report an honest award as
+                // unreproducible.
+                sides =
+                    OpenPlayPointsCalculator.Sides(
+                        team1Id = match.team1.teamId,
+                        concedingTeamId = match.concedingTeamId(),
+                    ),
                 sets = match.sets,
                 config = config,
             )

@@ -55,6 +55,7 @@ fun MatchSetEntity.toDomain(
         winnerTeamId = derivedSetWinner(team1Id = team1Id, team2Id = team2Id),
         tiebreakTeam1Points = tiebreakTeam1Points,
         tiebreakTeam2Points = tiebreakTeam2Points,
+        abandoned = abandoned,
     )
 
 /**

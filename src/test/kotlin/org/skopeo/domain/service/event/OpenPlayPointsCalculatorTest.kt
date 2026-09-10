@@ -22,13 +22,16 @@ class OpenPlayPointsCalculatorTest {
         winner: UUID,
         tb1: Int? = null,
         tb2: Int? = null,
+        abandoned: Boolean = false,
+        setNumber: Int = 1,
     ) = MatchSetResult(
-        setNumber = 1,
+        setNumber = setNumber,
         team1Games = team1Games,
         team2Games = team2Games,
         winnerTeamId = winner,
         tiebreakTeam1Points = tb1,
         tiebreakTeam2Points = tb2,
+        abandoned = abandoned,
     )
 
     private fun compute(
@@ -36,7 +39,14 @@ class OpenPlayPointsCalculatorTest {
         band2: String,
         sets: List<MatchSetResult>,
         config: OpenPlayPointsConfig = OpenPlayPointsConfig.DEFAULT,
-    ) = OpenPlayPointsCalculator.compute(band1 = band1, band2 = band2, team1Id = t1, sets = sets, config = config)
+        conceding: UUID? = null,
+    ) = OpenPlayPointsCalculator.compute(
+        band1 = band1,
+        band2 = band2,
+        sides = OpenPlayPointsCalculator.Sides(team1Id = t1, concedingTeamId = conceding),
+        sets = sets,
+        config = config,
+    )
 
     @Test
     fun `default schedule - equal bands - the winner gets the margin base, the loser 0`() {
@@ -122,5 +132,97 @@ class OpenPlayPointsCalculatorTest {
             )
         result.team1 shouldBe 2
         result.team2 shouldBe 1
+    }
+
+    // ---- The retirement rule (#972) -------------------------------------------------------------
+    //
+    // An abandoned set pays only when the designation and the games agree. All three rows of the rule
+    // are pinned, because each fails differently: the first is the case the rule exists for, the second
+    // is the one that must keep paying, and the third is the level set #968 will make recordable.
+
+    @Test
+    fun `an abandoned set pays nobody when the conceding side was ahead (#972)`() {
+        // "5 (ret) - 1": t1 retires while dominating. Without the rule t1 collects the winner's points
+        // for a match they walked out of, which is exactly what this forbids.
+        val result =
+            compute(
+                band1 = "4.0",
+                band2 = "4.0",
+                sets = listOf(element = set(team1Games = 5, team2Games = 1, winner = t1, abandoned = true)),
+                conceding = t1,
+            )
+
+        result.team1 shouldBe 0
+        // Not the loser points either: the opponent was behind, so the set pays nobody at all.
+        result.team2 shouldBe 0
+    }
+
+    @Test
+    fun `an abandoned set pays the opponent on margin when they were ahead (#972)`() {
+        // "1 (ret) - 5": t1 retires while losing. t2 was winning it, so t2 is paid normally — margin 4,
+        // base 21 at equal bands. The retiring side still gets nothing, not even loser points.
+        val result =
+            compute(
+                band1 = "4.0",
+                band2 = "4.0",
+                sets = listOf(element = set(team1Games = 1, team2Games = 5, winner = t2, abandoned = true)),
+                conceding = t1,
+            )
+
+        result.team1 shouldBe 0
+        result.team2 shouldBe 21
+    }
+
+    @Test
+    fun `sets completed before the retirement still pay normally (#972)`() {
+        // The deterrent is on the abandoned set alone. t1 won set 1 outright (6-4, margin 2, base 8),
+        // then retired at 5-1 in set 2 — keeping set 1 and being paid nothing for set 2.
+        val result =
+            compute(
+                band1 = "4.0",
+                band2 = "4.0",
+                sets =
+                    listOf(
+                        set(team1Games = 6, team2Games = 4, winner = t1, setNumber = 1),
+                        set(team1Games = 5, team2Games = 1, winner = t1, abandoned = true, setNumber = 2),
+                    ),
+                conceding = t1,
+            )
+
+        result.team1 shouldBe 8
+        result.team2 shouldBe 0
+    }
+
+    @Test
+    fun `an unmarked set is unaffected by the rule, even on a match someone conceded (#972)`() {
+        // The flag is what selects the set, not the presence of a conceding side. This is the guard
+        // against "the last set of a retired match" reasoning: the retirement may have happened between
+        // sets, leaving nothing abandoned, and a set that was played out must still pay.
+        val result =
+            compute(
+                band1 = "4.0",
+                band2 = "4.0",
+                sets = listOf(element = set(team1Games = 6, team2Games = 4, winner = t1)),
+                conceding = t1,
+            )
+
+        result.team1 shouldBe 8
+        result.team2 shouldBe 0
+    }
+
+    @Test
+    fun `an abandoned set on a normally completed match is left alone (#972)`() {
+        // No conceding side means the rule cannot attribute a concession, so it declines to act rather
+        // than guessing. Belt and braces: the combination should not arise, and if it does the payout
+        // must not be silently misattributed.
+        val result =
+            compute(
+                band1 = "4.0",
+                band2 = "4.0",
+                sets = listOf(element = set(team1Games = 6, team2Games = 4, winner = t1, abandoned = true)),
+                conceding = null,
+            )
+
+        result.team1 shouldBe 8
     }
 }

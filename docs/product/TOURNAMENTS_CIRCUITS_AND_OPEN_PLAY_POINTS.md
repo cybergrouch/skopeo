@@ -99,13 +99,38 @@ Points are computed **per set and summed across the sets** of the match:
 
 - Open play in Manila is generally **single-set**, but **3-set** open play is emerging. The formula runs **per set**: for each set, the set's winner/loser drives the table and **ALP is evaluated on that set's games** ("the set they lost" = each set the team lost).
 - The **band comparison is constant** across the match (same two teams), so only the set outcome and per-set games vary.
-- The **overall match `winnerTeamId` is not used** for open-play points — each set is scored independently.
+- The **overall match `winnerTeamId` is not used** for open-play points — each set is scored independently. *One exception (#972):* for a match that ended in a retirement or default, the match winner identifies which side conceded, since the conceding side is by definition the one that is not the designated winner. The set scores themselves are still what drive the points.
 - **Consequence:** a 3-set match can total **more (or, for an upset loser, more negative) points** than the single-set table values. This is intended.
 
 ### Edge cases
 
-- **Retirement / walkover (open play):** the match awards **0 points** — no computed award for either side.
-- **Retirement / walkover (tournament):** placement is unaffected — the recorded winner of a placement match still receives that placement's points (and the loser their placement's points), since tournament points depend on placement, not on games played.
+> **History:** the previous rule here — *"the match awards 0 points, no computed award for either side"* — was documented but **never built**: nothing in the awarding path read `completionReason`, so a retired match was scored exactly like a completed one, and a player who retired while leading collected that set's winner points. The rule below replaces it and *is* implemented (#972).
+
+**Retirement / default (open play).** Scored per set, like everything else here. For the set that was **abandoned** when a player retired or defaulted:
+
+- the **retiring side receives nothing** — not winner points, and not the loser points an ordinary set would pay them — **whatever the games say**;
+- the **opponent receives the normal margin-based winner points, but only if they were ahead on games** in that set;
+- if the opponent was level or behind, **that set pays nobody**.
+
+Sets that **finished normally before** the retirement are scored as usual. The deterrent is carried by the abandoned set, not applied retroactively to tennis that was actually played.
+
+A compact way to state the same rule: **the abandoned set pays only when the designation and the games agree.** The designated winner is always the non-retiring side, so the opponent is paid in exactly those cases where the games-derived winner is also them.
+
+**How the abandoned set is identified.** It is recorded, not inferred: `match_sets.abandoned` is set by the scorer for the set play stopped during. It cannot be derived, because a stored `5-1` reads identically whether it was won or walked away from — and it clears the games floor either way. Guessing "the last set of a retired match" would be wrong whenever a player retires *between* sets, and wrong in the damaging direction: it would retract points from a set that was genuinely completed and won.
+
+| Set when play stopped | Retiring side | Opponent |
+| --- | --- | --- |
+| `5 (ret) – 1` — retires ahead | 0 | 0 (was behind) |
+| `1 (ret) – 5` — retires behind | 0 | winner points at margin 4 |
+| `1 (ret) – 1` — level | 0 | 0 (not ahead) |
+
+The first row is the point of the rule: a player must not bank a dominant set and then walk away with its points.
+
+**Walkover / default with no sets played:** nothing to either side, because there is no set to score.
+
+**Retirement / default (tournament).** Placement is unaffected, and no special handling is needed: tournament points depend on **placement, not on games played**. The placement match's *designated* winner takes that placement's points — in a retirement that is, by definition, the player who did **not** retire — and the loser takes theirs (Championship Finals pay 1st/2nd, Plate Finals 3rd/4th).
+
+The open-play deterrent deliberately does **not** carry over. A beaten finalist finished second whether or not they retired, and placement records where a player ended the draw rather than how the last set was going. This is also why the two paths need different code: placement already reads the designated match winner, while open play reads the per-set games.
 
 ### Generalized algorithm (implementation spec)
 
@@ -155,7 +180,14 @@ for each team T in the match:
                      band = band(p) at entry, sex = p.sex,
                      validFrom = event.end, validUntil = event.end + 2 months,
                      trace = {event, match})   # same record/audit/finalize path as today
-# retirement / walkover: skip computation, award 0 for the match.
+# Retirement / default (#972): only the ABANDONED set is treated specially.
+#   conceding = the side that is not the match's designated winner
+#   for the abandoned set s:
+#       winnerPts(s) goes to the opponent ONLY if the opponent leads on games in s
+#       the conceding side receives nothing for s (no winner points, no loser points)
+#       if the opponent does not lead (level or behind), s pays nobody
+#   sets completed before the retirement are scored normally
+# Walkover with no sets played: nothing to either side.
 ```
 
 **Worked examples** (singles, so team = player):

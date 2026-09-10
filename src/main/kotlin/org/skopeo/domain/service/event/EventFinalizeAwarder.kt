@@ -22,6 +22,7 @@ import org.skopeo.domain.model.PointClass
 import org.skopeo.domain.model.PointSourceType
 import org.skopeo.domain.model.RankingPointAwardWrite
 import org.skopeo.domain.model.UserRating
+import org.skopeo.domain.model.concedingTeamId
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.rating.CalibrationService
 import org.skopeo.domain.service.rating.RatingAssembler
@@ -424,7 +425,11 @@ class EventFinalizeAwarder(
                 OpenPlayPointsCalculator.compute(
                     band1 = band1,
                     band2 = band2,
-                    team1Id = match.team1.teamId,
+                    sides =
+                        OpenPlayPointsCalculator.Sides(
+                            team1Id = match.team1.teamId,
+                            concedingTeamId = match.concedingTeamId(),
+                        ),
                     sets = match.sets,
                     config = config,
                 )

@@ -372,8 +372,16 @@ private fun LiveOutcome.toCompletionReason(): MatchCompletionReason =
  *
  * A **level** partial set (3-3, or 0-0 because nobody had started) is omitted instead. Not an oversight:
  * since #917 the set winner is derived from the games, and a level set has no winner to derive — the
- * recording path would reject it. Omitting loses nothing that matters, because #925 established that a
- * level set contributes zero dominance anyway. It is the same conclusion reached from the other end.
+ * recording path would reject it. That costs the rating nothing, because #925 established a level set
+ * contributes zero dominance anyway.
+ *
+ * It does cost the *record* something, which the earlier version of this note ("omitting loses nothing
+ * that matters") did not allow for: the games played are dropped, so `1-1 (ret)` is stored as a
+ * retirement with no score at all. That is #968, and it is a separate change — the omission stays here
+ * until a set with no winner can be represented.
+ *
+ * The decisive partial set carries `abandoned = true` (#972), which is what lets the points rule tell it
+ * apart from a set that was played out.
  */
 private fun recordableSets(state: ScoreState): List<SetScoreRequest> =
     (state.completedSets.map { it.toRequest() } + state.currentSetIfDecisive()).filterNotNull()
@@ -395,6 +403,10 @@ private fun ScoreState.currentSetIfDecisive(): SetScoreRequest? {
         team2Games = gamesTeam2,
         tiebreakTeam1Points = pointsTeam1.takeIf { isTiebreak },
         tiebreakTeam2Points = pointsTeam2.takeIf { isTiebreak },
+        // The unbanked set is by definition the one play stopped during (#972). This is the only place
+        // that knows it: once written, `5-1` is indistinguishable from a set that was played out, so
+        // leaving it unmarked here loses the fact permanently.
+        abandoned = true,
     )
 }
 

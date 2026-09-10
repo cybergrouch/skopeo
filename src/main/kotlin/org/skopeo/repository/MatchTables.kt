@@ -88,6 +88,10 @@ internal object MatchSetsTable : UUIDTable(name = "match_sets") {
     // No winner column (#917): who won a set is derived from these games and the tiebreak below, in
     // mapper.entity. matches.winner_team_id above is a different thing — the DESIGNATED match winner.
     val hasTiebreak = bool(name = "has_tiebreak").default(defaultValue = false)
+
+    // Play stopped during this set -- a retirement or default (#972). Unlike the winner V53 dropped,
+    // this is NOT derivable from the games: 5-1 reads the same whether it was won or walked away from.
+    val abandoned = bool(name = "abandoned").default(defaultValue = false)
 }
 
 internal object MatchSetTiebreaksTable : UUIDTable(name = "match_set_tiebreaks") {

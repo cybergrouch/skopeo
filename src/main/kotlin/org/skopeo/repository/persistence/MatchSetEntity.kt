@@ -16,4 +16,5 @@ data class MatchSetEntity(
     val team2Games: Int,
     val tiebreakTeam1Points: Int?,
     val tiebreakTeam2Points: Int?,
+    val abandoned: Boolean = false,
 )
