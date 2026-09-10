@@ -393,4 +393,48 @@ describe('StandingsTab', () => {
     renderTab()
     expect(screen.getByText('4.230000')).toBeInTheDocument()
   })
+  // ---- How current the standings are (#974) ----------------------------------------------------
+
+  it('shows when the points were last calculated (#974)', () => {
+    // The cheapest detector for a scheduled run (#389) that has silently stopped.
+    useGetApiV1Standings.mockReturnValue({
+      data: {
+        ...defaultPage,
+        source: 'POINTS',
+        computedAt: '2026-09-08T01:00:00.000Z',
+        asOf: '2026-09-08',
+      },
+      isLoading: false,
+    })
+    renderTab()
+
+    expect(screen.getByText(/Points last calculated/)).toBeInTheDocument()
+  })
+
+  it('also shows the as-of date when it differs from the run date (#974)', () => {
+    // A late or re-run calculation: the standings describe an earlier date than the run happened on.
+    // Collapsing the two into one line would hide exactly this case.
+    useGetApiV1Standings.mockReturnValue({
+      data: {
+        ...defaultPage,
+        source: 'POINTS',
+        computedAt: '2026-09-10T01:00:00.000Z',
+        asOf: '2026-09-03',
+      },
+      isLoading: false,
+    })
+    renderTab()
+
+    expect(screen.getByText(/standings as of 2026-09-03/)).toBeInTheDocument()
+  })
+
+  it('says nothing for the live RATING source, which cannot be stale (#974)', () => {
+    // RATING is computed on read, so the backend sends no timestamp — better silence than inventing
+    // "just now" for something that was never snapshotted.
+    useGetApiV1Standings.mockReturnValue({ data: defaultPage, isLoading: false })
+    renderTab()
+
+    expect(screen.queryByText(/Points last calculated/)).not.toBeInTheDocument()
+  })
+
 })
