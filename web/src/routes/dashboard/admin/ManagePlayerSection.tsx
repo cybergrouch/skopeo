@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Capability } from "@/auth/capabilities";
 import { NtrpDisclaimerInfo } from '@/components/NtrpLabel'
 import { toast } from 'sonner'
 import { toastError } from '@/observability/toastError'
@@ -31,13 +32,30 @@ import { usePostApiV1UsersUserIdRankingPointsAdjustments } from '@/api/generated
 import { useDeleteApiV1UsersId } from '@/api/generated/users/users'
 import type { UserSummaryResponse } from '@/api/generated/model'
 
-// Roles an admin can grant/revoke here. ADMINISTRATOR is included (#194) but gated behind a confirm
-// step, since it's a high-impact grant; the backend also refuses to revoke a bootstrap admin.
-// SCORER joins the list with #911 — without it the capability exists server-side but there is no way to
-// hand it to anyone. (POINTS_MANAGER is still absent; that predates #911 and is tracked separately.)
-const GRANTABLE = ['HOST', 'CLUB_OWNER', 'RATER', 'RESEARCHER', 'SCORER', 'ADMINISTRATOR'] as const
-type GrantableRole = (typeof GRANTABLE)[number]
-const ADMIN_ROLE: GrantableRole = 'ADMINISTRATOR'
+const ADMIN_ROLE = Capability.ADMINISTRATOR
+
+/**
+ * Roles an admin can grant or revoke here — **derived from the capability enum, not hand-listed** (#926).
+ *
+ * It was a literal, and it drifted twice: POINTS_MANAGER was added by #403 and never appeared, so the
+ * only way to appoint one was a direct API call, and nobody noticed for over a year because
+ * ADMINISTRATOR also satisfies that tab's gate. SCORER only made it in because #911 happened to touch
+ * this file. Deriving removes the failure mode rather than patching this instance of it — the next
+ * capability added is grantable the moment the client is regenerated.
+ *
+ * Two deliberate departures from the raw enum order:
+ *
+ * - **PLAYER is excluded.** It is the baseline every user keeps, so it is not a grant.
+ * - **ADMINISTRATOR is forced last.** It is the high-impact one and sits behind a confirm step (#194);
+ *   putting it in the middle of the list on enum ordering alone would make it easy to hit by accident.
+ */
+const GRANTABLE: Capability[] = [
+  ...Object.values(Capability).filter(
+    (role) => role !== Capability.PLAYER && role !== ADMIN_ROLE,
+  ),
+  ADMIN_ROLE,
+]
+type GrantableRole = Capability
 
 /** The backend's `{ error, message }` body carries a human-readable reason (e.g. last-admin, bootstrap). */
 function errorMessage(err: unknown, fallback: string): string {
