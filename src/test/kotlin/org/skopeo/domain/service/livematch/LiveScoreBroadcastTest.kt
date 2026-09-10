@@ -219,4 +219,16 @@ class LiveScoreBroadcastTest {
         // live scoring must work fully without one.
         NoOpLiveScoreBroadcaster.publish(payload = view().toBroadcast(publicCode = "MTCH01"))
     }
+
+    @Test
+    fun `a broadcaster written as a lambda gets an inert discard, and the sweep survives it`() {
+        // discard() has a default body purely so LiveScoreBroadcaster can stay a `fun interface` —
+        // several test doubles are SAM lambdas, and making it abstract would break every one. The
+        // default has to be genuinely inert, because the retention sweep (#939) calls it on whatever
+        // broadcaster it was handed, including one that never meant to implement it.
+        val lambdaOnly = LiveScoreBroadcaster { }
+
+        lambdaOnly.discard(publicCode = "MTCH01")
+        lambdaOnly.publish(payload = view().toBroadcast(publicCode = "MTCH01"))
+    }
 }
