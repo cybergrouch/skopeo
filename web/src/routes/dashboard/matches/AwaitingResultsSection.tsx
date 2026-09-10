@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EditFixturePlayersDialog } from "@/features/match/EditFixturePlayersDialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/observability/toastError";
 import { PublicPageLink } from "@/components/PublicPageLink";
@@ -104,6 +105,10 @@ function MatchResultRow({
   const recorded = match.sets.length > 0;
   const rated = match.ratedAt != null;
   const [editing, setEditing] = useState(false);
+  // Changing who plays (#957). Only while there is no recorded result — after that the server refuses,
+  // because changing who played would rewrite the history ratings and points are computed from.
+  const [editingPlayers, setEditingPlayers] = useState(false);
+  const canEditPlayers = !readOnly && !recorded && !rated;
   // A fresh fixture starts with a single empty set row (#571) — most results are single-set, so hosts
   // needn't delete a spare row; the "Add set" control adds more when needed.
   const [rows, setRows] = useState<SetRow[]>(
@@ -206,6 +211,31 @@ function MatchResultRow({
       Delete fixture
     </Button>
   );
+
+  // Sits beside Delete because it is the alternative to it: before #957, changing a player MEANT
+  // deleting the fixture and recreating it — which burned the match number and the ordering.
+  const editPlayersControl = canEditPlayers ? (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={() => setEditingPlayers(true)}
+    >
+      Change players
+    </Button>
+  ) : null;
+
+  if (editingPlayers) {
+    return (
+      <div className="rounded-lg border p-3">
+        <EditFixturePlayersDialog
+          match={match}
+          nameOf={nameOf}
+          onClose={() => setEditingPlayers(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border p-3">
@@ -311,7 +341,8 @@ function MatchResultRow({
                 Cancel
               </Button>
             ) : null}
-            {deleteControls}
+            {editPlayersControl}
+              {deleteControls}
           </div>
         </>
       ) : (
@@ -329,6 +360,7 @@ function MatchResultRow({
               >
                 Edit result
               </Button>
+              {editPlayersControl}
               {deleteControls}
             </div>
           )}

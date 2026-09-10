@@ -174,6 +174,42 @@ class MatchRepository {
         }
 
     /**
+     * Replace the players on a fixture's two sides (#957), keeping the match itself — and therefore its
+     * match number and its place in the order — exactly where it was.
+     *
+     * **Mutates the sides' `team_users`; it does not repoint the match at new teams.** That is what
+     * preserves the fixture's identity, and it is safe only because an ordinary fixture's teams are
+     * *temporary* — created per match by [createFixture] with `is_temporary = true`.
+     *
+     * **A non-temporary side is refused, and this is the important guard.** Standing event teams (#720)
+     * live in the same `teams` table and are shared across fixtures, so rewriting one here would
+     * silently change every other match that team plays. Changing who is in a standing team is team
+     * management, not a fixture edit, and it has its own surface.
+     *
+     * Positions are rewritten from the new order, so a doubles pairing keeps a defined slot order rather
+     * than inheriting whatever the old rows happened to have.
+     */
+    fun setFixturePlayers(
+        matchId: UUID,
+        team1UserIds: List<UUID>,
+        team2UserIds: List<UUID>,
+        team1Name: String,
+        team2Name: String,
+    ): Either<ServiceError, MatchAggregateEntity> =
+        transaction {
+            val match =
+                loadMatch(id = matchId)
+                    ?: return@transaction ServiceError.NotFound(message = "Match $matchId not found").left()
+            replaceSidePlayers(
+                match = match,
+                team1UserIds = team1UserIds,
+                team2UserIds = team2UserIds,
+                team1Name = team1Name,
+                team2Name = team2Name,
+            ).map { loadMatchOrThrow(id = matchId) }
+        }
+
+    /**
      * Move a match to [status]. Used by live scoring to mark a fixture `IN_PROGRESS` (#911) — the first
      * user of a status that has existed in the enum since the beginning and been written by nothing.
      *
@@ -994,3 +1030,58 @@ private fun setsOf(matchId: UUID): List<MatchSetEntity> =
                 tiebreakTeam2Points = tb?.get(expression = MatchSetTiebreaksTable.team2Points),
             )
         }
+
+/**
+ * Rewrite both sides' members and names in place (#957).
+ *
+ * File-level rather than a member because it needs nothing from the repository but the tables, and
+ * `MatchRepository` is at detekt's size limit — a class that keeps absorbing operations is what that
+ * limit exists to notice.
+ *
+ * **Mutates the sides' `team_users`; it does not repoint the match at new teams.** That is what keeps
+ * the fixture's identity — its match number and its place in the order — and it is safe only because an
+ * ordinary fixture's teams are *temporary*, created per match with `is_temporary = true`.
+ *
+ * **A non-temporary side is refused, and this is the important guard.** Standing event teams (#720)
+ * live in the same `teams` table and are shared across fixtures, so rewriting one here would silently
+ * change every other match that team plays. Changing a standing team's members is team management, not
+ * a fixture edit.
+ *
+ * Positions are rewritten from the new order, so a doubles pairing keeps a defined slot order rather
+ * than inheriting whatever the old rows happened to have.
+ */
+private fun replaceSidePlayers(
+    match: MatchAggregateEntity,
+    team1UserIds: List<UUID>,
+    team2UserIds: List<UUID>,
+    team1Name: String,
+    team2Name: String,
+): Either<ServiceError, Unit> {
+    val sides = listOf(match.team1.teamId to team1UserIds, match.team2.teamId to team2UserIds)
+    val shared =
+        sides.map { (teamId, _) -> teamId }.filterNot { teamId ->
+            TeamsTable.selectAll().where { TeamsTable.id eq teamId }.single()[TeamsTable.isTemporary]
+        }
+    if (shared.isNotEmpty()) {
+        return ServiceError
+            .Validation(
+                message =
+                    "This fixture uses a standing event team, whose members are shared with its other " +
+                        "matches. Change the team itself rather than this fixture.",
+            ).left()
+    }
+    sides.forEach { (teamId, userIds) ->
+        TeamUsersTable.deleteWhere { TeamUsersTable.teamId eq teamId }
+        userIds.forEachIndexed { index, uid ->
+            TeamUsersTable.insert {
+                it[TeamUsersTable.teamId] = teamId
+                it[userId] = uid
+                it[position] = index + 1
+            }
+        }
+    }
+    // The team's display name is derived from its members, so it goes stale otherwise.
+    TeamsTable.update(where = { TeamsTable.id eq match.team1.teamId }) { it[name] = team1Name }
+    TeamsTable.update(where = { TeamsTable.id eq match.team2.teamId }) { it[name] = team2Name }
+    return Unit.right()
+}

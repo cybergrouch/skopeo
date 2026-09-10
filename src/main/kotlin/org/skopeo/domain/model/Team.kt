@@ -94,4 +94,14 @@ enum class TeamType {
 
     /** Mixed doubles: 2 players per team (male + female) */
     MIXED_DOUBLES,
+    ;
+
+    /**
+     * How many players a side holds.
+     *
+     * On the enum rather than re-derived at each call site (#957): the counts were previously stated
+     * only in the comments above, so every caller needing them wrote its own `if (DOUBLES) 2 else 1` —
+     * which quietly treats MIXED_DOUBLES as singles.
+     */
+    val playersPerSide: Int get() = if (this == SINGLES) 1 else 2
 }

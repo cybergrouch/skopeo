@@ -2378,6 +2378,64 @@ paths:
         '409':
           description: Cannot disable a match that has already been rated
 
+  /api/v1/matches/{id}/players:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Change who is playing a fixture (#957)
+      description: |
+        Replaces both sides' players, keeping the fixture itself — and therefore its match number and
+        its place in the calculation order. Before this the only route was delete-and-recreate, which
+        left a permanent gap in the numbering (a match number is an identifier and is never recycled,
+        #898) and required rebuilding the order by hand.
+
+        Both sides are sent whole rather than as a patch, so the resulting line-up is unambiguous.
+
+        REFUSED once a result is recorded: changing who played after the fact would rewrite history that
+        ratings and points were computed from. The line is a recorded result, not a rating — rating
+        happens at event finalization, potentially days later (#952).
+
+        Also refused when either side is a STANDING event team (#720): those are shared across the
+        event's matches, so editing one here would silently change other fixtures. Change the team
+        instead.
+
+        The new players must be participants of the event and active, exactly as when creating the
+        fixture — a fixture edited into a state it could not have been created in would be a hole in
+        whatever the creation rules were protecting. The side sizes must match the fixture's format.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFixturePlayersRequest'
+      responses:
+        '200':
+          description: The updated fixture
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchResponse'
+        '400':
+          description: >-
+            A player is repeated or on both sides, a side is empty, an id is malformed, a player is not
+            an event participant or not active, a side size does not match the format, or a side is a
+            standing event team
+        '403':
+          description: Caller may not organize this event (#789)
+        '404':
+          description: No such match
+        '409':
+          description: The match is disabled, already has a recorded result, or its event is finalized
+
   /api/v1/matches/{id}/handicaps:
     parameters:
       - name: id
@@ -7586,6 +7644,26 @@ components:
             the default (true — "Award Ranking Points" is on unless the organizer unchecks it). Coerced to
             false when the global "Award ranking points" flag (#641) is off (#752): the request is
             accepted, the created event simply reports awardRankingPoints false.
+
+    UpdateFixturePlayersRequest:
+      type: object
+      description: >-
+        Both sides of a fixture, sent whole (#957). A patch would leave "unchanged" and "cleared"
+        looking the same; two sides is few enough that sending both is clearer than a diff.
+      required: [team1, team2]
+      properties:
+        team1:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: The user ids on side 1, in slot order. Must match the fixture's format size.
+        team2:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: The user ids on side 2. No player may appear twice or on both sides.
 
     SetHandicapsRequest:
       type: object
