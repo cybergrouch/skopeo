@@ -64,6 +64,18 @@ data class StandingsPageResponse(
     val groups: List<StandingsGroupResponse>,
     val bands: List<StandingsBandResponse>,
     val source: String,
+    /**
+     * When the served POINTS snapshot was computed, ISO-8601 (#974). Null for the live RATING source,
+     * which is computed on read, and null before any run has published.
+     */
+    val computedAt: String? = null,
+    /**
+     * The date the standings *describe*, ISO-8601 (#974) — which decides which awards had expired.
+     *
+     * Distinct from [computedAt] on purpose: they diverge whenever a run is late or re-run for an
+     * earlier date, and that is exactly the case a reader needs to see. Showing only one would hide it.
+     */
+    val asOf: String? = null,
 )
 
 /**

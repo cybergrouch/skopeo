@@ -19,6 +19,7 @@ import org.skopeo.domain.model.StandingsEntryWrite
 import org.skopeo.domain.model.StandingsPage
 import org.skopeo.domain.model.StandingsSnapshotEntry
 import org.skopeo.repository.persistence.StandingsEntryEntity
+import org.skopeo.repository.persistence.StandingsSnapshotEntity
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -67,6 +68,29 @@ class StandingsSnapshotRepository {
                 this[StandingsEntriesTable.achievedAt] = entry.achievedAt
             }
             snapshotId
+        }
+
+    /**
+     * The header row of [snapshotId] — when it was computed and what date it describes (#974).
+     *
+     * Separate from the id-only lookups above because most callers only need to know *which* snapshot
+     * to serve; this is for the one that also needs to say *how current* it is.
+     */
+    fun headerOf(snapshotId: UUID): StandingsSnapshotEntity? =
+        transaction {
+            StandingsSnapshotsTable
+                .selectAll()
+                .where { StandingsSnapshotsTable.id eq snapshotId }
+                .singleOrNull()
+                ?.let {
+                    StandingsSnapshotEntity(
+                        id = it[StandingsSnapshotsTable.id].value,
+                        computedAt = it[StandingsSnapshotsTable.computedAt],
+                        asOf = it[StandingsSnapshotsTable.asOf],
+                        status = it[StandingsSnapshotsTable.status],
+                        source = it[StandingsSnapshotsTable.sourceCol],
+                    )
+                }
         }
 
     /** The id of the newest PUBLISHED snapshot (by computed_at), or null when none has been built yet. */

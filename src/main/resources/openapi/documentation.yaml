@@ -9789,6 +9789,21 @@ components:
             The effective serving source. RATING is computed live from current ratings; POINTS is served
             from the latest published points snapshot. When source is POINTS and no snapshot exists the
             entries are empty (an explicit points empty state), never a silent fallback to ratings.
+        computedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            When the served POINTS snapshot was computed (#974). Null for the live RATING source, which
+            is computed on read, and null before any run has published.
+        asOf:
+          type: string
+          format: date
+          nullable: true
+          description: >-
+            The date the standings describe (#974) — which decides which awards had expired. Distinct
+            from computedAt: the two diverge whenever a run is late or re-run for an earlier date, which
+            is exactly the case a reader needs to see, so showing only one would hide it.
 
     StandingsLocateResponse:
       type: object

@@ -3,6 +3,9 @@
 
 package org.skopeo.domain.model
 
+import java.time.LocalDate
+import java.time.LocalDateTime
+
 // The standings read-path result aggregates (#113/#220), produced by StandingsService and mapped to the
 // API response by the mapper layer. Kept in model so the dto/mapper boundary never reaches into service.
 
@@ -22,6 +25,10 @@ data class StandingsView(
     // The effective serving source (#428): RATING = live calculation, POINTS = the POINTS snapshot (or an
     // explicit empty view when none exists). Lets the UI distinguish "POINTS, no data yet" from ratings.
     val source: SnapshotSource,
+    // How current these standings are (#974). Null for the live RATING source, which is computed on
+    // read and so is never stale — and null for POINTS before any run has published.
+    val computedAt: LocalDateTime? = null,
+    val asOf: LocalDate? = null,
 )
 
 /** A selectable (band, sex) group present in the leaderboard — powers the UI band dropdown + sex toggle. */
