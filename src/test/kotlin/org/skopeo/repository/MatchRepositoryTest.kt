@@ -6,6 +6,7 @@ package org.skopeo.repository
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
@@ -15,6 +16,7 @@ import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -357,6 +359,86 @@ class MatchRepositoryTest {
         overridden.subList(fromIndex = 2, toIndex = 4).toSet() shouldBe setOf(a1, a3)
         overridden.last() shouldBe c1
     }
+
+    /**
+     * The intra-event ordering contract from #898, pinned (#920).
+     *
+     * #898 replaced the `(match_date, calc_sequence NULLS LAST, completed_at, id)` tuple with
+     * `match_number`, and the claim that this reproduced the existing order was verified by hand
+     * against a restore of production — strong evidence, but not automated, so nothing would catch a
+     * regression. This is the automation.
+     *
+     * It matters more than an ordinary ordering test because the rating pipeline is **path-dependent**:
+     * each match carries ratings forward into the next, so reordering does not shuffle a list, it
+     * changes the numbers.
+     *
+     * The fixtures are created deliberately OUT of date order, which is what makes the case
+     * discriminating — under the old tuple this sorts by date, under `match_number` it sorts by
+     * creation. A test built on same-day matches (as the #335 one above is) would pass either way.
+     */
+    @Test
+    fun `intra-event processing order is match_number, not match date or completion time (#920)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 2, 1), members = listOf(u1, u2))
+
+        // match_number follows creation (1, 2, 3); match_date and completed_at both run backwards.
+        val first = pendingMatch(u1 = u1, u2 = u2, eventId = eventId, on = LocalDate.of(2026, 1, 30))
+        val second = pendingMatch(u1 = u1, u2 = u2, eventId = eventId, on = LocalDate.of(2026, 1, 20))
+        val third = pendingMatch(u1 = u1, u2 = u2, eventId = eventId, on = LocalDate.of(2026, 1, 10))
+        events.finalize(id = eventId, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
+
+        val expected = listOf(first, second, third)
+        withClue(clue = "processing order must be match_number order") {
+            matches.listPendingCalculation().map { it.toDomain().id } shouldBe expected
+        }
+        // Self-check: assert the case can actually tell the two keys apart, so that "fixing" the dates
+        // into ascending order cannot quietly turn this into a test that passes for no reason.
+        withClue(clue = "the fixtures must order differently by date than by match_number, or this proves nothing") {
+            expected.sortedBy { matches.findById(matchId = it).shouldBeRight().toDomain().matchDate } shouldNotBe expected
+        }
+    }
+
+    /**
+     * The other half of the contract (#920): the order follows `match_number` as a *live* value, not
+     * as a proxy for creation order.
+     *
+     * An organizer reordering an event's schedule (#898's `renumberMatches`) must move the rating
+     * pipeline with it — the numbers are what the organizer sees and what they are re-sequencing. This
+     * is the case that a change to number *assignment*, rather than to the comparator, would break.
+     */
+    @Test
+    fun `renumbering an event's matches re-orders the rating pipeline (#920)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 2, 1), members = listOf(u1, u2))
+        // Ascending dates, so match_number and match_date agree BEFORE the renumber and disagree after.
+        // Same-day fixtures would leave the two keys indistinguishable here: a date-keyed comparator
+        // would fall through to a stable sort and could reproduce the expected order by luck.
+        val m1 = pendingMatch(u1 = u1, u2 = u2, eventId = eventId, on = LocalDate.of(2026, 1, 10))
+        val m2 = pendingMatch(u1 = u1, u2 = u2, eventId = eventId, on = LocalDate.of(2026, 1, 15))
+        val m3 = pendingMatch(u1 = u1, u2 = u2, eventId = eventId, on = LocalDate.of(2026, 1, 20))
+        events.finalize(id = eventId, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
+
+        matches.listPendingCalculation().map { it.toDomain().id } shouldBe listOf(m1, m2, m3)
+
+        // Hand the slots 1, 2, 3 out in this order — the last match now leads the event.
+        matches.renumberMatches(matchIds = listOf(m3, m1, m2))
+
+        matches.listPendingCalculation().map { it.toDomain().id } shouldBe listOf(m3, m1, m2)
+    }
+
+    /**
+     * A completed, still-unrated match on [eventId] and [on], with a completion time that runs
+     * backwards as the date does — so neither of the old tuple's leading keys agrees with creation
+     * order. Wraps [completedMatch] purely to keep the two ordering tests above readable.
+     */
+    private fun pendingMatch(
+        u1: UUID,
+        u2: UUID,
+        eventId: UUID,
+        on: LocalDate,
+    ): UUID = completedMatch(u1 = u1, u2 = u2, matchDate = on, eventId = eventId, completedAt = on.atTime(12, 0))
 
     @Test
     fun `pending-calculation scoped to an event shows that event's fixtures from any creator (#335)`() {
