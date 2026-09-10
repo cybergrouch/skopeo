@@ -134,6 +134,7 @@ class MatchRepository {
                         it[team1Games] = set.team1Games
                         it[team2Games] = set.team2Games
                         it[hasTiebreak] = hasTb
+                        it[abandoned] = set.abandoned
                     }.value
                 if (hasTb) {
                     MatchSetTiebreaksTable.insert {
@@ -1028,6 +1029,7 @@ private fun setsOf(matchId: UUID): List<MatchSetEntity> =
                 team2Games = setRow[MatchSetsTable.team2Games],
                 tiebreakTeam1Points = tb?.get(expression = MatchSetTiebreaksTable.team1Points),
                 tiebreakTeam2Points = tb?.get(expression = MatchSetTiebreaksTable.team2Points),
+                abandoned = setRow[MatchSetsTable.abandoned],
             )
         }
 

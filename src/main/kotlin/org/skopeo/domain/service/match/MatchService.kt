@@ -881,6 +881,7 @@ internal fun deriveOutcome(
                     winnerTeamId = winner,
                     tiebreakTeam1Points = set.tiebreakTeam1Points,
                     tiebreakTeam2Points = set.tiebreakTeam2Points,
+                    abandoned = set.abandoned,
                 )
             }
         // The MATCH winner may be designated (#917); the SET winners above never are. When one is given

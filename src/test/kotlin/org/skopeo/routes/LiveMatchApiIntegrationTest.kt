@@ -3,6 +3,7 @@
 
 package org.skopeo.routes
 
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -427,6 +428,12 @@ class LiveMatchApiIntegrationTest {
             val finalized = client.finalize(token = token, matchId = matchId)
             finalized.status shouldBe HttpStatusCode.OK
             finalized.bodyAsText() shouldContain "RETIRED"
+
+            // The partial set is marked abandoned (#972), end to end. This is the only moment the fact
+            // is knowable: once stored, 3-1 reads exactly like a set that was played out, and it clears
+            // the games floor either way. Without the flag the points rule cannot tell the two apart.
+            val stored = MatchRepository().findById(matchId = matchId).shouldBeRight().toDomain()
+            stored.sets.map { it.abandoned } shouldBe listOf(element = true)
         }
 
     @Test

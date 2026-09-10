@@ -104,7 +104,7 @@ Points are computed **per set and summed across the sets** of the match:
 
 ### Edge cases
 
-> **Status:** the open-play retirement rule below is **specified, not yet implemented** (#972). The previous rule — *"the match awards 0 points, no computed award for either side"* — was documented here but never built: nothing in the awarding path reads `completionReason`, so a retired match is currently scored exactly like a completed one. Both the old rule and the new one differ from what the code does today.
+> **History:** the previous rule here — *"the match awards 0 points, no computed award for either side"* — was documented but **never built**: nothing in the awarding path read `completionReason`, so a retired match was scored exactly like a completed one, and a player who retired while leading collected that set's winner points. The rule below replaces it and *is* implemented (#972).
 
 **Retirement / default (open play).** Scored per set, like everything else here. For the set that was **abandoned** when a player retired or defaulted:
 
@@ -115,6 +115,8 @@ Points are computed **per set and summed across the sets** of the match:
 Sets that **finished normally before** the retirement are scored as usual. The deterrent is carried by the abandoned set, not applied retroactively to tennis that was actually played.
 
 A compact way to state the same rule: **the abandoned set pays only when the designation and the games agree.** The designated winner is always the non-retiring side, so the opponent is paid in exactly those cases where the games-derived winner is also them.
+
+**How the abandoned set is identified.** It is recorded, not inferred: `match_sets.abandoned` is set by the scorer for the set play stopped during. It cannot be derived, because a stored `5-1` reads identically whether it was won or walked away from — and it clears the games floor either way. Guessing "the last set of a retired match" would be wrong whenever a player retires *between* sets, and wrong in the damaging direction: it would retract points from a set that was genuinely completed and won.
 
 | Set when play stopped | Retiring side | Opponent |
 | --- | --- | --- |

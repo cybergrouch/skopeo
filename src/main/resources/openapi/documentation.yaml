@@ -7367,6 +7367,15 @@ components:
         tiebreakTeam2Points:
           type: integer
           nullable: true
+        abandoned:
+          type: boolean
+          default: false
+          description: >-
+            Play stopped during this set — a retirement or default (#972). Not derivable from the
+            score: `5-1` reads identically whether it was won or walked away from, and it clears the
+            games floor either way, so only the scorer knows. Drives the open-play points rule — an
+            abandoned set pays the conceding side nothing, and the opponent only if they were ahead
+            on games. The rating is unaffected and still follows the games (§10).
 
     MatchResultRequest:
       type: object

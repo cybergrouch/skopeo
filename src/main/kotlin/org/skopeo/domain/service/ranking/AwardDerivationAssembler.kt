@@ -12,6 +12,7 @@ import org.skopeo.domain.model.Match
 import org.skopeo.domain.model.PlacementBracket
 import org.skopeo.domain.model.PointClass
 import org.skopeo.domain.model.RankingPointAward
+import org.skopeo.domain.model.concedingTeamId
 import org.skopeo.domain.service.event.OpenPlayPointsCalculator
 import org.skopeo.domain.service.settings.PointsScheduleHistory
 import org.skopeo.repository.ClubRepository
@@ -174,6 +175,9 @@ class AwardDerivationAssembler(
                 team1Id = match.team1.teamId,
                 sets = match.sets,
                 config = config,
+                // Must match the awarder exactly (#972). The #892 guard below compares this arithmetic
+                // to what was paid, so omitting it here would report an honest award as unreproducible.
+                concedingTeamId = match.concedingTeamId(),
             )
         val sets =
             scored.map { set ->

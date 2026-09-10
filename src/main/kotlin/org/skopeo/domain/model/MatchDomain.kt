@@ -98,7 +98,29 @@ enum class MatchCompletionReason {
     val isRatable: Boolean get() = this != DEFAULTED
 }
 
-/** A completed set's score, with an optional tiebreak. Winner is derived from the games/tiebreak. */
+/**
+ * The side that conceded, for a match that did not play out (#972) — else `null`.
+ *
+ * Derived rather than stored, and deliberately so: a player who retires or defaults always loses, so
+ * the conceder is whichever side is not the designated winner. `MatchResultRequest` already declines
+ * to carry it as a field for exactly this reason — *"carrying it as well would let the two disagree."*
+ *
+ * Null for a normally completed match, and null when no winner was designated, so a caller that has
+ * not got a designation cannot accidentally attribute a concession to the wrong side.
+ */
+fun Match.concedingTeamId(): UUID? =
+    winnerTeamId
+        ?.takeIf { completionReason != MatchCompletionReason.COMPLETED }
+        ?.let { winner -> listOf(team1.teamId, team2.teamId).firstOrNull { it != winner } }
+
+/**
+ * A set's score, with an optional tiebreak. Winner is derived from the games/tiebreak.
+ *
+ * [abandoned] marks the set play stopped during -- a retirement or default (#972). It is stored rather
+ * than derived because nothing in the score implies it: `5-1` reads identically whether it was won or
+ * walked away from, and it clears the games floor either way. It drives the open-play points rule, and
+ * nothing else: the rating still reads [winnerTeamId], which stays derived from the games (S10).
+ */
 data class MatchSetResult(
     val setNumber: Int,
     val team1Games: Int,
@@ -106,6 +128,7 @@ data class MatchSetResult(
     val winnerTeamId: UUID,
     val tiebreakTeam1Points: Int? = null,
     val tiebreakTeam2Points: Int? = null,
+    val abandoned: Boolean = false,
 )
 
 /**

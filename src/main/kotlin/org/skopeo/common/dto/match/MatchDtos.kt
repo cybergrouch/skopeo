@@ -66,6 +66,15 @@ data class SetScoreRequest(
     val team2Games: Int,
     val tiebreakTeam1Points: Int? = null,
     val tiebreakTeam2Points: Int? = null,
+    /**
+     * Play stopped during this set -- a retirement or default (#972).
+     *
+     * Not derivable from the score, which is why it is on the wire: `5-1` reads identically whether it
+     * was won or walked away from, and it clears the games floor either way. Only the scorer knows.
+     *
+     * Defaults to false, so every existing caller keeps meaning "this set was played out".
+     */
+    val abandoned: Boolean = false,
 ) {
     init {
         // Shape validation at the boundary (#116): games can never be negative.

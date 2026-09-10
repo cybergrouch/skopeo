@@ -22,6 +22,7 @@ import org.skopeo.domain.model.PointClass
 import org.skopeo.domain.model.PointSourceType
 import org.skopeo.domain.model.RankingPointAwardWrite
 import org.skopeo.domain.model.UserRating
+import org.skopeo.domain.model.concedingTeamId
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.rating.CalibrationService
 import org.skopeo.domain.service.rating.RatingAssembler
@@ -427,6 +428,7 @@ class EventFinalizeAwarder(
                     team1Id = match.team1.teamId,
                     sets = match.sets,
                     config = config,
+                    concedingTeamId = match.concedingTeamId(),
                 )
             awardCount +=
                 awardBothSides(
