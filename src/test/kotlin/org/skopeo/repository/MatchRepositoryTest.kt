@@ -1087,4 +1087,47 @@ class MatchRepositoryTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
+
+    @Test
+    fun `setFixturePlayers reports an unknown match as not found (#957)`() {
+        matches
+            .setFixturePlayers(
+                matchId = UUID.randomUUID(),
+                team1UserIds = listOf(element = UUID.randomUUID()),
+                team2UserIds = listOf(element = UUID.randomUUID()),
+                team1Name = "a",
+                team2Name = "b",
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `setFixturePlayers refuses a STANDING event team, which is shared (#957)`() {
+        // The guard that matters. Standing event teams (#720) live in the same `teams` table as a
+        // fixture's temporary ones and are shared across the event's matches — rewriting one here
+        // would silently change every other match that team plays.
+        val u1 = newUser(uid = "standing-1")
+        val u2 = newUser(uid = "standing-2")
+        val spare = newUser(uid = "standing-3")
+        val id = fixture(u1 = u1, u2 = u2, date = LocalDate.of(2026, 5, 1)).id
+
+        // Turn side 1 into a standing team, exactly as an event team would be.
+        val team1Id = matches.findById(matchId = id).shouldBeRight().toDomain().team1.teamId
+        transaction {
+            TeamsTable.update(where = { TeamsTable.id eq team1Id }) { it[isTemporary] = false }
+        }
+
+        matches
+            .setFixturePlayers(
+                matchId = id,
+                team1UserIds = listOf(element = spare),
+                team2UserIds = listOf(element = u2),
+                team1Name = "spare",
+                team2Name = "away",
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+
+        // ...and nothing was written: a refusal that half-applied would be worse than the bug.
+        matches.findById(matchId = id).shouldBeRight().toDomain().team1.userIds shouldBe listOf(element = u1)
+    }
 }

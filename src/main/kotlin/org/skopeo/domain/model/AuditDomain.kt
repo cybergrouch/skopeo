@@ -25,6 +25,7 @@ enum class AuditAction {
     INVITE_CREATED,
     INVITE_REVOKED,
     MATCH_FIXTURE_CREATED,
+    MATCH_FIXTURE_PLAYERS_CHANGED,
     MATCH_RESULT_RECORDED,
     MATCH_SCORE_CORRECTED,
     MATCH_RATINGS_RE_RATED,
@@ -140,6 +141,8 @@ val AuditAction.category: AuditCategory
             -> AuditCategory.RATING_CHANGE
             AuditAction.INVITE_CREATED, AuditAction.INVITE_REVOKED -> AuditCategory.INVITE
             AuditAction.MATCH_FIXTURE_CREATED,
+            // Who played is exactly the kind of edit that has to be answerable later (#957).
+            AuditAction.MATCH_FIXTURE_PLAYERS_CHANGED,
             AuditAction.FIXTURE_HANDICAP_SET,
             -> AuditCategory.MATCH_FIXTURE
             // The score half of a post-rating correction (#776) belongs with results; its rating half

@@ -68,6 +68,16 @@ vi.mock('@/api/generated/matches/matches', () => ({
 vi.mock('@/api/generated/users/users', () => ({ useGetApiV1Users }))
 // dnd-kit relies on layout measurement that jsdom can't provide; stub it to passthrough components
 // and capture the DndContext onDragEnd so a test can simulate a drop.
+vi.mock('@/features/match/EditFixturePlayersDialog', () => ({
+  // Must be able to close: otherwise the section's onClose closure is never invoked and "open the
+  // editor, change your mind, come back" goes untested — which is a route a user takes constantly.
+  EditFixturePlayersDialog: ({ onClose }: { onClose: () => void }) => (
+    <div>
+      Change who is playing
+      <button onClick={onClose}>Close editor</button>
+    </div>
+  ),
+}))
 vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd: (e: unknown) => void }) => {
     dnd.onDragEnd = onDragEnd
@@ -384,6 +394,22 @@ describe('AwaitingResultsSection', () => {
     )
     // The confirm step resets so the row returns to its default actions.
     expect(screen.getByRole('button', { name: 'Delete fixture' })).toBeInTheDocument()
+  })
+
+  it('offers Change players on a fixture with no result, and opens the editor (#957)', async () => {
+    // The alternative to it used to be deleting the fixture and recreating it, which burned the match
+    // number (#898) and the ordering.
+    const user = userEvent.setup()
+    renderSection()
+
+    const control = await screen.findByRole('button', { name: 'Change players' })
+    await user.click(control)
+    expect(screen.getByText('Change who is playing')).toBeInTheDocument()
+
+    // ...and closing returns to the row rather than stranding the organizer in the editor.
+    await user.click(screen.getByRole('button', { name: 'Close editor' }))
+    expect(screen.queryByText('Change who is playing')).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Change players' })).toBeInTheDocument()
   })
 })
 

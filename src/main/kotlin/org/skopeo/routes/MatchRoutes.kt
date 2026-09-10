@@ -22,6 +22,8 @@ import org.skopeo.common.dto.match.MatchScoreCorrectionRequest
 import org.skopeo.common.dto.match.MatchStateRequest
 import org.skopeo.common.dto.match.ReorderMatchesRequest
 import org.skopeo.common.dto.match.SetHandicapsRequest
+import org.skopeo.common.dto.match.UpdateFixturePlayersRequest
+import org.skopeo.domain.service.match.FixturePlayerService
 import org.skopeo.domain.service.match.MatchScoreCorrectionService
 import org.skopeo.domain.service.match.MatchService
 import org.skopeo.domain.service.ranking.MatchAwardedPointsService
@@ -189,14 +191,18 @@ private fun Route.byId(service: MatchService) {
             ) { match -> call.respond(status = HttpStatusCode.OK, message = match) }
         }
     }
-    fixtureUpdateRoutes(service = service)
+    fixtureUpdateRoutes(service = service, players = FixturePlayerService())
 }
 
 /**
- * Fixture field-update routes (before the match is rated): per-side rating handicaps (#486). Handicap
- * ranges are validated in the DTO init; the service enforces the unrated guard.
+ * Fixture field-update routes: per-side rating handicaps (#486) and the players themselves (#957).
+ * Shapes are validated in the DTO inits; the service enforces the organizer gate and refuses a fixture
+ * that already has a recorded result.
  */
-private fun Route.fixtureUpdateRoutes(service: MatchService) {
+private fun Route.fixtureUpdateRoutes(
+    service: MatchService,
+    players: FixturePlayerService,
+) {
     put(path = "/{id}/handicaps") {
         respondMappingErrors {
             val request = call.receive<SetHandicapsRequest>()
@@ -207,6 +213,20 @@ private fun Route.fixtureUpdateRoutes(service: MatchService) {
                         matchId = uuidParam(name = "id"),
                         team1Handicap = request.team1Handicap?.let { BigDecimal(it) },
                         team2Handicap = request.team2Handicap?.let { BigDecimal(it) },
+                    ),
+            ) { match -> call.respond(status = HttpStatusCode.OK, message = match) }
+        }
+    }
+    // Change who is playing (#957). Both sides are sent whole, so the resulting line-up is unambiguous.
+    put(path = "/{id}/players") {
+        respondMappingErrors {
+            val request = call.receive<UpdateFixturePlayersRequest>()
+            respondEither(
+                result =
+                    players.updateFixturePlayers(
+                        token = verifiedToken(),
+                        matchId = uuidParam(name = "id"),
+                        request = request,
                     ),
             ) { match -> call.respond(status = HttpStatusCode.OK, message = match) }
         }

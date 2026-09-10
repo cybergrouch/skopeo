@@ -21,7 +21,6 @@ import org.skopeo.common.dto.match.MatchResultRequest
 import org.skopeo.common.dto.match.UpcomingMatchResponse
 import org.skopeo.common.dto.rating.MatchCalculationDetailResponse
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.security.CLUB_OWNER_OR_ADMIN
 import org.skopeo.common.security.Capability
 import org.skopeo.common.security.MATCH_MANAGEMENT_ROLES
 import org.skopeo.common.security.SCORING_ROLES
@@ -44,12 +43,10 @@ import org.skopeo.domain.model.MatchQuery
 import org.skopeo.domain.model.MatchSetResult
 import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.model.MatchType
-import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.PlacementBracket
 import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.canSeeRawRatingOrFalse
-import org.skopeo.domain.model.isExpired
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.event.EventOrganizerGate
 import org.skopeo.domain.service.rating.RatingAssembler
@@ -416,6 +413,7 @@ class MatchService(
      * is unrated (a rated match is frozen). Each value has already been range-validated at the boundary
      * (`0 < h <= 1.0`); a null side clears that side's handicap. Audited as FIXTURE_HANDICAP_SET.
      */
+
     fun setHandicaps(
         token: VerifiedFirebaseToken,
         matchId: UUID,
@@ -822,31 +820,6 @@ class MatchService(
         }
 
     /**
-     * Gate host data entry on an event (#310): once the event has ended, a plain HOST may no longer
-     * create fixtures or record results on it — only an ADMINISTRATOR or a CLUB_OWNER may. A
-     * [ServiceError.Conflict] otherwise.
-     */
-    private fun ensureHostMayEnter(
-        event: Event,
-        caller: User,
-    ): Either<ServiceError, Unit> =
-        either {
-            val exempt = caller.capabilities.any { it in CLUB_OWNER_OR_ADMIN }
-            ensure(condition = exempt || !event.isExpired(asOf = LocalDate.now())) {
-                ServiceError.Conflict(message = "This event has ended; only an administrator or club owner can modify it.")
-            }
-        }
-
-    /**
-     * Reject entering matches on a finalized event (#403): finalize is terminal and closes the event
-     * to further changes, so a fixture cannot be created on it and a result cannot be recorded.
-     */
-    private fun ensureEventNotFinalized(event: Event): Either<ServiceError, Unit> =
-        either {
-            ensure(condition = !event.isFinalized) { ServiceError.Validation(message = "Event is finalized") }
-        }
-
-    /**
      * How the match ended, from the wire (#911). Absent means [MatchCompletionReason.COMPLETED].
      *
      * Parsed here rather than in the DTO because the permitted values are a `model` concept and `dto`
@@ -863,14 +836,7 @@ class MatchService(
                 ).left()
     }
 
-    private fun staffCaller(token: VerifiedFirebaseToken): Either<ServiceError, User> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-        return if (caller == null || caller.capabilities.none { it in MATCH_MANAGEMENT_ROLES }) {
-            ServiceError.Forbidden().left()
-        } else {
-            caller.right()
-        }
-    }
+    private fun staffCaller(token: VerifiedFirebaseToken): Either<ServiceError, User> = staffCallerOf(users = users, token = token)
 
     /**
      * Resolve a fixture's players, requiring only that each exists and is active.
@@ -884,15 +850,7 @@ class MatchService(
      * participant is unrated, and finalizing is the only route into the rating queue (#403, #898), so
      * nothing can reach `RatingCalculationService` without a rating to move.
      */
-    private fun resolveActiveParticipants(ids: List<UUID>): Either<ServiceError, List<User>> =
-        either {
-            ids.map { id ->
-                val user =
-                    users.findById(id = id).map { it.toDomain() }.mapLeft { ServiceError.Validation(message = "Unknown user $id") }.bind()
-                ensure(condition = user.isActive) { ServiceError.Validation(message = "User $id is not active") }
-                user
-            }
-        }
+    private fun resolveActiveParticipants(ids: List<UUID>): Either<ServiceError, List<User>> = activeParticipants(users = users, ids = ids)
 }
 
 /**
@@ -981,11 +939,6 @@ private fun setWinner(
             set.tiebreakTeam1Points != set.tiebreakTeam2Points ->
             (if (set.tiebreakTeam1Points > set.tiebreakTeam2Points) team1Id else team2Id).right()
         else -> ServiceError.Validation(message = "set $setNumber has no clear winner").left()
-    }
-
-private fun teamName(users: List<User>): String =
-    users.joinToString(separator = "/") { user ->
-        user.names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value ?: "Player"
     }
 
 /** Orient one set's games/tiebreaks to a reference player's side: team1 when [refIsTeam1] (#188). */

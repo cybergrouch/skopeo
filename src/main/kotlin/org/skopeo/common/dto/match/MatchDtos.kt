@@ -152,6 +152,28 @@ data class MatchResultRequest(
     }
 }
 
+/**
+ * Body for `PUT /api/v1/matches/{id}/players` — change who is playing a fixture (#957).
+ *
+ * Both sides are supplied whole rather than as a diff: a fixture has exactly two sides and sending both
+ * makes the resulting line-up unambiguous, where a patch would leave "unchanged" and "cleared" looking
+ * the same.
+ */
+@Serializable
+data class UpdateFixturePlayersRequest(
+    val team1: List<String>,
+    val team2: List<String>,
+) {
+    init {
+        // Shape validation at the boundary (#116). Whether the players exist, are active, and are
+        // participants of the event is the service's job — it needs the database to answer.
+        require(value = team1.isNotEmpty() && team2.isNotEmpty()) { "both sides need at least one player" }
+        require(value = (team1 + team2).distinct().size == team1.size + team2.size) {
+            "a player cannot appear twice, or on both sides"
+        }
+    }
+}
+
 /** Body for `PUT /api/v1/matches/{id}/state` — enable/disable (append-only corrections). */
 @Serializable
 data class MatchStateRequest(
