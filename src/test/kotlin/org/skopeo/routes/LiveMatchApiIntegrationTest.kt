@@ -30,6 +30,7 @@ import org.skopeo.common.dto.livematch.LiveMatchResponse
 import org.skopeo.common.dto.livematch.LiveScoreEventRequest
 import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
+import org.skopeo.domain.mapper.entity.livematch.LiveMatchEventKinds
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -48,6 +49,7 @@ import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
 import org.skopeo.testsupport.fixtureEventId
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 /**
@@ -113,7 +115,42 @@ class LiveMatchApiIntegrationTest {
         return TestFirebaseAuth.mintToken(uid = uid)
     }
 
+    /**
+     * A fixture that is **under way**: created, started, and with a server assigned.
+     *
+     * Since #984/#985/#986 the API refuses scoring on a match that has not been started or has nobody
+     * serving. Seeded straight into the log rather than posted, so the arrangement does not depend on
+     * the guards under test.
+     */
     private fun seedFixture(): UUID {
+        val matchId = seedScheduledFixture()
+        val users = UserRepository()
+        val server = users.findByFirebaseUid(firebaseUid = "home")!!.toDomain().id
+        // Attribute the seeded rows to whichever umpire the test already created, not to a player.
+        // `umpireCredit` folds "who recorded rows" into the match's umpires, so crediting `home` here
+        // would invent a second umpire that the test never had.
+        val by =
+            listOf("ump", "boss")
+                .firstNotNullOfOrNull { uid -> users.findByFirebaseUid(firebaseUid = uid)?.toDomain()?.id }
+                ?: server
+        val live = LiveMatchRepository()
+        listOf(LiveMatchEventKinds.MATCH_STARTED to null, LiveMatchEventKinds.SERVER_ASSIGNED to server)
+            .forEach { (kind, playerId) ->
+                live.append(
+                    matchId = matchId,
+                    sequence = live.lastSequence(matchId = matchId) + 1,
+                    kind = kind,
+                    side = null,
+                    playerId = playerId,
+                    recordedBy = by,
+                    recordedAt = LocalDateTime.now(),
+                )
+            }
+        return matchId
+    }
+
+    /** A freshly created fixture, not yet started — the state an umpire first opens. */
+    private fun seedScheduledFixture(): UUID {
         val home = seedUser(uid = "home")
         val away = seedUser(uid = "away")
         return MatchRepository()
@@ -165,7 +202,8 @@ class LiveMatchApiIntegrationTest {
 
             view.pointsTeam1 shouldBe "40"
             view.pointsTeam2 shouldBe "0"
-            view.sequence shouldBe 3L
+            // The two rows `seedFixture` seeds (start, server) plus the three points.
+            view.sequence shouldBe 5L
         }
 
     @Test
@@ -271,7 +309,9 @@ class LiveMatchApiIntegrationTest {
     fun `undo with nothing to undo is 200, not an error`() =
         withApp { client ->
             val token = seedScorer()
-            val matchId = seedFixture()
+            // Scheduled, deliberately: `seedFixture` seeds a start and a server, and those ARE undoable
+            // actions — so on a match under way there is always something to take back.
+            val matchId = seedScheduledFixture()
             val response =
                 client.post(urlString = "/api/v1/matches/$matchId/live/undo") {
                     header(key = HttpHeaders.Authorization, value = "Bearer $token")
@@ -461,7 +501,8 @@ class LiveMatchApiIntegrationTest {
             // The credit is folded out because §8a makes the log disposable — but finalize itself does
             // NOT delete it, so a mis-finalized match can still be inspected.
             LiveMatchRepository().umpires(matchId = matchId).shouldHaveSize(size = 1)
-            LiveMatchRepository().log(matchId = matchId).shouldHaveSize(size = 1)
+            // The award, plus the start and server rows the fixture was seeded with.
+            LiveMatchRepository().log(matchId = matchId).shouldHaveSize(size = 3)
         }
 
     @Test
