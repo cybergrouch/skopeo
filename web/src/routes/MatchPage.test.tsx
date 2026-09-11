@@ -714,19 +714,21 @@ describe("MatchPage", () => {
     expect(screen.queryByText(/Not yet played/)).not.toBeInTheDocument();
   });
 
-  it("marks a retirement in the scoreline rather than reading as an ordinary loss (#954)", () => {
+  it("marks the side that retired, not the winner (#954, #987)", () => {
+    // Reported from production: `0-4 (ret)` put the mark beside the WINNER's figure, reading as
+    // though they had retired. TEAM2 won, so TEAM1 conceded, and the mark belongs on their number.
     useGetApiV1MatchesCodeCode.mockReturnValue({
       data: {
         ...match,
         status: "COMPLETED",
         completionReason: "RETIRED",
-        sets: [{ setNumber: 1, team1Games: 1, team2Games: 3 }],
+        sets: [{ setNumber: 1, team1Games: 1, team2Games: 3, abandoned: true }],
         winner: "TEAM2",
       },
       isLoading: false,
     });
     renderAt();
-    expect(screen.getByText(/1-3 \(ret\)/)).toBeInTheDocument();
+    expect(screen.getByText(/1\(R\)-3/)).toBeInTheDocument();
   });
 
   it("still says Not yet played for a fixture that genuinely has not been (#954)", () => {

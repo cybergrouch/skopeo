@@ -234,6 +234,15 @@ data class MatchSetResponse(
     val winnerTeamId: String? = null,
     val tiebreakTeam1Points: Int? = null,
     val tiebreakTeam2Points: Int? = null,
+    /**
+     * Play stopped during this set — a retirement or default (#972), exposed so a scoreline can mark
+     * the right set (#987).
+     *
+     * The obvious inference, "the last set is the abandoned one", is **wrong** when a player retires
+     * *between* sets: the last recorded set was played to a finish, and marking it would say someone
+     * quit during a set they completed. Only the scorer knows, so only the record can say.
+     */
+    val abandoned: Boolean = false,
 )
 
 @Serializable

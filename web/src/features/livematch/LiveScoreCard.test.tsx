@@ -93,7 +93,9 @@ describe("LiveScoreCard", () => {
     });
     renderCard();
 
-    expect(screen.getByText("(Retired)")).toBeInTheDocument();
+    // "(R)", not "(Retired)": one shared mark across this card and the match scoreline (#987), which
+    // previously said "(ret)" while this file's comment claimed the two agreed.
+    expect(screen.getByText("(R)")).toBeInTheDocument();
     // On the player, not in the badge: a badge saying "retired" leaves the reader to work out who by
     // reasoning backwards from the winner.
     expect(screen.getByText("Final")).toBeInTheDocument();
@@ -112,9 +114,9 @@ describe("LiveScoreCard", () => {
 
     const rows = container.querySelectorAll("div.flex.items-baseline");
     expect(rows[0].textContent).toContain("Ana");
-    expect(rows[0].textContent).not.toContain("(Retired)");
+    expect(rows[0].textContent).not.toContain("(R)");
     expect(rows[1].textContent).toContain("Bob");
-    expect(rows[1].textContent).toContain("(Retired)");
+    expect(rows[1].textContent).toContain("(R)");
   });
 
   it("marks a default the same way, with its own wording (#951)", () => {
@@ -124,7 +126,7 @@ describe("LiveScoreCard", () => {
       outcomeWinner: "TEAM1",
     });
     renderCard();
-    expect(screen.getByText("(Default)")).toBeInTheDocument();
+    expect(screen.getByText("(D)")).toBeInTheDocument();
     expect(screen.getByText("Final")).toBeInTheDocument();
   });
 
@@ -135,8 +137,8 @@ describe("LiveScoreCard", () => {
       outcomeWinner: "TEAM1",
     });
     renderCard();
-    expect(screen.queryByText("(Retired)")).not.toBeInTheDocument();
-    expect(screen.queryByText("(Default)")).not.toBeInTheDocument();
+    expect(screen.queryByText("(R)")).not.toBeInTheDocument();
+    expect(screen.queryByText("(D)")).not.toBeInTheDocument();
   });
 
   it("falls back to Final for an outcome it does not recognise", () => {
