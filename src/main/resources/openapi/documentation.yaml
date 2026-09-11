@@ -7158,12 +7158,14 @@ components:
       properties:
         kind:
           type: string
-          enum: [POINT_WON, GAME_AWARDED, SET_AWARDED, TIEBREAK_STARTED, SERVER_ASSIGNED,
+          enum: [POINT_WON, GAME_AWARDED, SET_AWARDED, SET_STARTED, TIEBREAK_STARTED, SERVER_ASSIGNED,
                  RETIRED, DEFAULTED, MATCH_AWARDED, MATCH_STARTED, PAUSED, RESUMED]
           description: >-
             POINT_WON advances the game and may close it. SET_AWARDED banks the current set at whatever
             the score is, and is also how a tiebreak ends (the umpire marks who won; no target is
-            assumed). MATCH_STARTED is distinct from the first point so match duration can be measured.
+            assumed) — it leaves the match BETWEEN sets, where scoring is refused until SET_STARTED
+            begins the next one or the match is finalized (#984). MATCH_STARTED is distinct from the
+            first point so match duration can be measured, and scoring is refused before it (#986).
             PAUSED/RESUMED suspend play without ending the match — a rain delay may last days, which is
             why it is stated rather than inferred from a timeout. UNDONE is absent: undo has its own
             endpoint because the server picks the target.
@@ -7295,6 +7297,12 @@ components:
           type: boolean
         isPaused:
           type: boolean
+        isBetweenSets:
+          type: boolean
+          default: false
+          description: >-
+            A set has been awarded and the next has not begun (#984). The umpire's decision point:
+            start the next set, or finalize here. Scoring is refused until one of those happens.
         isTiebreak:
           type: boolean
         serverId:

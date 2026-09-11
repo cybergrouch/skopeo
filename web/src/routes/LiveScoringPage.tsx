@@ -233,6 +233,22 @@ export function LiveScoringPage() {
             isRunning={view.isRunning ?? false}
             className="text-[2.4dvh] font-semibold tabular-nums text-foreground"
           />
+          {/*
+            The way out (#986). The entry screen had a Back control and the scoring view had none, so
+            an umpire who opened the wrong match — or one who is not ready to start — could only leave
+            via the browser, which does not release fullscreen. Stays live whatever state the match is
+            in: it is the one control the gates must never disable.
+          */}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              void exit()
+              navigate(`/matches/${code}`)
+            }}
+          >
+            Back
+          </Button>
           {view.isPaused && <span className="font-semibold text-amber-600">Paused</span>}
           {view.isTiebreak && <span className="font-semibold">Tiebreak</span>}
           {!view.hasStarted && (
@@ -264,6 +280,7 @@ export function LiveScoringPage() {
         onTiebreak={() => send('TIEBREAK_STARTED')}
         onPauseResume={() => send(view.isPaused ? 'RESUMED' : 'PAUSED')}
         onFlip={() => setFlipped((f) => !f)}
+        onStartSet={() => send('SET_STARTED')}
         onFinalize={() => finalize.mutate({ matchId })}
       />
     </div>

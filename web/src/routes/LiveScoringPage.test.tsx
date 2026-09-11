@@ -56,6 +56,11 @@ const liveView = {
   scorerId: "u1",
   hasStarted: true,
   isPaused: false,
+  // A match under way has a server: since #985 a point is refused without one, so a fixture lacking it
+  // would not represent a scorable match.
+  isBetweenSets: false,
+  serverId: "p-1",
+  serverName: "Ana",
   isTiebreak: false,
   pointsTeam1: "30",
   pointsTeam2: "15",
@@ -624,6 +629,12 @@ describe("LiveScoringPage", () => {
 
   it("offers to set a server when none is chosen (#943)", async () => {
     const user = userEvent.setup();
+    // No server yet: the base fixture has one, since #985 makes a point impossible without it, so this
+    // test has to arrange the state it is actually about.
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, serverId: null, serverName: null },
+      isLoading: false,
+    });
     renderPage();
     await start(user);
 
@@ -678,4 +689,87 @@ describe("LiveScoringPage", () => {
     await start(user);
     expect(screen.queryByRole("button", { name: /Serving|Set who is serving/ })).not.toBeInTheDocument();
   });
+  // ---- The opening and between-sets gates (#984/#985/#986) --------------------------------------
+
+  it("keeps every scoring control inert until the match is started (#986)", async () => {
+    // MATCH_STARTED is what starts the clock, so scoring without it produced a match with points and
+    // a duration of zero — and a spectator card reading "About to start" beside accumulating points.
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, hasStarted: false },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    expect(screen.getByLabelText("Point to Ana")).toBeDisabled();
+    expect(screen.getByLabelText("Game to Ana")).toBeDisabled();
+    expect(screen.getByLabelText("Set to Ana")).toBeDisabled();
+    expect(screen.getByLabelText("Ana retires")).toBeDisabled();
+    // Back stays available throughout — an umpire must be able to leave a match opened by mistake.
+    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+  });
+
+  it("refuses points until somebody is serving, but still allows a declared game (#985)", async () => {
+    // A point with nobody serving leaves the scoreboard unable to say who is. A game or set is an
+    // umpire declaration and needs no server, so gating those too would be over-applying the rule.
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, serverId: null, serverName: null },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    expect(screen.getByLabelText("Point to Ana")).toBeDisabled();
+    expect(screen.getByLabelText("Game to Ana")).toBeEnabled();
+  });
+
+  it("stops between sets and offers the choice that was missing (#984)", async () => {
+    // The bug this whole change exists for: awarding a set rolled straight into the next, so the
+    // moment to ask "is this over?" never came and Finalize could never be reached.
+    const user = userEvent.setup();
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "u1", capabilities: ["PLAYER", "SCORER", "HOST"] },
+    });
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isBetweenSets: true },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    expect(screen.getByLabelText("Point to Ana")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Start next set" })).toBeEnabled();
+    // Finalize is reachable HERE, on a match that simply finished — no retirement required.
+    expect(screen.getByRole("button", { name: "Finalize" })).toBeEnabled();
+  });
+
+  it("starts the next set on request (#984)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isBetweenSets: true },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    await user.click(screen.getByRole("button", { name: "Start next set" }));
+    expect(recordMutate).toHaveBeenCalledWith({ matchId: "m-1", data: { kind: "SET_STARTED" } });
+  });
+
+  it("offers no between-sets choice mid-set (#984)", async () => {
+    // The control must not over-apply: it belongs only to the pause between sets.
+    const user = userEvent.setup();
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "u1", capabilities: ["PLAYER", "SCORER", "HOST"] },
+    });
+    renderPage();
+    await start(user);
+
+    expect(screen.queryByRole("button", { name: "Start next set" })).not.toBeInTheDocument();
+    // And Finalize stays unreachable mid-set, as it always was.
+    expect(screen.getByRole("button", { name: "Finalize" })).toBeDisabled();
+  });
+
 });

@@ -73,6 +73,13 @@ data class LiveMatchResponse(
     val scorerId: String? = null,
     val hasStarted: Boolean,
     val isPaused: Boolean,
+    /**
+     * A set has been awarded and the next has not begun (#984).
+     *
+     * The umpire's decision point: start the next set, or finalize here. Scoring is refused until one
+     * of those happens, so the view greys the board rather than letting taps fail.
+     */
+    val isBetweenSets: Boolean = false,
     val isTiebreak: Boolean,
     val serverId: String? = null,
     /** The server's display name, so a client need not resolve the id itself. */

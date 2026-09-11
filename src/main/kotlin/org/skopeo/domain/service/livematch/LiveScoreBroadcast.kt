@@ -62,6 +62,8 @@ data class LiveScorePayload(
     val isTiebreak: Boolean,
     val isPaused: Boolean,
     val hasStarted: Boolean,
+    /** A set has ended and the next has not begun (#984), so 0-0 is a pause rather than fresh play. */
+    val isBetweenSets: Boolean = false,
     /**
      * Playing time and whether it is advancing (#937).
      *
@@ -95,6 +97,7 @@ data class LiveScorePayload(
             "isTiebreak" to isTiebreak,
             "isPaused" to isPaused,
             "hasStarted" to hasStarted,
+            "isBetweenSets" to isBetweenSets,
             "elapsedSeconds" to elapsedSeconds,
             "isRunning" to isRunning,
             "serverName" to serverName,
@@ -146,6 +149,7 @@ fun LiveMatchResponse.toBroadcast(publicCode: String): LiveScorePayload =
         isTiebreak = isTiebreak,
         isPaused = isPaused,
         hasStarted = hasStarted,
+        isBetweenSets = isBetweenSets,
         elapsedSeconds = elapsedSeconds,
         isRunning = isRunning,
         serverName = serverName,
