@@ -19,7 +19,7 @@ class OpenPlayPointsCalculatorTest {
     private fun set(
         team1Games: Int,
         team2Games: Int,
-        winner: UUID,
+        winner: UUID?,
         tb1: Int? = null,
         tb2: Int? = null,
         abandoned: Boolean = false,
@@ -224,5 +224,43 @@ class OpenPlayPointsCalculatorTest {
             )
 
         result.team1 shouldBe 8
+    }
+
+    @Test
+    fun `a set nobody won pays nobody (#968)`() {
+        // A retirement in a LEVEL set records the games with no winner. `winnerTeamId == team1Id`
+        // alone would read that null as "team2 won" and pay them for a set nobody took — the silent
+        // wrong answer a nullable slips past `==`.
+        val result =
+            compute(
+                band1 = "4.0",
+                band2 = "4.0",
+                sets = listOf(element = set(team1Games = 1, team2Games = 1, winner = null, abandoned = true)),
+                conceding = t1,
+            )
+
+        result.team1 shouldBe 0
+        result.team2 shouldBe 0
+    }
+
+    @Test
+    fun `a winnerless set pays nobody even alongside sets that were won (#968)`() {
+        // The one that would hide a regression: set 1 pays normally, so a total that looks plausible
+        // could still be quietly crediting the abandoned set to somebody.
+        val result =
+            compute(
+                band1 = "4.0",
+                band2 = "4.0",
+                sets =
+                    listOf(
+                        set(team1Games = 6, team2Games = 4, winner = t1, setNumber = 1),
+                        set(team1Games = 1, team2Games = 1, winner = null, abandoned = true, setNumber = 2),
+                    ),
+                conceding = t1,
+            )
+
+        // Margin 2 at equal bands is base 8, and nothing is added for the set nobody won.
+        result.team1 shouldBe 8
+        result.team2 shouldBe 0
     }
 }

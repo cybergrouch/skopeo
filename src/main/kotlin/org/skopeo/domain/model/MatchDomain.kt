@@ -145,7 +145,15 @@ data class MatchSetResult(
     val setNumber: Int,
     val team1Games: Int,
     val team2Games: Int,
-    val winnerTeamId: UUID,
+    /**
+     * Who won the set, derived from the games (#917) — or **null when nobody did** (#968).
+     *
+     * A set play stopped during can be level: 1-1 when a player retires. Nobody won it, and since the
+     * winner is derived rather than stored there is nothing to fall back on. Null says that honestly,
+     * where the alternative was to drop the set entirely and lose the games with it — which is what
+     * made a retirement at 1-1 render as "Retired" with no score at all.
+     */
+    val winnerTeamId: UUID?,
     val tiebreakTeam1Points: Int? = null,
     val tiebreakTeam2Points: Int? = null,
     val abandoned: Boolean = false,

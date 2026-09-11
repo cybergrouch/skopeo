@@ -33,7 +33,8 @@ fun Match.toResponse(): MatchResponse =
                     setNumber = it.setNumber,
                     team1Games = it.team1Games,
                     team2Games = it.team2Games,
-                    winnerTeamId = it.winnerTeamId.toString(),
+                    // `?.` not `.toString()`: the latter renders a null winner as the string "null" (#968).
+                    winnerTeamId = it.winnerTeamId?.toString(),
                     tiebreakTeam1Points = it.tiebreakTeam1Points,
                     tiebreakTeam2Points = it.tiebreakTeam2Points,
                 )

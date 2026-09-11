@@ -230,7 +230,8 @@ data class MatchSetResponse(
     val setNumber: Int,
     val team1Games: Int,
     val team2Games: Int,
-    val winnerTeamId: String,
+    /** Null when nobody won the set (#968) — a level set play stopped during, e.g. 1-1 at a retirement. */
+    val winnerTeamId: String? = null,
     val tiebreakTeam1Points: Int? = null,
     val tiebreakTeam2Points: Int? = null,
 )

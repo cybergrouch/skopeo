@@ -887,12 +887,28 @@ internal fun deriveOutcome(
     request: MatchResultRequest,
 ): Either<ServiceError, Pair<List<MatchSetResult>, UUID>> =
     either {
+        // Resolved first because the SET rule depends on it: a level set is acceptable only on a result
+        // that designates a match winner (#968), which is a retirement or default.
+        val designated = designatedWinner(team1Id = team1Id, team2Id = team2Id, raw = request.winnerTeamId).bind()
         var team1Sets = 0
         var team2Sets = 0
         val resolved =
             request.sets.mapIndexed { index, set ->
-                val winner = setWinner(team1Id = team1Id, team2Id = team2Id, set = set, setNumber = index + 1).bind()
-                if (winner == team1Id) team1Sets++ else team2Sets++
+                val winner =
+                    setWinner(
+                        team1Id = team1Id,
+                        team2Id = team2Id,
+                        set = set,
+                        setNumber = index + 1,
+                        matchWinnerDesignated = designated != null,
+                    ).bind()
+                // A set nobody won counts for nobody. `if (winner == team1Id) … else …` would have
+                // credited it to team2, which is how a null silently becomes the wrong answer.
+                when (winner) {
+                    team1Id -> team1Sets++
+                    team2Id -> team2Sets++
+                    else -> Unit
+                }
                 MatchSetResult(
                     setNumber = index + 1,
                     team1Games = set.team1Games,
@@ -906,7 +922,6 @@ internal fun deriveOutcome(
         // The MATCH winner may be designated (#917); the SET winners above never are. When one is given
         // the sets-tied guard does not apply — it only ever protected the derivation, and a designated
         // winner has nothing to derive. A retirement can legitimately stand at one set all.
-        val designated = designatedWinner(team1Id = team1Id, team2Id = team2Id, raw = request.winnerTeamId).bind()
         if (designated != null) {
             resolved to designated
         } else {
@@ -946,18 +961,30 @@ private fun designatedWinner(
         }
     }
 
+/**
+ * Who won [set], or **null when nobody did** (#968).
+ *
+ * A level set is only acceptable on a result that designates a match winner — a retirement or default,
+ * where play stopped mid-set at 1-1. On an ordinary result it is still an error: a completed set with
+ * no winner is a mis-entered score, and accepting it would let a nonsense scoreline through.
+ *
+ * The same carve-out shape as the games floor (#213) and the sets-tied guard (#917), for the same
+ * reason: a designated winner means the match did not end normally.
+ */
 private fun setWinner(
     team1Id: UUID,
     team2Id: UUID,
     set: org.skopeo.common.dto.match.SetScoreRequest,
     setNumber: Int,
-): Either<ServiceError, UUID> =
+    matchWinnerDesignated: Boolean,
+): Either<ServiceError, UUID?> =
     when {
         set.team1Games > set.team2Games -> team1Id.right()
         set.team2Games > set.team1Games -> team2Id.right()
         set.tiebreakTeam1Points != null && set.tiebreakTeam2Points != null &&
             set.tiebreakTeam1Points != set.tiebreakTeam2Points ->
             (if (set.tiebreakTeam1Points > set.tiebreakTeam2Points) team1Id else team2Id).right()
+        matchWinnerDesignated -> null.right()
         else -> ServiceError.Validation(message = "set $setNumber has no clear winner").left()
     }
 

@@ -429,21 +429,19 @@ private fun LiveOutcome.toCompletionReason(): MatchCompletionReason =
  * The partial set is included because §10 rates a retirement on the real score — a player who retires
  * down 1-3 was being outplayed, and dropping that would rate the match as if the games had not happened.
  *
- * A **level** partial set (3-3, or 0-0 because nobody had started) is omitted instead. Not an oversight:
- * since #917 the set winner is derived from the games, and a level set has no winner to derive — the
- * recording path would reject it. That costs the rating nothing, because #925 established a level set
- * contributes zero dominance anyway.
+ * A **level** partial set is now recorded too (#968). It used to be dropped, because a set winner is
+ * derived from the games (#917) and a level set has none — so `1-1 (ret)` was stored as a retirement
+ * with no score at all, while the spectator card still showed the games. The winner is nullable now, so
+ * the set can say honestly that nobody won it and keep the games.
  *
- * It does cost the *record* something, which the earlier version of this note ("omitting loses nothing
- * that matters") did not allow for: the games played are dropped, so `1-1 (ret)` is stored as a
- * retirement with no score at all. That is #968, and it is a separate change — the omission stays here
- * until a set with no winner can be represented.
+ * Only a set where **nothing was played** is still omitted: 0-0 with no tiebreak points is not a set,
+ * it is a retirement before the first game.
  *
  * The decisive partial set carries `abandoned = true` (#972), which is what lets the points rule tell it
  * apart from a set that was played out.
  */
 private fun recordableSets(state: ScoreState): List<SetScoreRequest> =
-    (state.completedSets.map { it.toRequest() } + state.currentSetIfDecisive()).filterNotNull()
+    (state.completedSets.map { it.toRequest() } + state.currentSetIfPlayed()).filterNotNull()
 
 private fun CompletedSet.toRequest(): SetScoreRequest =
     SetScoreRequest(
@@ -454,9 +452,13 @@ private fun CompletedSet.toRequest(): SetScoreRequest =
     )
 
 /** The unbanked set, when its games (or its tiebreak) actually separate the two sides. */
-private fun ScoreState.currentSetIfDecisive(): SetScoreRequest? {
-    val tiebreakDecides = isTiebreak && pointsTeam1 != pointsTeam2
-    if (gamesTeam1 == gamesTeam2 && !tiebreakDecides) return null
+private fun ScoreState.currentSetIfPlayed(): SetScoreRequest? {
+    // Nothing was played, so there is no set — distinct from a LEVEL set, which was played and stands
+    // at 1-1. Dropping the level one is what made a retirement there read as "Retired" with no score
+    // at all (#968), losing games the spectator card was still showing.
+    val anyGames = gamesTeam1 > 0 || gamesTeam2 > 0
+    val anyTiebreakPoints = isTiebreak && (pointsTeam1 > 0 || pointsTeam2 > 0)
+    if (!anyGames && !anyTiebreakPoints) return null
     return SetScoreRequest(
         team1Games = gamesTeam1,
         team2Games = gamesTeam2,

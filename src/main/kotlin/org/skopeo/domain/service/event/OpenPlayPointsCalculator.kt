@@ -91,6 +91,8 @@ internal object OpenPlayPointsCalculator {
         val equalBands = b1.compareTo(other = b2) == 0
         val team1IsHigher = b1 > b2
         return sets.mapIndexed { index, set ->
+            // `== team1Id` alone would read a WINNERLESS set (#968) as team2 having won it, and pay
+            // them for a set nobody took. Handled explicitly below rather than relying on that compare.
             val team1WonSet = set.winnerTeamId == team1Id
             val higherWonSet = (team1WonSet && team1IsHigher) || (!team1WonSet && !team1IsHigher)
             val relation =
@@ -102,13 +104,19 @@ internal object OpenPlayPointsCalculator {
             val margin = marginInSet(set = set, team1WonSet = team1WonSet)
             val cell = config.cell(relation = relation, margin = margin)
             val payable =
-                payableForAbandoned(
-                    set = set,
-                    team1WonSet = team1WonSet,
-                    team1Id = team1Id,
-                    conceding = sides.concedingTeamId,
-                    cell = cell,
-                )
+                if (set.winnerTeamId == null) {
+                    // Nobody won it, so nobody is paid for it — the same answer the retirement rule
+                    // reaches for a level abandoned set, arrived at from the other direction.
+                    cell.copy(winnerPoints = 0, loserPoints = 0)
+                } else {
+                    payableForAbandoned(
+                        set = set,
+                        team1WonSet = team1WonSet,
+                        team1Id = team1Id,
+                        conceding = sides.concedingTeamId,
+                        cell = cell,
+                    )
+                }
             SetScoring(
                 setNumber = index + 1,
                 margin = margin,

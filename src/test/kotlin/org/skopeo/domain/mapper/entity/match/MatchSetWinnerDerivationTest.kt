@@ -3,9 +3,7 @@
 
 package org.skopeo.domain.mapper.entity.match
 
-import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import org.skopeo.repository.persistence.MatchSetEntity
 import java.util.UUID
@@ -68,17 +66,22 @@ class MatchSetWinnerDerivationTest {
     }
 
     @Test
-    fun `an undecidable set fails loudly rather than fabricating a winner (#917)`() {
-        // Unreachable for stored data — MatchService.setWinner refuses to record it, and V53 dropped the
-        // stored winner only after confirming production held none. With no column to fall back to,
-        // silently picking a side would feed a fabricated result into the rating pipeline.
-        shouldThrow<IllegalStateException> {
-            set(team1Games = 3, team2Games = 3).toDomain(team1Id = team1, team2Id = team2)
-        }.message shouldContain "no deciding tiebreak"
+    fun `a set nobody won has no winner, rather than a fabricated or fatal one (#968)`() {
+        // This used to throw, on the premise that such a set was unrecordable: MatchService.setWinner
+        // refused it, and V53 dropped the stored winner only after confirming production held none.
+        //
+        // #968 removed the premise. A retirement at 1-1 leaves a set that WAS played and that nobody
+        // won, and dropping it lost the games with it — the Match card read "Retired" with no score
+        // while the live card still showed 1-1. Throwing now would make such a match unreadable
+        // rather than protect anything, since the row exists either way.
+        //
+        // Null, not a guess: silently picking a side would still feed a fabricated result onward,
+        // which is what the original throw was right to refuse.
+        set(team1Games = 3, team2Games = 3).toDomain(team1Id = team1, team2Id = team2).winnerTeamId shouldBe null
 
-        // A tied tiebreak is equally undecidable.
-        shouldThrow<IllegalStateException> {
-            set(team1Games = 6, team2Games = 6, tb1 = 7, tb2 = 7).toDomain(team1Id = team1, team2Id = team2)
-        }
+        // A tied tiebreak is equally undecidable, and equally honest about it.
+        set(team1Games = 6, team2Games = 6, tb1 = 7, tb2 = 7)
+            .toDomain(team1Id = team1, team2Id = team2)
+            .winnerTeamId shouldBe null
     }
 }
