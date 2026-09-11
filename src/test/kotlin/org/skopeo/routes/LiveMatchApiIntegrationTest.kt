@@ -5,6 +5,7 @@ package org.skopeo.routes
 
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.HttpClient
@@ -568,6 +569,28 @@ class LiveMatchApiIntegrationTest {
             client
                 .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
                 .status shouldBe HttpStatusCode.Conflict
+        }
+
+    @Test
+    fun `a game declared with nobody serving rotates nothing, and does not fail (#985)`() =
+        withApp { client ->
+            // Only POINTS need a server; a game is an umpire declaration. So a game can complete with
+            // no server assigned, and the rotation has no "next" to move to — it must do nothing
+            // rather than throw or invent one.
+            val token = seedFinalizer()
+            val matchId = seedScheduledFixture()
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "MATCH_STARTED"))
+
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "GAME_AWARDED", side = "TEAM1"))
+                .status shouldBe HttpStatusCode.Created
+
+            val view: LiveMatchResponse =
+                client.get(urlString = "/api/v1/matches/$matchId/live") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }.body()
+            view.gamesTeam1 shouldBe 1
+            view.serverId.shouldBeNull()
         }
 
     @Test

@@ -772,4 +772,30 @@ describe("LiveScoringPage", () => {
     expect(screen.getByRole("button", { name: "Finalize" })).toBeDisabled();
   });
 
+  it("leaves via Back, releasing fullscreen on the way (#986)", async () => {
+    // The umpire view is the only page that takes fullscreen, so leaving without releasing it would
+    // strand the whole app. Back existed on the entry screen and not in the scoring view, which is
+    // why an umpire who opened the wrong match could only escape through the browser.
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(exitFullscreen).toHaveBeenCalled();
+  });
+
+  it("keeps Back available even when everything else is inert (#986)", async () => {
+    // The one control the gates must never touch: on a match that has not started, it is the only
+    // way out.
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, hasStarted: false },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+  });
+
 });
