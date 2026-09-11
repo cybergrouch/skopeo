@@ -3,7 +3,6 @@
 
 package org.skopeo.repository
 
-import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
@@ -11,6 +10,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.insertIgnore
 import org.jetbrains.exposed.sql.max
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -49,8 +49,17 @@ open class LiveMatchRepository {
      * that gets `false` must re-read the log and retry against what actually landed — see
      * [appendNext], which does that.
      *
-     * Catching the constraint violation rather than pre-checking with a SELECT is deliberate: a
-     * check-then-insert has a window between the two, which is the whole bug being avoided.
+     * Not pre-checked with a SELECT: a check-then-insert has a window between the two, which is the
+     * whole bug being avoided. `ON CONFLICT DO NOTHING` closes the race in one statement.
+     *
+     * **Nor is the collision caught as an exception** (#989). It used to be, and that conflated a
+     * routine outcome with a broken one: every other constraint failure became the same `false`, so a
+     * CHECK violation was retried three times and reported as "another scorer is writing" for a row
+     * that could never be written (#988). The driver's message — which on Postgres embeds the offending
+     * values — was also the thing reaching the logs (#992).
+     *
+     * A losing insert now returns **zero rows**, which is a value, not an error. Anything else still
+     * throws, and should: it is not retryable, and it deserves to surface rather than be absorbed.
      */
     @Suppress("LongParameterList")
     open fun append(
@@ -63,9 +72,9 @@ open class LiveMatchRepository {
         recordedBy: UUID,
         recordedAt: LocalDateTime = LocalDateTime.now(),
     ): Boolean =
-        try {
-            transaction {
-                LiveMatchEventsTable.insert {
+        transaction {
+            LiveMatchEventsTable
+                .insertIgnore {
                     it[LiveMatchEventsTable.matchId] = matchId
                     it[LiveMatchEventsTable.sequence] = sequence
                     it[LiveMatchEventsTable.kind] = kind
@@ -74,11 +83,7 @@ open class LiveMatchRepository {
                     it[LiveMatchEventsTable.targetSequence] = targetSequence
                     it[LiveMatchEventsTable.recordedBy] = recordedBy
                     it[LiveMatchEventsTable.recordedAt] = recordedAt
-                }
-            }
-            true
-        } catch (_: ExposedSQLException) {
-            false
+                }.insertedCount > 0
         }
 
     /** The highest sequence written for [matchId], or 0 when the log is empty. */

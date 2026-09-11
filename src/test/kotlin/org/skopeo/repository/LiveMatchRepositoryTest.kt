@@ -3,8 +3,11 @@
 
 package org.skopeo.repository
 
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -204,6 +207,29 @@ class LiveMatchRepositoryTest {
 
         repository.log(matchId = matchId).shouldHaveSize(size = 1)
         repository.log(matchId = matchId).single().side shouldBe TeamSide.TEAM1.name
+    }
+
+    @Test
+    fun `a violation that is NOT a sequence collision throws rather than reporting a lost race (#989)`() {
+        // The distinction the old `catch (ExposedSQLException) { false }` erased. A taken sequence is a
+        // routine outcome and returns false so the caller retries; anything else is not retryable, and
+        // flattening it into the same false is what made a rejected event kind surface as "another
+        // scorer is writing" after three pointless attempts (#988).
+        val matchId = fixture()
+        val umpire = user(uid = "umpire")
+
+        shouldThrow<ExposedSQLException> {
+            repository.append(
+                matchId = matchId,
+                sequence = 1,
+                kind = "NOT_A_REAL_KIND",
+                side = TeamSide.TEAM1.name,
+                recordedBy = umpire,
+            )
+        }
+
+        // And nothing was written, so a caller that retries is not building on a half-applied row.
+        repository.log(matchId = matchId).shouldBeEmpty()
     }
 
     @Test
