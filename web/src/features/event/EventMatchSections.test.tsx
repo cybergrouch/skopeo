@@ -101,4 +101,19 @@ describe("EventMatchSections", () => {
     expect(screen.getByText("Awaiting rating")).toBeInTheDocument();
     expect(screen.getByText("Rated")).toBeInTheDocument();
   });
+  it('files a finished match with no sets under Recorded, not Awaiting (#969)', () => {
+    // A walkover never has a set, so the sets-based split called it "awaiting" forever. The file's own
+    // comment already warned about this shape for #945 — and then split on sets.length anyway.
+    render(
+      <MemoryRouter>
+        <EventMatchSections
+          matches={[match({ status: 'COMPLETED', completionReason: 'DEFAULTED', sets: [] })]}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('No fixtures awaiting results.')).toBeInTheDocument()
+    expect(screen.queryByText('No recorded results yet.')).not.toBeInTheDocument()
+  })
+
 });

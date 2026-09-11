@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { EditFixturePlayersDialog } from "@/features/match/EditFixturePlayersDialog";
+import { scoreline } from "@/lib/scoreline";
+import { hasResult, playHasBegun } from "@/lib/matchResult";
 import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/observability/toastError";
 import { PublicPageLink } from "@/components/PublicPageLink";
@@ -100,23 +102,22 @@ function MatchResultRow({
   readOnly?: boolean;
 }) {
   const queryClient = useQueryClient();
-  // A recorded fixture (has sets) starts collapsed as a score summary that can be expanded to edit;
-  // a scheduled fixture starts as the entry form. Once rated (#138) it is frozen: read-only, no edit.
-  const recorded = match.sets.length > 0;
+  // A match WITH a result starts collapsed as a score summary that can be expanded to edit; one
+  // without starts as the entry form. Once rated (#138) it is frozen: read-only, no edit.
+  //
+  // `hasResult` is the status, not `sets.length` (#969). A walkover has no sets and a retirement
+  // before the first game has none either, so the sets-based proxy called a finished match unplayed —
+  // and rendered it as a blank entry form offering to record a result it already had.
+  const recorded = hasResult(match);
   const rated = match.ratedAt != null;
-  // Has play begun (#970)? IN_PROGRESS or COMPLETED. This mirrors the server's `playHasBegun` gate, and
-  // it is deliberately NOT `sets.length` or `ratedAt`: a match being scored right now has neither, and
-  // rating happens at event finalization days later. Both of those proxies let the controls below stay
-  // on for a contest already under way.
-  const playHasBegun =
-    match.status === "IN_PROGRESS" || match.status === "COMPLETED";
+  const begun = playHasBegun(match);
   const [editing, setEditing] = useState(false);
   // Changing who plays (#957), and deleting the fixture, both alter WHAT the match is rather than what
   // it scored — so both stop the moment play begins. The server refuses either way (#970); hiding them
   // keeps the UI from offering something that will be rejected.
   const [editingPlayers, setEditingPlayers] = useState(false);
-  const canEditPlayers = !readOnly && !playHasBegun;
-  const canDelete = !readOnly && !playHasBegun;
+  const canEditPlayers = !readOnly && !begun;
+  const canDelete = !readOnly && !begun;
   // A fresh fixture starts with a single empty set row (#571) — most results are single-set, so hosts
   // needn't delete a spare row; the "Add set" control adds more when needed.
   const [rows, setRows] = useState<SetRow[]>(
@@ -185,9 +186,10 @@ function MatchResultRow({
   const player2 = match.team2.userIds.map(nameOf).join(", ");
   const badge = scheduleBadge(match.matchDate, todayIso());
   const showForm = !readOnly && (!recorded || editing);
-  const summary = match.sets
-    .map((s) => `${s.team1Games}–${s.team2Games}`)
-    .join(", ");
+  // The shared helper, not a fourth hand-rolled scoreline (#954/#969). This one could not say
+  // "Retired" or "Walkover" because it never looked at completionReason — so a finished match with no
+  // sets summarised as an empty string, which is how it came to read "Awaiting result".
+  const summary = scoreline(match.sets, match.completionReason, recorded) ?? "";
 
   // Delete control with a confirm step (#138); offered both while entering scores and when collapsed.
   const deleteControls = !canDelete ? null : confirmingDelete ? (
