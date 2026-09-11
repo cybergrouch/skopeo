@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { MatchScoreCorrectionCard } from "@/components/MatchScoreCorrectionCard";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import { canScore, isAdministrator } from "@/auth/capabilities";
+import { concededSide } from "@/lib/concession";
 import { scoreline } from "@/lib/scoreline";
 
 /** A player's name as a link to their public profile, falling back to the code or "Unknown". */
@@ -184,7 +185,18 @@ function HeadToHeadCard({ match }: { match: MatchPublicResponse }) {
         ) : (
           <ul className="space-y-2">
             {h2h.meetings.map((meeting) => {
-              const score = scoreline(meeting.sets, meeting.completionReason);
+              // These sets are oriented to the current match's team1 (#188), so "TEAM1" here means
+              // the reference side — whether they won the meeting decides who conceded. Matched on
+              // every member, since a doubles meeting names one of the pair as the winner.
+              const team1Won = match.team1.some(
+                (p) => p.publicCode === meeting.winnerPublicCode,
+              );
+              const score = scoreline(
+                meeting.sets,
+                meeting.completionReason,
+                true,
+                meeting.winnerPublicCode ? (team1Won ? "TEAM2" : "TEAM1") : undefined,
+              );
               const won = winnerName(meeting.winnerPublicCode);
               // Show whether the meeting was singles or doubles (#285), e.g. "mixed doubles".
               const format = meeting.matchFormat
@@ -250,7 +262,14 @@ export function MatchPage() {
   // any decisive set leaves nothing recordable, and this used to render as "Not yet played" on a match
   // that was over and had a winner.
   const isFinished = match?.status === "COMPLETED";
-  const score = scoreline(match?.sets, match?.completionReason, isFinished);
+  // The conceding side is the one that did not win (#987), so the mark lands on their number
+  // rather than trailing the line beside the winner's.
+  const score = scoreline(
+    match?.sets,
+    match?.completionReason,
+    isFinished,
+    concededSide(match?.winner),
+  );
 
   return (
     <PublicPageShell>

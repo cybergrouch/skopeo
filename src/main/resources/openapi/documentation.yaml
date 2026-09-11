@@ -7592,6 +7592,13 @@ components:
         tiebreakTeam2Points:
           type: integer
           nullable: true
+        abandoned:
+          type: boolean
+          default: false
+          description: >-
+            Play stopped during this set — a retirement or default (#972) — so a scoreline can mark the
+            right set (#987). "The last set is the abandoned one" is wrong when a player retires
+            *between* sets: that set was played to a finish.
 
     MatchResponse:
       type: object

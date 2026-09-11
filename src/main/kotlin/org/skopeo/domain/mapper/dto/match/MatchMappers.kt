@@ -37,6 +37,7 @@ fun Match.toResponse(): MatchResponse =
                     winnerTeamId = it.winnerTeamId?.toString(),
                     tiebreakTeam1Points = it.tiebreakTeam1Points,
                     tiebreakTeam2Points = it.tiebreakTeam2Points,
+                    abandoned = it.abandoned,
                 )
             },
         venue = venue,
