@@ -51,6 +51,12 @@ object ScoreEngine {
      * record correction. A **paused** one does not: the umpire is authoritative, a forgotten
      * [ScoreEvent.Resumed] is far likelier than a deliberate point during a rain delay, and dropping the
      * point would be the worse failure. The pause is recorded in the state; a UI is free to prompt.
+     *
+     * **The not-started and between-sets rules are deliberately NOT here** (#984/#986). The engine has
+     * no error channel, so enforcing them here would make it *silently discard* an umpire's tap — and a
+     * lost point is a worse failure than a mis-sequenced one. They are enforced at the service boundary,
+     * which can refuse with a reason, following the guard #952 already put there. The engine's job is to
+     * track [ScoreState.isBetweenSets] so the service and the UI have something to gate on.
      */
     fun apply(
         state: ScoreState,
@@ -64,28 +70,11 @@ object ScoreEngine {
             is ScoreEvent.PointWon -> pointWon(state = state, side = event.side)
             is ScoreEvent.GameAwarded -> gameTo(state = state, side = event.side)
             is ScoreEvent.SetAwarded -> setTo(state = state, side = event.side)
+            is ScoreEvent.SetStarted -> state.copy(isBetweenSets = false)
             is ScoreEvent.TiebreakStarted -> state.copy(isTiebreak = true, pointsTeam1 = 0, pointsTeam2 = 0)
             is ScoreEvent.ServerAssigned -> state.copy(serverId = event.playerId)
-            is ScoreEvent.Retired ->
-                state.copy(
-                    outcome =
-                        LiveOutcome(
-                            kind = LiveOutcomeKind.RETIRED,
-                            winner = event.side.opponent(),
-                            concededBy = event.side,
-                        ),
-                )
-            is ScoreEvent.Defaulted ->
-                state.copy(
-                    outcome =
-                        LiveOutcome(
-                            kind = LiveOutcomeKind.DEFAULTED,
-                            winner = event.side.opponent(),
-                            concededBy = event.side,
-                        ),
-                )
-            is ScoreEvent.MatchAwarded ->
-                state.copy(outcome = LiveOutcome(kind = LiveOutcomeKind.COMPLETED, winner = event.side))
+            // The three ways a match ends share a branch: each sets an outcome and changes nothing else.
+            is ScoreEvent.Ending -> state.copy(outcome = endingOf(event = event))
             // Starting also clears a pause, so a restart after a suspension needs no separate Resumed.
             is ScoreEvent.MatchStarted -> state.copy(hasStarted = true, isPaused = false)
             is ScoreEvent.Paused -> state.copy(isPaused = true)
@@ -167,6 +156,26 @@ object ScoreEngine {
         return if (own >= POINTS_TO_WIN_GAME && own - other >= CLEAR_BY) gameTo(state = scored, side = side) else scored
     }
 
+    /**
+     * How a match ended, for the three events that end one (#911).
+     *
+     * Retirement and default differ only in the reason: the winner is always the opponent, and
+     * `concededBy` records who stopped — the one fact the games cannot tell you, since a player can
+     * retire while leading. A declared win names its own winner and concedes nothing.
+     *
+     * Takes [ScoreEvent.Ending] rather than [ScoreEvent], so the `when` is exhaustive with **no `else`**.
+     * An unreachable error branch would be a line no test can honestly reach; making the type carry the
+     * guarantee removes the branch instead of excusing it.
+     */
+    private fun endingOf(event: ScoreEvent.Ending): LiveOutcome =
+        when (event) {
+            is ScoreEvent.Retired ->
+                LiveOutcome(kind = LiveOutcomeKind.RETIRED, winner = event.side.opponent(), concededBy = event.side)
+            is ScoreEvent.Defaulted ->
+                LiveOutcome(kind = LiveOutcomeKind.DEFAULTED, winner = event.side.opponent(), concededBy = event.side)
+            is ScoreEvent.MatchAwarded -> LiveOutcome(kind = LiveOutcomeKind.COMPLETED, winner = event.side)
+        }
+
     /** Bank a game to [side] and start the next one. Does not end the set — that is the umpire's call. */
     private fun gameTo(
         state: ScoreState,
@@ -199,6 +208,9 @@ object ScoreEngine {
                 tiebreakTeam1Points = state.pointsTeam1.takeIf { state.isTiebreak },
                 tiebreakTeam2Points = state.pointsTeam2.takeIf { state.isTiebreak },
             )
+        // Park between sets rather than rolling into the next one (#984). The zeroing still happens here
+        // so the board shows no stale in-progress numbers, but nothing is scorable until an explicit
+        // SetStarted — which is what creates the moment to ask whether the match is over at all.
         return state.copy(
             completedSets = state.completedSets + banked,
             gamesTeam1 = 0,
@@ -206,6 +218,7 @@ object ScoreEngine {
             pointsTeam1 = 0,
             pointsTeam2 = 0,
             isTiebreak = false,
+            isBetweenSets = true,
         )
     }
 

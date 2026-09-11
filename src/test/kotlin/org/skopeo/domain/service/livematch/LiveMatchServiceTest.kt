@@ -16,6 +16,7 @@ import org.skopeo.common.dto.livematch.LiveScoreEventRequest
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
+import org.skopeo.domain.mapper.entity.livematch.LiveMatchEventKinds
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -35,6 +36,7 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.fixtureEventId
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 /**
@@ -80,12 +82,39 @@ class LiveMatchServiceTest {
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
 
+    /**
+     * Rows [fixture] seeds before a test scores anything: MATCH_STARTED and SERVER_ASSIGNED.
+     *
+     * Named rather than folded into each expected count, so a reader can see *why* a log of "two
+     * points" holds four rows, and so these assertions move together if the arrangement changes.
+     */
+    private val setupRows = 2
+
     private fun umpire(uid: String = "ump"): UUID = user(uid = uid, roles = setOf(Capability.PLAYER, Capability.SCORER))
 
+    /**
+     * A fixture that is **under way**: created, started, and with a server assigned.
+     *
+     * Since #984/#985/#986 the service refuses scoring on a match that has not been started or has
+     * nobody serving, so this is what "a match you can score" now means. Tests whose subject IS a gate
+     * use [scheduledFixture] and arrange the state themselves.
+     */
     private fun fixture(): UUID {
         val home = user(uid = "home")
         val away = user(uid = "away")
-        return matches
+        val matchId = createFixture(home = home, away = away)
+        beginPlay(matchId = matchId, server = home)
+        return matchId
+    }
+
+    /** A freshly created fixture, not yet started — the state an umpire first opens. */
+    private fun scheduledFixture(): UUID = createFixture(home = user(uid = "home"), away = user(uid = "away"))
+
+    private fun createFixture(
+        home: UUID,
+        away: UUID,
+    ): UUID =
+        matches
             .createFixture(
                 command =
                     CreateFixtureCommand(
@@ -101,6 +130,33 @@ class LiveMatchServiceTest {
                     ),
             ).toDomain()
             .id
+
+    /**
+     * Put [matchId] into a state where points can be recorded: started, with a server.
+     *
+     * Since #984/#985/#986 the service refuses scoring on a match that has not been started or has
+     * nobody serving. Appended straight to the log rather than through `record`, so the arrangement
+     * does not depend on the very guards under test and does not consume the sequence numbers a test
+     * may be asserting on.
+     */
+    private fun beginPlay(
+        matchId: UUID,
+        server: UUID,
+    ) {
+        listOf(
+            LiveMatchEventKinds.MATCH_STARTED to null,
+            LiveMatchEventKinds.SERVER_ASSIGNED to server,
+        ).forEach { (kind, playerId) ->
+            live.append(
+                matchId = matchId,
+                sequence = live.lastSequence(matchId = matchId) + 1,
+                kind = kind,
+                side = null,
+                playerId = playerId,
+                recordedBy = server,
+                recordedAt = LocalDateTime.now(),
+            )
+        }
     }
 
     private fun point(side: TeamSide) = LiveScoreEventRequest(kind = "POINT_WON", side = side.name)
@@ -189,7 +245,8 @@ class LiveMatchServiceTest {
         }
         val view = service.scoreboard(matchId = matchId)
         view.gamesTeam1 shouldBe 1
-        view.sequence shouldBe 4L
+        // setup + 4 points + the serve rotation the completed game triggers (#985).
+        view.sequence shouldBe (setupRows + 5).toLong()
     }
 
     @Test
@@ -201,8 +258,8 @@ class LiveMatchServiceTest {
 
         val undone = service.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
         undone.pointsTeam1 shouldBe "15"
-        // Three rows: two points and the marker. Nothing was deleted.
-        live.log(matchId = matchId).shouldHaveSize(size = 3)
+        // Two points and the marker. Nothing was deleted.
+        live.log(matchId = matchId).shouldHaveSize(size = setupRows + 3)
     }
 
     @Test
@@ -217,13 +274,15 @@ class LiveMatchServiceTest {
 
         // The second undo must target the second point, not the marker the first undo wrote.
         twice.pointsTeam1 shouldBe "15"
-        live.log(matchId = matchId).shouldHaveSize(size = 5)
+        live.log(matchId = matchId).shouldHaveSize(size = setupRows + 5)
     }
 
     @Test
     fun `undo with nothing to undo is not an error and writes nothing`() {
         umpire()
-        val matchId = fixture()
+        // A scheduled fixture, deliberately: `fixture` seeds a start and a server, and those ARE
+        // undoable actions — so on a match under way there is always something to take back.
+        val matchId = scheduledFixture()
 
         service.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight().sequence shouldBe 0L
         live.log(matchId = matchId).shouldHaveSize(size = 0)
@@ -276,7 +335,7 @@ class LiveMatchServiceTest {
         service.record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "MATCH_STARTED"))
         service.record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "PAUSED"))
 
-        live.log(matchId = matchId).shouldHaveSize(size = 2)
+        live.log(matchId = matchId).shouldHaveSize(size = setupRows + 2)
         service.scoreboard(matchId = matchId).isPaused shouldBe true
     }
 
@@ -288,7 +347,7 @@ class LiveMatchServiceTest {
         service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
 
         val rows = live.log(matchId = matchId)
-        rows.shouldHaveSize(size = 2)
+        rows.shouldHaveSize(size = setupRows + 2)
         // Non-decreasing, and every row carries one — the anchor a match-duration figure is measured from.
         (rows[1].recordedAt >= rows[0].recordedAt) shouldBe true
     }
@@ -300,7 +359,8 @@ class LiveMatchServiceTest {
         service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
         service.undo(token = token(uid = "ump"), matchId = matchId)
 
-        live.log(matchId = matchId).map { it.recordedBy }.toSet() shouldBe setOf(element = id)
+        // Past the rows `fixture` seeded, which are arrangement rather than anything the umpire did.
+        live.log(matchId = matchId).drop(n = setupRows).map { it.recordedBy }.toSet() shouldBe setOf(element = id)
     }
 
     @Test
@@ -373,7 +433,9 @@ class LiveMatchServiceTest {
 
         watched.claim(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
         watched.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1)).shouldBeRight()
-        watched.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
+        // Three undos: the point, then the server and start rows `fixture` seeded. Only with the log
+        // empty is the next undo genuinely a no-op, which is the case under test.
+        repeat(times = 3) { watched.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight() }
         watched.release(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
         val beforeNoOpUndo = sent.size
 
@@ -381,8 +443,8 @@ class LiveMatchServiceTest {
         watched.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
 
         sent.size shouldBe beforeNoOpUndo
-        // claim, record, undo, release.
-        beforeNoOpUndo shouldBe 4
+        // claim, record, three undos, release.
+        beforeNoOpUndo shouldBe 6
         // Keyed by the public code, never the internal id: the document is world-readable.
         sent.last().publicCode.isNotBlank() shouldBe true
     }
@@ -400,7 +462,7 @@ class LiveMatchServiceTest {
             exploding.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
         }
         // The point still landed: the append is committed before anything is published.
-        live.log(matchId = matchId).shouldHaveSize(size = 1)
+        live.log(matchId = matchId).shouldHaveSize(size = setupRows + 1)
     }
 
     @Test
@@ -409,10 +471,11 @@ class LiveMatchServiceTest {
         var now = java.time.LocalDateTime.of(2026, 3, 1, 10, 0, 0)
         val timed = LiveMatchService(clock = { now })
         umpire()
-        val matchId = fixture()
+        val matchId = scheduledFixture()
 
-        // Nothing before the official start, however much has happened.
-        timed.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1)).shouldBeRight()
+        // Scoring before the official start is refused now (#986) — the clock and the score agree that
+        // the match has not begun, where before the clock said 0 while points accumulated beside it.
+        timed.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1)).shouldBeLeft()
         timed.scoreboard(matchId = matchId).elapsedSeconds shouldBe 0L
 
         timed.record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "MATCH_STARTED")).shouldBeRight()

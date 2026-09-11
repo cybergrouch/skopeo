@@ -46,6 +46,12 @@ export function LiveScoringBoard({
   // names would be worse than no labels at all — it would confidently say the wrong thing.
   const ordered = flipped ? [sides[1], sides[0]] : sides
   const finished = view.outcome != null
+  // Scoring is inert until the match is started (#986), while between sets (#984), and once finished.
+  // The server rule (#985) applies to points only — a game or set is an umpire declaration, which does
+  // not need one. Disabled rather than hidden: a board that vanishes and returns is disorienting, and
+  // a greyed one beside a prominent action reads as "do that first".
+  const scorable = view.hasStarted && !view.isBetweenSets && !finished
+  const canScorePoints = scorable && view.serverId != null
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-2 gap-[1dvh]">
@@ -53,7 +59,7 @@ export function LiveScoringBoard({
         <div key={side.id} className="flex min-h-0 flex-col gap-[0.6dvh]">
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || !canScorePoints}
             aria-label={`Point to ${side.name}`}
             onClick={() => onPoint(side.id)}
             className="flex min-h-0 flex-1 flex-col items-center justify-center gap-[0.5dvh] rounded-lg
@@ -82,7 +88,7 @@ export function LiveScoringBoard({
             <Button
               size="sm"
               variant="outline"
-              disabled={busy || finished}
+              disabled={busy || !scorable}
               aria-label={`Game to ${side.name}`}
               onClick={() => onGame(side.id)}
             >
@@ -91,7 +97,7 @@ export function LiveScoringBoard({
             <Button
               size="sm"
               variant="outline"
-              disabled={busy || finished}
+              disabled={busy || !scorable}
               aria-label={`Set to ${side.name}`}
               onClick={() => onEndSet(side.id)}
             >
@@ -100,7 +106,7 @@ export function LiveScoringBoard({
             <Button
               size="sm"
               variant="ghost"
-              disabled={busy || finished}
+              disabled={busy || finished || !view.hasStarted}
               aria-label={`${side.name} retires`}
               onClick={() => onRetire(side.id)}
             >
@@ -109,7 +115,7 @@ export function LiveScoringBoard({
             <Button
               size="sm"
               variant="ghost"
-              disabled={busy || finished}
+              disabled={busy || finished || !view.hasStarted}
               aria-label={`${side.name} defaults`}
               onClick={() => onDefault(side.id)}
             >
@@ -197,6 +203,7 @@ export function ScoringActions({
   onTiebreak,
   onPauseResume,
   onFlip,
+  onStartSet,
   onFinalize,
 }: {
   view: LiveMatchResponse
@@ -211,9 +218,11 @@ export function ScoringActions({
   onTiebreak: () => void
   onPauseResume: () => void
   onFlip: () => void
+  onStartSet: () => void
   onFinalize: () => void
 }) {
   const finished = view.outcome != null
+  const betweenSets = view.isBetweenSets && !finished
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-[0.8dvw] py-[0.6dvh]">
       <Button size="sm" variant="secondary" disabled={busy} onClick={onUndo}>
@@ -222,20 +231,40 @@ export function ScoringActions({
       <Button
         size="sm"
         variant="outline"
-        disabled={busy || finished || view.isTiebreak}
+        disabled={busy || finished || betweenSets || !view.hasStarted || view.isTiebreak}
         onClick={onTiebreak}
       >
         Start tiebreak
       </Button>
-      <Button size="sm" variant="outline" disabled={busy} onClick={onPauseResume}>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy || finished || !view.hasStarted}
+        onClick={onPauseResume}
+      >
         {view.isPaused ? 'Resume' : 'Pause'}
       </Button>
       {/* A display preference only. Never recorded, so the log cannot be corrupted by a flip (#911 §6). */}
       <Button size="sm" variant="ghost" disabled={busy} onClick={onFlip}>
         Switch sides
       </Button>
+      {/*
+        The decision point (#984). Awarding a set stops the match here rather than rolling into the
+        next, so the umpire chooses: play on, or this was the last set. Before this existed there was
+        no moment at which Finalize could be reached on a match that simply finished.
+      */}
+      {betweenSets && (
+        <Button size="sm" variant="outline" disabled={busy} onClick={onStartSet}>
+          Start next set
+        </Button>
+      )}
       {canFinalize && (
-        <Button size="sm" disabled={busy || !finished} onClick={onFinalize} className="ml-auto">
+        <Button
+          size="sm"
+          disabled={busy || !(finished || betweenSets)}
+          onClick={onFinalize}
+          className="ml-auto"
+        >
           Finalize
         </Button>
       )}

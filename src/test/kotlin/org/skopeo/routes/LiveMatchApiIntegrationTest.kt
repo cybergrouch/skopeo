@@ -5,6 +5,7 @@ package org.skopeo.routes
 
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.HttpClient
@@ -30,10 +31,13 @@ import org.skopeo.common.dto.livematch.LiveMatchResponse
 import org.skopeo.common.dto.livematch.LiveScoreEventRequest
 import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
+import org.skopeo.domain.mapper.entity.livematch.LiveMatchEventKinds
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.CreateFixtureCommand
+import org.skopeo.domain.model.MatchCompletionReason
+import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.model.MatchType
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.ProvisionUserCommand
@@ -48,6 +52,7 @@ import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
 import org.skopeo.testsupport.fixtureEventId
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 /**
@@ -113,7 +118,42 @@ class LiveMatchApiIntegrationTest {
         return TestFirebaseAuth.mintToken(uid = uid)
     }
 
+    /**
+     * A fixture that is **under way**: created, started, and with a server assigned.
+     *
+     * Since #984/#985/#986 the API refuses scoring on a match that has not been started or has nobody
+     * serving. Seeded straight into the log rather than posted, so the arrangement does not depend on
+     * the guards under test.
+     */
     private fun seedFixture(): UUID {
+        val matchId = seedScheduledFixture()
+        val users = UserRepository()
+        val server = users.findByFirebaseUid(firebaseUid = "home")!!.toDomain().id
+        // Attribute the seeded rows to whichever umpire the test already created, not to a player.
+        // `umpireCredit` folds "who recorded rows" into the match's umpires, so crediting `home` here
+        // would invent a second umpire that the test never had.
+        val by =
+            listOf("ump", "boss")
+                .firstNotNullOfOrNull { uid -> users.findByFirebaseUid(firebaseUid = uid)?.toDomain()?.id }
+                ?: server
+        val live = LiveMatchRepository()
+        listOf(LiveMatchEventKinds.MATCH_STARTED to null, LiveMatchEventKinds.SERVER_ASSIGNED to server)
+            .forEach { (kind, playerId) ->
+                live.append(
+                    matchId = matchId,
+                    sequence = live.lastSequence(matchId = matchId) + 1,
+                    kind = kind,
+                    side = null,
+                    playerId = playerId,
+                    recordedBy = by,
+                    recordedAt = LocalDateTime.now(),
+                )
+            }
+        return matchId
+    }
+
+    /** A freshly created fixture, not yet started — the state an umpire first opens. */
+    private fun seedScheduledFixture(): UUID {
         val home = seedUser(uid = "home")
         val away = seedUser(uid = "away")
         return MatchRepository()
@@ -165,7 +205,8 @@ class LiveMatchApiIntegrationTest {
 
             view.pointsTeam1 shouldBe "40"
             view.pointsTeam2 shouldBe "0"
-            view.sequence shouldBe 3L
+            // The two rows `seedFixture` seeds (start, server) plus the three points.
+            view.sequence shouldBe 5L
         }
 
     @Test
@@ -271,7 +312,9 @@ class LiveMatchApiIntegrationTest {
     fun `undo with nothing to undo is 200, not an error`() =
         withApp { client ->
             val token = seedScorer()
-            val matchId = seedFixture()
+            // Scheduled, deliberately: `seedFixture` seeds a start and a server, and those ARE undoable
+            // actions — so on a match under way there is always something to take back.
+            val matchId = seedScheduledFixture()
             val response =
                 client.post(urlString = "/api/v1/matches/$matchId/live/undo") {
                     header(key = HttpHeaders.Authorization, value = "Bearer $token")
@@ -436,6 +479,120 @@ class LiveMatchApiIntegrationTest {
             stored.sets.map { it.abandoned } shouldBe listOf(element = true)
         }
 
+    /** Four points to [side] — one game, so a set awarded afterwards is not a winnerless 0-0. */
+    private suspend fun HttpClient.winAGame(
+        token: String,
+        matchId: UUID,
+        side: String,
+    ) {
+        repeat(times = 4) {
+            postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = side))
+        }
+    }
+
+    @Test
+    fun `a match played to a finish is finalized from between sets (#984)`() =
+        withApp { client ->
+            // THE case this issue exists for, end to end. Before #984, awarding a set rolled straight
+            // into the next, so a match that simply finished could never reach a finalizable state —
+            // only a retirement or default could. The retirement path passing is what hid it.
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+
+            client.winAGame(token = token, matchId = matchId, side = "TEAM1")
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"))
+
+            // Between sets: no declaration was recorded, and none is needed — finalizing here IS it.
+            val finalized = client.finalize(token = token, matchId = matchId)
+            finalized.status shouldBe HttpStatusCode.OK
+
+            val stored = MatchRepository().findById(matchId = matchId).shouldBeRight().toDomain()
+            stored.status shouldBe MatchStatus.COMPLETED
+            stored.completionReason shouldBe MatchCompletionReason.COMPLETED
+            // The winner comes from the banked sets, not from anything the client said.
+            stored.winnerTeamId shouldBe stored.team1.teamId
+        }
+
+    @Test
+    fun `finalizing with the sets level is refused rather than inventing a winner (#984)`() =
+        withApp { client ->
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+
+            client.winAGame(token = token, matchId = matchId, side = "TEAM1")
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"))
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_STARTED"))
+            client.winAGame(token = token, matchId = matchId, side = "TEAM2")
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM2"))
+
+            // One set all. Picking a winner to let finalize succeed would put a fabricated result into
+            // the record — the umpire should play a decider or record a retirement.
+            val refused = client.finalize(token = token, matchId = matchId)
+            refused.status shouldBe HttpStatusCode.Conflict
+            refused.bodyAsText() shouldContain "level"
+        }
+
+    @Test
+    fun `scoring is refused between sets until the next one is started (#984)`() =
+        withApp { client ->
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+            client.winAGame(token = token, matchId = matchId, side = "TEAM1")
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"))
+
+            // A point here would silently join a set nobody has begun.
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+                .status shouldBe HttpStatusCode.Conflict
+
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_STARTED"))
+                .status shouldBe HttpStatusCode.Created
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+                .status shouldBe HttpStatusCode.Created
+        }
+
+    @Test
+    fun `scoring is refused before the match is started (#986)`() =
+        withApp { client ->
+            val token = seedFinalizer()
+            // Not seedFixture: this is about the state before anyone presses Start match.
+            val matchId = seedScheduledFixture()
+
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+                .status shouldBe HttpStatusCode.Conflict
+
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "MATCH_STARTED"))
+            // Still refused — started, but nobody is serving yet (#985).
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+                .status shouldBe HttpStatusCode.Conflict
+        }
+
+    @Test
+    fun `a game declared with nobody serving rotates nothing, and does not fail (#985)`() =
+        withApp { client ->
+            // Only POINTS need a server; a game is an umpire declaration. So a game can complete with
+            // no server assigned, and the rotation has no "next" to move to — it must do nothing
+            // rather than throw or invent one.
+            val token = seedFinalizer()
+            val matchId = seedScheduledFixture()
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "MATCH_STARTED"))
+
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "GAME_AWARDED", side = "TEAM1"))
+                .status shouldBe HttpStatusCode.Created
+
+            val view: LiveMatchResponse =
+                client.get(urlString = "/api/v1/matches/$matchId/live") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }.body()
+            view.gamesTeam1 shouldBe 1
+            view.serverId.shouldBeNull()
+        }
+
     @Test
     fun `a walkover finalizes with no sets at all`() =
         withApp { client ->
@@ -461,7 +618,8 @@ class LiveMatchApiIntegrationTest {
             // The credit is folded out because §8a makes the log disposable — but finalize itself does
             // NOT delete it, so a mis-finalized match can still be inspected.
             LiveMatchRepository().umpires(matchId = matchId).shouldHaveSize(size = 1)
-            LiveMatchRepository().log(matchId = matchId).shouldHaveSize(size = 1)
+            // The award, plus the start and server rows the fixture was seeded with.
+            LiveMatchRepository().log(matchId = matchId).shouldHaveSize(size = 3)
         }
 
     @Test

@@ -4,11 +4,9 @@
 package org.skopeo.domain.service.livematch
 
 import arrow.core.Either
-import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
-import arrow.core.right
 import org.skopeo.common.dto.livematch.LiveMatchResponse
 import org.skopeo.common.dto.livematch.LivePlayerResponse
 import org.skopeo.common.dto.livematch.LiveScoreEventRequest
@@ -35,7 +33,6 @@ import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.model.ScoreEvent
 import org.skopeo.domain.model.ScoreState
 import org.skopeo.domain.model.TeamSide
-import org.skopeo.domain.model.User
 import org.skopeo.domain.service.match.MatchService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
@@ -98,8 +95,8 @@ class LiveMatchService(
         matchId: UUID,
     ): Either<ServiceError, LiveMatchResponse> =
         either {
-            val caller = scorer(token = token).bind()
-            val match = scorableMatch(matchId = matchId).bind()
+            val caller = scorerOf(users = users, token = token).bind()
+            val match = scorableMatchOf(matches = matches, matchId = matchId).bind()
             live.claim(matchId = matchId, scorerId = caller.id)
             if (match.status == MatchStatus.SCHEDULED) {
                 matches.setStatus(matchId = matchId, status = MatchStatus.IN_PROGRESS.name)
@@ -113,8 +110,8 @@ class LiveMatchService(
         matchId: UUID,
     ): Either<ServiceError, LiveMatchResponse> =
         either {
-            scorer(token = token).bind()
-            val match = scorableMatch(matchId = matchId).bind()
+            scorerOf(users = users, token = token).bind()
+            val match = scorableMatchOf(matches = matches, matchId = matchId).bind()
             live.releaseClaim(matchId = matchId)
             published(match = match)
         }
@@ -138,19 +135,38 @@ class LiveMatchService(
     ): Either<ServiceError, LiveMatchResponse> =
         either {
             val event = ScoreEventParser.parse(request = request).bind()
-            appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
-                live.append(
-                    matchId = matchId,
-                    sequence = sequence,
-                    kind = kindOf(event = event),
-                    side = sideOf(event = event),
-                    playerId = (event as? ScoreEvent.ServerAssigned)?.playerId,
-                    recordedBy = callerId,
-                    // The SAME clock the elapsed time is folded with. Two notions of "now" — one
-                    // stamping rows, one measuring them — is how a match clock ends up reading zero.
-                    recordedAt = clock(),
-                )
-            }.bind()
+            // Resolve the match FIRST: an unknown id is a NotFound, not "this match has not started".
+            // An empty log looks exactly like an unstarted match, so checking state before existence
+            // reports the wrong thing for an id that was never a match at all.
+            scorableMatchOf(matches = matches, matchId = matchId).bind()
+            val before = ScoreEngine.replay(log = live.loggedActions(matchId = matchId))
+            if (event.isScoringAction()) scoringAllowed(state = before, event = event).bind()
+            val response =
+                appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
+                    live.append(
+                        matchId = matchId,
+                        sequence = sequence,
+                        kind = kindOf(event = event),
+                        side = sideOf(event = event),
+                        playerId = (event as? ScoreEvent.ServerAssigned)?.playerId,
+                        recordedBy = callerId,
+                        // The SAME clock the elapsed time is folded with. Two notions of "now" — one
+                        // stamping rows, one measuring them — is how a match clock ends up reading zero.
+                        recordedAt = clock(),
+                    )
+                }.bind()
+            // A completed game hands the serve on (#985). Keyed on a game actually COMPLETING, not on the
+            // event being GAME_AWARDED: most games end on the fourth point rather than an umpire
+            // declaring them, and keying on the event would have rotated for the rare case only.
+            //
+            // Appended as its own event rather than derived, so the rotation lives in the log: undo
+            // reverses it, and "who served game 4" stays answerable.
+            val after = ScoreEngine.replay(log = live.loggedActions(matchId = matchId))
+            if (gamesPlayed(state = after) > gamesPlayed(state = before)) {
+                rotateServer(token = token, matchId = matchId).bind()
+            } else {
+                response
+            }
         }
 
     /**
@@ -164,8 +180,8 @@ class LiveMatchService(
         matchId: UUID,
     ): Either<ServiceError, LiveMatchResponse> =
         either {
-            scorer(token = token).bind()
-            scorableMatch(matchId = matchId).bind()
+            scorerOf(users = users, token = token).bind()
+            scorableMatchOf(matches = matches, matchId = matchId).bind()
             val target = live.lastUndoableSequence(matchId = matchId)
             if (target == null) {
                 // Nothing changed, so nothing to broadcast: a courtside double-tap must not push a
@@ -203,15 +219,25 @@ class LiveMatchService(
         matchId: UUID,
     ): Either<ServiceError, MatchResponse> =
         either {
-            scorer(token = token).bind()
-            val match = scorableMatch(matchId = matchId).bind()
-            val state = ScoreEngine.replay(log = live.loggedActions(matchId = matchId))
+            scorerOf(users = users, token = token).bind()
+            val match = scorableMatchOf(matches = matches, matchId = matchId).bind()
+            val replayed = ScoreEngine.replay(log = live.loggedActions(matchId = matchId))
+            // Between sets, finalizing IS the declaration (#984): the umpire chose to stop here rather
+            // than start another set, and the banked sets already say who won. Declaring it explicitly
+            // keeps the log complete — "the match was awarded to X" is a fact worth recording — and the
+            // winner is derived here rather than trusted from a client.
+            val state =
+                if (replayed.outcome == null && replayed.isBetweenSets) {
+                    declareWinnerFromSets(token = token, matchId = matchId, state = replayed).bind()
+                } else {
+                    replayed
+                }
             val outcome =
                 ensureNotNull(value = state.outcome) {
                     ServiceError.Conflict(
                         message =
-                            "The match has not been declared over. Record a MATCH_AWARDED, RETIRED or " +
-                                "DEFAULTED action before finalizing.",
+                            "This match has not finished. Award the set and finalize from there, or record a " +
+                                "retirement or default.",
                     )
                 }
             val sides = mapOf(TeamSide.TEAM1 to match.team1.teamId, TeamSide.TEAM2 to match.team2.teamId)
@@ -256,8 +282,8 @@ class LiveMatchService(
         write: (Long, UUID) -> Boolean,
     ): Either<ServiceError, LiveMatchResponse> =
         either {
-            val caller = scorer(token = token).bind()
-            val match = scorableMatch(matchId = matchId).bind()
+            val caller = scorerOf(users = users, token = token).bind()
+            val match = scorableMatchOf(matches = matches, matchId = matchId).bind()
             var attempt = 0
             var written = false
             while (attempt < MAX_APPEND_ATTEMPTS && !written) {
@@ -272,49 +298,82 @@ class LiveMatchService(
             published(match = match)
         }
 
-    /** The caller, if they may score at all. A flat capability check — see the class note. */
-    private fun scorer(token: VerifiedFirebaseToken): Either<ServiceError, User> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-        return if (caller == null || caller.capabilities.none { it in SCORING_ROLES }) {
-            ServiceError.Forbidden().left()
-        } else {
-            caller.right()
-        }
-    }
-
     /**
-     * The match, if it can still be scored live.
+     * Declare the match won by whoever took more sets, and return the state with that outcome (#984).
      *
-     * A rated match is frozen for the same reason `uploadResult` refuses one: the result has already fed
-     * ratings and points, and re-deriving it from a live log would silently diverge from what was paid.
+     * Only reachable between sets, where the umpire has explicitly chosen to stop. The winner is the
+     * side holding more completed sets — derived from the log rather than supplied, so a client cannot
+     * name the wrong one.
+     *
+     * A level set count refuses. Nobody has won two sets all, and inventing a winner to let a finalize
+     * succeed would put a fabricated result into the record; the umpire should play the decider or
+     * record a retirement.
      */
-    private fun scorableMatch(matchId: UUID) =
+    private fun declareWinnerFromSets(
+        token: VerifiedFirebaseToken,
+        matchId: UUID,
+        state: ScoreState,
+    ): Either<ServiceError, ScoreState> =
         either {
-            val match = matches.findById(matchId = matchId).bind().toDomain()
-            ensure(condition = match.isActive) { ServiceError.Conflict(message = "Match is disabled") }
-            ensure(condition = match.ratedAt == null) {
-                ServiceError.Conflict(message = "Cannot score a match that has already been rated")
-            }
-            // Finalize ends live scoring (#952). `ratedAt` was the only guard here, and it is the wrong
-            // line: rating happens when the EVENT is finalized (#403), which can be days after the match
-            // was recorded. In between, a match with a full scoreline could still be claimed and scored.
-            //
-            // Refused rather than allowed-with-care, because the alternative is two ways to change one
-            // recorded result. The live log is working state (§8a) and the match is the record;
-            // corrections go through the ordinary result-editing path that everything else uses. Two
-            // routes to the same edit is how they drift.
-            //
-            // Note this guard is safe for finalize itself: it runs BEFORE uploadResult, when the match
-            // is still SCHEDULED or IN_PROGRESS. Reading the score is unaffected — `scoreboard` does not
-            // come through here, so a finished match's scoreboard stays visible.
-            ensure(condition = match.status != MatchStatus.COMPLETED) {
+            val byTeam1 = state.completedSets.count { it.winner == TeamSide.TEAM1 }
+            val byTeam2 = state.completedSets.count { it.winner == TeamSide.TEAM2 }
+            ensure(condition = byTeam1 != byTeam2) {
                 ServiceError.Conflict(
-                    message =
-                        "This match already has a recorded result. Live scoring is finished; correct the " +
-                            "score through the match result instead.",
+                    message = "The sets are level at $byTeam1-$byTeam2, so there is no winner to record. Play a deciding set.",
                 )
             }
-            match
+            val winner = if (byTeam1 > byTeam2) TeamSide.TEAM1 else TeamSide.TEAM2
+            appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
+                live.append(
+                    matchId = matchId,
+                    sequence = sequence,
+                    kind = kindOf(event = ScoreEvent.MatchAwarded(side = winner)),
+                    side = winner.name,
+                    playerId = null,
+                    recordedBy = callerId,
+                    recordedAt = clock(),
+                )
+            }.bind()
+            ScoreEngine.replay(log = live.loggedActions(matchId = matchId))
+        }
+
+    /**
+     * Hand the serve to the next player after a completed game (#985).
+     *
+     * Rotates through the roster in order, which is already correct for doubles' four-way turn — the
+     * reason `ServerAssigned` names a player rather than a side. Appended as an ordinary event so undo
+     * reverses it like any other, and an umpire correcting the order just assigns again.
+     *
+     * A no-op when nobody was serving: there is no "next" without a current, and the point guard above
+     * means a game can only have been played without a server if the umpire declared it outright.
+     */
+    private fun rotateServer(
+        token: VerifiedFirebaseToken,
+        matchId: UUID,
+    ): Either<ServiceError, LiveMatchResponse> =
+        either {
+            val order =
+                rosterOf(matches = matches, users = users, matchId = matchId).mapNotNull {
+                    runCatching { UUID.fromString(it.userId) }.getOrNull()
+                }
+            val current = ScoreEngine.replay(log = live.loggedActions(matchId = matchId)).serverId
+            // Wraps: the player after the last is the first again, which is the rotation in both formats.
+            val next = current?.let { order.getOrNull(index = order.indexOf(element = it) + 1) ?: order.firstOrNull() }
+            if (next == null) {
+                published(match = scorableMatchOf(matches = matches, matchId = matchId).bind())
+            } else {
+                appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
+                    live.append(
+                        matchId = matchId,
+                        sequence = sequence,
+                        kind = kindOf(event = ScoreEvent.ServerAssigned(playerId = next)),
+                        side = null,
+                        playerId = next,
+                        recordedBy = callerId,
+                        recordedAt = clock(),
+                    )
+                }.bind()
+            }
         }
 
     private companion object {

@@ -28,6 +28,7 @@ fun LiveMatchView.toResponse(
         sequence = sequence,
         scorerId = scorerId?.toString(),
         hasStarted = state.hasStarted,
+        isBetweenSets = state.isBetweenSets,
         isPaused = state.isPaused,
         isTiebreak = state.isTiebreak,
         serverId = state.serverId?.toString(),

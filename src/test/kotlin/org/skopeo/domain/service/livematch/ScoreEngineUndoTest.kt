@@ -24,8 +24,18 @@ import org.skopeo.domain.model.TeamSide
  *    themselves here*. So each test checks the log's size and contents are unchanged as well as the score.
  */
 class ScoreEngineUndoTest {
-    /** Build a log from actions already carrying their sequence numbers. */
-    private fun log(vararg actions: LoggedAction): List<LoggedAction> = actions.toList()
+    /**
+     * Build a log from actions already carrying their sequence numbers, on a **started** match.
+     *
+     * Scoring is inert until `MATCH_STARTED` (#986), so every log that expects points to count needs
+     * it. Sequence 0 keeps it ahead of the numbered actions, which start at 1, so nothing here has to
+     * renumber. The undo tests are about history resolution, not about the start gate.
+     */
+    private fun log(vararg actions: LoggedAction): List<LoggedAction> =
+        listOf(element = scored(sequence = 0, event = ScoreEvent.MatchStarted)) + actions
+
+    /** What [log] folds to with everything undone: started, nothing scored. */
+    private val startedOnly = ScoreState(hasStarted = true)
 
     private fun scored(
         sequence: Long,
@@ -59,8 +69,9 @@ class ScoreEngineUndoTest {
         state.pointsTeam1 shouldBe 1
 
         // The log still holds all three rows — the undone point among them.
-        history.shouldHaveSize(size = 3)
-        history.filterIsInstance<LoggedAction.Scored>().shouldHaveSize(size = 2)
+        // +1 on each: `log` prepends the MATCH_STARTED that scoring now requires (#986).
+        history.shouldHaveSize(size = 4)
+        history.filterIsInstance<LoggedAction.Scored>().shouldHaveSize(size = 3)
     }
 
     @Test
@@ -73,9 +84,10 @@ class ScoreEngineUndoTest {
             )
 
         // The second marker cancels the first, so the point counts again.
-        ScoreEngine.effective(log = history).shouldHaveSize(size = 1)
+        // The surviving point, plus the prepended MATCH_STARTED.
+        ScoreEngine.effective(log = history).shouldHaveSize(size = 2)
         ScoreEngine.replay(log = history).pointsTeam1 shouldBe 1
-        history.shouldHaveSize(size = 3)
+        history.shouldHaveSize(size = 4)
     }
 
     @Test
@@ -88,8 +100,9 @@ class ScoreEngineUndoTest {
                 undo(sequence = 3, target = 2),
                 undo(sequence = 4, target = 3),
             )
-        ScoreEngine.effective(log = history).shouldHaveSize(size = 0)
-        ScoreEngine.replay(log = history) shouldBe ScoreState()
+        // MATCH_STARTED always survives — only the scoring actions cancel.
+        ScoreEngine.effective(log = history).shouldHaveSize(size = 1)
+        ScoreEngine.replay(log = history) shouldBe startedOnly
     }
 
     @Test
@@ -116,15 +129,20 @@ class ScoreEngineUndoTest {
             (1..6).flatMap { game ->
                 (1..4).map { point -> scored(sequence = (game - 1) * 4L + point, event = point(side = TeamSide.TEAM1)) }
             }
-        val withSet = throughSet + log(scored(sequence = 25, event = ScoreEvent.SetAwarded(side = TeamSide.TEAM1)))
+        // `log` is used once, at the front: calling it again mid-expression would prepend a second
+        // MATCH_STARTED and two rows would share sequence 0.
+        val withSet =
+            log(actions = throughSet.toTypedArray()) +
+                scored(sequence = 25, event = ScoreEvent.SetAwarded(side = TeamSide.TEAM1))
 
         ScoreEngine.replay(log = withSet).completedSets.shouldHaveSize(size = 1)
 
-        val undone = withSet + log(undo(sequence = 26, target = 25))
+        val undone = withSet + undo(sequence = 26, target = 25)
         val state = ScoreEngine.replay(log = undone)
         state.completedSets.shouldHaveSize(size = 0)
         state.gamesTeam1 shouldBe 6
-        undone.shouldHaveSize(size = 26)
+        // 24 points + the set + its undo, plus the prepended MATCH_STARTED.
+        undone.shouldHaveSize(size = 27)
     }
 
     @Test
@@ -168,15 +186,18 @@ class ScoreEngineUndoTest {
                 undo(sequence = 2, target = 1),
             )
 
-        ScoreEngine.replay(log = history) shouldBe ScoreState()
-        ScoreEngine.effective(log = history).shouldHaveSize(size = 0)
-        history.shouldHaveSize(size = 2)
+        ScoreEngine.replay(log = history) shouldBe startedOnly
+        // Only the prepended MATCH_STARTED survives; the point and its undo cancel.
+        ScoreEngine.effective(log = history).shouldHaveSize(size = 1)
+        history.shouldHaveSize(size = 3)
     }
 
     @Test
     fun `undo when there is nothing to undo is inert`() {
         // An empty log, and a marker pointing at a sequence that was never written. Neither throws.
-        ScoreEngine.replay(log = log(undo(sequence = 1, target = 0))) shouldBe ScoreState()
+        // Target 999, not 0: sequence 0 is the prepended MATCH_STARTED, so aiming at it would un-start
+        // the match and test something else entirely.
+        ScoreEngine.replay(log = log(undo(sequence = 1, target = 999))) shouldBe startedOnly
         ScoreEngine.replay(log = emptyList()) shouldBe ScoreState()
 
         val stray =
@@ -247,7 +268,7 @@ class ScoreEngineUndoTest {
                 undo(sequence = 2, target = 1),
                 scored(sequence = 3, event = point(side = TeamSide.TEAM2)),
             )
-        ScoreEngine.effective(log = history) shouldBe listOf(element = point(side = TeamSide.TEAM2))
+        ScoreEngine.effective(log = history) shouldBe listOf(ScoreEvent.MatchStarted, point(side = TeamSide.TEAM2))
     }
 
     @Test

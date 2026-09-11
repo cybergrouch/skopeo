@@ -23,8 +23,14 @@ import java.util.UUID
  * target), so they are pinned rather than left to chance.
  */
 class ScoreEngineTest {
-    private fun state(vararg events: ScoreEvent): ScoreState =
-        events.fold(initial = ScoreState()) { acc, event -> ScoreEngine.apply(state = acc, event = event) }
+    /**
+     * Fold [events] onto a **started** match.
+     *
+     * Scoring is inert until `MATCH_STARTED` (#986), so every test whose subject is a scoring rule
+     * needs the match under way first. Prepending it here rather than in twenty tests keeps each one
+     * about its own rule. Tests whose subject IS the gating build their state explicitly instead.
+     */
+    private fun state(vararg events: ScoreEvent): ScoreState = stateOf(events = events.toList())
 
     private fun points(
         side: TeamSide,
@@ -32,7 +38,8 @@ class ScoreEngineTest {
     ): List<ScoreEvent> = List(size = times) { ScoreEvent.PointWon(side = side) }
 
     private fun stateOf(events: List<ScoreEvent>): ScoreState =
-        events.fold(initial = ScoreState()) { acc, event -> ScoreEngine.apply(state = acc, event = event) }
+        (listOf(element = ScoreEvent.MatchStarted) + events)
+            .fold(initial = ScoreState()) { acc, event -> ScoreEngine.apply(state = acc, event = event) }
 
     @Test
     fun `a fresh state is love-all with nothing banked`() {
@@ -167,7 +174,7 @@ class ScoreEngineTest {
 
     @Test
     fun `tiebreak points are plain ordinals and never close a game on their own`() {
-        val inTiebreak = ScoreEngine.apply(state = ScoreState(), event = ScoreEvent.TiebreakStarted)
+        val inTiebreak = state(ScoreEvent.TiebreakStarted)
         val sevenLove = stateOf(events = listOf(element = ScoreEvent.TiebreakStarted) + points(side = TeamSide.TEAM1, times = 7))
 
         inTiebreak.isTiebreak shouldBe true
@@ -228,6 +235,9 @@ class ScoreEngineTest {
                 events =
                     (1..6).flatMap { points(side = TeamSide.TEAM1, times = 4) } +
                         listOf(element = ScoreEvent.SetAwarded(side = TeamSide.TEAM1)) +
+                        // Set two must be started explicitly (#984): awarding a set parks the match
+                        // between sets rather than rolling into the next.
+                        listOf(element = ScoreEvent.SetStarted) +
                         (1..4).flatMap { points(side = TeamSide.TEAM2, times = 4) } +
                         listOf(element = ScoreEvent.SetAwarded(side = TeamSide.TEAM2)),
             )
@@ -241,14 +251,14 @@ class ScoreEngineTest {
     @Test
     fun `the server is a player id, so doubles rotation is expressible`() {
         // The one place doubles differs: the serve rotates through four people, so an event naming a SIDE
-        // could not express it. Nothing auto-rotates — whose turn it is is a format rule, and the umpire
-        // is the authority (#911).
+        // could not express it. The ENGINE still rotates nothing — it knows no roster; since #985 the
+        // service appends the rotation as an explicit event, which is what keeps undo able to reverse it.
         val alice = UUID.randomUUID()
         val bob = UUID.randomUUID()
         val carol = UUID.randomUUID()
         val dave = UUID.randomUUID()
 
-        var current = ScoreState()
+        var current = ScoreEngine.apply(state = ScoreState(), event = ScoreEvent.MatchStarted)
         listOf(alice, carol, bob, dave).forEach { server ->
             current = ScoreEngine.apply(state = current, event = ScoreEvent.ServerAssigned(playerId = server))
             current = stateFrom(state = current, events = points(side = TeamSide.TEAM1, times = 4))
@@ -334,9 +344,14 @@ class ScoreEngineTest {
         started.hasStarted shouldBe true
         started.pointsTeam1 shouldBe 0
 
-        // Scoring without a start is still allowed — the engine is permissive, and an umpire who forgets
-        // to tap Start should not lose the point.
-        stateOf(events = points(side = TeamSide.TEAM1, times = 1)).hasStarted shouldBe false
+        // The ENGINE stays permissive: an umpire who forgets to tap Start must not silently lose the
+        // point, and the engine has no way to report a refusal. #986 requires the start, but enforces it
+        // where it can say so — the service refuses the write and the UI disables the control.
+        val unstarted =
+            points(side = TeamSide.TEAM1, times = 1)
+                .fold(initial = ScoreState()) { acc, event -> ScoreEngine.apply(state = acc, event = event) }
+        unstarted.hasStarted shouldBe false
+        unstarted.pointsTeam1 shouldBe 1
     }
 
     @Test
@@ -388,15 +403,20 @@ class ScoreEngineTest {
     fun `replay of a whole match folds to the same state as applying step by step`() {
         // replay is a fold over apply, not a second traversal — this is the assertion that they cannot
         // drift, which is the classic way event-sourced scoring goes wrong (#911 §7).
+        // A realistic log: started, two sets with the second explicitly begun, then declared won.
         val events =
-            (1..6).flatMap { points(side = TeamSide.TEAM1, times = 4) } +
+            listOf(element = ScoreEvent.MatchStarted) +
+                (1..6).flatMap { points(side = TeamSide.TEAM1, times = 4) } +
                 listOf(element = ScoreEvent.SetAwarded(side = TeamSide.TEAM1)) +
+                listOf(element = ScoreEvent.SetStarted) +
                 (1..6).flatMap { points(side = TeamSide.TEAM2, times = 4) } +
                 listOf(element = ScoreEvent.SetAwarded(side = TeamSide.TEAM2)) +
                 listOf(element = ScoreEvent.MatchAwarded(side = TeamSide.TEAM2))
         val log = events.mapIndexed { index, event -> LoggedAction.Scored(sequence = index + 1L, event = event) }
 
-        ScoreEngine.replay(log = log) shouldBe stateOf(events = events)
+        // Folded raw, not via stateOf, since the log already carries its own MatchStarted.
+        val stepByStep = events.fold(initial = ScoreState()) { acc, e -> ScoreEngine.apply(state = acc, event = e) }
+        ScoreEngine.replay(log = log) shouldBe stepByStep
     }
 
     private fun stateFrom(

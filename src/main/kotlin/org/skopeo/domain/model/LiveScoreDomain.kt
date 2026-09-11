@@ -40,6 +40,18 @@ enum class TeamSide {
  * `apply` never sees one. See [LoggedAction.Undone].
  */
 sealed interface ScoreEvent {
+    /**
+     * The three events that END a match: a retirement, a default, or a declared win.
+     *
+     * A sub-interface rather than a comment so exhaustiveness is a *type* fact. `ScoreEngine.endingOf`
+     * takes this and needs no `else` branch — there is no fourth way for a match to stop, and if one is
+     * ever added the compiler names every place that has to consider it.
+     */
+    sealed interface Ending : ScoreEvent {
+        /** The side the outcome is stated about: who conceded, or who was declared the winner. */
+        val side: TeamSide
+    }
+
     /** A point to [side]. In a tiebreak this is an ordinal tick; otherwise it may close the game. */
     data class PointWon(val side: TeamSide) : ScoreEvent
 
@@ -56,24 +68,41 @@ sealed interface ScoreEvent {
      */
     data class SetAwarded(val side: TeamSide) : ScoreEvent
 
+    /**
+     * The next set begins (#984).
+     *
+     * Separate from [SetAwarded] on purpose. Banking a set and starting the following one used to be
+     * one step, which meant the match was already mid-next-set the instant a set ended — so the moment
+     * to ask "is this over?" never existed, and a match played to a normal finish could never be
+     * finalized. Splitting them creates that moment.
+     *
+     * Two events rather than one also lets undo reverse them independently: an umpire who starts the
+     * next set by mistake can take it back without un-awarding the set that ended.
+     */
+    data object SetStarted : ScoreEvent
+
     /** Points become plain ordinals from here until the set is awarded. No target is assumed. */
     data object TiebreakStarted : ScoreEvent
 
     /**
      * Who is serving. A **player**, not a side — the one place doubles differs, since the serve rotates
-     * through four people. Not auto-rotated on a game: whose turn it is is a format rule, and the umpire
-     * is the authority (a UI is free to *suggest* the next server).
+     * through four people.
+     *
+     * The service appends one of these automatically when a game is awarded (#985), advancing through
+     * the roster. It stays an explicit logged event rather than something the engine derives, for two
+     * reasons: the engine knows nothing about players, and an appended event means undo reverses a
+     * rotation for free. An umpire correcting the order just appends another.
      */
     data class ServerAssigned(val playerId: UUID) : ScoreEvent
 
     /** [side] retired. The opponent wins the match; the score reached stands as the record. */
-    data class Retired(val side: TeamSide) : ScoreEvent
+    data class Retired(override val side: TeamSide) : ScoreEvent.Ending
 
     /** [side] was defaulted. Same shape as a retirement, different reason, and the record says which. */
-    data class Defaulted(val side: TeamSide) : ScoreEvent
+    data class Defaulted(override val side: TeamSide) : ScoreEvent.Ending
 
     /** The umpire declares the match won by [side] — the ordinary end of a match that was played out. */
-    data class MatchAwarded(val side: TeamSide) : ScoreEvent
+    data class MatchAwarded(override val side: TeamSide) : ScoreEvent.Ending
 
     /**
      * Play has officially begun (#911).
@@ -170,10 +199,25 @@ data class ScoreState(
     val isTiebreak: Boolean = false,
     val hasStarted: Boolean = false,
     val isPaused: Boolean = false,
+    // A set has just been banked and the next one has not begun (#984). Scoring is inert here; the
+    // umpire either starts the next set or finalizes. This is the "is this over?" moment that did not
+    // exist when awarding a set rolled straight into the next.
+    val isBetweenSets: Boolean = false,
     val outcome: LiveOutcome? = null,
 ) {
     /** Whether the match has ended, however it ended. */
     val isFinished: Boolean get() = outcome != null
+
+    /**
+     * Whether scoring actions apply right now (#984/#985/#986).
+     *
+     * Three states forbid them, each a deliberate pause rather than an error: before the match has
+     * started (#986), between sets (#984), and after it has finished.
+     *
+     * Enforced by the service and the UI, not by the engine — the engine has no error channel, so
+     * gating there would silently discard an umpire's tap. This property is what they gate on.
+     */
+    val isScorable: Boolean get() = hasStarted && !isBetweenSets && !isFinished
 
     /** Games in the current (unbanked) set, for [side]. */
     fun games(side: TeamSide): Int = if (side == TeamSide.TEAM1) gamesTeam1 else gamesTeam2

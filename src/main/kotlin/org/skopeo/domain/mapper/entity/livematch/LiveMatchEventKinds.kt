@@ -24,6 +24,7 @@ object LiveMatchEventKinds {
     const val POINT_WON = "POINT_WON"
     const val GAME_AWARDED = "GAME_AWARDED"
     const val SET_AWARDED = "SET_AWARDED"
+    const val SET_STARTED = "SET_STARTED"
     const val TIEBREAK_STARTED = "TIEBREAK_STARTED"
     const val SERVER_ASSIGNED = "SERVER_ASSIGNED"
     const val RETIRED = "RETIRED"
@@ -41,6 +42,7 @@ fun kindOf(event: ScoreEvent): String =
         is ScoreEvent.PointWon -> LiveMatchEventKinds.POINT_WON
         is ScoreEvent.GameAwarded -> LiveMatchEventKinds.GAME_AWARDED
         is ScoreEvent.SetAwarded -> LiveMatchEventKinds.SET_AWARDED
+        is ScoreEvent.SetStarted -> LiveMatchEventKinds.SET_STARTED
         is ScoreEvent.TiebreakStarted -> LiveMatchEventKinds.TIEBREAK_STARTED
         is ScoreEvent.ServerAssigned -> LiveMatchEventKinds.SERVER_ASSIGNED
         is ScoreEvent.Retired -> LiveMatchEventKinds.RETIRED
@@ -60,6 +62,7 @@ fun sideOf(event: ScoreEvent): String? =
         is ScoreEvent.Retired -> event.side.name
         is ScoreEvent.Defaulted -> event.side.name
         is ScoreEvent.MatchAwarded -> event.side.name
+        is ScoreEvent.SetStarted,
         is ScoreEvent.TiebreakStarted,
         is ScoreEvent.ServerAssigned,
         is ScoreEvent.MatchStarted,
@@ -91,6 +94,7 @@ private fun LiveMatchEventEntity.toScoreEvent(): ScoreEvent =
         LiveMatchEventKinds.POINT_WON -> ScoreEvent.PointWon(side = requiredSide())
         LiveMatchEventKinds.GAME_AWARDED -> ScoreEvent.GameAwarded(side = requiredSide())
         LiveMatchEventKinds.SET_AWARDED -> ScoreEvent.SetAwarded(side = requiredSide())
+        LiveMatchEventKinds.SET_STARTED -> ScoreEvent.SetStarted
         LiveMatchEventKinds.TIEBREAK_STARTED -> ScoreEvent.TiebreakStarted
         LiveMatchEventKinds.MATCH_STARTED -> ScoreEvent.MatchStarted
         LiveMatchEventKinds.PAUSED -> ScoreEvent.Paused
