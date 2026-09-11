@@ -132,7 +132,7 @@ class ScoreEngineUndoTest {
         // `log` is used once, at the front: calling it again mid-expression would prepend a second
         // MATCH_STARTED and two rows would share sequence 0.
         val withSet =
-            log(*throughSet.toTypedArray()) +
+            log(actions = throughSet.toTypedArray()) +
                 scored(sequence = 25, event = ScoreEvent.SetAwarded(side = TeamSide.TEAM1))
 
         ScoreEngine.replay(log = withSet).completedSets.shouldHaveSize(size = 1)
