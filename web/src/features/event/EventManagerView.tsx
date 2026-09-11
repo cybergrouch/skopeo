@@ -38,7 +38,11 @@ import {
   usePostApiV1Matches,
 } from "@/api/generated/matches/matches";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
-import { canEditEndedEvents, canRate, isAdministrator } from "@/auth/capabilities";
+import {
+  canEditEndedEvents,
+  canRate,
+  isAdministrator,
+} from "@/auth/capabilities";
 import { PlayerPicker } from "@/components/PlayerPicker";
 import { SeedingTable } from "@/components/SeedingTable";
 import { ShareCard } from "@/components/ShareCard";
@@ -108,7 +112,10 @@ export function EventManagerView({ eventId }: { eventId: string }) {
   // club's sanctioning, and re-filing does not re-price it (#782). Say so rather than letting the change
   // look like an ordinary edit.
   const clubChangeLeavesPoints =
-    finalized && isAdmin && event?.type === "TOURNAMENT" && event?.awardRankingPoints === true;
+    finalized &&
+    isAdmin &&
+    event?.type === "TOURNAMENT" &&
+    event?.awardRankingPoints === true;
 
   // Clubs to (re)assign the event to (#319); staff-readable, empty when none exist.
   const clubs = useGetApiV1Clubs().data ?? [];
@@ -230,7 +237,8 @@ export function EventManagerView({ eventId }: { eventId: string }) {
         data: { clubId },
       });
     } catch (e) {
-      toastError(eventErrorMessage(e, "Could not update the club."), { cause: e,
+      toastError(eventErrorMessage(e, "Could not update the club."), {
+        cause: e,
         duration: 8000,
       });
     }
@@ -242,7 +250,8 @@ export function EventManagerView({ eventId }: { eventId: string }) {
       await renameEvent.mutateAsync({ id: eventId, data: { name } });
       return true;
     } catch (e) {
-      toastError(eventErrorMessage(e, "Could not rename this event."), { cause: e,
+      toastError(eventErrorMessage(e, "Could not rename this event."), {
+        cause: e,
         duration: 8000,
       });
       return false;
@@ -267,7 +276,8 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     try {
       await deleteEvent.mutateAsync({ id: eventId });
     } catch (e) {
-      toastError(eventErrorMessage(e, "Could not delete this event."), { cause: e,
+      toastError(eventErrorMessage(e, "Could not delete this event."), {
+        cause: e,
         duration: 8000,
       });
     }
@@ -290,7 +300,8 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     try {
       await finalizeEvent.mutateAsync({ id: eventId });
     } catch (e) {
-      toastError(eventErrorMessage(e, "Could not finalize this event."), { cause: e,
+      toastError(eventErrorMessage(e, "Could not finalize this event."), {
+        cause: e,
         duration: 8000,
       });
     }
@@ -313,7 +324,8 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     try {
       await unfinalizeEvent.mutateAsync({ id: eventId });
     } catch (e) {
-      toastError(eventErrorMessage(e, "Could not un-finalize this event."), { cause: e,
+      toastError(eventErrorMessage(e, "Could not un-finalize this event."), {
+        cause: e,
         duration: 8000,
       });
     }
@@ -366,7 +378,8 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     try {
       await generateSeeding.mutateAsync({ id: eventId });
     } catch (e) {
-      toastError(eventErrorMessage(e, "Could not generate the seeding."), { cause: e,
+      toastError(eventErrorMessage(e, "Could not generate the seeding."), {
+        cause: e,
         duration: 8000,
       });
     }
@@ -386,7 +399,8 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     try {
       await saveSeedingOrder.mutateAsync({ id: eventId, data: { userIds } });
     } catch (e) {
-      toastError(eventErrorMessage(e, "Could not save the seeding order."), { cause: e,
+      toastError(eventErrorMessage(e, "Could not save the seeding order."), {
+        cause: e,
         duration: 8000,
       });
     }
@@ -439,12 +453,17 @@ export function EventManagerView({ eventId }: { eventId: string }) {
                 onRemove={
                   locked
                     ? undefined
-                    : (userId) => removeParticipant.mutate({ id: eventId, userId })
+                    : (userId) =>
+                        removeParticipant.mutate({ id: eventId, userId })
                 }
                 // #907: rate an unassented player here rather than sending the host to the Ratings tab
                 // and back. Withheld on a locked event for the same reason every other control is —
                 // and the event still cannot be finalized until everyone has a rating.
-                onRated={locked || !canRate(me?.capabilities) ? undefined : refreshEvent}
+                onRated={
+                  locked || !canRate(me?.capabilities)
+                    ? undefined
+                    : refreshEvent
+                }
               />
               {locked ? null : (
                 <div className="space-y-1">
@@ -458,7 +477,8 @@ export function EventManagerView({ eventId }: { eventId: string }) {
                         { id: eventId, data: { userId: user.id } },
                         {
                           onError: (error) =>
-                            toastError("Could not add that participant.", { cause: error,
+                            toastError("Could not add that participant.", {
+                              cause: error,
                               duration: 8000,
                             }),
                         },
@@ -480,8 +500,8 @@ export function EventManagerView({ eventId }: { eventId: string }) {
               <CardTitle>Seeding</CardTitle>
               <CardDescription>
                 Generate a rating-sorted seeding from this event's approved
-                participants and export it as CSV. Regenerating refreshes it from
-                the current roster.
+                participants and export it as CSV. Regenerating refreshes it
+                from the current roster.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -515,7 +535,11 @@ export function EventManagerView({ eventId }: { eventId: string }) {
             requests={requests}
             disabled={decideParticipant.isPending || locked}
             onDecide={(userId, status) =>
-              decideParticipant.mutate({ id: eventId, userId, data: { status } })
+              decideParticipant.mutate({
+                id: eventId,
+                userId,
+                data: { status },
+              })
             }
           />
 
@@ -573,8 +597,16 @@ export function EventManagerView({ eventId }: { eventId: string }) {
             />
           )}
 
-          <AwaitingResultsSection eventId={eventId} readOnly={locked} />
-          <RecordedResultsSection eventId={eventId} readOnly={locked} />
+          <AwaitingResultsSection
+            eventId={eventId}
+            participants={participants}
+            readOnly={locked}
+          />
+          <RecordedResultsSection
+            eventId={eventId}
+            participants={participants}
+            readOnly={locked}
+          />
 
           <ShareCard
             url={`${window.location.origin}/events/${event.publicCode}`}

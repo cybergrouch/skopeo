@@ -1,3 +1,4 @@
+import type { EventParticipantResponse } from "@/api/generated/model";
 import { useState } from "react";
 import { EditFixturePlayersDialog } from "@/features/match/EditFixturePlayersDialog";
 import { scoreline } from "@/lib/scoreline";
@@ -92,10 +93,13 @@ function rowsFromMatch(match: MatchResponse): SetRow[] {
 
 function MatchResultRow({
   match,
+  participants,
   nameOf,
   readOnly = false,
 }: {
   match: MatchResponse;
+  /** The event roster the fixture may be crewed from (#971) — passed through to the players dialog. */
+  participants: EventParticipantResponse[];
   nameOf: (userId: string) => string;
   // When true (#310), suppress all data-entry controls — record/edit/delete — and just show the
   // score. Used for a HOST viewing an event that has ended; the server is still the source of truth.
@@ -244,6 +248,7 @@ function MatchResultRow({
       <div className="rounded-lg border p-3">
         <EditFixturePlayersDialog
           match={match}
+          participants={participants}
           nameOf={nameOf}
           onClose={() => setEditingPlayers(false)}
         />
@@ -409,9 +414,12 @@ function useNameResolver(matches: MatchResponse[]): (userId: string) => string {
 /** A draggable wrapper around a match card (#332): a grip handle carries the drag listeners. */
 function SortableMatchCard({
   match,
+  participants,
   nameOf,
 }: {
   match: MatchResponse;
+  /** The event roster the change-players dialog may pick from (#971). */
+  participants: EventParticipantResponse[];
   nameOf: (userId: string) => string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
@@ -429,7 +437,11 @@ function SortableMatchCard({
         <GripVertical className="h-4 w-4" />
       </button>
       <div className="pl-6">
-        <MatchResultRow match={match} nameOf={nameOf} />
+        <MatchResultRow
+          match={match}
+          participants={participants}
+          nameOf={nameOf}
+        />
       </div>
     </div>
   );
@@ -454,11 +466,14 @@ function SortableMatchCard({
  */
 function SortableMatchList({
   items,
+  participants,
   nameOf,
   readOnly,
   reorderable,
 }: {
   items: MatchResponse[];
+  /** The event roster the change-players dialog may pick from (#971). */
+  participants: EventParticipantResponse[];
   nameOf: (userId: string) => string;
   readOnly: boolean;
   reorderable: boolean;
@@ -490,6 +505,7 @@ function SortableMatchList({
           <MatchResultRow
             key={m.id}
             match={m}
+            participants={participants}
             nameOf={nameOf}
             readOnly={readOnly}
           />
@@ -520,7 +536,12 @@ function SortableMatchList({
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         {items.map((m) => (
-          <SortableMatchCard key={m.id} match={m} nameOf={nameOf} />
+          <SortableMatchCard
+            key={m.id}
+            match={m}
+            participants={participants}
+            nameOf={nameOf}
+          />
         ))}
       </SortableContext>
     </DndContext>
@@ -530,11 +551,14 @@ function SortableMatchList({
 /** Render the event's matches as a single drag-reorderable list when [reorderable]. */
 function ReorderableMatchList({
   matches,
+  participants,
   nameOf,
   readOnly,
   reorderable,
 }: {
   matches: MatchResponse[];
+  /** The event roster the change-players dialog may pick from (#971). */
+  participants: EventParticipantResponse[];
   nameOf: (userId: string) => string;
   readOnly: boolean;
   reorderable: boolean;
@@ -542,6 +566,7 @@ function ReorderableMatchList({
   return (
     <SortableMatchList
       items={matches}
+      participants={participants}
       nameOf={nameOf}
       readOnly={readOnly}
       reorderable={reorderable}
@@ -551,8 +576,20 @@ function ReorderableMatchList({
 
 export function AwaitingResultsSection({
   eventId,
+  participants = [],
   readOnly = false,
-}: { eventId?: string; readOnly?: boolean } = {}) {
+}: {
+  eventId?: string;
+  /**
+   * The event's roster, for the change-players dialog (#971).
+   *
+   * Defaulted only because this section also serves the event-less global oversight list, where there
+   * is no single roster. That list is read-only in practice — the dialog is reachable only from an
+   * event — so an empty roster there offers nothing rather than offering everyone.
+   */
+  participants?: EventParticipantResponse[];
+  readOnly?: boolean;
+} = {}) {
   // Scope to a single event's awaiting fixtures when given (#138), else the global oversight list.
   const matchesQuery = useGetApiV1Matches(
     eventId ? { ...AWAITING, eventId } : AWAITING,
@@ -576,6 +613,7 @@ export function AwaitingResultsSection({
         ) : matches.length > 0 ? (
           <ReorderableMatchList
             matches={matches}
+            participants={participants}
             nameOf={nameOf}
             readOnly={readOnly}
             reorderable={eventId != null}
@@ -597,9 +635,12 @@ export function AwaitingResultsSection({
  */
 export function RecordedResultsSection({
   eventId,
+  participants = [],
   readOnly = false,
 }: {
   eventId: string;
+  /** The event's roster, for the change-players dialog (#971). */
+  participants?: EventParticipantResponse[];
   readOnly?: boolean;
 }) {
   const matchesQuery = useGetApiV1Matches({
@@ -624,6 +665,7 @@ export function RecordedResultsSection({
         ) : matches.length > 0 ? (
           <ReorderableMatchList
             matches={matches}
+            participants={participants}
             nameOf={nameOf}
             readOnly={readOnly}
             reorderable
