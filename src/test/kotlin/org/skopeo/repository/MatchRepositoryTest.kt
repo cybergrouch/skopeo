@@ -33,6 +33,7 @@ import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.CreateEventCommand
 import org.skopeo.domain.model.CreateFixtureCommand
+import org.skopeo.domain.model.MatchCompletionReason
 import org.skopeo.domain.model.MatchSetResult
 import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.model.MatchType
@@ -115,6 +116,7 @@ class MatchRepositoryTest {
         eventId: UUID = fixtureEventId(),
         completedAt: LocalDateTime = LocalDateTime.now(),
         matchType: MatchType = MatchType.OPEN_PLAY,
+        completionReason: MatchCompletionReason = MatchCompletionReason.COMPLETED,
     ): UUID {
         val match =
             matches.createFixture(
@@ -141,6 +143,7 @@ class MatchRepositoryTest {
             winnerTeamId = match.team1.teamId,
             recordedBy = u1,
             completedAt = completedAt,
+            completionReason = completionReason.name,
         )
         return match.id
     }
@@ -446,6 +449,83 @@ class MatchRepositoryTest {
         eventId: UUID,
         on: LocalDate,
     ): UUID = completedMatch(u1 = u1, u2 = u2, matchDate = on, eventId = eventId, completedAt = on.atTime(12, 0))
+
+    /**
+     * The rating queue holds only matches there is tennis to rate (#972).
+     *
+     * Both exclusions are the same rule one step apart: no scoreline, no rating. Neither had a test,
+     * and the set-less case does not merely fail to rate — it reaches `MatchScore`, whose `init`
+     * requires at least one set, and throws inside the calculation run, taking the batch with it.
+     */
+    @Test
+    fun `a match with no recorded sets is not pending calculation (#972)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 2, 1), members = listOf(u1, u2))
+        val played = pendingMatch(u1 = u1, u2 = u2, eventId = eventId, on = LocalDate.of(2026, 1, 10))
+        // A retirement before the first game is over: a winner, a reason, and no set at all.
+        val setLess = setLessMatch(u1 = u1, u2 = u2, eventId = eventId, reason = MatchCompletionReason.RETIRED)
+        events.finalize(id = eventId, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
+
+        val pending = matches.listPendingCalculation().map { it.toDomain().id }
+
+        pending shouldBe listOf(element = played)
+        pending.contains(element = setLess) shouldBe false
+    }
+
+    @Test
+    fun `a defaulted match is not pending calculation (#911)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 2, 1), members = listOf(u1, u2))
+        // Sets present, so it is the REASON doing the excluding rather than the missing scoreline.
+        val defaulted =
+            completedMatch(
+                u1 = u1,
+                u2 = u2,
+                matchDate = LocalDate.of(2026, 1, 10),
+                eventId = eventId,
+                completedAt = LocalDateTime.of(2026, 1, 10, 12, 0),
+                completionReason = MatchCompletionReason.DEFAULTED,
+            )
+        events.finalize(id = eventId, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
+
+        matches.listPendingCalculation().map { it.toDomain().id }.contains(element = defaulted) shouldBe false
+    }
+
+    /** A completed match carrying a designated winner and no sets — a walkover or an instant retirement. */
+    private fun setLessMatch(
+        u1: UUID,
+        u2: UUID,
+        eventId: UUID,
+        reason: MatchCompletionReason,
+    ): UUID {
+        val match =
+            matches
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.FULL_MATCH,
+                            matchDate = LocalDate.of(2026, 1, 11),
+                            team1UserIds = listOf(element = u1),
+                            team2UserIds = listOf(element = u2),
+                            team1Name = "T1",
+                            team2Name = "T2",
+                            createdBy = u1,
+                            eventId = eventId,
+                        ),
+                ).toDomain()
+        matches.addResult(
+            matchId = match.id,
+            sets = emptyList(),
+            winnerTeamId = match.team2.teamId,
+            recordedBy = u1,
+            completedAt = LocalDateTime.of(2026, 1, 11, 12, 0),
+            completionReason = reason.name,
+        )
+        return match.id
+    }
 
     @Test
     fun `pending-calculation scoped to an event shows that event's fixtures from any creator (#335)`() {

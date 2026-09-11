@@ -499,7 +499,15 @@ class MatchRepository {
                                 // calculated, and leaving it in a "pending" list would be a standing lie.
                                 // A RETIRED match is NOT excluded: there was tennis, and it rates on the
                                 // real score.
-                                (MatchesTable.completionReason neq MatchCompletionReason.DEFAULTED.name)
+                                (MatchesTable.completionReason neq MatchCompletionReason.DEFAULTED.name) and
+                                // ...and neither is a match with NO SETS, for the same reason one
+                                // step further on (#972). A retirement before the first game is over
+                                // stores no set — `currentSetIfPlayed` omits 0-0, and manual entry
+                                // accepts a designated winner with no sets — so there is no scoreline
+                                // here either. Left in the queue it does not merely fail to rate: it
+                                // reaches `MatchScore`, whose `init` requires at least one set, and
+                                // throws inside the calculation run, taking the whole batch with it.
+                                hasAnySet()
                         // The rating-queue eligibility (#403): a completed, unrated match queues only if
                         // it is event-less (queues immediately, as before) OR its event is finalized. An
                         // explicit event scope is a pre-finalize organizer preview, so it lists the event's
@@ -512,6 +520,15 @@ class MatchRepository {
                     }.map { loadMatch(id = it[MatchesTable.id].value)!! }
             sortForCalculation(matches = matches)
         }
+
+    /**
+     * "This match has at least one recorded set" (#972) — a scoreline to rate.
+     *
+     * Phrased as a membership test rather than a count so it reads the same way as [queueEligible]
+     * directly below, and so the database can answer it from the `match_sets` foreign-key index.
+     */
+    private fun ISqlExpressionBuilder.hasAnySet(): Op<Boolean> =
+        MatchesTable.id inSubQuery MatchSetsTable.select(columns = listOf(element = MatchSetsTable.matchId))
 
     /**
      * The rating-queue eligibility clause (#403): a match qualifies once its event is finalized
