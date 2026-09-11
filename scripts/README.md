@@ -261,6 +261,16 @@ SCHEDULER_SA=<sa>@skopeo-prod.iam.gserviceaccount.com \
 ./scripts/schedule-backup.sh
 ```
 
+#### `schedule-standings.sh`
+One-time setup to automate the **Standings recompute + publish** via Cloud Scheduler (#389). Points expire, so the table goes stale with time alone; this is the clock. It calls the same endpoint the Admin UI's manual trigger uses, authenticating as an API client so the Activity Log names the caller.
+
+**Usage:**
+```bash
+API_KEY=skopeo_live_… ./scripts/schedule-standings.sh
+```
+
+Defaults to Tuesdays 01:00 Asia/Manila, publishing (not a dry run). Re-run with a new `API_KEY` to rotate; the job is updated in place.
+
 #### `backup-firebase-auth.sh`
 Portable backup of Firebase Auth users to GCS (users are keyed by `firebase_uid`, so a DB dump alone isn't a complete restore). Automated weekly by `.github/workflows/firebase-auth-backup.yml`. ⚠️ Contains password hashes + PII.
 
