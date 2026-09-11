@@ -41,6 +41,8 @@ class ScoreEventParserTest {
 
     @Test
     fun `every payload-free kind parses to its event`() {
+        // SET_STARTED begins the next set after one is awarded (#984) — payload-free, like the rest.
+        parse(kind = "SET_STARTED").shouldBeRight() shouldBe ScoreEvent.SetStarted
         parse(kind = "TIEBREAK_STARTED").shouldBeRight() shouldBe ScoreEvent.TiebreakStarted
         parse(kind = "MATCH_STARTED").shouldBeRight() shouldBe ScoreEvent.MatchStarted
         parse(kind = "PAUSED").shouldBeRight() shouldBe ScoreEvent.Paused

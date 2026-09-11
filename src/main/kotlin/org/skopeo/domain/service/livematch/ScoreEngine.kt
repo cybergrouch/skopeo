@@ -74,10 +74,7 @@ object ScoreEngine {
             is ScoreEvent.TiebreakStarted -> state.copy(isTiebreak = true, pointsTeam1 = 0, pointsTeam2 = 0)
             is ScoreEvent.ServerAssigned -> state.copy(serverId = event.playerId)
             // The three ways a match ends share a branch: each sets an outcome and changes nothing else.
-            is ScoreEvent.Retired,
-            is ScoreEvent.Defaulted,
-            is ScoreEvent.MatchAwarded,
-            -> state.copy(outcome = endingOf(event = event))
+            is ScoreEvent.Ending -> state.copy(outcome = endingOf(event = event))
             // Starting also clears a pause, so a restart after a suspension needs no separate Resumed.
             is ScoreEvent.MatchStarted -> state.copy(hasStarted = true, isPaused = false)
             is ScoreEvent.Paused -> state.copy(isPaused = true)
@@ -166,17 +163,17 @@ object ScoreEngine {
      * `concededBy` records who stopped — the one fact the games cannot tell you, since a player can
      * retire while leading. A declared win names its own winner and concedes nothing.
      *
-     * Split out so [apply] keeps one branch for all three; the `else` is unreachable because only those
-     * three reach here, and erroring is more honest than inventing an outcome for an event that has none.
+     * Takes [ScoreEvent.Ending] rather than [ScoreEvent], so the `when` is exhaustive with **no `else`**.
+     * An unreachable error branch would be a line no test can honestly reach; making the type carry the
+     * guarantee removes the branch instead of excusing it.
      */
-    private fun endingOf(event: ScoreEvent): LiveOutcome =
+    private fun endingOf(event: ScoreEvent.Ending): LiveOutcome =
         when (event) {
             is ScoreEvent.Retired ->
                 LiveOutcome(kind = LiveOutcomeKind.RETIRED, winner = event.side.opponent(), concededBy = event.side)
             is ScoreEvent.Defaulted ->
                 LiveOutcome(kind = LiveOutcomeKind.DEFAULTED, winner = event.side.opponent(), concededBy = event.side)
             is ScoreEvent.MatchAwarded -> LiveOutcome(kind = LiveOutcomeKind.COMPLETED, winner = event.side)
-            else -> error(message = "endingOf called with a non-terminal event: $event")
         }
 
     /** Bank a game to [side] and start the next one. Does not end the set — that is the umpire's call. */

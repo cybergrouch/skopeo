@@ -40,6 +40,18 @@ enum class TeamSide {
  * `apply` never sees one. See [LoggedAction.Undone].
  */
 sealed interface ScoreEvent {
+    /**
+     * The three events that END a match: a retirement, a default, or a declared win.
+     *
+     * A sub-interface rather than a comment so exhaustiveness is a *type* fact. `ScoreEngine.endingOf`
+     * takes this and needs no `else` branch — there is no fourth way for a match to stop, and if one is
+     * ever added the compiler names every place that has to consider it.
+     */
+    sealed interface Ending : ScoreEvent {
+        /** The side the outcome is stated about: who conceded, or who was declared the winner. */
+        val side: TeamSide
+    }
+
     /** A point to [side]. In a tiebreak this is an ordinal tick; otherwise it may close the game. */
     data class PointWon(val side: TeamSide) : ScoreEvent
 
@@ -84,13 +96,13 @@ sealed interface ScoreEvent {
     data class ServerAssigned(val playerId: UUID) : ScoreEvent
 
     /** [side] retired. The opponent wins the match; the score reached stands as the record. */
-    data class Retired(val side: TeamSide) : ScoreEvent
+    data class Retired(override val side: TeamSide) : ScoreEvent.Ending
 
     /** [side] was defaulted. Same shape as a retirement, different reason, and the record says which. */
-    data class Defaulted(val side: TeamSide) : ScoreEvent
+    data class Defaulted(override val side: TeamSide) : ScoreEvent.Ending
 
     /** The umpire declares the match won by [side] — the ordinary end of a match that was played out. */
-    data class MatchAwarded(val side: TeamSide) : ScoreEvent
+    data class MatchAwarded(override val side: TeamSide) : ScoreEvent.Ending
 
     /**
      * Play has officially begun (#911).
