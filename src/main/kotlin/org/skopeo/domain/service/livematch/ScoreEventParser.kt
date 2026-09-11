@@ -67,6 +67,7 @@ object ScoreEventParser {
 
     private fun bare(kind: String): ScoreEvent =
         when (kind) {
+            LiveMatchEventKinds.SET_STARTED -> ScoreEvent.SetStarted
             LiveMatchEventKinds.TIEBREAK_STARTED -> ScoreEvent.TiebreakStarted
             LiveMatchEventKinds.MATCH_STARTED -> ScoreEvent.MatchStarted
             LiveMatchEventKinds.PAUSED -> ScoreEvent.Paused
@@ -98,6 +99,7 @@ object ScoreEventParser {
     /** Kinds that carry no payload at all. */
     private val BARE_KINDS =
         setOf(
+            LiveMatchEventKinds.SET_STARTED,
             LiveMatchEventKinds.TIEBREAK_STARTED,
             LiveMatchEventKinds.MATCH_STARTED,
             LiveMatchEventKinds.PAUSED,

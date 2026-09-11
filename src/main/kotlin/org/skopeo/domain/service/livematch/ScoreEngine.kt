@@ -51,6 +51,12 @@ object ScoreEngine {
      * record correction. A **paused** one does not: the umpire is authoritative, a forgotten
      * [ScoreEvent.Resumed] is far likelier than a deliberate point during a rain delay, and dropping the
      * point would be the worse failure. The pause is recorded in the state; a UI is free to prompt.
+     *
+     * **The not-started and between-sets rules are deliberately NOT here** (#984/#986). The engine has
+     * no error channel, so enforcing them here would make it *silently discard* an umpire's tap — and a
+     * lost point is a worse failure than a mis-sequenced one. They are enforced at the service boundary,
+     * which can refuse with a reason, following the guard #952 already put there. The engine's job is to
+     * track [ScoreState.isBetweenSets] so the service and the UI have something to gate on.
      */
     fun apply(
         state: ScoreState,
@@ -64,6 +70,7 @@ object ScoreEngine {
             is ScoreEvent.PointWon -> pointWon(state = state, side = event.side)
             is ScoreEvent.GameAwarded -> gameTo(state = state, side = event.side)
             is ScoreEvent.SetAwarded -> setTo(state = state, side = event.side)
+            is ScoreEvent.SetStarted -> state.copy(isBetweenSets = false)
             is ScoreEvent.TiebreakStarted -> state.copy(isTiebreak = true, pointsTeam1 = 0, pointsTeam2 = 0)
             is ScoreEvent.ServerAssigned -> state.copy(serverId = event.playerId)
             is ScoreEvent.Retired ->
@@ -199,6 +206,9 @@ object ScoreEngine {
                 tiebreakTeam1Points = state.pointsTeam1.takeIf { state.isTiebreak },
                 tiebreakTeam2Points = state.pointsTeam2.takeIf { state.isTiebreak },
             )
+        // Park between sets rather than rolling into the next one (#984). The zeroing still happens here
+        // so the board shows no stale in-progress numbers, but nothing is scorable until an explicit
+        // SetStarted — which is what creates the moment to ask whether the match is over at all.
         return state.copy(
             completedSets = state.completedSets + banked,
             gamesTeam1 = 0,
@@ -206,6 +216,7 @@ object ScoreEngine {
             pointsTeam1 = 0,
             pointsTeam2 = 0,
             isTiebreak = false,
+            isBetweenSets = true,
         )
     }
 
