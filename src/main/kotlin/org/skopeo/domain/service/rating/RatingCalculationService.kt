@@ -493,17 +493,24 @@ internal fun buildRequest(
                 ),
         )
     val sets =
-        match.sets.map { set ->
+        // A set nobody won is excluded from the rating input (#968). It cannot be represented — SetScore
+        // requires a distinct winner and loser — and it would change nothing if it could: #925 settled
+        // that a level set carries zero dominance and moves neither player. Excluding it keeps the
+        // rating identical to what it was before such sets could be recorded at all, which is the point:
+        // #968 recovers the games for the RECORD, deliberately without touching what anyone is rated.
+        match.sets.mapNotNull { set ->
+            // `mapNotNull` with an early return rather than filter-then-!!: the winner is needed twice
+            // below, and capturing it once here is what makes both uses non-null without asserting it.
+            val winner = set.winnerTeamId?.toString() ?: return@mapNotNull null
             val tiebreak =
                 if (set.tiebreakTeam1Points != null && set.tiebreakTeam2Points != null) {
                     TiebreakScore(
                         points = mapOf(t1 to set.tiebreakTeam1Points, t2 to set.tiebreakTeam2Points),
-                        winnerTeamId = set.winnerTeamId.toString(),
+                        winnerTeamId = winner,
                     )
                 } else {
                     null
                 }
-            val winner = set.winnerTeamId.toString()
             val games = mapOf(t1 to set.team1Games, t2 to set.team2Games)
             SetScore(
                 games = games,

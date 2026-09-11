@@ -7571,7 +7571,6 @@ components:
         - setNumber
         - team1Games
         - team2Games
-        - winnerTeamId
       properties:
         setNumber:
           type: integer
@@ -7582,6 +7581,11 @@ components:
         winnerTeamId:
           type: string
           format: uuid
+          nullable: true
+          description: >-
+            Null when nobody won the set (#968) — a level set that play stopped during, e.g. 1-1 when a
+            player retired. No longer required: such a set used to be dropped entirely, which lost the
+            games with it and left the match reading "Retired" with no score.
         tiebreakTeam1Points:
           type: integer
           nullable: true

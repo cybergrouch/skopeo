@@ -4,6 +4,7 @@
 package org.skopeo.routes
 
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -591,6 +592,47 @@ class LiveMatchApiIntegrationTest {
                 }.body()
             view.gamesTeam1 shouldBe 1
             view.serverId.shouldBeNull()
+        }
+
+    @Test
+    fun `a retirement in a LEVEL set keeps the games played (#968)`() =
+        withApp { client ->
+            // The bug as reported: a retirement at 1-1 rendered as "Retired" with no score, while the
+            // spectator card still showed 1-1. The set was dropped because a level set has no winner to
+            // derive — so the games went with it.
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+
+            client.winAGame(token = token, matchId = matchId, side = "TEAM1")
+            client.winAGame(token = token, matchId = matchId, side = "TEAM2")
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "RETIRED", side = "TEAM1"))
+            client.finalize(token = token, matchId = matchId).status shouldBe HttpStatusCode.OK
+
+            val stored = MatchRepository().findById(matchId = matchId).shouldBeRight().toDomain()
+            val set = stored.sets.single()
+            set.team1Games shouldBe 1
+            set.team2Games shouldBe 1
+            // Nobody won it, and the record says so rather than guessing or dropping the set.
+            set.winnerTeamId.shouldBeNull()
+            set.abandoned shouldBe true
+            // The match still went to the opponent: who conceded is a different question from who won
+            // the set, and #968 does not change the first.
+            stored.winnerTeamId shouldBe stored.team2.teamId
+            stored.completionReason shouldBe MatchCompletionReason.RETIRED
+        }
+
+    @Test
+    fun `a retirement before the first game still records no set (#968)`() =
+        withApp { client ->
+            // The boundary: 0-0 with nothing played is not a level set, it is no set. Recording one
+            // would invent a set nobody played, which is the opposite mistake.
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "RETIRED", side = "TEAM1"))
+            client.finalize(token = token, matchId = matchId).status shouldBe HttpStatusCode.OK
+
+            MatchRepository().findById(matchId = matchId).shouldBeRight().toDomain().sets.shouldBeEmpty()
         }
 
     @Test

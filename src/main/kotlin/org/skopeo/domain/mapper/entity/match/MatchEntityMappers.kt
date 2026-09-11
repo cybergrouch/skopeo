@@ -71,16 +71,16 @@ fun MatchSetEntity.toDomain(
 private fun MatchSetEntity.derivedSetWinner(
     team1Id: UUID,
     team2Id: UUID,
-): UUID =
+): UUID? =
     when {
         team1Games > team2Games -> team1Id
         team2Games > team1Games -> team2Id
         tiebreakTeam1Points != null && tiebreakTeam2Points != null && tiebreakTeam1Points != tiebreakTeam2Points ->
             if (tiebreakTeam1Points > tiebreakTeam2Points) team1Id else team2Id
-        else -> {
-            val detail = "Set $setNumber is tied at $team1Games-$team2Games with no deciding tiebreak"
-            error(message = "$detail, so it has no winner to derive. This should be unrecordable (#917).")
-        }
+        // Nobody won it (#968). This used to throw, on the premise that such a set was unrecordable —
+        // true until a retirement in a level set needed its games kept. Throwing now would make the
+        // match unreadable rather than protecting anything: the row exists, and null is what it means.
+        else -> null
     }
 
 // Build the domain Match from the raw MatchAggregateEntity graph the repository returns: the `matches`
