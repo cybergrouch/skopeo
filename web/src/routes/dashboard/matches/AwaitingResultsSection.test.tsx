@@ -269,6 +269,153 @@ describe('AwaitingResultsSection', () => {
     expect(screen.queryByText(/Handicap:/)).not.toBeInTheDocument()
   })
 
+  // #972: manual entry could previously say only "played to a finish", so a Host recording a
+  // retirement had to enter a score nobody played — and the derived winner was frequently the
+  // player who quit, since a retiring player is often ahead when they pull out.
+  describe('abnormal endings (#972)', () => {
+    it('records a mid-set retirement with the designated winner and the real score', async () => {
+      const user = userEvent.setup()
+      renderSection()
+
+      await user.type(screen.getByLabelText('set 1 player 1 games'), '5')
+      await user.type(screen.getByLabelText('set 1 player 2 games'), '1')
+      await user.selectOptions(screen.getByLabelText('How it ended'), 'RETIRED')
+      await user.selectOptions(screen.getByLabelText('Match won by'), 't2')
+      await user.click(screen.getByRole('button', { name: 'Record result' }))
+
+      // 5-1 to the side that LOST the match: Alice was ahead and pulled out. Deriving from the
+      // score would hand it to her, which is the whole reason the designation exists.
+      await waitFor(() =>
+        expect(mutateAsync).toHaveBeenCalledWith({
+          id: 'm1',
+          data: {
+            sets: [{ team1Games: 5, team2Games: 1, abandoned: true }],
+            completionReason: 'RETIRED',
+            winnerTeamId: 't2',
+          },
+        }),
+      )
+    })
+
+    it('refuses to save an abnormal ending with no designated winner', async () => {
+      const user = userEvent.setup()
+      renderSection()
+
+      await user.type(screen.getByLabelText('set 1 player 1 games'), '5')
+      await user.type(screen.getByLabelText('set 1 player 2 games'), '1')
+      await user.selectOptions(screen.getByLabelText('How it ended'), 'RETIRED')
+      await user.click(screen.getByRole('button', { name: 'Record result' }))
+
+      // The server refuses it too; catching it here says why rather than surfacing a 400.
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /Say who won the match/,
+      )
+      expect(mutateAsync).not.toHaveBeenCalled()
+    })
+
+    it('leaves a set played to a finish unmarked when the retirement came between sets', async () => {
+      const user = userEvent.setup()
+      renderSection()
+
+      await user.type(screen.getByLabelText('set 1 player 1 games'), '6')
+      await user.type(screen.getByLabelText('set 1 player 2 games'), '4')
+      await user.selectOptions(screen.getByLabelText('How it ended'), 'RETIRED')
+      await user.selectOptions(screen.getByLabelText('Match won by'), 't2')
+      // "The last set is the abandoned one" is wrong here — set 1 was played out, and marking it
+      // would put a (R) on a clean 6-4 (#987).
+      await user.click(
+        screen.getByRole('checkbox', { name: /Play stopped during set 1/ }),
+      )
+      await user.click(screen.getByRole('button', { name: 'Record result' }))
+
+      await waitFor(() =>
+        expect(mutateAsync).toHaveBeenCalledWith({
+          id: 'm1',
+          data: {
+            sets: [{ team1Games: 6, team2Games: 4, abandoned: false }],
+            completionReason: 'RETIRED',
+            winnerTeamId: 't2',
+          },
+        }),
+      )
+    })
+
+    it('records a walkover with no sets at all', async () => {
+      const user = userEvent.setup()
+      renderSection()
+
+      await user.selectOptions(screen.getByLabelText('How it ended'), 'DEFAULTED')
+      await user.selectOptions(screen.getByLabelText('Match won by'), 't1')
+      await user.click(screen.getByRole('button', { name: 'Record result' }))
+
+      // A defaulted match has no set to type. Before this, "Enter at least one set." made it
+      // literally unrecordable.
+      await waitFor(() =>
+        expect(mutateAsync).toHaveBeenCalledWith({
+          id: 'm1',
+          data: { sets: [], completionReason: 'DEFAULTED', winnerTeamId: 't1' },
+        }),
+      )
+    })
+
+    it('still demands a set when the match played out', async () => {
+      const user = userEvent.setup()
+      renderSection()
+
+      await user.click(screen.getByRole('button', { name: 'Record result' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Enter at least one set.',
+      )
+      expect(mutateAsync).not.toHaveBeenCalled()
+    })
+
+    it('offers no set-stopped tick for a walkover, since there is no set to stop during', async () => {
+      const user = userEvent.setup()
+      renderSection()
+
+      await user.selectOptions(screen.getByLabelText('How it ended'), 'DEFAULTED')
+
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    })
+
+    it('names both sides in the winner picker rather than showing team ids', async () => {
+      const user = userEvent.setup()
+      renderSection()
+
+      await user.selectOptions(screen.getByLabelText('How it ended'), 'RETIRED')
+      const options = screen.getAllByRole('option')
+
+      expect(options.map((o) => o.textContent)).toContain('Alice')
+      expect(options.map((o) => o.textContent)).toContain('Bob')
+    })
+
+    it('drops the winner and the abandoned mark on correcting back to played-to-a-finish', async () => {
+      const user = userEvent.setup()
+      renderSection()
+
+      await user.type(screen.getByLabelText('set 1 player 1 games'), '6')
+      await user.type(screen.getByLabelText('set 1 player 2 games'), '4')
+      await user.selectOptions(screen.getByLabelText('How it ended'), 'RETIRED')
+      await user.selectOptions(screen.getByLabelText('Match won by'), 't2')
+      await user.selectOptions(screen.getByLabelText('How it ended'), 'COMPLETED')
+      await user.click(screen.getByRole('button', { name: 'Record result' }))
+
+      // A designation left behind would silence the "sets are tied" guard on a match that played
+      // out, and an abandoned flag would mark a set nobody abandoned.
+      await waitFor(() =>
+        expect(mutateAsync).toHaveBeenCalledWith({
+          id: 'm1',
+          data: {
+            sets: [{ team1Games: 6, team2Games: 4, abandoned: false }],
+            completionReason: 'COMPLETED',
+          },
+        }),
+      )
+      expect(screen.queryByLabelText('Match won by')).not.toBeInTheDocument()
+    })
+  })
+
   it('badges an overdue fixture, a fixture today, and an upcoming one', () => {
     const now = new Date()
     const isoToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -297,9 +444,14 @@ describe('AwaitingResultsSection', () => {
     await user.click(screen.getByRole('button', { name: 'Record result' }))
 
     await waitFor(() =>
+      // completionReason and abandoned are stated rather than left out (#972): the Host chose
+      // "played to a finish", and an unmarked set is a claim about it, not an absence of one.
       expect(mutateAsync).toHaveBeenCalledWith({
         id: 'm1',
-        data: { sets: [{ team1Games: 6, team2Games: 4 }] },
+        data: {
+          sets: [{ team1Games: 6, team2Games: 4, abandoned: false }],
+          completionReason: 'COMPLETED',
+        },
       }),
     )
   })
@@ -548,9 +700,10 @@ describe('RecordedResultsSection', () => {
         id: 'm2',
         data: {
           sets: [
-            { team1Games: 6, team2Games: 4 },
-            { team1Games: 6, team2Games: 0 },
+            { team1Games: 6, team2Games: 4, abandoned: false },
+            { team1Games: 6, team2Games: 0, abandoned: false },
           ],
+          completionReason: 'COMPLETED',
         },
       }),
     )

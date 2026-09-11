@@ -43,7 +43,12 @@ import {
 } from "@/api/generated/matches/matches";
 import { useGetApiV1Users } from "@/api/generated/users/users";
 import { GetApiV1MatchesFilter } from "@/api/generated/model";
-import type { MatchResponse, SetScoreRequest } from "@/api/generated/model";
+import type {
+  MatchResponse,
+  MatchResultRequest,
+  MatchResultRequestCompletionReason,
+  SetScoreRequest,
+} from "@/api/generated/model";
 
 const AWAITING = { filter: GetApiV1MatchesFilter["awaiting-results"] };
 const MAX_SETS = 5;
@@ -77,11 +82,31 @@ interface SetRow {
   t2: string;
 }
 
-function toSets(rows: SetRow[]): SetScoreRequest[] {
-  return rows
-    .filter((r) => r.t1.trim() !== "" && r.t2.trim() !== "")
-    .map((r) => ({ team1Games: Number(r.t1), team2Games: Number(r.t2) }));
+/**
+ * The filled-in rows as set scores.
+ *
+ * [abandonedLast] marks the final set as the one play stopped during (#972). Only the final set can
+ * be: a Host does not enter sets played after the retirement. It is a flag rather than an index for
+ * the same reason — there is nothing else it could point at.
+ */
+function toSets(rows: SetRow[], abandonedLast: boolean): SetScoreRequest[] {
+  const scored = rows.filter((r) => r.t1.trim() !== "" && r.t2.trim() !== "");
+  return scored.map((r, i) => ({
+    team1Games: Number(r.t1),
+    team2Games: Number(r.t2),
+    abandoned: abandonedLast && i === scored.length - 1,
+  }));
 }
+
+/** How a match ended, in the order the select offers them. Playing to a finish is the norm. */
+const COMPLETION_REASONS = [
+  { value: "COMPLETED", label: "Played to a finish" },
+  { value: "RETIRED", label: "Retired" },
+  { value: "DEFAULTED", label: "Defaulted / walkover" },
+] as const satisfies readonly {
+  value: MatchResultRequestCompletionReason;
+  label: string;
+}[];
 
 /** The set-score rows prefilled from an already-recorded match (games only; tiebreaks aren't edited). */
 function rowsFromMatch(match: MatchResponse): SetRow[] {
@@ -129,6 +154,24 @@ function MatchResultRow({
   );
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // How the match ended (#972). The form could previously say only "played to a finish", so a Host
+  // recording a retirement by hand had to enter a score nobody played — and the derived winner was
+  // frequently the player who quit, since a retiring player is often ahead when they pull out.
+  const [reason, setReason] = useState<MatchResultRequestCompletionReason>(
+    () => match.completionReason ?? "COMPLETED",
+  );
+  // Required whenever the match did not play out: there is no scoreline to derive a winner from.
+  const [winner, setWinner] = useState<string>(() => match.winnerTeamId ?? "");
+  // Whether play stopped DURING the last set entered, as opposed to between sets. Not derivable:
+  // a retirement between sets leaves a set that was played to a finish, and marking it abandoned
+  // would put a marker on a scoreline nobody abandoned (#987).
+  const [stoppedMidSet, setStoppedMidSet] = useState(() =>
+    match.sets.some((set) => set.abandoned),
+  );
+  const abnormal = reason !== "COMPLETED";
+  const scoredSetCount = rows.filter(
+    (r) => r.t1.trim() !== "" && r.t2.trim() !== "",
+  ).length;
 
   // Refresh every matches list (awaiting + recorded, global + event-scoped) via the base key prefix.
   const invalidateMatches = () =>
@@ -164,13 +207,29 @@ function MatchResultRow({
 
   async function submit() {
     setError(null);
-    const sets = toSets(rows);
-    if (sets.length === 0) {
+    const sets = toSets(rows, abnormal && stoppedMidSet);
+    // "At least one set" only holds for a match that played out. A walkover has no set to report,
+    // and a player who pulls out before the first game leaves nothing decisive either — the same
+    // carve-out the server makes, for the same reason.
+    if (sets.length === 0 && !abnormal) {
       setError("Enter at least one set.");
       return;
     }
+    if (abnormal && winner === "") {
+      setError(
+        "Say who won the match — a retirement or default has no score to derive it from.",
+      );
+      return;
+    }
+    const data: MatchResultRequest = {
+      sets,
+      completionReason: reason,
+      // Only for an abnormal ending. Designating a winner on a match that played out would change
+      // nothing and would silence the "sets are tied" guard, which is there to catch a typo.
+      ...(abnormal ? { winnerTeamId: winner } : {}),
+    };
     try {
-      await upload.mutateAsync({ id: match.id, data: { sets } });
+      await upload.mutateAsync({ id: match.id, data });
       setEditing(false);
     } catch (error) {
       toastError("Could not save the result. Each set needs a clear winner.", {
@@ -182,6 +241,9 @@ function MatchResultRow({
 
   function cancelEdit() {
     setRows(rowsFromMatch(match));
+    setReason(match.completionReason ?? "COMPLETED");
+    setWinner(match.winnerTeamId ?? "");
+    setStoppedMidSet(match.sets.some((set) => set.abandoned));
     setError(null);
     setEditing(false);
   }
@@ -329,6 +391,75 @@ function MatchResultRow({
               </div>
             ))}
           </div>
+          {/* #972: until now the only thing this form could say was "played to a finish". */}
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs text-muted-foreground">
+                How it ended
+              </span>
+              <select
+                aria-label="How it ended"
+                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                value={reason}
+                onChange={(e) => {
+                  const next = e.target
+                    .value as MatchResultRequestCompletionReason;
+                  setReason(next);
+                  // Mid-set is the common shape of a retirement, so default to it — visibly, as a
+                  // ticked box the Host can clear, not as a hidden assumption. Changing the reason
+                  // resets the sub-choice rather than carrying a stale one across.
+                  setStoppedMidSet(next !== "COMPLETED");
+                  setError(null);
+                }}
+              >
+                {COMPLETION_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {abnormal ? (
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs text-muted-foreground">
+                  Match won by
+                </span>
+                <select
+                  aria-label="Match won by"
+                  className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                  value={winner}
+                  onChange={(e) => {
+                    setWinner(e.target.value);
+                    setError(null);
+                  }}
+                >
+                  <option value="">Select…</option>
+                  <option value={match.team1.teamId}>{player1}</option>
+                  <option value={match.team2.teamId}>{player2}</option>
+                </select>
+              </label>
+            ) : null}
+            {/* Hidden with no sets: a walkover has no set for play to have stopped during. */}
+            {abnormal && scoredSetCount > 0 ? (
+              <label className="flex items-center gap-1.5 pb-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={stoppedMidSet}
+                  onChange={(e) => setStoppedMidSet(e.target.checked)}
+                />
+                {`Play stopped during set ${scoredSetCount}`}
+              </label>
+            ) : null}
+          </div>
+          {abnormal ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              The conceding side is not a separate choice — a player who retires
+              always loses, so it is whichever side did not win. Enter the score
+              as it stood when play stopped: a set short of the usual minimum is
+              accepted once a winner is named, and a walkover needs no sets at
+              all.
+            </p>
+          ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
             {rows.length < MAX_SETS ? (
               <Button
@@ -603,8 +734,9 @@ export function AwaitingResultsSection({
         <CardTitle>Awaiting results</CardTitle>
         <CardDescription>
           Your scheduled fixtures awaiting results — they can be played anytime,
-          so record the set scores whenever the match happens; the server
-          derives the winner.
+          so record the set scores whenever the match happens. The server
+          derives the winner from the score, unless you record a retirement or
+          default, which needs you to say who took the match.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
