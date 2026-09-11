@@ -94,6 +94,7 @@ private fun LiveMatchEventEntity.toScoreEvent(): ScoreEvent =
         LiveMatchEventKinds.POINT_WON -> ScoreEvent.PointWon(side = requiredSide())
         LiveMatchEventKinds.GAME_AWARDED -> ScoreEvent.GameAwarded(side = requiredSide())
         LiveMatchEventKinds.SET_AWARDED -> ScoreEvent.SetAwarded(side = requiredSide())
+        LiveMatchEventKinds.SET_STARTED -> ScoreEvent.SetStarted
         LiveMatchEventKinds.TIEBREAK_STARTED -> ScoreEvent.TiebreakStarted
         LiveMatchEventKinds.MATCH_STARTED -> ScoreEvent.MatchStarted
         LiveMatchEventKinds.PAUSED -> ScoreEvent.Paused

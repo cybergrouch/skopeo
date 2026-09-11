@@ -35,6 +35,8 @@ import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.CreateFixtureCommand
+import org.skopeo.domain.model.MatchCompletionReason
+import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.model.MatchType
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.ProvisionUserCommand
@@ -474,6 +476,98 @@ class LiveMatchApiIntegrationTest {
             // the games floor either way. Without the flag the points rule cannot tell the two apart.
             val stored = MatchRepository().findById(matchId = matchId).shouldBeRight().toDomain()
             stored.sets.map { it.abandoned } shouldBe listOf(element = true)
+        }
+
+    /** Four points to [side] — one game, so a set awarded afterwards is not a winnerless 0-0. */
+    private suspend fun HttpClient.winAGame(
+        token: String,
+        matchId: UUID,
+        side: String,
+    ) {
+        repeat(times = 4) {
+            postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = side))
+        }
+    }
+
+    @Test
+    fun `a match played to a finish is finalized from between sets (#984)`() =
+        withApp { client ->
+            // THE case this issue exists for, end to end. Before #984, awarding a set rolled straight
+            // into the next, so a match that simply finished could never reach a finalizable state —
+            // only a retirement or default could. The retirement path passing is what hid it.
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+
+            client.winAGame(token = token, matchId = matchId, side = "TEAM1")
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"))
+
+            // Between sets: no declaration was recorded, and none is needed — finalizing here IS it.
+            val finalized = client.finalize(token = token, matchId = matchId)
+            finalized.status shouldBe HttpStatusCode.OK
+
+            val stored = MatchRepository().findById(matchId = matchId).shouldBeRight().toDomain()
+            stored.status shouldBe MatchStatus.COMPLETED
+            stored.completionReason shouldBe MatchCompletionReason.COMPLETED
+            // The winner comes from the banked sets, not from anything the client said.
+            stored.winnerTeamId shouldBe stored.team1.teamId
+        }
+
+    @Test
+    fun `finalizing with the sets level is refused rather than inventing a winner (#984)`() =
+        withApp { client ->
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+
+            client.winAGame(token = token, matchId = matchId, side = "TEAM1")
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"))
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_STARTED"))
+            client.winAGame(token = token, matchId = matchId, side = "TEAM2")
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM2"))
+
+            // One set all. Picking a winner to let finalize succeed would put a fabricated result into
+            // the record — the umpire should play a decider or record a retirement.
+            val refused = client.finalize(token = token, matchId = matchId)
+            refused.status shouldBe HttpStatusCode.Conflict
+            refused.bodyAsText() shouldContain "level"
+        }
+
+    @Test
+    fun `scoring is refused between sets until the next one is started (#984)`() =
+        withApp { client ->
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+            client.winAGame(token = token, matchId = matchId, side = "TEAM1")
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"))
+
+            // A point here would silently join a set nobody has begun.
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+                .status shouldBe HttpStatusCode.Conflict
+
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_STARTED"))
+                .status shouldBe HttpStatusCode.Created
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+                .status shouldBe HttpStatusCode.Created
+        }
+
+    @Test
+    fun `scoring is refused before the match is started (#986)`() =
+        withApp { client ->
+            val token = seedFinalizer()
+            // Not seedFixture: this is about the state before anyone presses Start match.
+            val matchId = seedScheduledFixture()
+
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+                .status shouldBe HttpStatusCode.Conflict
+
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "MATCH_STARTED"))
+            // Still refused — started, but nobody is serving yet (#985).
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+                .status shouldBe HttpStatusCode.Conflict
         }
 
     @Test
