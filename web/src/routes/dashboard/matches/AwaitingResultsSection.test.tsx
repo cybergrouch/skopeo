@@ -118,6 +118,9 @@ const match = {
   team1: { teamId: 't1', userIds: ['p1'] },
   team2: { teamId: 't2', userIds: ['p2'] },
   sets: [],
+  // A fixture awaiting its result. Status is what "has a result" now reads (#969), so a fixture that
+  // omitted it would be neither awaiting nor recorded.
+  status: 'SCHEDULED',
 }
 
 // A recorded (completed, unrated) fixture carries its set scores.
@@ -126,6 +129,9 @@ const recordedMatch = {
   id: 'm2',
   publicCode: 'MPUB2',
   matchNumber: 2,
+  // A match with sets is a match that finished. Leaving this SCHEDULED was harmless while the code
+  // keyed on `sets.length`; it is a contradiction now that status is the truth (#969).
+  status: 'COMPLETED',
   sets: [
     { setNumber: 1, team1Games: 6, team2Games: 4, winnerTeamId: 't1' },
     { setNumber: 2, team1Games: 6, team2Games: 3, winnerTeamId: 't1' },
@@ -486,7 +492,10 @@ describe('RecordedResultsSection', () => {
     })
     renderRecorded()
     expect(screen.getByText('Rated')).toBeInTheDocument()
-    expect(screen.getByText('6–4, 6–3')).toBeInTheDocument()
+    // `6-4 6-3`, not `6–4, 6–3`: this surface used to hand-roll its own scoreline with an en-dash and
+    // commas. It now uses the shared `scoreline` helper (#969), so it reads the same here as on the
+    // match page and the event list — and can say "Retired"/"Walkover", which it previously could not.
+    expect(screen.getByText('6-4 6-3')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit result' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Delete fixture' })).not.toBeInTheDocument()
     // Every fixture row links to the match's public page (where the QR lives).
@@ -515,7 +524,7 @@ describe('RecordedResultsSection', () => {
   it('shows a recorded fixture collapsed as a score summary until expanded', () => {
     renderRecorded()
     expect(screen.getByText('Recorded')).toBeInTheDocument()
-    expect(screen.getByText('6–4, 6–3')).toBeInTheDocument()
+    expect(screen.getByText('6-4 6-3')).toBeInTheDocument()
     // The entry form is hidden until "Edit result" is clicked.
     expect(screen.queryByLabelText('set 1 player 1 games')).not.toBeInTheDocument()
   })
@@ -591,7 +600,7 @@ describe('RecordedResultsSection', () => {
         </QueryClientProvider>
       </MemoryRouter>,
     )
-    expect(screen.getByText('6–4, 6–3')).toBeInTheDocument()
+    expect(screen.getByText('6-4 6-3')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Edit result/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Delete fixture/ })).not.toBeInTheDocument()
   })
@@ -671,4 +680,44 @@ describe('RecordedResultsSection', () => {
     )
     expect(screen.queryByRole('button', { name: 'Reorder match' })).not.toBeInTheDocument()
   })
+  // ---- "Has a result" is the status, not the sets (#969) ----------------------------------------
+
+  it('renders a walkover as a result, not as a blank entry form (#969)', async () => {
+    // The reported bug. A finished match with no sets was called unplayed by `sets.length > 0`, so it
+    // rendered as an empty entry form still offering to record a result it already had — while the
+    // server had already filed it under results.
+    useGetApiV1Matches.mockReturnValue({
+      data: [{ ...match, status: 'COMPLETED', completionReason: 'DEFAULTED', sets: [] }],
+      isLoading: false,
+    })
+    renderRecorded()
+
+    expect(screen.getByText('Walkover')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Record result' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add set' })).not.toBeInTheDocument()
+  })
+
+  it('renders a retirement with no sets as a result too (#969)', async () => {
+    // The other way to finish with nothing recorded: a player retires before the first game.
+    useGetApiV1Matches.mockReturnValue({
+      data: [{ ...match, status: 'COMPLETED', completionReason: 'RETIRED', sets: [] }],
+      isLoading: false,
+    })
+    renderRecorded()
+
+    expect(screen.getByText('Retired')).toBeInTheDocument()
+  })
+
+  it('still shows the entry form for a fixture that genuinely has no result (#969)', async () => {
+    // The control: the predicate must not swing the other way and hide the form from a match that
+    // really is awaiting its score.
+    useGetApiV1Matches.mockReturnValue({
+      data: [{ ...match, status: 'SCHEDULED', sets: [] }],
+      isLoading: false,
+    })
+    renderSection()
+
+    expect(screen.getByRole('button', { name: 'Record result' })).toBeInTheDocument()
+  })
+
 })

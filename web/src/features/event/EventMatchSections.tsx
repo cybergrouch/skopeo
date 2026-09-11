@@ -3,6 +3,7 @@ import type { MatchPublicResponse } from '@/api/generated/model'
 import { Badge } from '@/components/ui/badge'
 import { playerLabel } from '@/lib/playerLabel'
 import { concededSide } from '@/lib/concession'
+import { hasResult } from '@/lib/matchResult'
 import { scoreline } from '@/lib/scoreline'
 
 type StatusBadge = { label: string; variant: 'default' | 'secondary' | 'outline' }
@@ -92,8 +93,12 @@ function MatchSection({
  * `RecordedResultsSection` instead: same split, different surface, so the two are not interchangeable.
  */
 export function EventMatchSections({ matches }: { matches: MatchPublicResponse[] }) {
-  // Split on status FIRST, then on whether a result exists. Ordering matters: a match being scored has
-  // no sets yet, so a sets-only split would file it under "awaiting" — which is how #945 arose.
+  // Split on status throughout (#969). The comment here already warned that a sets-only split files a
+  // match being scored under "awaiting" — that is how #945 arose — and then the two lines below split
+  // on `sets.length` anyway. The lesson was written down and not applied.
+  //
+  // It matters beyond the in-progress case: a walkover and a retirement before the first game are both
+  // finished with no sets, so a sets-based split calls them awaiting forever.
   const inProgress = matches.filter((m) => m.status === 'IN_PROGRESS')
   const rest = matches.filter((m) => m.status !== 'IN_PROGRESS')
 
@@ -111,12 +116,12 @@ export function EventMatchSections({ matches }: { matches: MatchPublicResponse[]
       ) : null}
       <MatchSection
         title="Awaiting results"
-        matches={rest.filter((m) => m.sets.length === 0)}
+        matches={rest.filter((m) => !hasResult(m))}
         emptyText="No fixtures awaiting results."
       />
       <MatchSection
         title="Recorded results"
-        matches={rest.filter((m) => m.sets.length > 0)}
+        matches={rest.filter((m) => hasResult(m))}
         emptyText="No recorded results yet."
       />
     </>
