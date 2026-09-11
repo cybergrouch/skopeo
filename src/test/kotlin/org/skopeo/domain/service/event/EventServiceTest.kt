@@ -47,6 +47,7 @@ import org.skopeo.domain.model.Event
 import org.skopeo.domain.model.EventParticipantStatus
 import org.skopeo.domain.model.EventType
 import org.skopeo.domain.model.Match
+import org.skopeo.domain.model.MatchCompletionReason
 import org.skopeo.domain.model.MatchSetResult
 import org.skopeo.domain.model.MatchType
 import org.skopeo.domain.model.NameType
@@ -1583,6 +1584,52 @@ class EventServiceTest {
         level: String,
     ) = RatingRepository().setRating(userId = userId, rating = BigDecimal(level), level = level).also {
         settleAllRatings()
+    }
+
+    @Test
+    fun `a retired finalist takes 2nd and the opponent 1st, whatever the score said (#972)`() {
+        // Placement records where a player ENDED the draw, not how the last set was going. p1 was
+        // leading 5-1 and pulled out, so the games say p1 and the designation says p2 — and a final
+        // has to answer with one of them. The open-play deterrent (an abandoned set pays nobody)
+        // deliberately does not extend here: p1 reached the final, and that is what a placing is for.
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        val match =
+            seedCompletedFixture(
+                eventId = event.id,
+                host = host,
+                p1 = p1,
+                p2 = p2,
+                placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
+            )
+        // Overwrite the default 6-4-to-team1 result with the retirement.
+        matchRepo.addResult(
+            matchId = match.id,
+            sets =
+                listOf(
+                    element =
+                        MatchSetResult(
+                            setNumber = 1,
+                            team1Games = 5,
+                            team2Games = 1,
+                            winnerTeamId = match.team1.teamId,
+                            abandoned = true,
+                        ),
+                ),
+            winnerTeamId = match.team2.teamId,
+            recordedBy = match.createdBy!!,
+            completedAt = LocalDateTime.now(),
+            completionReason = MatchCompletionReason.RETIRED.name,
+        )
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 1)
+        awardRepo.listByUser(userId = p1.id).single().points shouldBe placementRate(place = 2)
     }
 
     @Test

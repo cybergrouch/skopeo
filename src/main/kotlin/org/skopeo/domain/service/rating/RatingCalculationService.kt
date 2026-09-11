@@ -26,6 +26,7 @@ import org.skopeo.domain.model.Match
 import org.skopeo.domain.model.MatchCalculation
 import org.skopeo.domain.model.MatchRatingWrite
 import org.skopeo.domain.model.MatchScore
+import org.skopeo.domain.model.MatchSetResult
 import org.skopeo.domain.model.PlayerChange
 import org.skopeo.domain.model.PlayerProfile
 import org.skopeo.domain.model.Rating
@@ -502,15 +503,7 @@ internal fun buildRequest(
             // `mapNotNull` with an early return rather than filter-then-!!: the winner is needed twice
             // below, and capturing it once here is what makes both uses non-null without asserting it.
             val winner = set.winnerTeamId?.toString() ?: return@mapNotNull null
-            val tiebreak =
-                if (set.tiebreakTeam1Points != null && set.tiebreakTeam2Points != null) {
-                    TiebreakScore(
-                        points = mapOf(t1 to set.tiebreakTeam1Points, t2 to set.tiebreakTeam2Points),
-                        winnerTeamId = winner,
-                    )
-                } else {
-                    null
-                }
+            val tiebreak = completedTiebreakOrNull(set = set, t1 = t1, t2 = t2, winner = winner)
             val games = mapOf(t1 to set.team1Games, t2 to set.team2Games)
             SetScore(
                 games = games,
@@ -523,12 +516,60 @@ internal fun buildRequest(
         }
     return RankingCalculationRequest(
         teams = teams,
-        matchScore = MatchScore(sets = sets, winnerTeamId = match.winnerTeamId.toString()),
+        matchScore =
+            MatchScore(
+                sets = sets,
+                winnerTeamId = match.winnerTeamId.toString(),
+                // Name the loser explicitly (the other team), for the same reason the SetScore above
+                // does — and this one is not hypothetical. MatchScore defaults the loser to whoever
+                // lost the most SETS, which contradicts a designated MATCH winner whenever the two
+                // disagree: a retirement at 5-1 gives the set to the player who quit and the match to
+                // their opponent, so the default names the match winner as the loser too and
+                // `MatchScore.init` throws — inside a calculation run, failing the whole batch (#972).
+                loserTeamId = (setOf(t1, t2) - match.winnerTeamId.toString()).single(),
+            ),
         matchDate = match.matchDate.toString(),
         // The match-type factor (#108) is folded into the rating change via the calculator's scale term.
         options = RatingCalculationOptions(matchTypeFactor = match.matchType.factor),
     )
 }
+
+/**
+ * The set's tiebreak as rating input, or null when it never finished (#972).
+ *
+ * [TiebreakScore] enforces real tiebreak rules — seven points and a two-point margin — because at the
+ * stateless `/api/v1/calculate-ranking` boundary those catch a typo. A retirement *during* a tiebreak
+ * stores the real, partial score (`LiveMatchService` banks `pointsTeam1` as-is), so 6-6 (4-3) is a
+ * legitimate stored row that those rules reject. Constructing it here would throw
+ * `IllegalArgumentException` from inside a calculation run and fail the whole batch, not just this
+ * match.
+ *
+ * Dropping it costs the rating nothing: a tiebreak is informational by [TiebreakScore]'s own
+ * contract — "tiebreak points are NOT included in the dominance calculation" — which counts games
+ * only. The set keeps its games and its derived winner either way. The partial score is still stored,
+ * still shown, and still the record; it simply is not handed to a model that would refuse it.
+ */
+private fun completedTiebreakOrNull(
+    set: MatchSetResult,
+    t1: String,
+    t2: String,
+    winner: String,
+): TiebreakScore? {
+    val p1 = set.tiebreakTeam1Points
+    val p2 = set.tiebreakTeam2Points
+    if (p1 == null || p2 == null) return null
+    val best = if (p1 > p2) p1 else p2
+    val margin = if (p1 > p2) p1 - p2 else p2 - p1
+    // TiebreakScore's own invariants, asked rather than violated.
+    val finished = best >= MIN_TIEBREAK_POINTS_TO_WIN && margin >= MIN_TIEBREAK_MARGIN
+    return if (finished) TiebreakScore(points = mapOf(t1 to p1, t2 to p2), winnerTeamId = winner) else null
+}
+
+/** [TiebreakScore]'s floor, mirrored so a partial tiebreak can be detected instead of thrown at. */
+private const val MIN_TIEBREAK_POINTS_TO_WIN = 7
+
+/** [TiebreakScore]'s winning margin, mirrored for the same reason. */
+private const val MIN_TIEBREAK_MARGIN = 2
 
 private fun teamOf(
     teamId: String,
