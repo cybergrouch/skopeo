@@ -20,7 +20,7 @@
 # Config via env:
 #   PROJECT    GCP project                        (default: skopeo-prod)
 #   REGION     scheduler location                 (default: asia-southeast1)
-#   BASE_URL   API origin, no trailing slash       (default: https://api.skopeo.co)
+#   BASE_URL   API origin, no trailing slash       (default: the prod Cloud Run URL below)
 #   API_KEY    an API client key with POINTS_MANAGER scope    (required)
 #   CRON       schedule, read in TIME_ZONE        (default: "0 1 * * 2" = Tuesdays, 01:00)
 #   TIME_ZONE  IANA zone the cron is read in      (default: Asia/Manila)
@@ -38,7 +38,11 @@ set -euo pipefail
 
 PROJECT="${PROJECT:-skopeo-prod}"
 REGION="${REGION:-asia-southeast1}"
-BASE_URL="${BASE_URL:-https://api.skopeo.co}"
+# The Cloud Run service URL, which is what the deployed SPA calls (web/.env.production.local) and what
+# the live job already targets. There is no api.skopeo.co — only the web origin has a custom domain.
+# This changes if the service is ever recreated; read the current one with:
+#   gcloud run services describe skopeo --project skopeo-prod --region asia-southeast1 --format='value(status.url)'
+BASE_URL="${BASE_URL:-https://skopeo-lljnrq2m2q-as.a.run.app}"
 API_KEY="${API_KEY:-}"
 CRON="${CRON:-0 1 * * 2}"
 TIME_ZONE="${TIME_ZONE:-Asia/Manila}"
@@ -50,7 +54,9 @@ if [[ -z "$API_KEY" ]]; then
   exit 1
 fi
 
-JOB="skopeo-standings-recompute"
+# Must match the job that already exists, or this creates a SECOND one beside it and the recompute
+# fires twice a week. Verify with: gcloud scheduler jobs list --project skopeo-prod --location <region>
+JOB="standings-recompute"
 URI="${BASE_URL%/}/api/v1/standings/calculations"
 BODY="{\"dryRun\":${DRY_RUN}}"
 
