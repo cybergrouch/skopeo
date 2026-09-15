@@ -17,8 +17,8 @@ project.
 | Compile toolchain (bytecode target) | **Java 17** (`build.gradle.kts`, unchanged) |
 | Gradle daemon / build tooling JVM | **Java 25**, pinned in `gradle/gradle-daemon-jvm.properties` (was 21 until #1008) |
 | Docker build stage | `eclipse-temurin:25-jdk` (Debian-based) — must track the daemon pin |
-| Docker runtime stage | `eclipse-temurin:17-jre-alpine` |
-| Production runtime upgrades (21/25) | Change the Dockerfile runtime base image — independent of everything above |
+| Docker runtime stage (**production JVM**) | `eclipse-temurin:25-jre-noble` (was 17 until #1008) |
+| Production runtime upgrades | Change the Dockerfile runtime base image alone. Still independent of everything above: the compile target stays 17, so the bytecode runs on a 17 or a 25 JRE and the line can be swapped back without rebuilding |
 | Ceiling on build JVM | **None** since #1008. detekt 2.0.0-alpha.6 removed the Java 24 ceiling that 1.23.8 imposed |
 
 ---
@@ -178,7 +178,9 @@ JDK 17, which no longer satisfied the (committed) daemon criteria. Two changes:
   fail to unpack into a usable Java home on musl-based images
   (`Unpacked JDK archive does not contain a Java home`). The builder is
   Debian-based; image size is irrelevant for a multi-stage build stage.
-- **Runtime stage is unchanged:** `eclipse-temurin:17-jre-alpine`.
+- **Runtime stage:** `eclipse-temurin:25-jre-noble` since #1008 (this bullet previously said
+  `17-jre-alpine`, stale on both counts — the move to Debian predates #1008, see the netty-tcnative
+  note in the Dockerfile).
 
 Verified end-to-end: `./gradlew clean build` green locally, `docker build`
 succeeds, and the resulting container boots through configuration loading to the
