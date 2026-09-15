@@ -27,7 +27,7 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 ## JVM Constraints
 
 - Code targets Java 17 (Gradle toolchain).
-- The Gradle daemon is pinned to Java 21 in `gradle/gradle-daemon-jvm.properties` because detekt 1.23.8's bundled Kotlin compiler crashes on Java 25+. Do not raise it until detekt 2.0 is adopted. See `docs/engineering/operations/JVM_COMPATIBILITY.md`.
+- The Gradle daemon runs on **Java 25**, set in `gradle/gradle-daemon-jvm.properties`. It was pinned to 21 until #1008, because detekt 1.23.8's bundled Kotlin compiler crashed on Java 25+; detekt 2.0.0-alpha.6 fixed that. **The pin and CI's `java-version` list must move together** — the daemon toolchain has to be discoverable in CI or the build cannot start. See `docs/engineering/operations/JVM_COMPATIBILITY.md`.
 
 ## Architecture
 

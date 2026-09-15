@@ -8,12 +8,15 @@ FROM eclipse-temurin:17-jdk AS jdk17
 # ============================================================================
 # Stage 1: Build
 # ============================================================================
-# The builder runs on Java 21 (the Gradle daemon launcher pinned in
-# gradle/gradle-daemon-jvm.properties). The project's compile toolchain is Java 17
-# (build.gradle.kts), which Gradle would otherwise auto-download from adoptium/foojay on
-# every build — a flaky network dependency (#280). Copy a JDK 17 in and hand it to Gradle
-# via org.gradle.java.installations.paths so the toolchain resolves locally, no download.
-FROM eclipse-temurin:21-jdk AS builder
+# The builder runs on Java 25, matching the daemon toolchainVersion pinned in
+# gradle/gradle-daemon-jvm.properties — which is COPYd in below, so this base image MUST track
+# it. If they diverge the daemon cannot start here at all, and auto-download is off (see below),
+# so there is no silent fallback. It was 21 until detekt 2.0 lifted the Java 25 ceiling (#1008).
+# The project's compile toolchain is Java 17 (build.gradle.kts), which Gradle would otherwise
+# auto-download from adoptium/foojay on every build — a flaky network dependency (#280). Copy a
+# JDK 17 in and hand it to Gradle via org.gradle.java.installations.paths so the toolchain
+# resolves locally, no download.
+FROM eclipse-temurin:25-jdk AS builder
 
 WORKDIR /build
 
