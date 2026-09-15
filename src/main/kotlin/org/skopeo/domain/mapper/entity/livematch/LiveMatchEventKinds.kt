@@ -17,8 +17,15 @@ import org.skopeo.repository.persistence.LiveMatchEventEntity
  *
  * The string constants are duplicated in `chk_live_match_events_kind` (V55) on purpose — the database
  * refuses a kind it does not know, so a mapper that invented one could not persist it. [kindOf] and
- * [toLoggedAction] are exhaustive over the same set in opposite directions, and `LiveMatchMapperTest`
- * round-trips every variant so the two cannot drift.
+ * [toLoggedAction] are exhaustive over the same set in opposite directions.
+ *
+ * **Only [kindOf] and [sideOf] are checked by the compiler.** They are `when`s over the sealed
+ * hierarchy; [toLoggedAction]'s is a `when` over strings, `ScoreEventParser` holds its kinds in plain
+ * sets, and the CHECK constraints are not Kotlin at all. A new kind therefore has to be added in four
+ * places and the build only insists on two of them — which is how `SET_STARTED` shipped half-wired in
+ * #988. `LiveMatchEventKindContractTest` (#989) is what closes that: it enumerates the sealed hierarchy
+ * and drives every subtype request → event → row → event against a real database, so forgetting any one
+ * of the four fails there.
  */
 object LiveMatchEventKinds {
     const val POINT_WON = "POINT_WON"

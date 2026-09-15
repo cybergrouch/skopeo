@@ -11,31 +11,16 @@ import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.domain.mapper.entity.livematch.LiveMatchEventKinds
-import org.skopeo.domain.mapper.entity.livematch.kindOf
-import org.skopeo.domain.mapper.entity.livematch.sideOf
 import org.skopeo.domain.mapper.entity.livematch.toLoggedAction
-import org.skopeo.domain.mapper.entity.match.toDomain
-import org.skopeo.domain.mapper.entity.user.toDomain
-import org.skopeo.domain.model.AuthProvider
-import org.skopeo.domain.model.CreateFixtureCommand
 import org.skopeo.domain.model.LoggedAction
-import org.skopeo.domain.model.MatchType
-import org.skopeo.domain.model.NameType
-import org.skopeo.domain.model.ProvisionUserCommand
-import org.skopeo.domain.model.ScoreEvent
 import org.skopeo.domain.model.TeamSide
-import org.skopeo.domain.model.TeamType
-import org.skopeo.domain.model.UserIdentity
-import org.skopeo.domain.model.UserName
 import org.skopeo.domain.service.livematch.ScoreEngine
 import org.skopeo.repository.persistence.MatchUmpireEntity
 import org.skopeo.testsupport.PostgresTestDatabase
-import org.skopeo.testsupport.fixtureEventId
-import java.time.LocalDate
+import org.skopeo.testsupport.seedLiveMatchFixture
+import org.skopeo.testsupport.seedLiveMatchUser
 import java.time.LocalDateTime
-import java.util.UUID
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -46,6 +31,12 @@ import java.util.concurrent.TimeUnit
  * The centrepiece is [concurrent umpire writes cannot both take the same sequence] — #911 requires that
  * be enforced by a **database constraint, not application ordering**, so it is tested by actually racing
  * two threads rather than by asserting that some Kotlin code looks careful.
+ *
+ * What is deliberately *not* here: the per-kind round-trip. This suite used to carry a test called
+ * "every event kind round-trips through the database" whose list of kinds was hand-written, and which
+ * had drifted to eight of the twelve — it claimed the coverage that let `SET_STARTED` ship half-wired
+ * (#988). `LiveMatchEventKindContractTest` replaces it by enumerating the sealed hierarchy instead
+ * (#989), which is the only version of that test that can stay true.
  */
 class LiveMatchRepositoryTest {
     companion object {
@@ -57,54 +48,16 @@ class LiveMatchRepositoryTest {
     }
 
     private val repository = LiveMatchRepository()
-    private val matches = MatchRepository()
 
     @BeforeEach
     fun reset() {
         PostgresTestDatabase.truncate()
     }
 
-    private fun user(uid: String): UUID =
-        UserRepository()
-            .provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = uid.asRedactable(),
-                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    ),
-            ).toDomain()
-            .id
-
-    /** A fixture to hang a log off. The log's content is what is under test, not the match. */
-    private fun fixture(
-        one: String = "home",
-        two: String = "away",
-    ): UUID {
-        val home = user(uid = one)
-        val away = user(uid = two)
-        return matches
-            .createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.now(),
-                        team1UserIds = listOf(element = home),
-                        team2UserIds = listOf(element = away),
-                        team1Name = one,
-                        team2Name = two,
-                        createdBy = home,
-                        eventId = fixtureEventId(home, away),
-                    ),
-            ).toDomain()
-            .id
-    }
-
     @Test
     fun `an appended log reads back in sequence order and folds to a score`() {
-        val matchId = fixture()
-        val umpire = user(uid = "umpire")
+        val matchId = seedLiveMatchFixture()
+        val umpire = seedLiveMatchUser(uid = "umpire")
 
         (1..4).forEach { n ->
             repository.append(
@@ -123,43 +76,9 @@ class LiveMatchRepositoryTest {
     }
 
     @Test
-    fun `every event kind round-trips through the database`() {
-        // The mapper and chk_live_match_events_payload have to agree about which columns each kind uses.
-        // A kind that disagrees is rejected by the CHECK, so this is the test that keeps them in step.
-        val matchId = fixture()
-        val umpire = user(uid = "umpire")
-        val server = user(uid = "server")
-
-        val events: List<ScoreEvent> =
-            listOf(
-                ScoreEvent.PointWon(side = TeamSide.TEAM1),
-                ScoreEvent.GameAwarded(side = TeamSide.TEAM2),
-                ScoreEvent.TiebreakStarted,
-                ScoreEvent.SetAwarded(side = TeamSide.TEAM1),
-                ScoreEvent.ServerAssigned(playerId = server),
-                ScoreEvent.Retired(side = TeamSide.TEAM2),
-                ScoreEvent.Defaulted(side = TeamSide.TEAM1),
-                ScoreEvent.MatchAwarded(side = TeamSide.TEAM1),
-            )
-        events.forEachIndexed { index, event ->
-            repository.append(
-                matchId = matchId,
-                sequence = index + 1L,
-                kind = kindOf(event = event),
-                side = sideOf(event = event),
-                playerId = (event as? ScoreEvent.ServerAssigned)?.playerId,
-                recordedBy = umpire,
-            ) shouldBe true
-        }
-
-        val readBack = repository.log(matchId = matchId).map { it.toLoggedAction() }
-        readBack.filterIsInstance<LoggedAction.Scored>().map { it.event } shouldBe events
-    }
-
-    @Test
     fun `an undo marker round-trips and cancels its target`() {
-        val matchId = fixture()
-        val umpire = user(uid = "umpire")
+        val matchId = seedLiveMatchFixture()
+        val umpire = seedLiveMatchUser(uid = "umpire")
 
         repository.append(
             matchId = matchId,
@@ -185,8 +104,8 @@ class LiveMatchRepositoryTest {
 
     @Test
     fun `a second write at the same sequence is refused by the database`() {
-        val matchId = fixture()
-        val umpire = user(uid = "umpire")
+        val matchId = seedLiveMatchFixture()
+        val umpire = seedLiveMatchUser(uid = "umpire")
 
         repository.append(
             matchId = matchId,
@@ -215,8 +134,8 @@ class LiveMatchRepositoryTest {
         // routine outcome and returns false so the caller retries; anything else is not retryable, and
         // flattening it into the same false is what made a rejected event kind surface as "another
         // scorer is writing" after three pointless attempts (#988).
-        val matchId = fixture()
-        val umpire = user(uid = "umpire")
+        val matchId = seedLiveMatchFixture()
+        val umpire = seedLiveMatchUser(uid = "umpire")
 
         shouldThrow<ExposedSQLException> {
             repository.append(
@@ -234,9 +153,9 @@ class LiveMatchRepositoryTest {
 
     @Test
     fun `two matches number their sequences independently`() {
-        val first = fixture()
-        val umpire = user(uid = "umpire")
-        val second = fixture(one = "p3", two = "p4")
+        val first = seedLiveMatchFixture()
+        val umpire = seedLiveMatchUser(uid = "umpire")
+        val second = seedLiveMatchFixture(one = "p3", two = "p4")
 
         // The constraint is per match, so sequence 1 must be free on the second one.
         repository.append(
@@ -261,8 +180,8 @@ class LiveMatchRepositoryTest {
         // is why the test races real threads instead of asserting that some code looks careful. Two Cloud
         // Run instances reading the same log will compute the same "next" sequence; exactly one insert may
         // survive, and the other must be told it lost so it can retry against what actually landed.
-        val matchId = fixture()
-        val umpire = user(uid = "umpire")
+        val matchId = seedLiveMatchFixture()
+        val umpire = seedLiveMatchUser(uid = "umpire")
         val contenders = 8
         val pool = Executors.newFixedThreadPool(contenders)
 
@@ -292,8 +211,8 @@ class LiveMatchRepositoryTest {
 
     @Test
     fun `lastSequence reports zero for an untouched match and the high-water mark otherwise`() {
-        val matchId = fixture()
-        val umpire = user(uid = "umpire")
+        val matchId = seedLiveMatchFixture()
+        val umpire = seedLiveMatchUser(uid = "umpire")
         repository.lastSequence(matchId = matchId) shouldBe 0L
 
         listOf(1L, 2L, 3L).forEach { n ->
@@ -310,9 +229,9 @@ class LiveMatchRepositoryTest {
 
     @Test
     fun `claiming a match displaces the previous scorer, because taking over is expected`() {
-        val matchId = fixture()
-        val first = user(uid = "first")
-        val second = user(uid = "second")
+        val matchId = seedLiveMatchFixture()
+        val first = seedLiveMatchUser(uid = "first")
+        val second = seedLiveMatchUser(uid = "second")
 
         repository.scorer(matchId = matchId) shouldBe null
 
@@ -333,8 +252,8 @@ class LiveMatchRepositoryTest {
     fun `umpire credit survives discarding the log`() {
         // The point of match_umpires: §8a makes the log disposable, so attribution kept only on the log
         // would vanish exactly when the match becomes historical.
-        val matchId = fixture()
-        val umpire = user(uid = "umpire")
+        val matchId = seedLiveMatchFixture()
+        val umpire = seedLiveMatchUser(uid = "umpire")
         val now = LocalDateTime.now()
 
         repository.append(
@@ -366,8 +285,8 @@ class LiveMatchRepositoryTest {
 
     @Test
     fun `recording umpires again restates the credit rather than doubling it`() {
-        val matchId = fixture()
-        val umpire = user(uid = "umpire")
+        val matchId = seedLiveMatchFixture()
+        val umpire = seedLiveMatchUser(uid = "umpire")
         val now = LocalDateTime.now()
         val credit =
             MatchUmpireEntity(userId = umpire, eventsRecorded = 5, firstRecordedAt = now, lastRecordedAt = now)
@@ -381,9 +300,9 @@ class LiveMatchRepositoryTest {
 
     @Test
     fun `two umpires who shared a match are both credited, most active first`() {
-        val matchId = fixture()
-        val busy = user(uid = "busy")
-        val brief = user(uid = "brief")
+        val matchId = seedLiveMatchFixture()
+        val busy = seedLiveMatchUser(uid = "busy")
+        val brief = seedLiveMatchUser(uid = "brief")
         val now = LocalDateTime.now()
 
         repository.recordUmpires(
