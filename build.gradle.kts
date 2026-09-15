@@ -6,7 +6,7 @@ plugins {
     kotlin("plugin.serialization") version "2.2.21"
     application
     id("org.jlleitschuh.gradle.ktlint") version "12.3.0"
-    id("io.gitlab.arturbosch.detekt") version "1.23.8"
+    id("dev.detekt") version "2.0.0-alpha.6"
     jacoco
 }
 
@@ -179,19 +179,26 @@ ktlint {
 
 // detekt configuration
 detekt {
-    buildUponDefaultConfig = true
-    allRules = false
+    // detekt 2.0 (#1008) models these as lazy Providers, so they are `.set(...)` rather than `=`.
+    buildUponDefaultConfig.set(true)
+    allRules.set(false)
     config.setFrom(files("$projectDir/detekt.yml"))
-    baseline = file("$projectDir/detekt-baseline.xml")
+    baseline.set(file("$projectDir/detekt-baseline.xml"))
+    // Replaces `build.maxIssues: 0` from the 1.x config, which 2.0 removed (#1008). maxIssues counted
+    // EVERY finding regardless of severity, so `Info` — the lowest rung — is the faithful translation.
+    // The 2.0 default is `Error`, which would have quietly stopped failing the build on warnings.
+    failOnSeverity.set(dev.detekt.gradle.extensions.FailOnSeverity.Info)
 }
 
-tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+tasks.withType<dev.detekt.gradle.Detekt>().configureEach {
+    // detekt 2.0 renamed two report types and dropped one (#1008): xml -> checkstyle, md -> markdown,
+    // and the plain-text report is gone. Nothing in CI consumes any of these — they are all local
+    // convenience — so the rename is the whole of the change and `txt` simply disappears.
     reports {
+        checkstyle.required.set(true)
         html.required.set(true)
-        xml.required.set(true)
-        txt.required.set(true)
         sarif.required.set(true)
-        md.required.set(true)
+        markdown.required.set(true)
     }
 }
 

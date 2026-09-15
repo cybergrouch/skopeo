@@ -1,0 +1,74 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ImplicitDefaultLocale:ClubPublicEventsBucketTest.kt:ClubPublicEventsBucketTest$"Event %02d".format(i)</ID>
+    <ID>ImplicitDefaultLocale:ClubPublicEventsBucketTest.kt:ClubPublicEventsBucketTest$"Event %02d".format(it)</ID>
+    <ID>LargeClass:EventServiceTest.kt:EventServiceTest</ID>
+    <ID>LargeClass:MatchRepositoryTest.kt:MatchRepositoryTest</ID>
+    <ID>LargeClass:MatchServiceTest.kt:MatchServiceTest</ID>
+    <ID>LargeClass:RankingCalculationPayloadTest.kt:RankingCalculationPayloadTest</ID>
+    <ID>LargeClass:RatingCalculationServiceTest.kt:RatingCalculationServiceTest</ID>
+    <ID>LargeClass:UserServiceTest.kt:UserServiceTest</ID>
+    <ID>LongMethod:RankingCalculationPayloadTest.kt:RankingCalculationPayloadTest$@Test fun testNTRP_BasicMatch_ExactPayload</ID>
+    <ID>LongMethod:RankingCalculationPayloadTest.kt:RankingCalculationPayloadTest$@Test fun testNTRP_DominantWin_ExactPayload</ID>
+    <ID>LongMethod:RankingCalculationPayloadTest.kt:RankingCalculationPayloadTest$@Test fun testNTRP_EqualRatings_ExactPayload</ID>
+    <ID>LongMethod:RankingCalculationPayloadTest.kt:RankingCalculationPayloadTest$@Test fun testNTRP_MaximumBoundary_ExactPayload</ID>
+    <ID>LongMethod:RankingCalculationPayloadTest.kt:RankingCalculationPayloadTest$@Test fun testNTRP_MinimumBoundary_ExactPayload</ID>
+    <ID>NamedArguments:CalculationApiIntegrationTest.kt:CalculationApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:CalculationApiIntegrationTest.kt:CalculationApiIntegrationTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
+    <ID>NamedArguments:CalculationApiIntegrationTest.kt:CalculationApiIntegrationTest$listOf(p1.id)</ID>
+    <ID>NamedArguments:CalculationApiIntegrationTest.kt:CalculationApiIntegrationTest$listOf(p2.id)</ID>
+    <ID>NamedArguments:CapabilityApiIntegrationTest.kt:CapabilityApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:CapabilityRepositoryTest.kt:CapabilityRepositoryTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
+    <ID>NamedArguments:CapabilityServiceTest.kt:CapabilityServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:ContactApiIntegrationTest.kt:ContactApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:ContactApiIntegrationTest.kt:ContactApiIntegrationTest$listOf(UserName(type = NameType.FIRST, value = "Admin"))</ID>
+    <ID>NamedArguments:ContactRepositoryTest.kt:ContactRepositoryTest$listOf(UserName(type = NameType.FIRST, value = "Test"))</ID>
+    <ID>NamedArguments:ContactServiceTest.kt:ContactServiceTest$listOf(UserName(type = NameType.FIRST, value = "N"))</ID>
+    <ID>NamedArguments:ContactServiceTest.kt:ContactServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt:MatchApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt:MatchApiIntegrationTest$listOf(matchA.id)</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt:MatchApiIntegrationTest$listOf(matchB.id)</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt:MatchApiIntegrationTest$listOf(p1)</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt:MatchApiIntegrationTest$listOf(p2)</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt:MatchApiIntegrationTest$setOf(Capability.ADMINISTRATOR)</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt:MatchApiIntegrationTest$setOf(Capability.HOST)</ID>
+    <ID>NamedArguments:MatchRepositoryTest.kt:MatchRepositoryTest$listOf( MatchSetResult( setNumber = 1, team1Games = 7, team2Games = 6, winnerTeamId = t1, tiebreakTeam1Points = 7, tiebreakTeam2Points = null, ), )</ID>
+    <ID>NamedArguments:MatchRepositoryTest.kt:MatchRepositoryTest$listOf(MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = UUID.randomUUID()))</ID>
+    <ID>NamedArguments:MatchRepositoryTest.kt:MatchRepositoryTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
+    <ID>NamedArguments:MatchRepositoryTest.kt:MatchRepositoryTest$listOf(u1)</ID>
+    <ID>NamedArguments:MatchRepositoryTest.kt:MatchRepositoryTest$listOf(u2)</ID>
+    <ID>NamedArguments:MatchServiceTest.kt:MatchServiceTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
+    <ID>NamedArguments:MatchServiceTest.kt:MatchServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:NameApiIntegrationTest.kt:NameApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:NameServiceTest.kt:NameServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:OpenAPIIntegrationTest.kt:OpenAPIIntegrationTest$match(ContentType.Text.Html)</ID>
+    <ID>NamedArguments:OpenAPIIntegrationTest.kt:OpenAPIIntegrationTest$match(ContentType.Text.Plain)</ID>
+    <ID>NamedArguments:PostgresTestDatabase.kt:PostgresTestDatabase$exec("TRUNCATE users CASCADE")</ID>
+    <ID>NamedArguments:RankingCalculationPayloadTest.kt:RankingCalculationPayloadTest$encodeToString(JsonElement.serializer(), element)</ID>
+    <ID>NamedArguments:RankingCalculationPayloadTest.kt:RankingCalculationPayloadTest$parseToJsonElement(jsonString)</ID>
+    <ID>NamedArguments:RankingTestCase.kt:Scenarios$mapOf( 1 to TestScore.SetScore( player1Games = player1Games, player2Games = player2Games, tieBrakeScore = tieBreakScore, ), )</ID>
+    <ID>NamedArguments:RatingApiIntegrationTest.kt:RatingApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:RatingApiIntegrationTest.kt:RatingApiIntegrationTest$listOf(UserName(type = NameType.DISPLAY, value = "Admin"))</ID>
+    <ID>NamedArguments:RatingCalculationServiceTest.kt:RatingCalculationServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:RatingRepositoryTest.kt:RatingRepositoryTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
+    <ID>NamedArguments:RatingServiceTest.kt:RatingServiceTest$listOf(UserName(type = NameType.FIRST, value = "First"))</ID>
+    <ID>NamedArguments:RatingServiceTest.kt:RatingServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:TestFirebaseAuth.kt:TestFirebaseAuth$mapOf(signInProvider to listOf(uid))</ID>
+    <ID>NamedArguments:UserApiIntegrationTest.kt:UserApiIntegrationTest$TextContent(json, ContentType.Application.Json)</ID>
+    <ID>NamedArguments:UserApiIntegrationTest.kt:UserApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:UserRepositoryTest.kt:UserRepositoryTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt:UserSearchApiIntegrationTest$listOf("Alice")</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt:UserSearchApiIntegrationTest$listOf("Mid")</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt:UserSearchApiIntegrationTest$listOf("Twenties")</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt:UserSearchApiIntegrationTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt:UserSearchApiIntegrationTest$setOf(Capability.ADMINISTRATOR)</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt:UserSearchApiIntegrationTest$setOf(Capability.HOST)</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt:UserSearchApiIntegrationTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:UserServiceTest.kt:UserServiceTest$listOf(UserName(type = org.skopeo.domain.model.NameType.FIRST, value = "Root"))</ID>
+    <ID>NamedArguments:UserServiceTest.kt:UserServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>UnnecessaryNotNullOperator:TokenMappingTest.kt:TokenMappingTest$command.email!!</ID>
+    <ID>UnusedVariable:ClubScopedEventAuthzTest.kt:ClubScopedEventAuthzTest$val outsider = provision(uid = "outsider", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))</ID>
+  </CurrentIssues>
+</SmellBaseline>
