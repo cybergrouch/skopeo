@@ -209,13 +209,53 @@ the right place to control it rather than a vendor hook:
 4. **Credential-shaped values get redacted at the call site.** `redactedJdbcUrl` drops a JDBC URL's query
    string before it is logged, because `?user=…&password=…` is the conventional Postgres form and that line
    is emitted on every boot.
+5. **Never log a database exception's own message.** Rule 2 holds for messages *we* author; Postgres
+   authors its own, and puts the offending row in them. Attaching a `SQLException` to a log event is
+   enforced against rather than merely discouraged — see the section below.
 
 ### How it is verified
 
 `PiiLeakTest` drives a request carrying an email, a date of birth, a Firebase UID and a bearer token
 through both a 500 and a malformed-JSON 400, then **encodes every captured log event through the shipped
 `logback.xml`** and asserts none of the four appears. Asserting on the message alone would miss the two
-ways a value actually escapes: the MDC map, and an exception's own message inside `stack_trace`.
+ways a value actually escapes: the MDC map, and an exception's own message inside `stack_trace`. Since
+#992 it also drives a duplicate verified email against a real Postgres and asserts on both halves of the
+outcome: the address is absent, the constraint name and SQLSTATE are present.
+
+## Driver-composed messages: the leak no type can reach (#992)
+
+A unique-violation message is composed inside the JDBC driver, from column values:
+
+```
+duplicate key value violates unique constraint "uq_contact_verified_value"
+  Detail: Key (contact_type, value)=(EMAIL, someone@example.com) already exists.
+```
+
+`contact_information.value` **is** the email address or phone number. `Contact.value` is a `Redactable`,
+and that is irrelevant here: no Kotlin call site formats this string, so there is nothing to wrap. It
+reached the log two ways — our own 500 handler logging the throwable, and Exposed logging the failed
+transaction attempt itself, at WARN, before our code saw the exception at all.
+
+The fix keeps the failure and drops the wording:
+
+- `common/logging/SqlErrorRedaction.kt` — `sqlFailureFacts()` reads the server's *structured* error
+  fields (constraint, table, column, routine, SQLSTATE), all of them identifiers rather than values;
+  `redactedForLogging()` returns a copy of the cause chain with every driver message replaced and every
+  stack frame kept. It is the identity for anything without a `SQLException` in it.
+- `respondMappingErrors` uses both, so a 500 keeps its own wording and gains the facts.
+- `SqlExceptionRedactingFilter`, registered as a `<turboFilter>` in `logback.xml`, refuses **any** event
+  carrying a `SQLException` and re-emits it — same logger, same level, facts and frames intact. That is
+  what covers Exposed, and any future library, without a call site to remember.
+
+Scrubbing `Detail:` out of the text was the alternative, and it fails open: it has to track Postgres'
+wording across versions and every library that interpolates `cause.message`. Rebuilding the line from
+fields we have individually judged safe fails closed. The cost is that a log site's own message is
+dropped when it reaches the filter — deliberate, because a site that interpolates `e.message` into its
+own sentence is exactly the mistake being guarded.
+
+Note what was *not* done: the unique index stands (a verified value belongs to one active contact), and
+nothing was silenced. #989 is the cautionary tale in the other direction — a constraint violation nobody
+logged, misreported as a lost sequence race.
 
 Deliberately still open: redacting value types in the domain model (**#801**), as defence in depth against
 rule 1 rather than a substitute for it.
@@ -288,10 +328,11 @@ Both contact forms are wrapped deliberately: covering one leaves the other leaki
 | `UserName.value` | — | Display names are shown publicly on player pages anyway. |
 | `UserIdentity.providerUid` | — | It is the join key the repository looks up by. |
 
-### Three blind spots, all invisible to the compiler
+### Four blind spots, all invisible to the compiler
 
 The type checker catches an **assignment** mismatch — passing a `String` where `Redactable<String>` is
-wanted. It catches nothing else, and each of these three cost a real bug:
+wanted. It catches nothing else. The first three below each cost a real bug; the fourth is one the type
+system cannot close even in principle:
 
 **1. Interpolation.** `"$model"` redacts correctly, which is the point — but it also silently redacts a
 reader that legitimately needs the value. Wrapping `Contact.value` turned an audit-log summary into
@@ -310,6 +351,11 @@ just `domain/model` and `domain/service` — the bug was in `domain/mapper`.
 
 **3. kotest `shouldBe` is `Any`-typed.** `wrapped shouldBe rawValue` compiles and fails only at runtime.
 Seven test assertions needed `?.revealed`. Nothing guards this one; the suite is the guard.
+
+**4. Values the application never formats at all (#992).** `Contact.value` is wrapped, and a Postgres
+unique violation still printed the address — because Postgres composed that sentence from the column,
+inside the driver, with no Kotlin call site in between. A wrapper can only protect a value the code
+passes through it. See "Driver-composed messages" above for the guard that covers this class of leak.
 
 **It also stops `"$user"` but not `"${user.dateOfBirth.revealed}"`** — reading the value out and logging
 it is beyond anything a type can prevent. That is what #806's clean-sources rules and `PiiLeakTest` are

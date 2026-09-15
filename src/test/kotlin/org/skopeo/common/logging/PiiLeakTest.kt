@@ -3,14 +3,19 @@
 
 package org.skopeo.common.logging
 
+import arrow.core.Either
+import arrow.core.flatMap
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.joran.JoranConfigurator
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.ConsoleAppender
 import ch.qos.logback.core.read.ListAppender
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -24,11 +29,29 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.postgresql.util.PSQLException
+import org.skopeo.common.error.ServiceError
+import org.skopeo.common.redaction.asRedactable
 import org.skopeo.configureMonitoring
 import org.skopeo.configurePlugins
+import org.skopeo.domain.model.AuthProvider
+import org.skopeo.domain.model.ContactType
+import org.skopeo.domain.model.NameType
+import org.skopeo.domain.model.ProvisionUserCommand
+import org.skopeo.domain.model.UserIdentity
+import org.skopeo.domain.model.UserName
+import org.skopeo.domain.model.VerificationMethod
+import org.skopeo.domain.model.VerificationStatus
+import org.skopeo.repository.ContactRepository
+import org.skopeo.repository.UserRepository
+import org.skopeo.repository.persistence.ContactEntity
 import org.skopeo.routes.respondMappingErrors
+import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.uniqueViolation
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
+import java.time.LocalDateTime
+import java.util.UUID
 
 /**
  * The #806 go-live gate: nothing personal reaches a log sink.
@@ -38,6 +61,13 @@ import org.slf4j.MDC
  * through the shipped `logback.xml`**, checking the resulting JSON. Asserting on the message alone would
  * miss the two ways a value actually escapes: the MDC map, and an exception's own message inside
  * `stack_trace`.
+ *
+ * The exception-message case has a third form, added in #992 and the reason this class now needs a
+ * database: a message composed **inside the JDBC driver**. `Redactable` covers values the application
+ * formats; a Postgres unique violation quotes the offending row (`Detail: Key (contact_type,
+ * value)=(EMAIL, …)`) with no Kotlin call site anywhere in between, and Exposed logs it before our code
+ * sees the exception at all. So the last three tests here assert on both halves of that fix — the value
+ * is gone, the constraint name and SQLSTATE are not.
  */
 class PiiLeakTest {
     /** Distinctive enough that a substring match cannot be a coincidence. */
@@ -87,6 +117,20 @@ class PiiLeakTest {
 
     private fun leaks(): List<String> =
         encodedLines().flatMap { line -> SECRETS.filter { line.contains(other = it) }.map { "$it in: $line" } }
+
+    /**
+     * The exception Postgres hands back for a second VERIFIED contact with the same value, built the way
+     * the driver builds it: from the wire-format ErrorResponse, so `getMessage()` is composed by pgjdbc
+     * rather than by this test. That is the whole point of the hazard — the sentence, `Detail:` and all,
+     * is assembled inside the driver from column values no Kotlin call site ever touches, which is why
+     * `Redactable` has nothing to wrap (#992).
+     */
+    private fun duplicateVerifiedEmail(): PSQLException =
+        uniqueViolation(
+            constraint = "uq_contact_verified_value",
+            table = "contact_information",
+            detail = "Key (contact_type, value)=(EMAIL, $EMAIL) already exists.",
+        )
 
     @Test
     fun `a request carrying personal data through a 500 leaks none of it`() =
@@ -143,6 +187,100 @@ class PiiLeakTest {
             }
 
             leaks().shouldBeEmpty()
+        }
+
+    @Test
+    fun `a driver exception quoting an email address reaches the sink without it`() {
+        // The hazard in one line: `contact_information.value` IS the email address, and Postgres names the
+        // offending tuple in `Detail:`. No Kotlin call site composed that sentence, so `Redactable` has
+        // nothing to wrap; the only place left to stop it is between the throwable and the appender.
+        LoggerFactory.getLogger("org.skopeo.probe").error("saving the contact failed", duplicateVerifiedEmail())
+
+        leaks().shouldBeEmpty()
+        val line = encodedLines().single()
+        // Still diagnosable — the constraint name is the useful half of that message, and #989 is the
+        // cautionary tale of a constraint violation nobody logged being misdiagnosed as something else.
+        line.contains(other = "uq_contact_verified_value") shouldBe true
+        line.contains(other = "23505") shouldBe true
+        // The driver's wording goes wholesale rather than being scrubbed of its `Detail:` clause, and the
+        // call site's own sentence goes with it: a log site that interpolates `e.message` into its own
+        // message is exactly the mistake this backstops, so "we wrote it" is not evidence it is clean.
+        line.contains(other = "duplicate key value") shouldBe false
+        line.contains(other = "saving the contact failed") shouldBe false
+    }
+
+    @Test
+    fun `the 500 boundary keeps its own wording and still names the constraint`() =
+        testApplication {
+            application {
+                configureMonitoring()
+                configurePlugins()
+                routing {
+                    post(path = "/probe") {
+                        // A violation that no repository translated into a ServiceError reaches the
+                        // boundary, which logs the throwable (#805).
+                        respondMappingErrors { throw duplicateVerifiedEmail() }
+                    }
+                }
+            }
+
+            client.post(urlString = "/probe")
+
+            leaks().shouldBeEmpty()
+            // The boundary redacts the throwable itself, so its authored message survives alongside the
+            // facts. That is what separates the sanctioned path from the filter backstop above, where the
+            // message is dropped because nothing there can vouch for it.
+            encodedLines().any {
+                it.contains(other = "Unexpected error handling request") && it.contains(other = "uq_contact_verified_value")
+            } shouldBe true
+        }
+
+    @Test
+    fun `a duplicate verified email cannot reach the sink through Exposed retry logging`() {
+        // The end-to-end path against a real Postgres, because the copy that matters is not the one our
+        // boundary logs: Exposed logs the failed transaction attempt itself, at WARN, with the driver's
+        // message, before our code ever sees the exception — and again on each retry. No catch clause can
+        // reach that, which is why the guard is registered in `logback.xml` (#992).
+        PostgresTestDatabase.start()
+        PostgresTestDatabase.truncate()
+        val contacts = ContactRepository()
+        val holder = provisionUser(uid = "probe-holder")
+        val rival = provisionUser(uid = "probe-rival")
+        verifyEmail(contacts = contacts, userId = holder).shouldBeRight()
+
+        val clash = verifyEmail(contacts = contacts, userId = rival)
+
+        // The rule itself is untouched: a verified value still belongs to exactly one active contact.
+        clash.shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
+        leaks().shouldBeEmpty()
+        encodedLines().any {
+            it.contains(other = "uq_contact_verified_value") && it.contains(other = "23505")
+        } shouldBe true
+    }
+
+    private fun provisionUser(uid: String): UUID =
+        UserRepository().provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid.asRedactable(),
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = listOf(element = UserName(type = NameType.FIRST, value = "Probe")),
+                ),
+        ).user.id
+
+    /** Add [EMAIL] to [userId] and verify it — the second call is the one that hits the unique index. */
+    private fun verifyEmail(
+        contacts: ContactRepository,
+        userId: UUID,
+    ): Either<ServiceError, ContactEntity> =
+        contacts.create(userId = userId, type = ContactType.EMAIL, value = EMAIL, isPrimary = true).flatMap {
+            contacts.setVerification(
+                id = it.id,
+                status = VerificationStatus.VERIFIED,
+                method = VerificationMethod.ADMIN_OVERRIDE,
+                verifiedBy = userId,
+                verifiedAt = LocalDateTime.now(),
+            )
         }
 
     @Test

@@ -18,6 +18,15 @@
     <!-- Logback's WARN/TRACE are not Cloud Logging severities; see GcpSeverity.kt for why that matters. -->
     <conversionRule conversionWord="gcpSeverity" class="org.skopeo.common.logging.GcpSeverityConverter" />
 
+    <!-- A Postgres unique-violation message quotes the offending row — `Detail: Key (contact_type,
+         value)=(EMAIL, someone@example.com)` — and `contact_information.value` IS the email address.
+         That sentence is composed inside the JDBC driver, so `Redactable` has no call site to wrap, and
+         Exposed logs it itself on every failed transaction attempt. This filter refuses any event
+         carrying a SQLException and re-emits it with the constraint name and SQLSTATE in place of the
+         driver's words (#992). Registered here rather than at a call site because it has to cover
+         libraries too; see SqlExceptionRedactingFilter for the reasoning. -->
+    <turboFilter class="org.skopeo.common.logging.SqlExceptionRedactingFilter" />
+
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
             <providers>
