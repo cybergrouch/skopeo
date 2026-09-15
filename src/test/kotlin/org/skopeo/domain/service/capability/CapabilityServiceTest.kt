@@ -90,6 +90,30 @@ class CapabilityServiceTest {
     }
 
     @Test
+    fun `an account manager cannot grant capabilities, so the role is not a route to ADMINISTRATOR (#1002)`() {
+        // The security property that decided #1002's shape. If an ACCOUNT_MANAGER could grant, it could
+        // grant ITSELF ADMINISTRATOR — the capability would be an escalation path to the very role it
+        // exists to avoid handing out. The web hides `ManagePlayerSection` from them for the same reason,
+        // but hiding a control is not a gate; this is the gate.
+        admin(uid = "root")
+        val manager = provisionUser(uid = "manager", roles = setOf(Capability.PLAYER, Capability.ACCOUNT_MANAGER))
+
+        service
+            .grant(token = token(uid = "manager"), userId = manager.id, capabilityRaw = Capability.ADMINISTRATOR.name)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .grant(token = token(uid = "manager"), userId = manager.id, capabilityRaw = Capability.HOST.name)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .revoke(token = token(uid = "manager"), userId = manager.id, capabilityRaw = Capability.PLAYER.name)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.list(token = token(uid = "manager"), userId = manager.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
     fun `grant is idempotent and records the granting admin`() {
         val root = admin(uid = "root")
         val player = provisionUser(uid = "player")

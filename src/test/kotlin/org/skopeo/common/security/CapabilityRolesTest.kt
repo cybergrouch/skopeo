@@ -30,9 +30,15 @@ class CapabilityRolesTest {
     }
 
     @Test
-    fun `email view is match management plus raters, and never points managers`() {
+    fun `email view is match management plus raters and account managers, and never points managers`() {
         EMAIL_VIEW_ROLES shouldContainExactlyInAnyOrder
-            listOf(Capability.HOST, Capability.CLUB_OWNER, Capability.RATER, Capability.ADMINISTRATOR)
+            listOf(
+                Capability.HOST,
+                Capability.CLUB_OWNER,
+                Capability.RATER,
+                Capability.ACCOUNT_MANAGER,
+                Capability.ADMINISTRATOR,
+            )
         // Managing points is no reason to see somebody's email address (#630/#865).
         EMAIL_VIEW_ROLES.contains(element = Capability.POINTS_MANAGER) shouldBe false
     }
@@ -45,6 +51,7 @@ class CapabilityRolesTest {
                 Capability.CLUB_OWNER,
                 Capability.RATER,
                 Capability.POINTS_MANAGER,
+                Capability.ACCOUNT_MANAGER,
                 Capability.ADMINISTRATOR,
             )
     }
@@ -72,6 +79,8 @@ class CapabilityRolesTest {
         // rather than only via the superset check below, so a future narrowing names the account shape it
         // would break.
         PLAYER_SEARCH_ROLES.contains(element = Capability.CLUB_OWNER) shouldBe true
+        // Every staff role since #1002 — the list of six was about to omit ACCOUNT_MANAGER, which is the
+        // same gap this set was created to close, forming a second time.
         PLAYER_SEARCH_ROLES shouldContainExactlyInAnyOrder
             listOf(
                 Capability.HOST,
@@ -80,9 +89,41 @@ class CapabilityRolesTest {
                 Capability.POINTS_MANAGER,
                 Capability.RATER,
                 Capability.RESEARCHER,
+                Capability.SCORER,
+                Capability.ACCOUNT_MANAGER,
             )
         // A plain player cannot look other players up; that is the whole point of gating it.
         PLAYER_SEARCH_ROLES.contains(element = Capability.PLAYER) shouldBe false
+    }
+
+    @Test
+    fun `staff roles is every capability except plain player`() {
+        // The `- PLAYER` in the definition is the security boundary, not tidying: every signed-in user
+        // holds PLAYER, so a derived set that loses the subtraction names EVERYBODY. Asserted directly so
+        // a later "simplification" to `Capability.entries.toSet()` fails here rather than in production.
+        STAFF_ROLES.contains(element = Capability.PLAYER) shouldBe false
+        STAFF_ROLES shouldContainExactlyInAnyOrder (Capability.entries - Capability.PLAYER)
+    }
+
+    @Test
+    fun `a new capability joins player search automatically`() {
+        // The property that makes the derivation worth having: search is staff-wide by construction, so
+        // the NEXT capability cannot repeat the #867/#1002 omission. If someone re-lists this set by hand,
+        // this fails the moment the two diverge.
+        PLAYER_SEARCH_ROLES shouldBe STAFF_ROLES
+    }
+
+    @Test
+    fun `account management is account managers and administrators, and no action set admits them`() {
+        ACCOUNT_MANAGEMENT_ROLES shouldContainExactlyInAnyOrder
+            listOf(Capability.ACCOUNT_MANAGER, Capability.ADMINISTRATOR)
+        // The view/action split (#1002): an account manager may SEE what an administrator sees while doing
+        // account work, and may DO none of the other staff jobs. Running events, rating, umpiring and
+        // moving points are all separate roles, and this is what stops the capability sprawling into them.
+        listOf(MATCH_MANAGEMENT_ROLES, RATING_ROLES, SCORING_ROLES, POINTS_MANAGEMENT_ROLES, CLUB_OWNER_OR_ADMIN)
+            .forEach { it.contains(element = Capability.ACCOUNT_MANAGER) shouldBe false }
+        listOf(EMAIL_VIEW_ROLES, PLAYER_POINTS_VIEW_ROLES, PLAYER_SEARCH_ROLES)
+            .forEach { it.contains(element = Capability.ACCOUNT_MANAGER) shouldBe true }
     }
 
     @Test
@@ -92,7 +133,8 @@ class CapabilityRolesTest {
         // narrowing ever makes one of these a superset of search, the layering has inverted.
         EMAIL_VIEW_ROLES.all { it in PLAYER_SEARCH_ROLES } shouldBe true
         PLAYER_POINTS_VIEW_ROLES.all { it in PLAYER_SEARCH_ROLES } shouldBe true
-        (PLAYER_SEARCH_ROLES - PLAYER_POINTS_VIEW_ROLES) shouldBe setOf(element = Capability.RESEARCHER)
+        (PLAYER_SEARCH_ROLES - PLAYER_POINTS_VIEW_ROLES) shouldContainExactlyInAnyOrder
+            listOf(Capability.RESEARCHER, Capability.SCORER)
     }
 
     @Test

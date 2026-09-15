@@ -35,9 +35,9 @@ package org.skopeo.common.security
  * any set derived from this into a public one. `CapabilityRolesTest` asserts PLAYER is absent.
  *
  * Derived rather than listed so the next capability is staff by default. That is the right default for
- * the one right below — looking a player up — and **only** for that one: [EMAIL_VIEW_ROLES] and
- * [PLAYER_POINTS_VIEW_ROLES] stay explicit, because a new role should get search by default and someone's
- * email by decision.
+ * [PLAYER_SEARCH_ROLES] and **only** for it: [EMAIL_VIEW_ROLES] and [PLAYER_POINTS_VIEW_ROLES] stay
+ * explicit lists, because a new role should get player search by default and someone's email by
+ * decision.
  *
  * The name has history. This file exists partly because `STAFF_ROLES` once named two *different* sets in
  * two files, and the header calls that name false as it was then used. It is honest here because there is
@@ -92,14 +92,20 @@ val CLUB_OWNER_OR_ADMIN: Set<Capability> =
 val RATING_ROLES: Set<Capability> = MATCH_MANAGEMENT_ROLES + Capability.RATER
 
 /**
- * Who may see a player's registered email (#630) — match management plus raters.
+ * Who may see a player's registered email (#630) — match management, raters and account managers.
  *
  * **Composed, not re-listed**, so adding a role to match management cannot leave this behind. Deliberately
  * does *not* include POINTS_MANAGER: managing points is no reason to see someone's email. That is why this
  * set and [PLAYER_POINTS_VIEW_ROLES] stay separate despite differing by one member — they answer different
  * questions and would drift into each other if merged.
+ *
+ * ACCOUNT_MANAGER joins for the inverse of that reason (#1002): managing **accounts** is exactly a reason
+ * to see an address. Identity is the job — duplicate rectification asks "are these two the same person?"
+ * and `MergeAccountsSection` demands a `verificationNote` saying how that was confirmed. It is also the
+ * honest position: `InvitesSection` renders `InviteResponse.email`, a plain `String` that never consulted
+ * this set, so the access existed before the membership did.
  */
-val EMAIL_VIEW_ROLES: Set<Capability> = MATCH_MANAGEMENT_ROLES + Capability.RATER
+val EMAIL_VIEW_ROLES: Set<Capability> = MATCH_MANAGEMENT_ROLES + Capability.RATER + Capability.ACCOUNT_MANAGER
 
 /**
  * Who still sees ranking-point figures when the "hide ranking points from players" flag is on (#865) —
@@ -107,9 +113,15 @@ val EMAIL_VIEW_ROLES: Set<Capability> = MATCH_MANAGEMENT_ROLES + Capability.RATE
  *
  * Composed for the same reason as [EMAIL_VIEW_ROLES]. POINTS_MANAGER belongs here and not there: a points
  * manager has an operational reason to see points and none to see an email address.
+ *
+ * ACCOUNT_MANAGER joins by the view-set rule (#1002) — an administrator holds this while doing account
+ * work, so an account manager doing the same work holds it too. **No consumer today**, stated plainly so
+ * nobody later reads the membership as evidence of a requirement: no Account Management section renders a
+ * points figure. It costs nothing, since this set only decides whether the #865 "hide ranking points from
+ * players" flag applies to a viewer.
  */
 val PLAYER_POINTS_VIEW_ROLES: Set<Capability> =
-    MATCH_MANAGEMENT_ROLES + Capability.RATER + Capability.POINTS_MANAGER
+    MATCH_MANAGEMENT_ROLES + Capability.RATER + Capability.POINTS_MANAGER + Capability.ACCOUNT_MANAGER
 
 /**
  * Who may look a player up by name or resolve one by id (#867) — **every staff capability** (#1002).
