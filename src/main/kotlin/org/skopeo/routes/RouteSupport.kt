@@ -18,6 +18,8 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.RoutingContext
 import kotlinx.serialization.SerializationException
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.logging.redactedForLogging
+import org.skopeo.common.logging.sqlFailureFacts
 import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.ClientAuthResult
 import org.skopeo.common.security.ClientPrincipal
@@ -149,7 +151,20 @@ internal suspend fun RoutingContext.respondMappingErrors(block: suspend () -> Un
         logger.warn(throwable = e) { "Bad request" }
         call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Validation error", message = rootCause.message))
     } catch (e: Exception) {
-        logger.error(throwable = e) { "Unexpected error handling request" }
+        // A database exception's message is composed by the driver, not by us: Postgres puts the
+        // offending row in it (`Detail: Key (contact_type, value)=(EMAIL, someone@example.com)`) and
+        // `contact_information.value` is the email address. `Redactable` cannot reach that string —
+        // there is no Kotlin call site formatting it — so the throwable is logged as a redacted copy:
+        // same frames, driver text replaced by constraint name and SQLSTATE (#992).
+        //
+        // Folded into the existing catch rather than added as a `catch (e: SQLException)` clause above
+        // it, because a database exception arrives wrapped at least as often as bare, and a clause on
+        // the declared type would miss those. `redactedForLogging` is the identity for everything else,
+        // and `sqlFailureFacts` is null, so the non-database path logs exactly as it did before.
+        val facts = sqlFailureFacts(throwable = e)
+        logger.error(throwable = redactedForLogging(throwable = e)) {
+            "Unexpected error handling request" + facts?.let { " (${it.describe()})" }.orEmpty()
+        }
         // This catch is why StatusPages rarely fires: it swallows the exception. 28 of 31 route files
         // route through here, so without the request id on THIS path most 500s would carry none (#805).
         call.respond(
