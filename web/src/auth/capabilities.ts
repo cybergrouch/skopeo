@@ -83,7 +83,8 @@ export function canRate(
   capabilities: readonly Capability[] | undefined,
 ): boolean {
   return (
-    hasCapability(capabilities, Capability.RATER) || canManageMatches(capabilities)
+    hasCapability(capabilities, Capability.RATER) ||
+    canManageMatches(capabilities)
   );
 }
 
@@ -102,7 +103,8 @@ export function canScore(
   capabilities: readonly Capability[] | undefined,
 ): boolean {
   return (
-    hasCapability(capabilities, Capability.SCORER) || canManageMatches(capabilities)
+    hasCapability(capabilities, Capability.SCORER) ||
+    canManageMatches(capabilities)
   );
 }
 
@@ -116,6 +118,26 @@ export function canManagePointsBudget(
 ): boolean {
   return (
     hasCapability(capabilities, Capability.POINTS_MANAGER) ||
+    hasCapability(capabilities, Capability.ADMINISTRATOR)
+  );
+}
+
+/**
+ * The Account Management tab is for account managers (#1002): invites, restoring soft-deleted accounts,
+ * and duplicate rectification. ADMINISTRATOR is implicitly one.
+ *
+ * Mirrors `ACCOUNT_MANAGEMENT_ROLES` in `common/security/CapabilityRoles.kt`; keep the two in step.
+ *
+ * Note this gates the **tab**, not everything on it. `ManagePlayerSection` is administrator-only
+ * ({@link isAdministrator}) because its controls answer to other rules entirely — ratings, points
+ * adjustments, capability grants, account deletion. Gating the tab alone would have shown an account
+ * manager controls that answer 403, which is the #867 shape.
+ */
+export function canManageAccounts(
+  capabilities: readonly Capability[] | undefined,
+): boolean {
+  return (
+    hasCapability(capabilities, Capability.ACCOUNT_MANAGER) ||
     hasCapability(capabilities, Capability.ADMINISTRATOR)
   );
 }

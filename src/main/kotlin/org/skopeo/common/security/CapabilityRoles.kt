@@ -28,6 +28,25 @@ package org.skopeo.common.security
  */
 
 /**
+ * Every **staff** capability — the enum minus [Capability.PLAYER] (#1002).
+ *
+ * ⚠️ **The subtraction is the security boundary, not tidying.** Every signed-in user holds PLAYER, so
+ * `Capability.entries.toSet()` on its own names *everybody*. A "simplification" that drops the `-` turns
+ * any set derived from this into a public one. `CapabilityRolesTest` asserts PLAYER is absent.
+ *
+ * Derived rather than listed so the next capability is staff by default. That is the right default for
+ * the one right below — looking a player up — and **only** for that one: [EMAIL_VIEW_ROLES] and
+ * [PLAYER_POINTS_VIEW_ROLES] stay explicit, because a new role should get search by default and someone's
+ * email by decision.
+ *
+ * The name has history. This file exists partly because `STAFF_ROLES` once named two *different* sets in
+ * two files, and the header calls that name false as it was then used. It is honest here because there is
+ * exactly one definition and it means precisely what it says: not a plain player. `CapabilityRolesTest`
+ * fails if two sets ever share a name while differing.
+ */
+val STAFF_ROLES: Set<Capability> = Capability.entries.toSet() - Capability.PLAYER
+
+/**
  * Match management: run fixtures, organize events, manage rosters, seed (#789).
  *
  * Named to match the **web** side (`canManageMatches` in `auth/capabilities.ts`) and CLAUDE.md's own
@@ -93,25 +112,25 @@ val PLAYER_POINTS_VIEW_ROLES: Set<Capability> =
     MATCH_MANAGEMENT_ROLES + Capability.RATER + Capability.POINTS_MANAGER
 
 /**
- * Who may look a player up by name or resolve one by id (#867) — match management, plus the three roles
- * whose own tools are built on searching for a person: points managers, raters and researchers.
+ * Who may look a player up by name or resolve one by id (#867) — **every staff capability** (#1002).
  *
  * **This replaced `HOST_OR_ADMIN` = {HOST, ADMINISTRATOR}, which was an oversight** (#867). #789 gave a
  * named club owner the organizer surfaces — the New Event form and the event manager — and both render a
  * player picker that calls this. So a CLUB_OWNER who did not *also* hold HOST was offered a picker that
- * answered 403: the UI was granted and the call it depends on was not. Nothing implies HOST from
- * CLUB_OWNER; adding a club owner is an ADMINISTRATOR action that grants CLUB_OWNER alone.
+ * answered 403: the UI was granted and the call it depends on was not.
  *
- * Composed from [MATCH_MANAGEMENT_ROLES] rather than re-listed, so a role added to match management
- * cannot leave the picker behind again — which is precisely how the gap arose.
+ * It was then a composed list of six, which fixed that instance and left the shape intact — #1002 found
+ * the same gap forming again, because three Account Management sections search for a person and a new
+ * ACCOUNT_MANAGER would have been missing from the list. **So it is now [STAFF_ROLES] outright**: looking
+ * a player up is basic to every staff role, and a derived set cannot be forgotten. Adding SCORER is the
+ * only change in membership; nothing needed it yet, and nothing is exposed by it.
  *
  * Searching for a person is **not** the same permission as seeing what the search returns about them: a
  * registered email needs [EMAIL_VIEW_ROLES] and a points figure needs [PLAYER_POINTS_VIEW_ROLES], both
  * enforced separately on the way out. Being able to find someone is the weaker right, which is why this
- * is the widest of the three sets.
+ * is the widest of the three sets — and why it is the only one safe to derive.
  */
-val PLAYER_SEARCH_ROLES: Set<Capability> =
-    MATCH_MANAGEMENT_ROLES + Capability.POINTS_MANAGER + Capability.RATER + Capability.RESEARCHER
+val PLAYER_SEARCH_ROLES: Set<Capability> = STAFF_ROLES
 
 /**
  * Who may operate the Points Management surfaces (#472) — a points manager or an administrator.
@@ -121,6 +140,24 @@ val PLAYER_SEARCH_ROLES: Set<Capability> =
  */
 val POINTS_MANAGEMENT_ROLES: Set<Capability> =
     setOf(Capability.POINTS_MANAGER, Capability.ADMINISTRATOR)
+
+/**
+ * Who may operate the Account Management surfaces (#1002) — an account manager or an administrator.
+ *
+ * Invites, restoring soft-deleted accounts, and duplicate rectification (mark/replace, merge, candidate
+ * queue). ADMINISTRATOR is listed rather than inherited: this codebase composes role **sets** and has no
+ * capability hierarchy — see [SCORING_ROLES], where the same "inherited by HOST → CLUB_OWNER →
+ * ADMINISTRATOR" phrasing was answered the same way.
+ *
+ * **Deliberately narrower than the tab it gates.** `ManagePlayerSection` stays ADMINISTRATOR-only, because
+ * its controls answer to other sets entirely — ratings to [RATING_ROLES], points adjustments to
+ * [POINTS_MANAGEMENT_ROLES], capability grant/revoke and account soft-delete to ADMINISTRATOR. Hiding that
+ * one card keeps two properties at once: nothing on the page can 403 for an account manager (the #867
+ * shape), and capability grant/revoke is *unreachable* rather than merely refused — so the role cannot be
+ * a route to ADMINISTRATOR.
+ */
+val ACCOUNT_MANAGEMENT_ROLES: Set<Capability> =
+    setOf(Capability.ACCOUNT_MANAGER, Capability.ADMINISTRATOR)
 
 /**
  * Who may umpire a live match (#911) — match management plus scorers.

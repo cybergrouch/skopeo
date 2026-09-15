@@ -13,6 +13,7 @@ import org.skopeo.common.dto.user.UserResponse
 import org.skopeo.common.dto.user.UserSummaryPageResponse
 import org.skopeo.common.dto.user.UserSummaryResponse
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.ACCOUNT_MANAGEMENT_ROLES
 import org.skopeo.common.security.Capability
 import org.skopeo.common.security.PLAYER_SEARCH_ROLES
 import org.skopeo.domain.mapper.dto.user.toResponse
@@ -445,15 +446,21 @@ class UserService(
         }
 
     /**
-     * Admin-only re-allow-login (#518): flip a soft-deleted account's `is_active` back to true. A deleted
-     * account already has a null canonical pointer, so this is a pure reactivation. Audited (target = user).
+     * Re-allow login on a soft-deleted account (#518). A deleted account already has a null canonical
+     * pointer, so this is a pure reactivation. Audited (target = user).
+     *
+     * **[ACCOUNT_MANAGEMENT_ROLES], not administrator-only, since #1002** — restoring an account is the
+     * Account Management tab's job. Note the asymmetry with [deactivate] one function above, which stays
+     * ADMINISTRATOR-only: it lives on `ManagePlayerSection`, the one card an account manager never sees.
+     * Deleting an account and undoing that deletion are deliberately not the same permission — the
+     * destructive half stays with administrators.
      */
     fun reactivate(
         token: VerifiedFirebaseToken,
         id: UUID,
     ): Either<ServiceError, Unit> =
         either {
-            val actorId = requireAdmin(token = token).bind()
+            val actorId = requireAnyOf(users = repository, token = token, allowed = ACCOUNT_MANAGEMENT_ROLES).bind()
             val target = repository.findById(id = id).bind().toDomain()
             repository.reactivate(id = id).bind()
             audit.record(
