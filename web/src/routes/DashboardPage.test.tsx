@@ -197,6 +197,34 @@ describe("DashboardPage", () => {
     expect(screen.getByText("ratings content")).toBeInTheDocument();
   });
 
+  it("shows Account Management for an account manager, and nothing else staff-only (#1002)", async () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "u1", capabilities: ["PLAYER", "ACCOUNT_MANAGER"] },
+      isLoading: false,
+    });
+    const user = setupUser();
+    renderDashboard();
+    await openMenu(user);
+
+    expect(
+      screen.getByRole("button", { name: "Account Management" }),
+    ).toBeInTheDocument();
+    // The role is deliberately narrow: it is a VIEW right over people plus the account surfaces, and
+    // grants none of the other staff jobs (#1002's view-set/action-set split).
+    [
+      "Admin",
+      "Activity Log",
+      "Reports",
+      "Matches",
+      "Ratings",
+      "Points Management",
+    ].forEach((tab) =>
+      expect(
+        screen.queryByRole("button", { name: tab }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
   it("shows the Matches items for a host (plus Profile/Research, no Admin)", async () => {
     useGetApiV1UsersMe.mockReturnValue({
       data: { id: "u1", capabilities: ["PLAYER", "RESEARCHER", "HOST"] },
@@ -292,7 +320,8 @@ describe("DashboardPage", () => {
       screen.getByRole("button", { name: "Points Management" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Admin" })).toBeInTheDocument();
-    // Account Management is an admin-only tab split out of Admin (#648).
+    // Account Management was split out of Admin (#648); ACCOUNT_MANAGER-gated since #1002, and an
+    // administrator is implicitly one.
     expect(
       screen.getByRole("button", { name: "Account Management" }),
     ).toBeInTheDocument();
@@ -300,7 +329,6 @@ describe("DashboardPage", () => {
     expect(
       screen.getByRole("button", { name: "Club Management" }),
     ).toBeInTheDocument();
-
 
     await user.click(
       screen.getByRole("button", { name: "Account Management" }),

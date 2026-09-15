@@ -197,6 +197,28 @@ class DuplicateServiceTest {
     }
 
     @Test
+    fun `an account manager may mark, replace, and restore duplicates (#1002)`() {
+        // Duplicate rectification is the core of the Account Management job, so the gate is
+        // ACCOUNT_MANAGEMENT_ROLES rather than ADMINISTRATOR. Walks the whole cluster lifecycle: marking
+        // is what `replaceAccount` requires first, so asserting only the replace would have proved the
+        // gate by way of a Conflict rather than a Right.
+        provisionUser(uid = "manager", roles = setOf(Capability.PLAYER, Capability.ACCOUNT_MANAGER))
+        val canonical = provisionUser(uid = "keeper")
+        val replaced = provisionUser(uid = "dupe")
+        val restored = provisionUser(uid = "mistake")
+
+        // Two duplicates, because replace and restore cannot be chained on one: replacing clears the
+        // canonical pointer, and restore refuses an account that is no longer marked.
+        service
+            .markDuplicates(token = token(uid = "manager"), canonicalId = canonical.id, duplicateIds = listOf(replaced.id, restored.id))
+            .shouldBeRight()
+        service
+            .replaceAccount(token = token(uid = "manager"), canonicalId = canonical.id, duplicateId = replaced.id)
+            .shouldBeRight()
+        service.restore(token = token(uid = "manager"), id = restored.id).shouldBeRight()
+    }
+
+    @Test
     fun `an admin marks a cluster — duplicates are disabled and point at the canonical`() {
         admin(uid = "root")
         val canonical = provisionUser(uid = "keep")

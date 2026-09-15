@@ -4,13 +4,11 @@
 package org.skopeo.domain.service.user
 
 import arrow.core.Either
-import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
-import arrow.core.right
 import org.skopeo.common.dto.user.UserSummaryResponse
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.security.Capability
+import org.skopeo.common.security.ACCOUNT_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.user.toSummary
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditAction
@@ -45,7 +43,7 @@ class DuplicateService(
         duplicateIds: List<UUID>,
     ): Either<ServiceError, List<UserSummaryResponse>> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireAccountManager(token = token).bind()
             val canonical = users.findById(id = canonicalId).bind().toDomain()
             ensure(condition = duplicateIds.isNotEmpty()) { ServiceError.Validation(message = "At least one duplicate is required") }
             ensure(
@@ -96,7 +94,7 @@ class DuplicateService(
         duplicateId: UUID,
     ): Either<ServiceError, UserSummaryResponse> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireAccountManager(token = token).bind()
             val canonical = users.findById(id = canonicalId).bind().toDomain()
             val duplicate = users.findById(id = duplicateId).bind().toDomain()
             ensure(condition = canonical.canonicalUserId == null) {
@@ -157,7 +155,7 @@ class DuplicateService(
         verificationNote: String,
     ): Either<ServiceError, UserSummaryResponse> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireAccountManager(token = token).bind()
             ensure(condition = verificationNote.isNotBlank()) {
                 ServiceError.Validation(message = "A verification note is required")
             }
@@ -223,7 +221,7 @@ class DuplicateService(
         id: UUID,
     ): Either<ServiceError, Unit> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireAccountManager(token = token).bind()
             val target = users.findById(id = id).bind().toDomain()
             ensure(condition = target.canonicalUserId != null) {
                 ServiceError.Conflict(message = "User ${target.publicCode} is not marked as a duplicate")
@@ -252,7 +250,7 @@ class DuplicateService(
         canonicalId: UUID,
     ): Either<ServiceError, List<UserSummaryResponse>> =
         either {
-            requireAdmin(token = token).bind()
+            requireAccountManager(token = token).bind()
             users.findById(id = canonicalId).bind()
             users.findDuplicatesOf(canonicalId = canonicalId).map { it.toDomain() }.map { it.toSummary(isDeleted = it.isDeleted()) }
         }
@@ -267,12 +265,15 @@ class DuplicateService(
             target
         }
 
-    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-        return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
-            ServiceError.Forbidden().left()
-        } else {
-            caller.id.right()
-        }
-    }
+    /**
+     * Account-management access (#1002): an ACCOUNT_MANAGER or an ADMINISTRATOR. Returns the caller's id
+     * (the audit actor).
+     *
+     * Delegates to the shared [requireAnyOf] rather than keeping a private copy. This service held one of
+     * the three hand-rolled `requireAdmin` clones that [requireAnyOf] was extracted to replace (#866) —
+     * widening the rule was the moment to finish that job, since three copies of one check is three places
+     * for it to drift.
+     */
+    private fun requireAccountManager(token: VerifiedFirebaseToken): Either<ServiceError, UUID> =
+        requireAnyOf(users = users, token = token, allowed = ACCOUNT_MANAGEMENT_ROLES)
 }

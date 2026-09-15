@@ -11,7 +11,7 @@ import arrow.core.right
 import org.skopeo.common.dto.invite.InvitePageResponse
 import org.skopeo.common.dto.invite.InviteResponse
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.security.Capability
+import org.skopeo.common.security.ACCOUNT_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.invite.toResponse
 import org.skopeo.domain.mapper.entity.invite.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -22,6 +22,7 @@ import org.skopeo.domain.model.InvitePage
 import org.skopeo.domain.model.InviteStatus
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
+import org.skopeo.domain.service.user.requireAnyOf
 import org.skopeo.repository.ContactRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.UserRepository
@@ -51,7 +52,7 @@ class InviteService(
         email: String,
     ): Either<ServiceError, InviteResponse> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireAccountManager(token = token).bind()
             // Don't invite an address that already belongs to an active account (#132); disabled
             // accounts are excluded by the lookup, so a re-invite to a deactivated account is allowed.
             ensure(condition = !contacts.activeAccountHasEmail(email = email)) {
@@ -87,7 +88,7 @@ class InviteService(
         statusRaw: String? = null,
     ): Either<ServiceError, InvitePageResponse> =
         either {
-            requireAdmin(token = token).bind()
+            requireAccountManager(token = token).bind()
             val status = statusRaw?.let { raw -> parseStatus(raw = raw).bind() }
             val (items, total) =
                 invites.list(
@@ -103,7 +104,7 @@ class InviteService(
         id: UUID,
     ): Either<ServiceError, Unit> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireAccountManager(token = token).bind()
             val revoked = invites.revoke(id = id).bind()
             audit.record(
                 write =
@@ -124,10 +125,15 @@ class InviteService(
             ?: ServiceError.Validation(message = "Unknown invite status '$raw'; expected one of $allowed").left()
     }
 
-    /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
-    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-        val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
-        return if (caller == null || !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
-    }
+    /**
+     * Account-management access (#1002): an ACCOUNT_MANAGER or an ADMINISTRATOR. Returns the caller's id
+     * (the audit actor).
+     *
+     * Delegates to the shared [requireAnyOf] rather than keeping a private copy. This service held one of
+     * the three hand-rolled `requireAdmin` clones that [requireAnyOf] was extracted to replace (#866) —
+     * widening the rule was the moment to finish that job, since three copies of one check is three places
+     * for it to drift.
+     */
+    private fun requireAccountManager(token: VerifiedFirebaseToken): Either<ServiceError, UUID> =
+        requireAnyOf(users = users, token = token, allowed = ACCOUNT_MANAGEMENT_ROLES)
 }

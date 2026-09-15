@@ -16,6 +16,7 @@ import {
   canManageMatches,
   canManagePointsBudget,
   canRate,
+  canManageAccounts,
   isAdministrator,
   isPlayer,
   isResearcher,
@@ -60,7 +61,7 @@ export function DashboardPage() {
   const showResearch = isResearcher(capabilities);
   const showActivity = isAdministrator(capabilities);
   const showReport = isAdministrator(capabilities);
-  const showAccountManagement = isAdministrator(capabilities);
+  const showAccountManagement = canManageAccounts(capabilities);
   // Club Management is a match-manager surface (#786), not admin-only: a HOST/CLUB_OWNER already reads
   // the club list to file events, so they can see it here too. Every WRITE inside keeps its own server
   // rule (create/rename/delete/owners are ADMINISTRATOR, sanctioning is CLUB_OWNER/ADMIN) and the section

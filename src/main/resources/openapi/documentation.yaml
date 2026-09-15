@@ -209,7 +209,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
           description: Restrict to users holding this capability (#317), e.g. CLUB_OWNER.
         - name: limit
           in: query
@@ -321,7 +321,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
           description: Restrict to users holding this capability (#317), e.g. CLUB_OWNER.
         - name: ids
           in: query
@@ -1617,7 +1617,7 @@ paths:
         required: true
         schema:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
     delete:
       summary: Revoke a capability (ADMINISTRATOR only)
       description: |
@@ -6548,7 +6548,7 @@ components:
           type: array
           items:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
         record:
           nullable: true
           type: object
@@ -6656,7 +6656,7 @@ components:
           type: array
           items:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
 
     ContactCreateRequest:
       type: object
@@ -6800,7 +6800,7 @@ components:
       properties:
         capability:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
 
     CapabilityResponse:
       type: object
@@ -6810,7 +6810,7 @@ components:
       properties:
         capability:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
         isActive:
           type: boolean
         grantedBy:

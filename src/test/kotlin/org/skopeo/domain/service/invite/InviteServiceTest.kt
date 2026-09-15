@@ -172,6 +172,18 @@ class InviteServiceTest {
     }
 
     @Test
+    fun `an account manager may create, list, and revoke invites (#1002)`() {
+        // Onboarding invites are an Account Management surface, so the gate is ACCOUNT_MANAGEMENT_ROLES
+        // rather than ADMINISTRATOR. Before #1002, handing someone this job meant making them a full
+        // administrator.
+        provision(uid = "manager", roles = setOf(Capability.PLAYER, Capability.ACCOUNT_MANAGER))
+
+        val invite = service.create(token = token(uid = "manager"), email = "newbie@example.com").shouldBeRight()
+        service.list(token = token(uid = "manager"), limit = 50, offset = 0).shouldBeRight()
+        service.revoke(token = token(uid = "manager"), id = UUID.fromString(invite.id)).shouldBeRight()
+    }
+
+    @Test
     fun `a caller without a provisioned account cannot create, list, or revoke invites`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val invite = service.create(token = token(uid = "admin"), email = "x@example.com").shouldBeRight()

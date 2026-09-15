@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect } from "vitest";
 import {
   Capability,
   canEditEndedEvents,
   canManageMatches,
+  canManageAccounts,
   canManagePointsBudget,
   canRate,
   canScore,
@@ -10,86 +11,94 @@ import {
   hasCapability,
   isAdministrator,
   isResearcher,
-} from './capabilities'
+} from "./capabilities";
 
-describe('capabilities', () => {
-  it('hasCapability checks membership and handles undefined', () => {
-    expect(hasCapability([Capability.PLAYER], Capability.PLAYER)).toBe(true)
+describe("capabilities", () => {
+  it("hasCapability checks membership and handles undefined", () => {
+    expect(hasCapability([Capability.PLAYER], Capability.PLAYER)).toBe(true);
     expect(hasCapability([Capability.PLAYER], Capability.ADMINISTRATOR)).toBe(
       false,
-    )
-    expect(hasCapability(undefined, Capability.PLAYER)).toBe(false)
-  })
+    );
+    expect(hasCapability(undefined, Capability.PLAYER)).toBe(false);
+  });
 
-  it('canManageMatches is true for hosts, club owners, and administrators', () => {
-    expect(canManageMatches([Capability.PLAYER])).toBe(false)
-    expect(canManageMatches([Capability.HOST])).toBe(true)
-    expect(canManageMatches([Capability.CLUB_OWNER])).toBe(true)
-    expect(canManageMatches([Capability.ADMINISTRATOR])).toBe(true)
-  })
+  it("canManageMatches is true for hosts, club owners, and administrators", () => {
+    expect(canManageMatches([Capability.PLAYER])).toBe(false);
+    expect(canManageMatches([Capability.HOST])).toBe(true);
+    expect(canManageMatches([Capability.CLUB_OWNER])).toBe(true);
+    expect(canManageMatches([Capability.ADMINISTRATOR])).toBe(true);
+  });
 
-  it('isAdministrator is true only for administrators', () => {
-    expect(isAdministrator([Capability.ADMINISTRATOR])).toBe(true)
-    expect(isAdministrator([Capability.HOST])).toBe(false)
-    expect(isAdministrator(undefined)).toBe(false)
-  })
+  it("isAdministrator is true only for administrators", () => {
+    expect(isAdministrator([Capability.ADMINISTRATOR])).toBe(true);
+    expect(isAdministrator([Capability.HOST])).toBe(false);
+    expect(isAdministrator(undefined)).toBe(false);
+  });
 
-  it('canSeeRawRatings requires ADMINISTRATOR and not previewing as non-admin (#583/#654)', () => {
-    expect(canSeeRawRatings([Capability.ADMINISTRATOR], false)).toBe(true)
-    expect(canSeeRawRatings([Capability.ADMINISTRATOR], undefined)).toBe(true)
+  it("canSeeRawRatings requires ADMINISTRATOR and not previewing as non-admin (#583/#654)", () => {
+    expect(canSeeRawRatings([Capability.ADMINISTRATOR], false)).toBe(true);
+    expect(canSeeRawRatings([Capability.ADMINISTRATOR], undefined)).toBe(true);
     // Admin previewing as a non-admin no longer sees raw ratings.
-    expect(canSeeRawRatings([Capability.ADMINISTRATOR], true)).toBe(false)
+    expect(canSeeRawRatings([Capability.ADMINISTRATOR], true)).toBe(false);
     // Non-admins never see raw ratings, regardless of the toggle.
-    expect(canSeeRawRatings([Capability.PLAYER], false)).toBe(false)
-    expect(canSeeRawRatings(undefined, false)).toBe(false)
-  })
+    expect(canSeeRawRatings([Capability.PLAYER], false)).toBe(false);
+    expect(canSeeRawRatings(undefined, false)).toBe(false);
+  });
 
-  it('canRate is true for raters, administrators and match managers (#106, #907)', () => {
-    expect(canRate([Capability.RATER])).toBe(true)
-    expect(canRate([Capability.ADMINISTRATOR])).toBe(true)
+  it("canRate is true for raters, administrators and match managers (#106, #907)", () => {
+    expect(canRate([Capability.RATER])).toBe(true);
+    expect(canRate([Capability.ADMINISTRATOR])).toBe(true);
     // #907: a host holds a rater's capabilities, and a club owner organizes events too (#789), so
     // gating on HOST alone would show an owner a control the server answers 403 for (#867).
-    expect(canRate([Capability.HOST])).toBe(true)
-    expect(canRate([Capability.CLUB_OWNER])).toBe(true)
-    expect(canRate([Capability.RESEARCHER])).toBe(false)
-    expect(canRate([Capability.PLAYER])).toBe(false)
-    expect(canRate(undefined)).toBe(false)
-  })
+    expect(canRate([Capability.HOST])).toBe(true);
+    expect(canRate([Capability.CLUB_OWNER])).toBe(true);
+    expect(canRate([Capability.RESEARCHER])).toBe(false);
+    expect(canRate([Capability.PLAYER])).toBe(false);
+    expect(canRate(undefined)).toBe(false);
+  });
 
-  it('canScore is true for scorers and everyone who runs matches (#911)', () => {
-    expect(canScore([Capability.SCORER])).toBe(true)
+  it("canScore is true for scorers and everyone who runs matches (#911)", () => {
+    expect(canScore([Capability.SCORER])).toBe(true);
     // Mirrors SCORING_ROLES: composed from match management, so a club owner who does not also hold
     // HOST may umpire — gating on HOST alone would show them a control the server answers 403 for (#867).
-    expect(canScore([Capability.HOST])).toBe(true)
-    expect(canScore([Capability.CLUB_OWNER])).toBe(true)
-    expect(canScore([Capability.ADMINISTRATOR])).toBe(true)
-    expect(canScore([Capability.PLAYER])).toBe(false)
-    expect(canScore([Capability.RESEARCHER])).toBe(false)
-    expect(canScore(undefined)).toBe(false)
-  })
+    expect(canScore([Capability.HOST])).toBe(true);
+    expect(canScore([Capability.CLUB_OWNER])).toBe(true);
+    expect(canScore([Capability.ADMINISTRATOR])).toBe(true);
+    expect(canScore([Capability.PLAYER])).toBe(false);
+    expect(canScore([Capability.RESEARCHER])).toBe(false);
+    expect(canScore(undefined)).toBe(false);
+  });
 
-  it('canEditEndedEvents is true only for administrators and club owners (#310)', () => {
-    expect(canEditEndedEvents([Capability.ADMINISTRATOR])).toBe(true)
-    expect(canEditEndedEvents([Capability.CLUB_OWNER])).toBe(true)
-    expect(canEditEndedEvents([Capability.HOST])).toBe(false)
-    expect(canEditEndedEvents([Capability.PLAYER])).toBe(false)
-    expect(canEditEndedEvents(undefined)).toBe(false)
-  })
+  it("canEditEndedEvents is true only for administrators and club owners (#310)", () => {
+    expect(canEditEndedEvents([Capability.ADMINISTRATOR])).toBe(true);
+    expect(canEditEndedEvents([Capability.CLUB_OWNER])).toBe(true);
+    expect(canEditEndedEvents([Capability.HOST])).toBe(false);
+    expect(canEditEndedEvents([Capability.PLAYER])).toBe(false);
+    expect(canEditEndedEvents(undefined)).toBe(false);
+  });
 
-  it('canManagePointsBudget is true for points managers and administrators (#403)', () => {
-    expect(canManagePointsBudget([Capability.POINTS_MANAGER])).toBe(true)
-    expect(canManagePointsBudget([Capability.ADMINISTRATOR])).toBe(true)
-    expect(canManagePointsBudget([Capability.PLAYER])).toBe(false)
-    expect(canManagePointsBudget([Capability.HOST])).toBe(false)
-    expect(canManagePointsBudget(undefined)).toBe(false)
-  })
+  it("canManagePointsBudget is true for points managers and administrators (#403)", () => {
+    expect(canManagePointsBudget([Capability.POINTS_MANAGER])).toBe(true);
+    expect(canManagePointsBudget([Capability.ADMINISTRATOR])).toBe(true);
+    expect(canManagePointsBudget([Capability.PLAYER])).toBe(false);
+    expect(canManagePointsBudget([Capability.HOST])).toBe(false);
+    expect(canManagePointsBudget(undefined)).toBe(false);
+  });
 
-  it('isResearcher is true for researchers and administrators (#107)', () => {
-    expect(isResearcher([Capability.RESEARCHER])).toBe(true)
-    expect(isResearcher([Capability.ADMINISTRATOR])).toBe(true)
-    expect(isResearcher([Capability.PLAYER])).toBe(false)
-    expect(isResearcher([Capability.HOST])).toBe(false)
-    expect(isResearcher(undefined)).toBe(false)
-  })
+  it("canManageAccounts is true for account managers and administrators (#1002)", () => {
+    expect(canManageAccounts([Capability.ACCOUNT_MANAGER])).toBe(true);
+    expect(canManageAccounts([Capability.ADMINISTRATOR])).toBe(true);
+    expect(canManageAccounts([Capability.PLAYER])).toBe(false);
+    // Running matches is not managing accounts - the capability does not come along with staff status.
+    expect(canManageAccounts([Capability.HOST])).toBe(false);
+    expect(canManageAccounts(undefined)).toBe(false);
+  });
 
-})
+  it("isResearcher is true for researchers and administrators (#107)", () => {
+    expect(isResearcher([Capability.RESEARCHER])).toBe(true);
+    expect(isResearcher([Capability.ADMINISTRATOR])).toBe(true);
+    expect(isResearcher([Capability.PLAYER])).toBe(false);
+    expect(isResearcher([Capability.HOST])).toBe(false);
+    expect(isResearcher(undefined)).toBe(false);
+  });
+});

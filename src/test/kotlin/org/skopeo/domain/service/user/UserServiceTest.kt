@@ -367,6 +367,18 @@ class UserServiceTest {
                 ),
         ).toDomain()
 
+    /** As [provisionAdmin], but for the account-management role (#1002). */
+    private fun provisionAccountManager(uid: String) =
+        repository.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid.asRedactable(),
+                    identity = UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                    names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.FIRST, value = uid)),
+                    capabilities = setOf(Capability.PLAYER, Capability.ACCOUNT_MANAGER),
+                ),
+        ).toDomain()
+
     @Test
     fun `setRatingPreview toggles the per-admin flag for an admin, and is forbidden for a non-admin (#583)`() {
         provisionAdmin(uid = "admin")
@@ -426,6 +438,24 @@ class UserServiceTest {
             token = token(uid = "admin-404"),
             id = UUID.randomUUID(),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `an account manager may restore an account but not delete one (#1002)`() {
+        // The asymmetry #1002 settled. Restoring is Account Management work; deleting is not — it lives
+        // on `ManagePlayerSection`, the one card an account manager never sees. Deleting an account and
+        // undoing that deletion are deliberately different permissions, and the destructive half stays
+        // with administrators.
+        val target = service.provision(token = token(uid = "victim"), request = request).shouldBeRight().user
+        val targetId = UUID.fromString(target.id)
+        provisionAccountManager(uid = "manager")
+        provisionAdmin(uid = "admin-del")
+
+        service.deactivate(token = token(uid = "manager"), id = targetId).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+
+        // ...but once an administrator deletes it, the account manager can put it back.
+        service.deactivate(token = token(uid = "admin-del"), id = targetId).shouldBeRight()
+        service.reactivate(token = token(uid = "manager"), id = targetId).shouldBeRight()
     }
 
     @Test

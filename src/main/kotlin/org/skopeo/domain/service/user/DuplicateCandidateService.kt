@@ -11,7 +11,7 @@ import arrow.core.right
 import org.skopeo.common.dto.duplicate.DuplicateCandidatePageResponse
 import org.skopeo.common.dto.duplicate.DuplicateCandidateResponse
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.security.Capability
+import org.skopeo.common.security.ACCOUNT_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.duplicate.toResponse
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditAction
@@ -51,7 +51,7 @@ class DuplicateCandidateService(
         statusRaw: String?,
     ): Either<ServiceError, DuplicateCandidatePageResponse> =
         either {
-            requireAdmin(token = token).bind()
+            requireAccountManager(token = token).bind()
             val status = statusRaw?.let { raw -> parseStatus(raw = raw).bind() }
             val (items, total) =
                 candidates.list(
@@ -82,7 +82,7 @@ class DuplicateCandidateService(
         reason: String?,
     ): Either<ServiceError, DuplicateCandidateResponse> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireAccountManager(token = token).bind()
             ensure(condition = userAId != userBId) { ServiceError.Validation(message = "A candidate needs two different users") }
             val userA = users.findById(id = userAId).bind().toDomain()
             val userB = users.findById(id = userBId).bind().toDomain()
@@ -120,7 +120,7 @@ class DuplicateCandidateService(
         id: UUID,
     ): Either<ServiceError, Unit> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireAccountManager(token = token).bind()
             val candidate = openCandidate(id = id).bind()
             candidates
                 .setStatus(id = id, status = DuplicateCandidateStatus.DISMISSED, resolvedBy = adminId, resolvedAt = LocalDateTime.now())
@@ -147,7 +147,7 @@ class DuplicateCandidateService(
         canonicalId: UUID,
     ): Either<ServiceError, Unit> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireAccountManager(token = token).bind()
             val candidate = openCandidate(id = id).bind()
             ensure(condition = canonicalId == candidate.userAId || canonicalId == candidate.userBId) {
                 ServiceError.Validation(message = "The canonical account must be one of the candidate's two accounts")
@@ -185,12 +185,15 @@ class DuplicateCandidateService(
             candidate
         }
 
-    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
-        return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
-            ServiceError.Forbidden().left()
-        } else {
-            caller.id.right()
-        }
-    }
+    /**
+     * Account-management access (#1002): an ACCOUNT_MANAGER or an ADMINISTRATOR. Returns the caller's id
+     * (the audit actor).
+     *
+     * Delegates to the shared [requireAnyOf] rather than keeping a private copy. This service held one of
+     * the three hand-rolled `requireAdmin` clones that [requireAnyOf] was extracted to replace (#866) —
+     * widening the rule was the moment to finish that job, since three copies of one check is three places
+     * for it to drift.
+     */
+    private fun requireAccountManager(token: VerifiedFirebaseToken): Either<ServiceError, UUID> =
+        requireAnyOf(users = users, token = token, allowed = ACCOUNT_MANAGEMENT_ROLES)
 }
