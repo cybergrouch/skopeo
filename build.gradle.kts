@@ -146,6 +146,12 @@ dependencies {
     // YAML parser for OpenAPIIntegrationTest (#401): parse the served spec so a malformed
     // documentation.yaml fails the backend gate instead of only breaking the web orval step.
     testImplementation("org.yaml:snakeyaml:2.3")
+
+    // Sealed-hierarchy enumeration for LiveMatchEventKindContractTest (#989): `sealedSubclasses` is
+    // declared in the stdlib but only implemented by kotlin-reflect, so without this the test compiles
+    // and then dies at runtime with KotlinReflectionNotSupportedError. It arrives transitively today
+    // (Ktor, Exposed), and a test whose entire job is to catch drift must not rest on that.
+    testImplementation("org.jetbrains.kotlin:kotlin-reflect")
 }
 
 kotlin {
