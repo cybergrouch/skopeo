@@ -201,6 +201,22 @@ detekt {
     failOnSeverity.set(dev.detekt.gradle.extensions.FailOnSeverity.Info)
 }
 
+// `detektMain` prints "There were 11 compiler errors found during analysis. This affects accuracy of
+// reporting." That is EXPECTED and is not a misconfiguration here (#1017).
+//
+// All 11 are `unresolved reference 'serializer'`, in the three files that call a generated
+// `Foo.serializer()` — Rating.kt, PointsConfigService.kt, PointsScheduleHistory.kt. That companion
+// function is synthesised by the kotlinx.serialization COMPILER PLUGIN, and detekt's Analysis API
+// frontend does not apply compiler plugins, so the reference cannot resolve. Upstream:
+// https://github.com/detekt/detekt/issues/7531
+//
+// Verified rather than assumed: `enableCompilerPlugin = true` does NOT help (still 11), `detektTest`
+// is unaffected (0), and the degradation is confined to those three files — so the type-aware rules
+// are intact everywhere else. Do not "fix" this by adding a dependency; there is nothing to add.
+//
+// Do not swap `Foo.serializer()` for the library's `serializer<Foo>()` to appease the tool either:
+// that trades a compile-time-guaranteed serializer for a reflective runtime lookup, in production
+// serialization code, to quieten a linter. Wrong trade.
 tasks.withType<dev.detekt.gradle.Detekt>().configureEach {
     // detekt 2.0 renamed two report types and dropped one (#1008): xml -> checkstyle, md -> markdown,
     // and the plain-text report is gone. Nothing in CI consumes any of these — they are all local
