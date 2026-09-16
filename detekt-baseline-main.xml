@@ -1,0 +1,41 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ImplicitDefaultLocale:ApiKeyCrypto.kt:ApiKeyCrypto$"%02x".format(byte)</ID>
+    <ID>ImplicitDefaultLocale:ClaimCodeCrypto.kt:ClaimCodeCrypto$"%02x".format(byte)</ID>
+    <ID>LargeClass:EventService.kt:EventService</ID>
+    <ID>LargeClass:MatchRepository.kt:MatchRepository</ID>
+    <ID>LongMethod:PerformanceBasedRankingCalculatorImpl.kt:PerformanceBasedRankingCalculatorImpl$override fun calculate: RankingCalculationResult</ID>
+    <ID>LongParameterList:DatabaseConfig.kt:DatabaseConfig$private fun createDataSource: HikariDataSource</ID>
+    <ID>MagicNumber:DatabaseConfig.kt:DatabaseConfig$10</ID>
+    <ID>MagicNumber:DatabaseConfig.kt:DatabaseConfig$1800000</ID>
+    <ID>MagicNumber:DatabaseConfig.kt:DatabaseConfig$30000</ID>
+    <ID>MagicNumber:DatabaseConfig.kt:DatabaseConfig$5000</ID>
+    <ID>MagicNumber:DatabaseConfig.kt:DatabaseConfig$600000</ID>
+    <ID>NamedArguments:TokenMapping.kt:listOf(UserName(type = NameType.DISPLAY, value = value))</ID>
+    <ID>NamedArguments:UserDomain.kt:ProvisionUserCommand$setOf(Capability.PLAYER)</ID>
+    <ID>ThrowsCount:Rating.kt:RatingSerializer$override fun deserialize: Rating</ID>
+    <ID>TooGenericExceptionCaught:DatabaseConfig.kt:DatabaseConfig$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:RankingRoutes.kt:e: Exception</ID>
+    <ID>TooManyFunctions:EventRepository.kt:EventRepository</ID>
+    <ID>TooManyFunctions:EventService.kt:EventService</ID>
+    <ID>TooManyFunctions:MatchRepository.kt:MatchRepository</ID>
+    <ID>TooManyFunctions:MatchService.kt:MatchService</ID>
+    <ID>TooManyFunctions:RatingRepository.kt:RatingRepository</ID>
+    <ID>TooManyFunctions:UserService.kt:UserService</ID>
+    <ID>TopLevelPropertyNaming:Application.kt:private val logger = KotlinLogging.logger {}</ID>
+    <ID>TopLevelPropertyNaming:DatabaseConfig.kt:private val logger = KotlinLogging.logger {}</ID>
+    <ID>TopLevelPropertyNaming:RankingRoutes.kt:private val logger = KotlinLogging.logger {}</ID>
+    <ID>TopLevelPropertyNaming:UserService.kt:private val logger = KotlinLogging.logger {}</ID>
+    <ID>UnnecessaryNotNullOperator:MatchRepository.kt:MatchRepository$set.tiebreakTeam1Points!!</ID>
+    <ID>UnnecessaryNotNullOperator:MatchRepository.kt:MatchRepository$set.tiebreakTeam2Points!!</ID>
+    <ID>UnsafeCallOnNullableType:DatabaseConfig.kt:DatabaseConfig$dataSource!!</ID>
+    <ID>UnsafeCallOnNullableType:MatchRepository.kt:MatchRepository$loadMatch(id = it[MatchesTable.id].value)!!</ID>
+    <ID>UnsafeCallOnNullableType:Rating.kt:RatingSerializer$jsonObject["publishedLevel"]!!</ID>
+    <ID>UnsafeCallOnNullableType:RouteSupport.kt:call.principal&lt;JWTPrincipal&gt;()!!</ID>
+    <ID>UnsafeCallOnNullableType:UserRepository.kt:UserRepository$loadAggregate(id = it[UsersTable.id].value)!!</ID>
+    <ID>UnusedVariable:PlayerService.kt:PlayerService$val series = OpponentBand.entries.map { relation -&gt; val forRelation = classified.filter { it.relation == relation } OpponentBandSeries( relation = relation, totals = totalsOf(rows = forRelation.map { ResultRow(singles = true, period = it.period, won = it.won) }), monthly = months.map { period -&gt; val inMonth = forRelation.filter { it.period == period } ResultsBucket(period = period, wins = inMonth.count { it.won }, losses = inMonth.count { !it.won }) }, ) }</ID>
+    <ID>UseCheckOrError:Application.kt:throw IllegalStateException("OpenAPI specification file not found")</ID>
+  </CurrentIssues>
+</SmellBaseline>

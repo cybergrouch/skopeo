@@ -26,8 +26,8 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 
 ## JVM Constraints
 
-- Code targets Java 17 (Gradle toolchain).
-- The Gradle daemon is pinned to Java 21 in `gradle/gradle-daemon-jvm.properties` because detekt 1.23.8's bundled Kotlin compiler crashes on Java 25+. Do not raise it until detekt 2.0 is adopted. See `docs/engineering/operations/JVM_COMPATIBILITY.md`.
+- Code targets Java 17 (Gradle toolchain) — unchanged, and deliberately so: the bytecode runs on both a 17 and a 25 JRE. The **production runtime** is Java 25 (`Dockerfile` runtime stage) and the **Gradle daemon** is Java 25; the three are independent.
+- The Gradle daemon runs on **Java 25**, set in `gradle/gradle-daemon-jvm.properties`. It was pinned to 21 until #1008, because detekt 1.23.8's bundled Kotlin compiler crashed on Java 25+; detekt 2.0.0-alpha.6 fixed that. **The pin and CI's `java-version` list must move together** — the daemon toolchain has to be discoverable in CI or the build cannot start. See `docs/engineering/operations/JVM_COMPATIBILITY.md`.
 
 ## Architecture
 
@@ -60,7 +60,7 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 
 ## Code Style Enforcement
 
-- **Named arguments required everywhere**: detekt's `NamedArguments` rule has threshold 1 — name parameters even on single-argument calls.
+- **Named arguments required everywhere**: detekt's `NamedArguments` rule is set to `allowedArguments: 0` — name parameters even on single-argument calls. (It was `threshold: 0` before detekt 2.0; this doc previously said "threshold 1", which was never the configured value.)
 - **Kotest assertions only in tests**: detekt forbids JUnit/kotlin-test assertions (`assertEquals`, `assertTrue`, etc.); use `shouldBe`, `shouldThrow<T>`, etc.
 - **Sensitive fields use `Redactable<T>`** (`common/redaction`): a value class whose `toString()` is `***`, so any `data class` holding one is safe from `logger.info { "$model" }` without declaring its own `toString()`. Wrap with `.asRedactable()` at the boundary, unwrap with `.revealed` only where the value is genuinely needed (`\.revealed` greps every deliberate exposure). Currently applied to `IssuedApiKey.plaintext`, `VerifiedFirebaseToken.email`/`.providerUid`, `Contact.value`/`ContactInfo.value`, `Invite.email`; `User.dateOfBirth`/`firebaseUid` are deliberately excluded on cost/benefit. Note the type system catches only *assignment* mismatches: it does **not** catch interpolation (silently redacted an audit-log summary), `.toString()` on the wrapper (shipped `"***"` from two DTO mappers), or kotest's `Any`-typed `shouldBe`. **A clean compile is not evidence — run the full suite.** See `docs/engineering/operations/LOGGING_AND_METRICS.md`.
 - ktlint runs as part of `build`; a pre-commit hook can be installed with `./gradlew installGitHooks`.

@@ -15,11 +15,11 @@ project.
 | Concern | Decision |
 |---|---|
 | Compile toolchain (bytecode target) | **Java 17** (`build.gradle.kts`, unchanged) |
-| Gradle daemon / build tooling JVM | **Java 21 LTS**, pinned in `gradle/gradle-daemon-jvm.properties` |
-| Docker build stage | `eclipse-temurin:21-jdk` (Debian-based) |
-| Docker runtime stage | `eclipse-temurin:17-jre-alpine` |
-| Production runtime upgrades (21/25) | Change the Dockerfile runtime base image — independent of everything above |
-| Ceiling on build JVM | **Java 24**, imposed by detekt 1.23.8; lift after upgrading to detekt 2.0 |
+| Gradle daemon / build tooling JVM | **Java 25**, pinned in `gradle/gradle-daemon-jvm.properties` (was 21 until #1008) |
+| Docker build stage | `eclipse-temurin:25-jdk` (Debian-based) — must track the daemon pin |
+| Docker runtime stage (**production JVM**) | `eclipse-temurin:25-jre-noble` (was 17 until #1008) |
+| Production runtime upgrades | Change the Dockerfile runtime base image alone. Still independent of everything above: the compile target stays 17, so the bytecode runs on a 17 or a 25 JRE and the line can be swapped back without rebuilding |
+| Ceiling on build JVM | **None** since #1008. detekt 2.0.0-alpha.6 removed the Java 24 ceiling that 1.23.8 imposed |
 
 ---
 
@@ -130,16 +130,27 @@ Two conclusions:
 
 ## Resolution (Adopted Configuration)
 
-### Pin the Gradle daemon to Java 21 LTS
+### Pin the Gradle daemon to Java 25
 
 `gradle/gradle-daemon-jvm.properties` (committed, applies to every machine and CI):
 
 ```properties
-# Keep <= 24: detekt 1.23.8's bundled Kotlin compiler crashes on Java 25+
-# (https://github.com/detekt/detekt/issues/8714, fixed in detekt 2.0).
-# Raise to 25 once detekt 2.0 stable is adopted.
-toolchainVersion=21
+toolchainVersion=25
 ```
+
+**Four places carry this number and must move together** (#1008). Three of them are not
+obvious, and missing any one breaks the build rather than degrading it:
+
+| Where | Why it must match |
+|---|---|
+| `gradle/gradle-daemon-jvm.properties` | the pin itself |
+| `.github/workflows/ci.yml` — `java-version` | the daemon toolchain must be discoverable, or CI cannot start the build |
+| `gradle.properties` — `org.gradle.java.installations.fromEnv` | names the CI env vars Gradle discovers toolchains from |
+| `Dockerfile` — the `builder` stage base image | it COPYs `gradle/` in, and `auto-download=false` means no silent fallback |
+
+Until #1008 this was 21, because detekt 1.23.8's bundled Kotlin compiler crashed on Java 25+
+([detekt#8714](https://github.com/detekt/detekt/issues/8714)). detekt 2.0.0-alpha.6 fixed it,
+verified by running the full detekt gate on 25 rather than taken from the changelog.
 
 This decouples the build from the drifting `JAVA_HOME` on developer machines.
 The compile toolchain remains Java 17, so produced bytecode is unchanged.
@@ -167,7 +178,9 @@ JDK 17, which no longer satisfied the (committed) daemon criteria. Two changes:
   fail to unpack into a usable Java home on musl-based images
   (`Unpacked JDK archive does not contain a Java home`). The builder is
   Debian-based; image size is irrelevant for a multi-stage build stage.
-- **Runtime stage is unchanged:** `eclipse-temurin:17-jre-alpine`.
+- **Runtime stage:** `eclipse-temurin:25-jre-noble` since #1008 (this bullet previously said
+  `17-jre-alpine`, stale on both counts — the move to Debian predates #1008, see the netty-tcnative
+  note in the Dockerfile).
 
 Verified end-to-end: `./gradlew clean build` green locally, `docker build`
 succeeds, and the resulting container boots through configuration loading to the
