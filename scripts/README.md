@@ -261,6 +261,16 @@ SCHEDULER_SA=<sa>@skopeo-prod.iam.gserviceaccount.com \
 ./scripts/schedule-backup.sh
 ```
 
+#### `harden-run-identity.sh`
+Gives Cloud Run a dedicated least-privilege service account instead of the default compute account, which carries project-wide `roles/editor` (#955). Performs only the safe, reversible part — snapshots the IAM policy, creates and grants the runtime account, and deploys a **tagged zero-traffic canary** reusing the current image digest so the identity is the only thing that changed. It stops there: shifting traffic and removing `roles/editor` are printed for you to run deliberately, with their rollback commands.
+
+**Usage:**
+```bash
+./scripts/harden-run-identity.sh
+```
+
+Idempotent. Re-running re-grants the same roles and redeploys the canary; it never shifts traffic.
+
 #### `schedule-standings.sh`
 One-time setup to automate the **Standings recompute + publish** via Cloud Scheduler (#389). Points expire, so the table goes stale with time alone; this is the clock. It calls the same endpoint the Admin UI's manual trigger uses, authenticating as an API client so the Activity Log names the caller.
 
