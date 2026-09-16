@@ -8,7 +8,7 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.skopeo.common.dto.RankingCalculationRequest
 import org.skopeo.common.dto.rating.CalculationResponse
 import org.skopeo.common.error.ServiceError

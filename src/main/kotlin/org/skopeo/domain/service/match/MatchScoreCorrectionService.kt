@@ -9,7 +9,7 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.skopeo.common.dto.match.MatchCorrectionPlayerImpact
 import org.skopeo.common.dto.match.MatchResultRequest
 import org.skopeo.common.dto.match.MatchScoreCorrectionRequest

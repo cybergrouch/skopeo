@@ -6,28 +6,31 @@ package org.skopeo.repository
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.right
-import org.jetbrains.exposed.sql.ISqlExpressionBuilder
-import org.jetbrains.exposed.sql.JoinType
-import org.jetbrains.exposed.sql.Op
-import org.jetbrains.exposed.sql.ResultRow
-import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.SqlExpressionBuilder
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.inSubQuery
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.count
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.max
-import org.jetbrains.exposed.sql.or
-import org.jetbrains.exposed.sql.select
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.core.Op
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.count
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greater
+import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.inSubQuery
+import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.max
+import org.jetbrains.exposed.v1.core.neq
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.plus
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.select
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.domain.model.CreateFixtureCommand
 import org.skopeo.domain.model.MatchCompletionReason
@@ -411,7 +414,7 @@ class MatchRepository {
     ) {
         transaction {
             MatchesTable.update(where = { MatchesTable.id eq matchId }) {
-                with(receiver = SqlExpressionBuilder) { it[reRatedCount] = reRatedCount + 1 }
+                it[reRatedCount] = reRatedCount + 1
                 it[MatchesTable.reRatedAt] = reRatedAt
             }
         }
@@ -531,7 +534,7 @@ class MatchRepository {
      * Phrased as a membership test rather than a count so it reads the same way as [queueEligible]
      * directly below, and so the database can answer it from the `match_sets` foreign-key index.
      */
-    private fun ISqlExpressionBuilder.hasAnySet(): Op<Boolean> =
+    private fun hasAnySet(): Op<Boolean> =
         MatchesTable.id inSubQuery MatchSetsTable.select(columns = listOf(element = MatchSetsTable.matchId))
 
     /**
@@ -543,7 +546,7 @@ class MatchRepository {
      * `matches.event_id` NOT NULL, so that branch became unreachable and is gone: **finalizing the event
      * is now the only route to a rating.** There is no longer any match that bypasses the gate.
      */
-    private fun ISqlExpressionBuilder.queueEligible(): Op<Boolean> =
+    private fun queueEligible(): Op<Boolean> =
         MatchesTable.eventId inSubQuery
             EventsTable.select(columns = listOf(element = EventsTable.id)).where { EventsTable.finalizedAt.isNotNull() }
 
@@ -929,7 +932,7 @@ class MatchRepository {
      * traceability, #325) untouched. Requires the query to leftJoin [EventsTable] on the event_id
      * reference so eventless rows survive the join.
      */
-    private fun ISqlExpressionBuilder.eventContainerActive(): Op<Boolean> = MatchesTable.eventId.isNull() or (EventsTable.isActive eq true)
+    private fun eventContainerActive(): Op<Boolean> = MatchesTable.eventId.isNull() or (EventsTable.isActive eq true)
 
     /** The (temporary singles) team ids a user has ever played in — the join basis for match lookups. */
     private fun teamIdsOf(userId: UUID): List<UUID> =

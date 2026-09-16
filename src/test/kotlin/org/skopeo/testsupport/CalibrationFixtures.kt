@@ -3,8 +3,8 @@
 
 package org.skopeo.testsupport
 
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.skopeo.repository.UserRatingsTable
 
 /**

@@ -6,7 +6,7 @@ package org.skopeo.repository
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.right
-import org.jetbrains.exposed.exceptions.ExposedSQLException
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.skopeo.common.error.ServiceError
 import java.sql.SQLException
 
