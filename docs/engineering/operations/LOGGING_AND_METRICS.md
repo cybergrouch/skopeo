@@ -375,13 +375,16 @@ needs a decision between a source scan, a reflective test, and a logger-interpol
 ### The better end state
 
 The [Redacted compiler plugin](https://github.com/ZacSweers/redacted-compiler-plugin) does this with a
-property annotation and **zero** call-site churn. It does not work on Kotlin 2.2.21 — verified: `1.13.0`
-(stable, targets 2.1.20) fails `compileKotlin` with `AbstractMethodError` in the FIR checker, and
-`1.14.0-alpha01` compiles main but fails `compileTestKotlin` with `NoSuchMethodError`.
+property annotation and **zero** call-site churn. It did not work on Kotlin 2.2.21 — verified at the
+time: `1.13.0` (stable, targeted 2.1.20) failed `compileKotlin` with `AbstractMethodError` in the FIR
+checker, and `1.14.0-alpha01` compiled main but failed `compileTestKotlin` with `NoSuchMethodError`.
 
-Revisit when a stable release targeting 2.2.x ships; the swap is delete-the-wrapper, add-annotations. Not
-worth downgrading Kotlin for — the Gradle daemon is already pinned to Java 21 for detekt, and a second
-toolchain shackle for defence in depth is a poor trade.
+**This project is now on Kotlin 2.4.20** (#1008), so the bar has moved: revisit when a stable release
+targets **2.4.x**, not 2.2.x — see #825. A compiler plugin binds to an exact compiler version, so this
+target will move again with every Kotlin bump, which is itself an argument for treating the hand-rolled
+`Redactable` as the long-term answer rather than a stopgap. Note the plugin would also not close the
+fourth gap found in #992: values composed inside the JDBC driver, which the application never formats.
+The swap, if it ever happens, is delete-the-wrapper, add-annotations.
 
 ## References
 

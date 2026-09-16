@@ -79,7 +79,6 @@ The design/decision records above, with status:
 
 - [TESTING_STRATEGY.md](engineering/quality/TESTING_STRATEGY.md) — testing pyramid and approach.
 - [CODE_COVERAGE.md](engineering/quality/CODE_COVERAGE.md) — JaCoCo thresholds and exclusions.
-- [LINTING_NAMED_PARAMETERS.md](engineering/quality/LINTING_NAMED_PARAMETERS.md) — the `NamedArguments` detekt rule and rationale.
 
 ### `engineering/`
 

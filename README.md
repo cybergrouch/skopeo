@@ -34,7 +34,7 @@ The heart of the Skopeo system - a sophisticated performance-based rating calcul
 - **Comprehensive Validation**: Input validation for player profiles, ratings, and match scores
 
 #### 2. **REST API**
-Production-ready HTTP API built with Ktor 3.0.3.
+Production-ready HTTP API built with Ktor 3.2.0.
 
 - **Ranking Calculation Endpoint**: POST `/api/v1/calculate-ranking`
   - Accepts player profiles with ratings and match scores
@@ -159,8 +159,8 @@ Skopeo has grown from a stateless rating calculator into a capability-gated rank
 ## Technology Stack
 
 ### Current
-- **Language**: Kotlin 2.2.21
-- **Web Framework**: Ktor 3.0.3 (Netty server)
+- **Language**: Kotlin 2.4.20
+- **Web Framework**: Ktor 3.2.0 (Netty server)
 - **Serialization**: kotlinx.serialization (JSON)
 - **Database**: PostgreSQL
 - **Migrations**: Flyway
@@ -185,9 +185,10 @@ Skopeo has grown from a stateless rating calculator into a capability-gated rank
 
 ### Prerequisites
 
-- **JDK 21** — the code targets Java 17, but the Gradle daemon is pinned to 21 because detekt 1.23.8's
-  bundled Kotlin compiler crashes on Java 25+. A newer JDK may stay your system default; the pin in
-  `gradle/gradle-daemon-jvm.properties` decides what Gradle uses. See
+- **JDK 25** — the Gradle daemon runs on 25 (`gradle/gradle-daemon-jvm.properties`), while the code
+  still *targets* Java 17, so the bytecode runs on either. A different JDK may stay your system
+  default; the pin decides what Gradle uses. The daemon was held at 21 until #1008, because detekt
+  1.23.8 crashed on Java 25+. See
   [JVM_COMPATIBILITY.md](docs/engineering/operations/JVM_COMPATIBILITY.md).
 - Gradle (included via wrapper)
 - Docker (for PostgreSQL; the app itself can run on the host)
