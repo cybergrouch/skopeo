@@ -167,7 +167,7 @@ Skopeo has grown from a stateless rating calculator into a capability-gated rank
 - **ORM**: Exposed (Kotlin SQL framework) + HikariCP connection pool
 - **Auth**: Firebase Auth (tokens verified at the API)
 - **Web UI**: React + Vite (`web/`)
-- **Build Tool**: Gradle 9.5.1
+- **Build Tool**: Gradle 9.7.1
 - **Code Quality**: ktlint + Detekt
 - **Testing**: JUnit 5 + Kotest assertions
 - **Coverage**: JaCoCo

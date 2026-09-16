@@ -21,17 +21,28 @@ application {
 // Single source of truth for the app version: generate version.properties from `project.version`
 // onto the runtime classpath so /health reports it (no hardcoded literal). Release tags carry the
 // official version by setting `version` on the tagged commit (see .github/workflows/release.yml).
-val generateVersionProperties by tasks.registering {
-    val versionFile = layout.buildDirectory.file("generated/version/version.properties")
-    inputs.property("version", project.version.toString())
-    outputs.file(versionFile)
-    doLast {
-        versionFile.get().asFile.apply {
-            parentFile.mkdirs()
-            writeText("version=${project.version}\n")
+// Plain `tasks.register(...)` rather than the `by tasks.registering` delegate: Gradle 9.6 deprecated
+// the Kotlin DSL delegated-property syntax, and it is one of the two things that stood between this
+// build and Gradle 10 on 9.7.1 (#1012). The delegate only ever bought us the task name for free —
+// spelling it out is the whole of the migration, and the task itself is unchanged.
+val generateVersionProperties =
+    tasks.register("generateVersionProperties") {
+        val versionFile = layout.buildDirectory.file("generated/version/version.properties")
+        // `project.version` is read HERE, at configuration time, and the string is what the action
+        // captures. Interpolating `project.version` inside `doLast` instead — as this did until #1012 —
+        // is `Task.project` at execution time: deprecated, removed in Gradle 10, and unavailable under
+        // the configuration cache, which Gradle is making the only mode. Same value either way, since
+        // release tags set `version` on the tagged commit before any task runs.
+        val projectVersion = project.version.toString()
+        inputs.property("version", projectVersion)
+        outputs.file(versionFile)
+        doLast {
+            versionFile.get().asFile.apply {
+                parentFile.mkdirs()
+                writeText("version=$projectVersion\n")
+            }
         }
     }
-}
 sourceSets.named("main") {
     resources.srcDir(layout.buildDirectory.dir("generated/version"))
 }
