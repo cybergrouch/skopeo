@@ -60,6 +60,11 @@ object RatingSerializer : KSerializer<Rating> {
         }
     }
 
+    // Three throws, one per distinct malformed input, across two decoder shapes: the JSON fast path can
+    // derive the level from the value so only a missing `value` is fatal, while the generic path decodes
+    // both elements positionally and so has to reject each independently. Folding them into one
+    // validation path would mean losing which field was missing — the one thing the message is for.
+    @Suppress("ThrowsCount")
     override fun deserialize(decoder: Decoder): Rating {
         return if (decoder is JsonDecoder) {
             val jsonObject = decoder.decodeJsonElement().jsonObject

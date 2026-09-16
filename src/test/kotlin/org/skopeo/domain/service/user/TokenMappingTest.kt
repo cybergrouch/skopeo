@@ -125,8 +125,10 @@ class TokenMappingTest {
                 request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
             )
 
-        command.email!!.status shouldBe VerificationStatus.PENDING
-        command.email!!.method.shouldBeNull()
+        command.email!!.let {
+            it.status shouldBe VerificationStatus.PENDING
+            it.method.shouldBeNull()
+        }
     }
 
     @Test
