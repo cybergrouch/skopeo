@@ -561,19 +561,6 @@ class PlayerService(
         // A fixed trailing window of months, oldest first, every month present (#845): an absence must
         // render as a gap, so the client is handed zeroes rather than left to infer missing periods.
         val months = (0 until RESULTS_MONTHS_WINDOW).map { YearMonth.now().minusMonths(it.toLong()).toString() }.reversed()
-        val series =
-            OpponentBand.entries.map { relation ->
-                val forRelation = classified.filter { it.relation == relation }
-                OpponentBandSeries(
-                    relation = relation,
-                    totals = totalsOf(rows = forRelation.map { ResultRow(singles = true, period = it.period, won = it.won) }),
-                    monthly =
-                        months.map { period ->
-                            val inMonth = forRelation.filter { it.period == period }
-                            ResultsBucket(period = period, wins = inMonth.count { it.won }, losses = inMonth.count { !it.won })
-                        },
-                )
-            }
 
         return OpponentBand.entries.map { relation ->
             val forRelation = classified.filter { it.relation == relation }

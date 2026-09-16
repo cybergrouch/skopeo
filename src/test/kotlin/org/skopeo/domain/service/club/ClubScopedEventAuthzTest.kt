@@ -454,7 +454,7 @@ class ClubScopedEventAuthzTest {
     @Test
     fun `match operations under an event inherit its club rule (#789)`() {
         val owner = provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
-        val outsider = provision(uid = "outsider", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        provision(uid = "outsider", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
         val p1 = provision(uid = "p1", rated = true)
         val p2 = provision(uid = "p2", rated = true)
         val owned = club("Downtown TC", owner)

@@ -139,8 +139,12 @@ class MatchRepository {
                 if (hasTb) {
                     MatchSetTiebreaksTable.insert {
                         it[matchSetId] = setId
-                        it[team1Points] = set.tiebreakTeam1Points!!
-                        it[team2Points] = set.tiebreakTeam2Points!!
+                        // No `!!` needed: both fields are nullable on MatchSetResult, but `hasTb` is a stable
+                        // local whose definition is the null check, so the compiler carries the smart cast in
+                        // here. The columns are non-null, so a future change that breaks the implication is a
+                        // compile error rather than a null slipping into the insert.
+                        it[team1Points] = set.tiebreakTeam1Points
+                        it[team2Points] = set.tiebreakTeam2Points
                     }
                 }
             }

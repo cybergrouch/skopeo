@@ -21,7 +21,6 @@
     <ID>MagicNumber:DatabaseConfig.kt:DatabaseConfig$30000</ID>
     <ID>MagicNumber:DatabaseConfig.kt:DatabaseConfig$5000</ID>
     <ID>MagicNumber:DatabaseConfig.kt:DatabaseConfig$600000</ID>
-    <ID>ThrowsCount:Rating.kt:RatingSerializer$override fun deserialize: Rating</ID>
     <ID>TooGenericExceptionCaught:DatabaseConfig.kt:DatabaseConfig$e: Exception</ID>
     <ID>TooGenericExceptionCaught:RankingRoutes.kt:e: Exception</ID>
     <ID>TooManyFunctions:EventRepository.kt:EventRepository</ID>

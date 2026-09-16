@@ -68,7 +68,5 @@
     <ID>NamedArguments:UserSearchApiIntegrationTest.kt:UserSearchApiIntegrationTest$setOf(Capability.PLAYER)</ID>
     <ID>NamedArguments:UserServiceTest.kt:UserServiceTest$listOf(UserName(type = org.skopeo.domain.model.NameType.FIRST, value = "Root"))</ID>
     <ID>NamedArguments:UserServiceTest.kt:UserServiceTest$setOf(Capability.PLAYER)</ID>
-    <ID>UnnecessaryNotNullOperator:TokenMappingTest.kt:TokenMappingTest$command.email!!</ID>
-    <ID>UnusedVariable:ClubScopedEventAuthzTest.kt:ClubScopedEventAuthzTest$val outsider = provision(uid = "outsider", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))</ID>
   </CurrentIssues>
 </SmellBaseline>
