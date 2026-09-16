@@ -126,14 +126,14 @@ docker build --no-cache -t skopeo .
 The Dockerfile uses a **multi-stage build**:
 
 **Stage 1: Builder**
-1. Uses `eclipse-temurin:17-jdk-alpine` (full JDK)
+1. Uses `eclipse-temurin:25-jdk` (full JDK, Debian — **not** Alpine; see the netty-tcnative note in the Dockerfile)
 2. Copies Gradle wrapper and build files
 3. Downloads dependencies (cached layer)
 4. Copies source code
 5. Builds fat JAR with `./gradlew clean build -x test`
 
 **Stage 2: Runtime**
-1. Uses `eclipse-temurin:17-jre-alpine` (JRE only)
+1. Uses `eclipse-temurin:25-jre-noble` (JRE only, Debian — this is the **production JVM**)
 2. Creates non-root user (appuser)
 3. Copies fat JAR from builder stage
 4. Sets up health check

@@ -54,10 +54,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Install BOTH JDK 17 and 21. The last entry (21) becomes JAVA_HOME, so
-      # Gradle's daemon — and detekt — run on 21. This is required: detekt 1.23.8
-      # crashes on JDK 25+, which is exactly why gradle-daemon-jvm.properties pins
-      # the daemon to 21. The build still compiles with the Java 17 toolchain.
+      # Install BOTH JDK 17 and 25. The last entry (25) becomes JAVA_HOME, so
+      # Gradle's daemon — and detekt — run on 25, matching the toolchainVersion in
+      # gradle-daemon-jvm.properties. This list and that pin MUST move together, or
+      # the daemon toolchain is undiscoverable and the build cannot start. 21 was
+      # here only until #1008, because detekt 1.23.8 crashed on JDK 25+. The build
+      # still compiles with the Java 17 toolchain.
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
