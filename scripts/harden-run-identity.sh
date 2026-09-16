@@ -105,17 +105,31 @@ gcloud run deploy "$SERVICE" \
   --service-account "$RUN_SA" \
   --tag "$TAG" --no-traffic
 
+# `gcloud run deploy` prints the tagged URL itself, but parse it from the service rather than the
+# deploy output so a re-run (when the canary already exists) resolves it too.
+#
+# Strip quotes AND brackets: the `value()` projection over a repeated field yields the URL wrapped in
+# single quotes, e.g. `'https://canary---…'`. Left in, curl reads the quote as part of the host and
+# reports "Port number was not a decimal number" — which looks exactly like a canary that failed to
+# start, on a canary that is serving perfectly. That mis-diagnosis is the reason this is spelled out.
 CANARY_URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" \
-  --format="value(status.traffic.filter(\"tag:${TAG}\").extract(\"url\"))" | tr -d '[]')"
-[[ -z "$CANARY_URL" ]] && CANARY_URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT" \
-  --region "$REGION" --format='value(status.traffic[].url)' | tr '\t' '\n' | grep -m1 "${TAG}---" || true)"
+  --format="value(status.traffic.filter(\"tag:${TAG}\").extract(\"url\"))" | tr -d "[]'\"" | tr -d '[:space:]')"
 
 echo "4️⃣  Probing the canary…"
 if [[ -n "$CANARY_URL" ]]; then
   echo "    ${CANARY_URL}/health"
   # The whole point of the exercise: does the app start, reach Cloud SQL and read its secrets as the
   # NEW identity? A 200 with a version string is the evidence; anything else means stop here.
-  curl -fsS --max-time 30 "${CANARY_URL}/health" && echo || echo "    ❌ canary did not answer /health"
+  if curl -fsS --max-time 30 "${CANARY_URL}/health"; then
+    echo
+    echo "    ✅ the canary starts, reaches Cloud SQL and reads its secrets as ${RUN_SA}."
+    echo "       NOT covered: /health does not touch Firestore, and roles/datastore.user is the"
+    echo "       permission whose shape changed most — watch live scores after the traffic shift."
+  else
+    echo "    ❌ canary did not answer /health. Nothing is serving it, so there is no user impact."
+    echo "       Check the roles first — cloudsql.client is the one to doubt:"
+    echo "       gcloud run services logs read $SERVICE --project $PROJECT --region $REGION"
+  fi
 else
   echo "    ⚠️  could not resolve the canary URL; find it with:"
   echo "        gcloud run services describe $SERVICE --project $PROJECT --region $REGION --format=yaml | grep -A2 'tag: '"

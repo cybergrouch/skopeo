@@ -1,0 +1,103 @@
+bindings:
+- members:
+  - serviceAccount:service-680245910471@gcp-sa-artifactregistry.iam.gserviceaccount.com
+  role: roles/artifactregistry.serviceAgent
+- members:
+  - serviceAccount:github-deployer@skopeo-prod.iam.gserviceaccount.com
+  role: roles/artifactregistry.writer
+- members:
+  - serviceAccount:680245910471-compute@developer.gserviceaccount.com
+  - serviceAccount:680245910471@cloudbuild.gserviceaccount.com
+  role: roles/cloudbuild.builds.builder
+- members:
+  - serviceAccount:github-deployer@skopeo-prod.iam.gserviceaccount.com
+  role: roles/cloudbuild.builds.editor
+- members:
+  - serviceAccount:service-680245910471@gcp-sa-cloudbuild.iam.gserviceaccount.com
+  role: roles/cloudbuild.serviceAgent
+- members:
+  - serviceAccount:service-680245910471@gcp-sa-cloudscheduler.iam.gserviceaccount.com
+  role: roles/cloudscheduler.serviceAgent
+- members:
+  - serviceAccount:db-backup@skopeo-prod.iam.gserviceaccount.com
+  role: roles/cloudsql.editor
+- members:
+  - serviceAccount:680245910471@cloudservices.gserviceaccount.com
+  role: roles/compute.instanceGroupManagerServiceAgent
+- members:
+  - serviceAccount:service-680245910471@compute-system.iam.gserviceaccount.com
+  role: roles/compute.serviceAgent
+- members:
+  - serviceAccount:service-680245910471@containerregistry.iam.gserviceaccount.com
+  role: roles/containerregistry.ServiceAgent
+- members:
+  - serviceAccount:firebase-app-hosting-compute@skopeo-prod.iam.gserviceaccount.com
+  role: roles/developerconnect.readTokenAccessor
+- members:
+  - serviceAccount:service-680245910471@gcp-sa-devconnect.iam.gserviceaccount.com
+  role: roles/developerconnect.serviceAgent
+- members:
+  - serviceAccount:680245910471-compute@developer.gserviceaccount.com
+  role: roles/editor
+- members:
+  - serviceAccount:service-680245910471@gcp-sa-firebase.iam.gserviceaccount.com
+  role: roles/firebase.managementServiceAgent
+- members:
+  - serviceAccount:firebase-adminsdk-fbsvc@skopeo-prod.iam.gserviceaccount.com
+  - serviceAccount:firebase-app-hosting-compute@skopeo-prod.iam.gserviceaccount.com
+  role: roles/firebase.sdkAdminServiceAgent
+- members:
+  - serviceAccount:firebase-deployer@skopeo-prod.iam.gserviceaccount.com
+  role: roles/firebase.viewer
+- members:
+  - serviceAccount:firebase-app-hosting-compute@skopeo-prod.iam.gserviceaccount.com
+  role: roles/firebaseapphosting.computeRunner
+- members:
+  - serviceAccount:service-680245910471@gcp-sa-firebaseapphosting.iam.gserviceaccount.com
+  role: roles/firebaseapphosting.serviceAgent
+- members:
+  - serviceAccount:firebase-adminsdk-fbsvc@skopeo-prod.iam.gserviceaccount.com
+  - serviceAccount:firebase-deployer@skopeo-prod.iam.gserviceaccount.com
+  role: roles/firebaseauth.admin
+- members:
+  - serviceAccount:firebase-deployer@skopeo-prod.iam.gserviceaccount.com
+  role: roles/firebasehosting.admin
+- members:
+  - serviceAccount:service-680245910471@firebase-rules.iam.gserviceaccount.com
+  role: roles/firebaserules.system
+- members:
+  - serviceAccount:service-680245910471@gcp-sa-firestore.iam.gserviceaccount.com
+  role: roles/firestore.serviceAgent
+- members:
+  - serviceAccount:firebase-adminsdk-fbsvc@skopeo-prod.iam.gserviceaccount.com
+  role: roles/iam.serviceAccountTokenCreator
+- members:
+  - serviceAccount:github-deployer@skopeo-prod.iam.gserviceaccount.com
+  role: roles/iam.serviceAccountUser
+- members:
+  - user:lange.pantoja@gmail.com
+  role: roles/owner
+- members:
+  - serviceAccount:github-deployer@skopeo-prod.iam.gserviceaccount.com
+  role: roles/run.admin
+- members:
+  - serviceAccount:service-680245910471@serverless-robot-prod.iam.gserviceaccount.com
+  role: roles/run.serviceAgent
+- condition:
+    expression: request.time < timestamp("2026-06-29T22:13:17.206Z")
+    title: developer-connect-connection-setup
+  members:
+  - serviceAccount:service-680245910471@gcp-sa-devconnect.iam.gserviceaccount.com
+  role: roles/secretmanager.admin
+- members:
+  - serviceAccount:680245910471-compute@developer.gserviceaccount.com
+  - serviceAccount:github-deployer@skopeo-prod.iam.gserviceaccount.com
+  role: roles/secretmanager.secretAccessor
+- members:
+  - serviceAccount:service-680245910471@service-networking.iam.gserviceaccount.com
+  role: roles/servicenetworking.serviceAgent
+- members:
+  - serviceAccount:github-deployer@skopeo-prod.iam.gserviceaccount.com
+  role: roles/storage.admin
+etag: BwZbD0vbI5A=
+version: 3
