@@ -50,12 +50,12 @@ tasks.named("processResources") {
     dependsOn(generateVersionProperties)
 }
 
-val ktorVersion = "3.2.0"
+val ktorVersion = "3.5.2"
 val exposedVersion = "0.61.0"
 val postgresVersion = "42.7.13"
 val flywayVersion = "11.8.2"
 val hikariVersion = "6.3.0"
-val arrowVersion = "2.1.2"
+val arrowVersion = "2.2.3"
 
 java {
     toolchain {
@@ -91,7 +91,7 @@ dependencies {
     // in-process SSE/WebSocket registry is broken by construction: the umpire's POST lands on one
     // instance while a spectator's stream is held by the other, and the event never crosses. Firestore
     // fans out server-push with no sockets to operate and no instance affinity.
-    implementation("com.google.firebase:firebase-admin:9.4.3")
+    implementation("com.google.firebase:firebase-admin:9.10.0")
 
     // Authentication — verify Firebase-issued JWTs against Google's public keys
     implementation("io.ktor:ktor-server-auth-jvm:$ktorVersion")
@@ -143,20 +143,20 @@ dependencies {
     testImplementation("io.kotest.extensions:kotest-assertions-arrow:2.0.0")
     // Mocking for the rare defensive path a real DB can't produce (e.g. a row deleted between an
     // existence check and its update); used sparingly — most service tests run against real Testcontainers.
-    testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation("io.mockk:mockk:1.14.11")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     // Integration tests against a real PostgreSQL (applies the Flyway migration)
-    testImplementation("org.testcontainers:postgresql:1.21.3")
-    testImplementation("org.testcontainers:junit-jupiter:1.21.3")
+    testImplementation("org.testcontainers:postgresql:1.21.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
 
     // Architecture tests — enforce layered package dependencies (issue #69). Bytecode-based, so
     // it's robust against Kotlin compiler versions (unlike source-scanning tools).
-    testImplementation("com.tngtech.archunit:archunit:1.4.1")
+    testImplementation("com.tngtech.archunit:archunit:1.5.0")
 
     // YAML parser for OpenAPIIntegrationTest (#401): parse the served spec so a malformed
     // documentation.yaml fails the backend gate instead of only breaking the web orval step.
-    testImplementation("org.yaml:snakeyaml:2.3")
+    testImplementation("org.yaml:snakeyaml:2.7")
 
     // Sealed-hierarchy enumeration for LiveMatchEventKindContractTest (#989): `sealedSubclasses` is
     // declared in the stdlib but only implemented by kotlin-reflect, so without this the test compiles
