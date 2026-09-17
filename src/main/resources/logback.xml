@@ -77,6 +77,25 @@
     <!-- Netty logger (reduce noise) -->
     <logger name="io.netty" level="WARN" />
 
+    <!-- Exposed: PINNED AT INFO, and this is a PII control rather than noise reduction (#1031).
+         Exposed's `Slf4jSqlDebugLogger` logs every statement with its arguments EXPANDED INLINE
+         (`logger.debug(expandArgs(context, transaction))`), so at DEBUG a row's column values land in
+         the message verbatim — and `contact_information.value` IS an email address:
+
+             INSERT INTO contact_information (..., "value", ...) VALUES (..., 'someone@example.com', ...)
+
+         The #992 turboFilter above CANNOT cover this. It keys on an event carrying a SQLException, and
+         a statement-execution log carries none, so the filter returns NEUTRAL and the event passes
+         through untouched. Different path, no protection.
+
+         Pinned here rather than left to inherit, because inheriting means one change to <root> — the
+         obvious thing to do while debugging — starts writing personal data to Cloud Logging. With this
+         line, raising root to DEBUG no longer reaches Exposed; turning SQL logging on has to be a
+         deliberate, reviewable edit to THIS element.
+
+         Do not raise this in a deployed environment. See PiiLeakTest and LOGGING_AND_METRICS.md. -->
+    <logger name="Exposed" level="INFO" />
+
     <!-- Console only: containers and cloud platforms collect stdout -->
     <root level="INFO">
         <appender-ref ref="CONSOLE" />

@@ -257,6 +257,40 @@ Note what was *not* done: the unique index stands (a verified value belongs to o
 nothing was silenced. #989 is the cautionary tale in the other direction — a constraint violation nobody
 logged, misreported as a lost sequence race.
 
+### The second path through the same area, which the filter does not cover (#1031)
+
+The filter above keys on **an event carrying a `SQLException`**. Exposed has another way of putting column
+values in a log line, and it carries no exception at all:
+
+`Slf4jSqlDebugLogger` logs every statement with its arguments **expanded inline** —
+`logger.debug(expandArgs(context, transaction))`. At DEBUG that produces
+
+```
+INSERT INTO contact_information (..., "value", ...) VALUES (..., 'someone@example.com', ...)
+```
+
+and `contact_information.value` **is** the email address. No `SQLException`, so the turboFilter returns
+`NEUTRAL` and the line passes through untouched. Different path, no protection — widening the filter to
+cover it would mean scrubbing arbitrary statement text, which is the fail-open approach rejected above.
+
+**The control is a level pin, not a filter:** `<logger name="Exposed" level="INFO" />` in `logback.xml`.
+Pinned rather than left to inherit, because inheriting means one change to `<root>` — the obvious thing to
+do while debugging — starts writing personal data to Cloud Logging. With the pin, raising root has no
+effect on Exposed; enabling SQL logging requires a deliberate, reviewable edit to that element.
+
+**Never raise it in a deployed environment.** For local debugging it is fine, and `SKOPEO_TEST_FORKS`-style
+env gating was considered and rejected: a logging level that can be turned on by configuration is exactly
+the hazard, so it should require a code change that shows up in review.
+
+Two `PiiLeakTest` cases guard this, and both were confirmed to fail when the pin is removed — one asserts
+the shipped `logback.xml` still declares it, the other drives a real insert with root at DEBUG and asserts
+nothing leaks. Note the deliberate contrast with the Exposed-retry case in the same class, which raises the
+`Exposed` logger *itself* to DEBUG on purpose: that one polices the filter's scrubbing of an
+exception-bearing event. Opposite sides of the same logger, not a contradiction.
+
+This gap predates the Exposed 1.0 upgrade (#1024) — verified by reproducing it on 0.61 — and was found
+while re-pointing the retry test during that work.
+
 Deliberately still open: redacting value types in the domain model (**#801**), as defence in depth against
 rule 1 rather than a substitute for it.
 
