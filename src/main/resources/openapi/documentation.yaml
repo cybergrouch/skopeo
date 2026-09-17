@@ -159,10 +159,15 @@ paths:
     get:
       summary: Paged player search with a total count (#232)
       description: >-
-        Same filters as `GET /api/v1/users` search mode (name/code/q/sex/age/rating; at least one
-        required), but returns a page `{ items, total }` so the UI can show the current page, links to
-        other pages, and the total. Same gate as `GET /api/v1/users` (#867): HOST, CLUB_OWNER,
+        Same filters as `GET /api/v1/users` search mode (name/code/q/sex/age/rating/status; at least
+        one required), but returns a page `{ items, total }` so the UI can show the current page, links
+        to other pages, and the total. Same gate as `GET /api/v1/users` (#867): HOST, CLUB_OWNER,
         ADMINISTRATOR, POINTS_MANAGER, RATER or RESEARCHER.
+
+
+        Only this endpoint takes `sort`/`direction` (#1050) — ordering is applied in the database, so it
+        selects which page you get rather than reordering one. `inCalibration` is populated here and
+        nowhere else, because answering it costs a query the pickers should not pay.
       tags:
         - Users
       security:
@@ -211,6 +216,33 @@ paths:
             type: string
             enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
           description: Restrict to users holding this capability (#317), e.g. CLUB_OWNER.
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ACTIVE, UNCLAIMED, DELETED, MERGED]
+          description: >-
+            Restrict to one lifecycle state (#1050); mutually exclusive, in this precedence. MERGED and
+            DELETED exist only among inactive accounts, so either one requires `includeInactive=true` —
+            the combination is a 400 rather than an unexplained empty page.
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DISPLAY_NAME, LAST_NAME, FIRST_NAME, SEX, AGE, RATING, STATUS]
+          description: >-
+            Column to order by (#1050); omitted means insertion order (`id`). `AGE` orders by age, which
+            is the inverse of date of birth. Ties break on `id`, so a page boundary cannot repeat or drop
+            a row among the many that share a sex or a status.
+        - name: direction
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ASC, DESC]
+          description: Sort direction; default ASC. Ignored without `sort`.
         - name: limit
           in: query
           required: false
@@ -239,7 +271,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserSummaryPageResponse'
         '400':
-          description: No filter given, or a malformed age/rating interval
+          description: >-
+            No filter given; a malformed age/rating interval; an unknown status/sort/direction value; or
+            a status that `includeInactive=false` has already excluded
           content:
             application/json:
               schema:
@@ -264,7 +298,7 @@ paths:
           - **Id resolution** — `ids` (comma-separated UUIDs) resolves known ids to summaries
             (match rosters, rating history, calculation previews). Exclusive: it cannot be combined with
             the search filters below.
-          - **Search** — any combination of `name`, `code`, `q`, `sex`, `age`, `rating`
+          - **Search** — any combination of `name`, `code`, `q`, `sex`, `age`, `rating`, `status`
             (AND-combined; at least one required). `name` is a fuzzy, partial match across all of
             a profile's names; `code` is a player-code prefix; `q` is a unified term matching a
             fuzzy name OR a code prefix. `age` and `rating` are interval strings: `[` / `]`
@@ -323,6 +357,16 @@ paths:
             type: string
             enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
           description: Restrict to users holding this capability (#317), e.g. CLUB_OWNER.
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ACTIVE, UNCLAIMED, DELETED, MERGED]
+          description: >-
+            Restrict to one lifecycle state (#1050). MERGED and DELETED exist only among inactive
+            accounts, so either one requires `includeInactive=true`; the combination is a 400 rather
+            than an unexplained empty result.
         - name: ids
           in: query
           required: false
@@ -6578,6 +6622,29 @@ components:
           description: >-
             Derived login/link status (#643): the account's login anchor (GOOGLE, FACEBOOK, or PASSWORD) or
             NONE for a login-less placeholder. Read-only; the account-merge UI shows it per account.
+        firstName:
+          type: string
+          nullable: true
+          description: >-
+            Active FIRST name (#1050), its own column in the Research table. Null when the player has no
+            active row of that type — many placeholders carry only a display name.
+        lastName:
+          type: string
+          nullable: true
+          description: Active LAST name (#1050); null on the same terms as `firstName`.
+        status:
+          type: string
+          enum: [ACTIVE, UNCLAIMED, DELETED, MERGED]
+          description: >-
+            Derived lifecycle state (#1050), mutually exclusive and in this precedence. Supersedes reading
+            `isPlaceholder`/`isDeleted` separately, and unlike those two it tells a merged account apart
+            from a plainly soft-deleted one.
+        inCalibration:
+          type: boolean
+          nullable: true
+          description: >-
+            Whether the rating is still being calibrated (#881). Populated by `GET /api/v1/users/search`
+            and absent elsewhere — null means nobody asked, NOT that the player is settled.
     UserResponse:
       type: object
       required:

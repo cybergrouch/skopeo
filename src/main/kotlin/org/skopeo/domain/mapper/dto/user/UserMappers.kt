@@ -77,8 +77,8 @@ fun User.toSummary(
     // service layer, so the value is passed in rather than derived here.
     isDeleted: Boolean,
     // Calibration (#881) needs a rated-match count and the live global N, so only the service can answer
-    // it; `CalibrationService` is the single source of that rule (#882). Defaults false.
-    inCalibration: Boolean = false,
+    // it; `CalibrationService` is the single source of that rule (#882). Null = not asked, not "no".
+    inCalibration: Boolean? = null,
 ): UserSummaryResponse =
     UserSummaryResponse(
         id = id.toString(),

@@ -4,6 +4,7 @@
 package org.skopeo.domain.service.user
 import arrow.core.Either
 import arrow.core.left
+import arrow.core.raise.Raise
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
@@ -19,20 +20,24 @@ import org.skopeo.common.security.PLAYER_SEARCH_ROLES
 import org.skopeo.domain.mapper.dto.user.toResponse
 import org.skopeo.domain.mapper.dto.user.toSummary
 import org.skopeo.domain.mapper.entity.user.toDomain
+import org.skopeo.domain.model.AccountStatus
 import org.skopeo.domain.model.AuditAction
 import org.skopeo.domain.model.AuditEntityType
 import org.skopeo.domain.model.AuditWrite
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.NumericRange
 import org.skopeo.domain.model.ProfilePatch
+import org.skopeo.domain.model.SortDirection
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserRating
 import org.skopeo.domain.model.UserSearchQuery
+import org.skopeo.domain.model.UserSearchSort
 import org.skopeo.domain.model.WinLossRecord
 import org.skopeo.domain.model.ageRangeToDob
 import org.skopeo.domain.model.canSeeRawRatingOrFalse
 import org.skopeo.domain.model.effectivePhotoUrl
 import org.skopeo.domain.service.audit.AuditService
+import org.skopeo.domain.service.rating.CalibrationService
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.InviteRepository
@@ -41,6 +46,7 @@ import org.skopeo.repository.UserRepository
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
+import kotlin.enums.enumEntries
 
 private val logger = KotlinLogging.logger {}
 
@@ -63,6 +69,8 @@ data class UserSearchFilters(
     val rating: String? = null,
     // Raw capability name to restrict to (#317).
     val capability: String? = null,
+    // Raw `AccountStatus` name to restrict to (#1050), parsed in [UserService.validatedQuery].
+    val status: String? = null,
 )
 
 /**
@@ -79,6 +87,8 @@ class UserService(
     private val invites: InviteRepository = InviteRepository(),
     private val matches: MatchRepository = MatchRepository(),
     private val audit: AuditService = AuditService(),
+    // Derived, never stored (#881) — the search page reads it per row, so it is asked in one batch.
+    private val calibration: CalibrationService = CalibrationService(),
     // Verified-email allowlist for the ADMINISTRATOR bootstrap (from ADMIN_EMAILS); empty = none.
     private val adminEmails: Set<String> = emptySet(),
 ) {
@@ -141,6 +151,7 @@ class UserService(
         either {
             requirePlayerSearchAccess(repository = repository, token = token).bind()
             val query = validatedQuery(filters = filters).bind()
+            ensureStatusIsReachable(status = query.status, includeInactive = includeInactive)
             val users =
                 repository.search(
                     query = query,
@@ -155,7 +166,14 @@ class UserService(
             users.map { it.toSummary(rating = ratingsById[it.id], showRawRating = showRaw, isDeleted = it.isDeleted()) }
         }
 
-    /** Like [search] but returns a page with the total match count, for numbered pagination (#232). */
+    /**
+     * Like [search] but returns a page with the total match count, for numbered pagination (#232), plus
+     * the column ordering the Research table sorts by (#1050).
+     *
+     * [sort] and [direction] are raw enum names (unknown values are a 400); absent means the historical
+     * `id ASC`. Sorting is applied in the database, not to the returned page — sorting a page would
+     * order 25 arbitrary rows rather than choosing which 25 they are.
+     */
     fun searchPage(
         token: VerifiedFirebaseToken,
         filters: UserSearchFilters,
@@ -163,23 +181,31 @@ class UserService(
         offset: Int,
         // Include soft-deleted/inactive accounts (Research; #518). Default false keeps pickers active-only.
         includeInactive: Boolean = false,
+        sort: String? = null,
+        direction: String? = null,
     ): Either<ServiceError, UserSummaryPageResponse> =
         either {
             requirePlayerSearchAccess(repository = repository, token = token).bind()
             val query = validatedQuery(filters = filters).bind()
+            ensureStatusIsReachable(status = query.status, includeInactive = includeInactive)
+            val sortKey = sort?.let { raw -> enumByName<UserSearchSort>(raw = raw, field = "sort") }
+            val sortOrder = direction?.let { raw -> enumByName<SortDirection>(raw = raw, field = "direction") }
             val items =
                 repository.search(
                     query = query,
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
                     offset = offset.coerceAtLeast(minimumValue = 0),
                     includeInactive = includeInactive,
+                    sort = sortKey,
+                    direction = sortOrder ?: SortDirection.ASC,
                 ).map { it.toDomain() }
             val total = repository.countSearch(query = query, includeInactive = includeInactive)
-            // Enrich with current ratings + win–loss records (#342) + the raw-reveal flag here (was in the
-            // route), returning the finished page DTO so the route stays thin.
+            // Enrich with current ratings + win–loss records (#342) + calibration (#881) + the raw-reveal
+            // flag here (was in the route), returning the finished page DTO so the route stays thin.
             val ids = items.map { it.id }
             val ratingsById = currentRatings(ids = ids)
             val records = winLossRecords(ids = ids)
+            val calibrating = calibration.statusesFor(userIds = ids)
             val showRaw = callerCanSeeRawRating(token = token)
             UserSummaryPageResponse(
                 items =
@@ -189,11 +215,37 @@ class UserService(
                             record = records[it.id],
                             showRawRating = showRaw,
                             isDeleted = it.isDeleted(),
+                            inCalibration = calibrating[it.id]?.inCalibration,
                         )
                     },
                 total = total.toInt(),
             )
         }
+
+    /**
+     * Refuse a status filter that the `includeInactive` flag has already excluded (#1050).
+     *
+     * Merging and deleting both clear `is_active`, so `status=MERGED` or `status=DELETED` against an
+     * active-only search is a predicate that cannot match a row — the caller would get an empty page
+     * and no reason for it. Widening the search silently instead would be worse: `includeInactive=false`
+     * is an explicit instruction, and answering it with deleted accounts breaks the pickers that rely on
+     * it. So say which of the two to change.
+     */
+    private fun Raise<ServiceError>.ensureStatusIsReachable(
+        status: AccountStatus?,
+        includeInactive: Boolean,
+    ) {
+        if (includeInactive) return
+        if (status != AccountStatus.MERGED && status != AccountStatus.DELETED) return
+        raise(
+            r =
+                ServiceError.Validation(
+                    message =
+                        "status=$status only exists among inactive accounts, which this search excludes; " +
+                            "pass includeInactive=true, or filter on ACTIVE or UNCLAIMED",
+                ),
+        )
+    }
 
     /** Build the repository query from request filters, requiring at least one filter (#116). */
     private fun validatedQuery(filters: UserSearchFilters): Either<ServiceError, UserSearchQuery> =
@@ -203,22 +255,14 @@ class UserService(
             val qTerm = blankToNull(raw = filters.q)
             val age = filters.age?.let { NumericRange.parse(raw = it) }
             val rating = filters.rating?.let { NumericRange.parse(raw = it) }
-            val capability =
-                filters.capability?.let { raw ->
-                    Capability.entries.find { it.name == raw.uppercase() }
-                        ?: raise(
-                            r =
-                                ServiceError.Validation(
-                                    message = "Unknown capability '$raw'; expected one of ${Capability.entries.joinToString { it.name }}",
-                                ),
-                        )
-                }
+            val capability = filters.capability?.let { raw -> enumByName<Capability>(raw = raw, field = "capability") }
+            val status = filters.status?.let { raw -> enumByName<AccountStatus>(raw = raw, field = "status") }
             ensure(
                 condition =
-                    nameTerm != null || codeTerm != null || qTerm != null ||
-                        filters.sex != null || age != null || rating != null || capability != null,
+                    nameTerm != null || codeTerm != null || qTerm != null || filters.sex != null ||
+                        age != null || rating != null || capability != null || status != null,
             ) {
-                ServiceError.Validation(message = "at least one filter (name, code, q, sex, age, rating, capability) is required")
+                ServiceError.Validation(message = "at least one filter (name, code, q, sex, age, rating, capability, status) is required")
             }
             val dob = age?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
             UserSearchQuery(
@@ -230,6 +274,7 @@ class UserService(
                 dobMax = dob?.max,
                 rating = rating,
                 capability = capability,
+                status = status,
             )
         }
 
@@ -499,6 +544,25 @@ class UserService(
 
 /** Trim a free-text search term, collapsing a null/blank value to null. */
 private fun blankToNull(raw: String?): String? = raw?.trim()?.ifEmpty { null }
+
+/**
+ * Resolve [raw] to a [T] by name, case-insensitively, or raise a 400 naming every accepted value.
+ *
+ * Every enum-valued facet and sort key arrives as a query string, so the same "unknown value" answer is
+ * owed for each; spelling the accepted values into the message is what makes a typo self-correcting
+ * instead of an empty page.
+ */
+private inline fun <reified T : Enum<T>> Raise<ServiceError>.enumByName(
+    raw: String,
+    field: String,
+): T =
+    enumEntries<T>().find { it.name == raw.uppercase() }
+        ?: raise(
+            r =
+                ServiceError.Validation(
+                    message = "Unknown $field '$raw'; expected one of ${enumEntries<T>().joinToString { it.name }}",
+                ),
+        )
 
 /**
  * Idempotently grant ADMINISTRATOR to an already-provisioned user whose verified email is on the
