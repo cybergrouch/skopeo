@@ -123,7 +123,7 @@ dependencies {
 
     // Logging
     implementation("ch.qos.logback:logback-classic:1.5.16")
-    implementation("io.github.oshai:kotlin-logging-jvm:7.0.7")
+    implementation("io.github.oshai:kotlin-logging-jvm:8.0.4")
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     // Request id in the MDC and echoed on the response, so a user's screenshot reaches a log line (#805).
     implementation("io.ktor:ktor-server-call-id-jvm:$ktorVersion")
