@@ -72,6 +72,58 @@ jobs:
           # Publish as a drillable "Test Report" check run (not just the run summary).
           use-actions-summary: 'false'
 
+      # Per-suite timings, so #978 ("explore parallelising the suite") can be decided on evidence
+      # instead of intuition. Gradle already writes these JUnit XMLs; nothing here re-runs anything.
+      #
+      # The numbers that actually drive the choice are the last two: SEQUENTIAL TOTAL is what we pay
+      # today, and SLOWEST SUITE is the floor any amount of parallelism could reach, because a single
+      # class cannot be split across forks. A large gap means forking pays; a small one means the cost
+      # is concentrated in one suite and parallelism would buy almost nothing.
+      - name: Test timing profile
+        if: always()
+        continue-on-error: true
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, xml.etree.ElementTree as ET
+          rows = []
+          for f in glob.glob('build/test-results/test/TEST-*.xml'):
+              try:
+                  r = ET.parse(f).getroot()
+              except ET.ParseError:
+                  continue
+              rows.append((float(r.get('time', 0)), int(r.get('tests', 0)), r.get('name', '?')))
+          if not rows:
+              print('## Test timing profile\n\nNo test XMLs found.')
+              raise SystemExit
+          rows.sort(reverse=True)
+          total = sum(r[0] for r in rows)
+          tests = sum(r[1] for r in rows)
+          slowest = rows[0][0]
+          top10 = sum(r[0] for r in rows[:10])
+          print('## Test timing profile')
+          print()
+          print(f'- **{len(rows)} suites**, **{tests} tests**')
+          print(f'- **Sequential total: {total:.0f}s** ({total/60:.1f} min) — what we pay today')
+          print(f'- **Slowest single suite: {slowest:.0f}s** — the floor for any parallel scheme')
+          print(f'- Top 10 suites are **{100*top10/total:.0f}%** of total time')
+          print()
+          print('| secs | tests | suite |')
+          print('|---:|---:|---|')
+          for secs, n, name in rows[:20]:
+              print(f'| {secs:.1f} | {n} | `{name}` |')
+          PY
+
+      # The raw XMLs, so a profile can be analysed off-box without re-running a 12-minute suite on a
+      # constrained machine — which is the behaviour #978 exists to fix.
+      - name: Archive test results
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: build/test-results/test/TEST-*.xml
+          retention-days: 14
+
       # Patch (changed-lines) coverage against origin/main via diff-cover. JaCoCo package
       # names + sourcefile names resolve under src/main/kotlin, so diff-cover maps the
       # changed Kotlin lines to their coverage. Non-blocking: the gate is `./gradlew check`.
