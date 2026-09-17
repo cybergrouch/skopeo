@@ -26,7 +26,7 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 
 ## JVM Constraints
 
-- Code targets Java 17 (Gradle toolchain) — unchanged, and deliberately so: the bytecode runs on both a 17 and a 25 JRE. The **production runtime** is Java 25 (`Dockerfile` runtime stage) and the **Gradle daemon** is Java 25; the three are independent.
+- Code targets **Java 25** (Gradle toolchain) since #1030 — it was 17, and the bytecode then ran on either a 17 or a 25 JRE. It no longer does: major-69 class files will not load on a 17 JRE, so the production runtime can only go forward and reverting means moving the toolchain back and rebuilding. That trade was taken because Java 17 left Oracle premier support on 30 Sep 2026 and the runtime had been on 25 since #1008. All three JVM dials — compile toolchain, **Gradle daemon**, and **production runtime** (`Dockerfile` runtime stage) — are now Java 25; they remain independently configurable, they just happen to agree.
 - The Gradle daemon runs on **Java 25**, set in `gradle/gradle-daemon-jvm.properties`. It was pinned to 21 until #1008, because detekt 1.23.8's bundled Kotlin compiler crashed on Java 25+; detekt 2.0.0-alpha.6 fixed that. **The pin and CI's `java-version` list must move together** — the daemon toolchain has to be discoverable in CI or the build cannot start. See `docs/engineering/operations/JVM_COMPATIBILITY.md`.
 
 ## Architecture
