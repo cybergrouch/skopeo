@@ -54,7 +54,7 @@ val ktorVersion = "3.5.2"
 val exposedVersion = "1.5.0"
 val postgresVersion = "42.7.13"
 val flywayVersion = "13.7.0"
-val hikariVersion = "6.3.0"
+val hikariVersion = "7.1.0"
 val arrowVersion = "2.2.3"
 
 java {
@@ -122,8 +122,8 @@ dependencies {
     implementation("io.arrow-kt:arrow-core:$arrowVersion")
 
     // Logging
-    implementation("ch.qos.logback:logback-classic:1.5.16")
-    implementation("io.github.oshai:kotlin-logging-jvm:7.0.7")
+    implementation("ch.qos.logback:logback-classic:1.6.3")
+    implementation("io.github.oshai:kotlin-logging-jvm:8.0.4")
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     // Request id in the MDC and echoed on the response, so a user's screenshot reaches a log line (#805).
     implementation("io.ktor:ktor-server-call-id-jvm:$ktorVersion")
@@ -133,13 +133,13 @@ dependencies {
     // Structured JSON logs for Cloud Logging (#751). Micrometer/Prometheus was removed with the
     // /metrics endpoint: nothing scraped it (Cloud Run scales to zero, which suits pull-based scraping
     // badly), and per-endpoint metrics now come from log-based metrics over these fields.
-    implementation("net.logstash.logback:logstash-logback-encoder:8.1")
+    implementation("net.logstash.logback:logstash-logback-encoder:9.0")
 
     // Testing
     testImplementation("io.ktor:ktor-server-test-host-jvm:$ktorVersion")
     testImplementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testImplementation("io.kotest:kotest-assertions-core:5.9.1")
+    testImplementation("io.kotest:kotest-assertions-core:6.2.5")
     testImplementation("io.kotest.extensions:kotest-assertions-arrow:2.0.0")
     // Mocking for the rare defensive path a real DB can't produce (e.g. a row deleted between an
     // existence check and its update); used sparingly — most service tests run against real Testcontainers.
