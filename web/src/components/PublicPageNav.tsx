@@ -1,36 +1,41 @@
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { ContentLink } from '@/components/ContentLink'
 import { useAuth } from '@/auth/useAuth'
+import { readOrigin } from '@/lib/navOrigin'
 
 /**
- * Top-of-page nav for the public-by-code pages (#193). Logged in → a Back control that returns to
- * wherever the viewer came from (#323). Logged out → a sign-up / log-in call-to-action; the log-in
- * link carries the current location so the user returns here after authenticating.
+ * Top-of-page nav for the public-by-code pages (#193).
+ *
+ * Back returns the viewer to **where they entered the public pages from** (#1027) — the recorded
+ * origin, which is normally the dashboard including its `?tab=`. That replaces the previous
+ * `navigate(-1)` (#323), which stepped back a single history entry: correct for one hop, but it made
+ * `dashboard → player → match → player` a three-press walk home, and it could step outside the app
+ * entirely because browser history contains entries this app never created. See `lib/navOrigin.ts`.
+ *
+ * Fallbacks, in order:
+ *  - signed in, no recorded origin (cold open, pasted link, new tab) → `/dashboard`
+ *  - signed out → `/login`, alongside the sign-up CTA rather than replacing it
+ *
+ * **Three states, not two.** While Firebase restores a session, `user` is null and `initializing` is
+ * true. Treating that as "signed out" rendered the CTA for a moment on every full page load and, worse,
+ * a Back clicked in that window sent a signed-in viewer to the login page. `RequireAuth` already waits
+ * on `initializing`; this does too (#1027).
  */
 export function PublicPageNav() {
-  const { user } = useAuth()
+  const { user, initializing } = useAuth()
   const location = useLocation()
-  const navigate = useNavigate()
+
+  // Auth still resolving: render the frame but commit to nothing. Returning null would collapse the
+  // layout and shift the page once auth lands.
+  if (initializing) {
+    return <div className="text-sm text-muted-foreground">&nbsp;</div>
+  }
 
   if (user) {
-    // Return to the origin (#323): step back through the in-app history instead of always jumping to
-    // /dashboard. A public page is shareable and may be opened cold (pasted link / new tab); the very
-    // first history entry has key 'default', so in that case there's nothing to go back to and we
-    // fall back to the dashboard.
-    if (location.key !== 'default') {
-      return (
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="content-link text-sm"
-        >
-          ← Back
-        </button>
-      )
-    }
+    const origin = readOrigin()
     return (
-      <ContentLink to="/dashboard" className="text-sm">
-        ← Back to dashboard
+      <ContentLink to={origin ?? '/dashboard'} className="text-sm">
+        ← Back
       </ContentLink>
     )
   }
@@ -44,8 +49,17 @@ export function PublicPageNav() {
         Sign up
       </ContentLink>
       {' · '}
+      {/*
+        Back goes to /login WITHOUT `state.from`, unlike the log-in link beside it. The distinction is
+        deliberate: "Log in" means "sign in and bring me back here", while "Back" means "leave here".
+        Carrying `from` on Back would bounce the viewer straight back to the page they just left.
+      */}
       <ContentLink to="/login" state={{ from: location }} className="font-medium">
         Log in
+      </ContentLink>
+      {' · '}
+      <ContentLink to="/login" className="font-medium">
+        ← Back
       </ContentLink>
     </div>
   )

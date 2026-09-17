@@ -6,6 +6,7 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { RequireAuth } from "@/auth/RequireAuth";
 import { RequireProfile } from "@/auth/RequireProfile";
 import { ThemeProvider, LocalThemeApplier } from "@/theme/ThemeProvider";
+import { NavOriginRecorder } from "@/components/NavOriginRecorder";
 import { NewVersionBanner } from "@/components/NewVersionBanner";
 import { ErrorBoundary } from "@/observability/ErrorBoundary";
 
@@ -89,6 +90,9 @@ function App() {
               keep rendering options the server has since started rejecting. */}
           <NewVersionBanner />
           <BrowserRouter>
+            {/* Remembers the last non-public location so the public pages' "← Back" can return the
+                viewer where they came from (#1027). Renders nothing; must sit inside the router. */}
+            <NavOriginRecorder />
             {/* Outside <Suspense> deliberately (#807): a code-split route whose chunk fails to load
                 throws during render, and only a boundary above Suspense sees it. Inside <BrowserRouter>
                 so the fallback's "go home" is a real navigation rather than a hard bounce. */}
