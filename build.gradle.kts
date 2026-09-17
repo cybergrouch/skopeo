@@ -171,6 +171,26 @@ kotlin {
     }
 }
 
+// Parallel test forks (#978), OPT-IN via `SKOPEO_TEST_FORKS` and deliberately 1 by default.
+//
+// The suite serialises on one database, not on slow individual tests: 547s sequential across 162
+// suites, with the slowest single suite at 52s. That 10.5x gap is what makes forking worth it — the
+// profile (see #978) predicts ~137s at 4 forks, near-linear, because no one suite dominates.
+//
+// **The isolation model is unchanged, which is why this is safe.** `PostgresTestDatabase` is a Kotlin
+// `object`, i.e. a per-JVM singleton: it starts its own container, migrates it, and truncates between
+// tests. N Gradle forks are N JVMs, so they get N independent containers on Testcontainers-assigned
+// ports with no shared state and no coordination. Nothing about the truncate-between-tests contract
+// changes; there is simply more than one of it.
+//
+// **Default 1, not `availableProcessors()`, on purpose.** Each fork costs a Postgres container and a
+// JVM. That is free on a CI runner and punishing on a constrained developer machine — the exact
+// trade-off #978 flagged. An env var keeps local parallelism a deliberate act (`SKOPEO_TEST_FORKS=4
+// ./gradlew test`) rather than something that silently saturates the machine this issue exists to
+// unburden. CI sets it in `.github/workflows/ci.yml`.
+val testForks =
+    (System.getenv("SKOPEO_TEST_FORKS")?.toIntOrNull() ?: 1).coerceAtLeast(minimumValue = 1)
+
 tasks.withType<Test> {
     useJUnitPlatform()
     // Testcontainers' bundled docker-java defaults to Docker API v1.43, but Docker
@@ -178,6 +198,11 @@ tasks.withType<Test> {
     // Pin the negotiated version so Testcontainers can reach the daemon (the value
     // sits within range for both local Docker Desktop and CI runners).
     systemProperty("api.version", "1.44")
+
+    maxParallelForks = testForks
+    if (testForks > 1) {
+        logger.lifecycle("Running tests with $testForks parallel forks (SKOPEO_TEST_FORKS)")
+    }
 }
 
 // ktlint configuration
