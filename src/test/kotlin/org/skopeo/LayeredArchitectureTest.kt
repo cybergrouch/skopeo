@@ -3,9 +3,12 @@
 
 package org.skopeo
 
+import com.tngtech.archunit.base.DescribedPredicate
+import com.tngtech.archunit.core.domain.JavaClass
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import com.tngtech.archunit.core.importer.ImportOption
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
+import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noCodeUnits
 import org.junit.jupiter.api.Test
 
 /**
@@ -205,6 +208,66 @@ class LayeredArchitectureTest {
         noClasses()
             .that().resideInAPackage("..routes..")
             .should().dependOnClassesThat().resideInAPackage("org.skopeo.domain.model..")
+            .check(classes)
+    }
+
+    /**
+     * The two rules below are the only *signature-shaped* ones in this class; every other rule is a
+     * whole-package dependency rule. That is deliberate, and worth explaining, because a package rule
+     * would be the obvious tool and cannot express this one.
+     *
+     * `service → persistence` is **legal by design**: a service calls a repository, receives raw
+     * `<X>Entity` rows and converts them via `mapper.entity`. What is not legal is a service **exposing**
+     * one across its own public boundary, because `routes` may not depend on `persistence` at all — so a
+     * leaked entity would either break the routes rule or force a row type into the transport layer.
+     * No `dependOnClassesThat` rule can say that: the dependency it would have to forbid is one we
+     * deliberately allow.
+     *
+     * `LAYERED_ARCHITECTURE.md` already asserts this ("Services return response DTOs and accept request
+     * DTOs") under a heading that calls the list "Enforced invariants". Until now that half was
+     * aspirational — nothing failed if a service started returning an entity. These rules close it (#1029).
+     *
+     * **Constructors are in scope**, hence `noCodeUnits()` rather than `noMethods()`: a service
+     * constructor taking an entity is the same leak as a method taking one.
+     *
+     * One caveat for whoever debugs a future failure: ArchUnit reads **bytecode**, and Kotlin `internal`
+     * members compile to *public* JVM methods (with mangled names). So an `internal` service function
+     * handling an entity would be caught here despite not being part of the public Kotlin API. That is
+     * the conservative direction, and there are no such cases today.
+     */
+    private val persistenceEntity =
+        DescribedPredicate.describe<JavaClass>(
+            "a raw persistence entity",
+        ) { javaClass -> javaClass.packageName.startsWith("org.skopeo.repository.persistence") }
+
+    private val anyPersistenceEntity =
+        DescribedPredicate.describe<List<JavaClass>>(
+            "any raw persistence entity",
+        ) { parameterTypes -> parameterTypes.any(persistenceEntity::test) }
+
+    @Test
+    fun `service never accepts a persistence entity in a public signature`() {
+        noCodeUnits()
+            .that().areDeclaredInClassesThat().resideInAPackage("org.skopeo.domain.service..")
+            .and().arePublic()
+            .should().haveRawParameterTypes(anyPersistenceEntity)
+            .because(
+                "a service may hold a persistence entity internally, but exposing one hands a raw " +
+                    "as-stored row type to its callers — and routes cannot depend on `persistence` at all",
+            )
+            .check(classes)
+    }
+
+    @Test
+    fun `service never returns a persistence entity from a public signature`() {
+        noCodeUnits()
+            .that().areDeclaredInClassesThat().resideInAPackage("org.skopeo.domain.service..")
+            .and().arePublic()
+            .should().haveRawReturnType(persistenceEntity)
+            .because(
+                "services return response DTOs and domain models; returning a `persistence` entity " +
+                    "leaks the storage shape past the boundary `mapper.entity` exists to guard",
+            )
             .check(classes)
     }
 }

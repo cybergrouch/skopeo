@@ -61,7 +61,12 @@ Enforced invariants (each is true in the codebase today):
   `repository`, converts the returned entity via `mapper.entity`, runs business logic on the domain
   `model`, then converts to a response DTO via `mapper.dto` (one-way, so the graph stays acyclic). It
   therefore MAY depend on `persistence` (the entities it receives). Services return response DTOs and
-  accept request DTOs.
+  accept request DTOs — and since #1029 that last sentence is **enforced**, not merely described: two
+  signature rules fail the build if any public service code unit takes or returns a `persistence`
+  entity. Note this is the one invariant on this page a package rule *cannot* express, because
+  `service → persistence` is legal by design; only the **exposure** of an entity is forbidden.
+  Constructors are in scope too, and be aware Kotlin `internal` members compile to public JVM
+  methods, so ArchUnit sees them — the conservative direction.
 - **`routes`** never depend on `mapper` **or `model`**: dto↔model translation is hidden behind the service
   (a route calls `service.*` and responds with the DTO it receives), and routes pass **raw** query/path/body
   strings to services, which parse + validate them (an unknown enum/band/value is a `ServiceError.Validation`
