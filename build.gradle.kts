@@ -53,7 +53,7 @@ tasks.named("processResources") {
 val ktorVersion = "3.5.2"
 val exposedVersion = "1.5.0"
 val postgresVersion = "42.7.13"
-val flywayVersion = "11.8.2"
+val flywayVersion = "13.7.0"
 val hikariVersion = "6.3.0"
 val arrowVersion = "2.2.3"
 

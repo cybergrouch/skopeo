@@ -87,6 +87,41 @@ No amount of test coverage changes the third row. A tightening is only safe if t
 its precondition. "Someone will check the row count before deploying" is not a guarantee — it is the failure
 mode described below.
 
+## Upgrading Flyway itself
+
+A Flyway version bump has a tiny code surface — `DatabaseConfig.runMigrations` is three lines — and that is
+exactly what makes it deceptive: nothing about the diff tells you whether it is safe. The two things that can
+actually hurt are **checksum computation** and **how an existing `flyway_schema_history` is validated**. If
+checksums shift, every environment holding the old values refuses to boot.
+
+CI cannot answer either question, for the same reason as the table above: it migrates a fresh, empty container,
+so it never reads a history table that a *previous* Flyway version wrote.
+
+**This does not need a production copy.** It is a Flyway-version question, not a data question, and it
+reproduces with no personal data at all. The procedure, used for 11.8.2 → 13.7.0 (#1025):
+
+1. Start a `postgres:16-alpine` container (match `PostgresTestDatabase`).
+2. Run the **old** Flyway CLI image against the real `src/main/resources/db/migration`, so the history table is
+   written by the version production is currently on.
+3. Run the **new** Flyway image's `validate` against that same database — this is the step CI can never do.
+4. Run the new image's `migrate`; it must report *no migration necessary*.
+5. Dump `SELECT version, checksum FROM flyway_schema_history WHERE success ORDER BY (version::int)` and `cmp`
+   it against `migration-checksums.txt`.
+
+For 11 → 13 all five passed: `validate` exited 0, `migrate` applied nothing, the history stayed 60 rows and 10
+columns, and the checksums were **byte-identical** to the manifest. No new manifest was needed.
+
+Two things worth knowing next time. Docker Hub does not publish every patch tag — there is no
+`flyway/flyway:11.8.2`, so step 2 used `11.8.1`; a patch inside the same minor cannot change checksum
+computation or history format, but say so rather than implying the exact pin was tested. And the only
+checksum-adjacent change in the 12/13 line was **13.0.0 switching generated migration filename timestamps to
+UTC**, which touches migrations Flyway *generates* — ours are all hand-written `V<n>__*.sql`, so it cannot
+affect us.
+
+**Do not reach for `scripts/restore-prod-to-local.sh` for a Flyway bump.** It downloads real emails and dates
+of birth, and the above answers the question without them. Restoring a prod copy is for validating a
+*migration against real rows* — the tightening case — not for validating the tool.
+
 ## Checklist for a constraint-tightening migration
 
 - [ ] **Does the migration make its own precondition true?** A `SET NOT NULL` is preceded by an `UPDATE … WHERE
