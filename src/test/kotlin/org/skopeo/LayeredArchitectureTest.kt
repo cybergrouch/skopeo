@@ -40,10 +40,31 @@ import org.junit.jupiter.api.Test
  */
 @Suppress("NamedArguments") // ArchUnit's fluent Java DSL has no Kotlin parameter names to name.
 class LayeredArchitectureTest {
-    private val classes =
-        ClassFileImporter()
-            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-            .importPackages("org.skopeo")
+    companion object {
+        /**
+         * Imported ONCE for the whole class (#978).
+         *
+         * `ClassFileImporter().importPackages("org.skopeo")` reads the entire application bytecode
+         * graph, which costs a couple of seconds. This was an *instance* field, and JUnit 5 defaults to
+         * `Lifecycle.PER_METHOD` — a fresh instance per test — so the graph was re-imported once per
+         * rule: 15 imports to check 15 rules, 14 of them pure waste. It made this the 4th-slowest suite
+         * in the whole build while touching no database and doing almost no work.
+         *
+         * The cost was invisible in per-test timings, which is why it survived: JUnit bills field
+         * initialisation to neither the test method nor any reported step, so the suite showed ~54s
+         * while its 15 tests summed to ~2.6s. The giveaway is that gap, not any slow test.
+         *
+         * A `companion object` rather than `@TestInstance(PER_CLASS)` deliberately: the annotation fixes
+         * this *given* that lifecycle, whereas a static field encodes "import once" regardless of what
+         * lifecycle anyone configures later — including via a `junit-platform.properties` this project
+         * does not yet have. Safe because both fields here are immutable and ArchUnit's `JavaClasses` is
+         * read-only.
+         */
+        private val classes =
+            ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages("org.skopeo")
+    }
 
     // The dto classes exempt from the dto↛model rule (their `$serializer`/`$Companion` synthetics included):
     // shared serializable value types are embedded as the wire contract. See the class KDoc.
