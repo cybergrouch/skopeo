@@ -3,10 +3,11 @@
 
 package org.skopeo.repository
 
-import org.jetbrains.exposed.dao.id.UUIDTable
-import org.jetbrains.exposed.sql.ReferenceOption
-import org.jetbrains.exposed.sql.javatime.date
-import org.jetbrains.exposed.sql.javatime.datetime
+import org.jetbrains.exposed.v1.core.ReferenceOption
+import org.jetbrains.exposed.v1.core.dao.id.java.UUIDTable
+import org.jetbrains.exposed.v1.core.java.javaUUID
+import org.jetbrains.exposed.v1.javatime.date
+import org.jetbrains.exposed.v1.javatime.datetime
 
 // NUMERIC precision/scale mirror the V1 schema.
 private const val RATING_PRECISION = 10
@@ -43,7 +44,7 @@ internal object UserRatingsTable : UUIDTable(name = "user_ratings") {
 /** Append-only rating-change history (match-driven, or initial assessment when match_id is null). */
 internal object UserRatingHistoryTable : UUIDTable(name = "user_rating_history") {
     val userId = reference(name = "user_id", foreign = UsersTable, onDelete = ReferenceOption.CASCADE)
-    val matchId = uuid(name = "match_id").nullable()
+    val matchId = javaUUID(name = "match_id").nullable()
     val previousRating = decimal(name = "previous_rating", precision = RATING_PRECISION, scale = RATING_SCALE)
     val newRating = decimal(name = "new_rating", precision = RATING_PRECISION, scale = RATING_SCALE)
     val ratingChange = decimal(name = "rating_change", precision = RATING_PRECISION, scale = RATING_SCALE)
@@ -76,7 +77,7 @@ internal object UserRatingHistoryTable : UUIDTable(name = "user_rating_history")
 
     // Identity of the calc batch that produced this row (#481); one id per calc run, shared by every
     // row it writes — a deterministic ordering/grouping key. Null for admin/self-set (non-batch) rows.
-    val ratingRunId = uuid(name = "rating_run_id").nullable()
+    val ratingRunId = javaUUID(name = "rating_run_id").nullable()
 
     // Soft-delete marker for an event-scoped rating reversal (#478); null = live. A "Reverse Ratings"
     // action supersedes (does not hard-delete) this event's rows by stamping this; the rating-history

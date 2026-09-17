@@ -3,12 +3,13 @@
 
 package org.skopeo.repository
 
-import org.jetbrains.exposed.dao.id.UUIDTable
-import org.jetbrains.exposed.sql.Column
-import org.jetbrains.exposed.sql.ColumnType
-import org.jetbrains.exposed.sql.ReferenceOption
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.javatime.datetime
+import org.jetbrains.exposed.v1.core.Column
+import org.jetbrains.exposed.v1.core.ColumnType
+import org.jetbrains.exposed.v1.core.ReferenceOption
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.dao.id.java.UUIDTable
+import org.jetbrains.exposed.v1.core.java.javaUUID
+import org.jetbrains.exposed.v1.javatime.datetime
 import org.postgresql.util.PGobject
 
 private const val ACTION_MAX = 64
@@ -30,7 +31,7 @@ internal object AuditLogTable : UUIDTable(name = "audit_log") {
         reference(name = "actor_client_id", foreign = ApiClientsTable, onDelete = ReferenceOption.SET_NULL).nullable()
     val action = varchar(name = "action", length = ACTION_MAX)
     val entityType = varchar(name = "entity_type", length = ENTITY_TYPE_MAX)
-    val entityId = uuid(name = "entity_id").nullable()
+    val entityId = javaUUID(name = "entity_id").nullable()
     val summary = text(name = "summary")
     val details = jsonb(name = "details").nullable()
 

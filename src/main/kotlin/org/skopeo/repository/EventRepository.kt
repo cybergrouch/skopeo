@@ -3,25 +3,27 @@
 
 package org.skopeo.repository
 
-import org.jetbrains.exposed.sql.Op
-import org.jetbrains.exposed.sql.ResultRow
-import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.SqlExpressionBuilder
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.exists
-import org.jetbrains.exposed.sql.innerJoin
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.not
-import org.jetbrains.exposed.sql.or
-import org.jetbrains.exposed.sql.select
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.v1.core.Op
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.exists
+import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.innerJoin
+import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.not
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.select
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.skopeo.domain.model.CreateEventCommand
 import org.skopeo.domain.model.EventBucket
 import org.skopeo.domain.model.EventParticipantEntry
@@ -143,28 +145,25 @@ class EventRepository {
         offset: Int,
     ): Pair<List<EventAggregateEntity>, Long> =
         transaction {
-            // Built under SqlExpressionBuilder so the nullability and comparison operators are in scope.
+            // "Has a recorded result" — the same definition as completedResultCountByEvents, as a
+            // correlated EXISTS so the signal can't drift between the two.
+            val hasResult =
+                exists(
+                    query =
+                        MatchesTable.selectAll().where {
+                            (MatchesTable.eventId eq EventsTable.id) and
+                                MatchesTable.isActive and
+                                (MatchesTable.status eq MatchStatus.COMPLETED.name) and
+                                MatchesTable.winnerTeamId.isNotNull()
+                        },
+                )
             val inBucket: Op<Boolean> =
-                with(receiver = SqlExpressionBuilder) {
-                    // "Has a recorded result" — the same definition as completedResultCountByEvents, as a
-                    // correlated EXISTS so the signal can't drift between the two.
-                    val hasResult =
-                        exists(
-                            query =
-                                MatchesTable.selectAll().where {
-                                    (MatchesTable.eventId eq EventsTable.id) and
-                                        MatchesTable.isActive and
-                                        (MatchesTable.status eq MatchStatus.COMPLETED.name) and
-                                        MatchesTable.winnerTeamId.isNotNull()
-                                },
-                        )
-                    when (bucket) {
-                        EventBucket.FINALIZED -> EventsTable.finalizedAt.isNotNull()
-                        EventBucket.UNFINALIZED ->
-                            EventsTable.finalizedAt.isNull() and ((EventsTable.endDate less today) or hasResult)
-                        EventBucket.UPCOMING ->
-                            EventsTable.finalizedAt.isNull() and (EventsTable.endDate greaterEq today) and not(op = hasResult)
-                    }
+                when (bucket) {
+                    EventBucket.FINALIZED -> EventsTable.finalizedAt.isNotNull()
+                    EventBucket.UNFINALIZED ->
+                        EventsTable.finalizedAt.isNull() and ((EventsTable.endDate less today) or hasResult)
+                    EventBucket.UPCOMING ->
+                        EventsTable.finalizedAt.isNull() and (EventsTable.endDate greaterEq today) and not(op = hasResult)
                 }
             val scope = EventsTable.isActive and (EventsTable.clubId eq clubId) and inBucket
             val total = EventsTable.selectAll().where { scope }.count()

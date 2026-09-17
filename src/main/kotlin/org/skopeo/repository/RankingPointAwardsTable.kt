@@ -3,9 +3,10 @@
 
 package org.skopeo.repository
 
-import org.jetbrains.exposed.dao.id.UUIDTable
-import org.jetbrains.exposed.sql.ReferenceOption
-import org.jetbrains.exposed.sql.javatime.datetime
+import org.jetbrains.exposed.v1.core.ReferenceOption
+import org.jetbrains.exposed.v1.core.dao.id.java.UUIDTable
+import org.jetbrains.exposed.v1.core.java.javaUUID
+import org.jetbrains.exposed.v1.javatime.datetime
 
 // NUMERIC precision/scale mirror the V13 schema (points to 4 decimal places).
 private const val POINTS_PRECISION = 10
@@ -34,7 +35,7 @@ internal object RankingPointAwardsTable : UUIDTable(name = "ranking_point_awards
     val validFrom = datetime(name = "valid_from")
     val validUntil = datetime(name = "valid_until")
     val status = varchar(name = "status", length = STATUS_MAX)
-    val revokesAwardId = uuid(name = "revokes_award_id").nullable()
+    val revokesAwardId = javaUUID(name = "revokes_award_id").nullable()
     val grantedBy = reference(name = "granted_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
     val awardedAt = datetime(name = "awarded_at")
 

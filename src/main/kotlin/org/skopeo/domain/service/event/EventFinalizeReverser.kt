@@ -3,7 +3,7 @@
 
 package org.skopeo.domain.service.event
 
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.skopeo.domain.model.AuditAction
 import org.skopeo.domain.model.AuditEntityType
 import org.skopeo.domain.model.AuditWrite

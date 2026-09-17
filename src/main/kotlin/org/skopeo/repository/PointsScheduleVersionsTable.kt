@@ -3,9 +3,9 @@
 
 package org.skopeo.repository
 
-import org.jetbrains.exposed.sql.ReferenceOption
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.javatime.datetime
+import org.jetbrains.exposed.v1.core.ReferenceOption
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.javatime.datetime
 
 /**
  * Exposed mapping over the V47 points_schedule_versions table (#862): one row per points-schedule

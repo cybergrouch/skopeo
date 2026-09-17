@@ -10,24 +10,32 @@ package org.skopeo.repository
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.right
-import org.jetbrains.exposed.sql.CustomFunction
-import org.jetbrains.exposed.sql.FloatColumnType
-import org.jetbrains.exposed.sql.Op
-import org.jetbrains.exposed.sql.ResultRow
-import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.TextColumnType
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.exists
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.lowerCase
-import org.jetbrains.exposed.sql.or
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.stringParam
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.v1.core.CustomFunction
+import org.jetbrains.exposed.v1.core.FloatColumnType
+import org.jetbrains.exposed.v1.core.Op
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.TextColumnType
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.exists
+import org.jetbrains.exposed.v1.core.greater
+import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.like
+import org.jetbrains.exposed.v1.core.lowerCase
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.stringParam
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.select
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AccountMergeResult
@@ -204,14 +212,14 @@ class UserRepository {
     ): Op<Boolean> =
         buildList {
             // Normal search/pickers exclude inactive; Research opts in (#518) to surface deleted accounts.
-            if (!includeInactive) add(element = Op.build { UsersTable.isActive eq true })
-            query.sex?.let { sex -> add(element = Op.build { UsersTable.sex eq sex }) }
-            query.dobMin?.let { min -> add(element = Op.build { UsersTable.dateOfBirth greaterEq min }) }
-            query.dobMax?.let { max -> add(element = Op.build { UsersTable.dateOfBirth lessEq max }) }
+            if (!includeInactive) add(element = UsersTable.isActive eq true)
+            query.sex?.let { sex -> add(element = UsersTable.sex eq sex) }
+            query.dobMin?.let { min -> add(element = UsersTable.dateOfBirth greaterEq min) }
+            query.dobMax?.let { max -> add(element = UsersTable.dateOfBirth lessEq max) }
             query.name?.let { name -> add(element = nameMatches(name = name)) }
             // Prefix match (#86): the service uppercases the term and codes are stored uppercase, so a
             // plain LIKE 'PREFIX%' matches partial codes case-insensitively.
-            query.code?.let { code -> add(element = Op.build { UsersTable.publicCode like "$code%" }) }
+            query.code?.let { code -> add(element = UsersTable.publicCode like "$code%") }
             query.q?.let { term -> add(element = nameOrCodeMatches(term = term)) }
             query.rating?.let { range -> add(element = ratingMatches(range = range)) }
             // Correlated EXISTS: the user has an active grant of the requested capability (#317).
@@ -806,8 +814,7 @@ private fun buildAggregate(
  * either a name or a partial code surfaces players incrementally. Codes are stored uppercase, so the
  * prefix is uppercased; the name part normalizes case itself.
  */
-private fun nameOrCodeMatches(term: String): Op<Boolean> =
-    nameMatches(name = term) or Op.build { UsersTable.publicCode like "${term.uppercase()}%" }
+private fun nameOrCodeMatches(term: String): Op<Boolean> = nameMatches(name = term) or (UsersTable.publicCode like "${term.uppercase()}%")
 
 /** Unicode combining marks left behind by NFD decomposition (the diacritics to strip when folding). */
 private val COMBINING_MARKS = Regex(pattern = "\\p{Mn}+")

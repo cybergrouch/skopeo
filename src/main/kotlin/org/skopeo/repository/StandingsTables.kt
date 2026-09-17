@@ -3,10 +3,10 @@
 
 package org.skopeo.repository
 
-import org.jetbrains.exposed.dao.id.UUIDTable
-import org.jetbrains.exposed.sql.ReferenceOption
-import org.jetbrains.exposed.sql.javatime.date
-import org.jetbrains.exposed.sql.javatime.datetime
+import org.jetbrains.exposed.v1.core.ReferenceOption
+import org.jetbrains.exposed.v1.core.dao.id.java.UUIDTable
+import org.jetbrains.exposed.v1.javatime.date
+import org.jetbrains.exposed.v1.javatime.datetime
 
 // Money-style scale-4 columns. The tie-break rating is NUMERIC(6,4) (an NTRP rating <= 7.0000); the
 // ordering value is widened to NUMERIC(12,4) (V14) so it can hold either a rating or an unbounded points

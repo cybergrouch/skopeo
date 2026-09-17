@@ -5,6 +5,7 @@ package org.skopeo.common.logging
 
 import arrow.core.Either
 import arrow.core.flatMap
+import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.joran.JoranConfigurator
@@ -14,6 +15,7 @@ import ch.qos.logback.core.read.ListAppender
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.client.request.header
@@ -238,9 +240,9 @@ class PiiLeakTest {
     @Test
     fun `a duplicate verified email cannot reach the sink through Exposed retry logging`() {
         // The end-to-end path against a real Postgres, because the copy that matters is not the one our
-        // boundary logs: Exposed logs the failed transaction attempt itself, at WARN, with the driver's
-        // message, before our code ever sees the exception — and again on each retry. No catch clause can
-        // reach that, which is why the guard is registered in `logback.xml` (#992).
+        // boundary logs: Exposed logs the failed transaction attempt itself, with the driver's message,
+        // before our code ever sees the exception — and again on each retry. No catch clause can reach
+        // that, which is why the guard is registered in `logback.xml` (#992).
         PostgresTestDatabase.start()
         PostgresTestDatabase.truncate()
         val contacts = ContactRepository()
@@ -248,12 +250,44 @@ class PiiLeakTest {
         val rival = provisionUser(uid = "probe-rival")
         verifyEmail(contacts = contacts, userId = holder).shouldBeRight()
 
-        val clash = verifyEmail(contacts = contacts, userId = rival)
+        // Exposed **1.0 demoted that log from WARN to DEBUG** (#1024, `TransactionsKt`), and nothing
+        // configures the `Exposed` logger, so at the root's INFO level the event is dropped and there is
+        // nothing for the filter to scrub — this test failed on exactly that.
+        //
+        // Asking for DEBUG here rather than asserting against whichever level Exposed currently picks is
+        // deliberate. The level is an upstream implementation detail that has already changed once; the
+        // property worth policing is that **when the event is emitted, the driver's words are scrubbed
+        // and the constraint facts survive**. Tying the guard to WARN would have it pass for the wrong
+        // reason on the next upstream change — or, as here, fail without anything having regressed.
+        val exposed = LoggerFactory.getLogger("Exposed") as Logger
+        val previousLevel = exposed.level
+        exposed.level = Level.DEBUG
+
+        val clash =
+            try {
+                verifyEmail(contacts = contacts, userId = rival)
+            } finally {
+                exposed.level = previousLevel
+            }
 
         // The rule itself is untouched: a verified value still belongs to exactly one active contact.
         clash.shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
-        leaks().shouldBeEmpty()
-        encodedLines().any {
+
+        // Scoped to the events this guard is answerable for: the ones carrying a `SQLException`, which is
+        // what `SqlExceptionRedactingFilter` keys on. The wording matched here is the filter's own, so
+        // this asserts against our code rather than Exposed's phrasing.
+        //
+        // The unscoped `leaks()` is deliberately NOT used in this one test. Raising the `Exposed` logger
+        // to DEBUG also switches on Exposed's statement logging, which inlines column values and so leaks
+        // independently of this filter — a statement log carries no exception, so the filter never sees
+        // it. That is a real gap but a SEPARATE one: it reproduces identically on 0.61, so it predates
+        // the Exposed 1.0 move, and it is tracked in #1031. Asserting it here would make this test fail
+        // for a defect it does not own. The other six tests in this class still run `leaks()` unscoped at
+        // production levels, so the class-wide guarantee is unchanged.
+        val attempts = encodedLines().filter { it.contains(other = "SQL failure on transaction attempt") }
+        attempts.shouldNotBeEmpty()
+        attempts.flatMap { line -> SECRETS.filter { line.contains(other = it) } }.shouldBeEmpty()
+        attempts.any {
             it.contains(other = "uq_contact_verified_value") && it.contains(other = "23505")
         } shouldBe true
     }

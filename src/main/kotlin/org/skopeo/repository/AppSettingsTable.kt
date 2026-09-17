@@ -3,9 +3,9 @@
 
 package org.skopeo.repository
 
-import org.jetbrains.exposed.sql.ReferenceOption
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.javatime.datetime
+import org.jetbrains.exposed.v1.core.ReferenceOption
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.javatime.datetime
 
 private const val SETTING_KEY_MAX = 64
 private const val SETTING_VALUE_MAX = 64
