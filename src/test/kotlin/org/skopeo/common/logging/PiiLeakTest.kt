@@ -292,6 +292,61 @@ class PiiLeakTest {
         } shouldBe true
     }
 
+    @Test
+    fun `the shipped config pins Exposed at INFO so raising root cannot switch on SQL logging`() {
+        // #1031. Exposed's `Slf4jSqlDebugLogger` logs every statement with arguments expanded inline, so
+        // at DEBUG a row's column values are in the message verbatim — and `contact_information.value`
+        // IS an email. The #992 turboFilter cannot help: it keys on an event carrying a SQLException, and
+        // a statement log carries none.
+        //
+        // Asserted against the SHIPPED `logback.xml`, parsed here, so this fails if the pin is ever
+        // dropped from the file rather than merely if behaviour changes.
+        val context = LoggerContext()
+        context.setMDCAdapter(MDC.getMDCAdapter())
+        val resource =
+            requireNotNull(value = this::class.java.classLoader.getResource("logback.xml")) {
+                "logback.xml is not on the test classpath"
+            }
+        JoranConfigurator().apply { setContext(context) }.doConfigure(resource)
+
+        // Simulate the thing that makes this a real hazard rather than a theoretical one: somebody turns
+        // the whole application up to DEBUG while chasing a bug.
+        context.getLogger(Logger.ROOT_LOGGER_NAME).level = Level.DEBUG
+
+        val exposed = context.getLogger("Exposed")
+        exposed.level shouldBe Level.INFO
+        // The property that actually matters: the statement logger refuses to emit, whatever root says.
+        exposed.isDebugEnabled shouldBe false
+    }
+
+    @Test
+    fun `raising root to DEBUG does not put column values in the log`() {
+        // The end-to-end counterpart of the config assertion above, against a real Postgres: a write
+        // whose value is the canary email, with the whole application at DEBUG. Before #1031 this
+        // produced `INSERT INTO contact_information (... "value" ...) VALUES (..., '<email>', ...)`.
+        //
+        // Note the contrast with the Exposed-retry test above, which raises the `Exposed` logger ITSELF
+        // to DEBUG on purpose: that one polices the #992 filter's scrubbing of an exception-bearing
+        // event. This one polices the pin, so it raises ROOT and asserts the pin defeats it. The two
+        // are not in conflict — they exercise opposite sides of the same logger.
+        PostgresTestDatabase.start()
+        PostgresTestDatabase.truncate()
+
+        val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
+        val previousRootLevel = root.level
+        root.level = Level.DEBUG
+        try {
+            val owner = provisionUser(uid = "probe-debug-root")
+            ContactRepository()
+                .create(userId = owner, type = ContactType.EMAIL, value = EMAIL, isPrimary = true)
+                .shouldBeRight()
+        } finally {
+            root.level = previousRootLevel
+        }
+
+        leaks().shouldBeEmpty()
+    }
+
     private fun provisionUser(uid: String): UUID =
         UserRepository().provision(
             command =
