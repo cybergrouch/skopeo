@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { MemoryRouter, useLocation } from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
 import { PublicPageNav } from './PublicPageNav'
+import { clearOrigin, rememberOrigin } from '@/lib/navOrigin'
 
-const { state } = vi.hoisted(() => ({ state: { user: null as { uid: string } | null } }))
-vi.mock('@/auth/useAuth', () => ({ useAuth: () => ({ user: state.user }) }))
+const { state } = vi.hoisted(() => ({
+  state: { user: null as { uid: string } | null, initializing: false },
+}))
+vi.mock('@/auth/useAuth', () => ({
+  useAuth: () => ({ user: state.user, initializing: state.initializing }),
+}))
 
 function renderNav() {
   return render(
@@ -15,15 +19,11 @@ function renderNav() {
   )
 }
 
-/** Surfaces the current pathname so a test can assert where "← Back" lands. */
-function LocationProbe() {
-  const location = useLocation()
-  return <div data-testid="path">{location.pathname}</div>
-}
-
 describe('PublicPageNav', () => {
   beforeEach(() => {
     state.user = null
+    state.initializing = false
+    clearOrigin()
   })
 
   it('shows a sign-up / log-in CTA for anonymous viewers (#193)', () => {
@@ -36,37 +36,55 @@ describe('PublicPageNav', () => {
     // The CTA links wear the themed content-link style (#452).
     expect(signUp).toHaveClass('content-link')
     expect(logIn).toHaveClass('content-link')
-    expect(screen.queryByText('← Back to dashboard')).not.toBeInTheDocument()
   })
 
-  it('falls back to a dashboard link when opened cold with no in-app history (#323)', () => {
-    // A single-entry history (pasted link / new tab) → the first entry's key is 'default'.
-    state.user = { uid: 'u1' }
+  it('gives anonymous viewers a Back that leads to the login page (#1027)', () => {
+    // Previously there was no Back at all for a signed-out viewer, so someone who followed the
+    // login page's own "About" link had no way onward except the browser's back button.
     renderNav()
-    const backToDashboard = screen.getByRole('link', { name: '← Back to dashboard' })
-    expect(backToDashboard).toHaveAttribute('href', '/dashboard')
-    // The Back-to-dashboard link wears the themed content-link style (#452).
-    expect(backToDashboard).toHaveClass('content-link')
+    const back = screen.getByRole('link', { name: '← Back' })
+    expect(back).toHaveAttribute('href', '/login')
+    expect(back).toHaveClass('content-link')
+    // The sign-up funnel is kept alongside it rather than replaced.
+    expect(screen.getByRole('link', { name: 'Sign up' })).toBeInTheDocument()
+  })
+
+  it('returns a signed-in viewer to the recorded origin, tab and all (#1027)', () => {
+    // The dashboard syncs its active tab into ?tab=, so storing the query is what makes Back land on
+    // the tab the viewer was on rather than resetting to Profile.
+    state.user = { uid: 'u1' }
+    rememberOrigin('/dashboard?tab=standings')
+    renderNav()
+    const back = screen.getByRole('link', { name: '← Back' })
+    expect(back).toHaveAttribute('href', '/dashboard?tab=standings')
+    expect(back).toHaveClass('content-link')
     expect(screen.queryByText(/Sign up to track/i)).not.toBeInTheDocument()
   })
 
-  it('goes back to the origin when there is in-app history (#323)', async () => {
+  it('falls back to the dashboard when a signed-in viewer has no recorded origin (#1027)', () => {
+    // A pasted link or a fresh tab: the viewer never passed through an origin, so there is nothing
+    // to return to and the dashboard is the honest default.
     state.user = { uid: 'u1' }
-    const user = userEvent.setup()
-    render(
-      <MemoryRouter initialEntries={['/dashboard/standings', '/players/AAA111']} initialIndex={1}>
-        <PublicPageNav />
-        <LocationProbe />
-      </MemoryRouter>,
-    )
+    renderNav()
+    expect(screen.getByRole('link', { name: '← Back' })).toHaveAttribute('href', '/dashboard')
+  })
 
-    // Arrived from within the app → a generic Back button, not the dashboard link.
-    expect(screen.queryByRole('link', { name: '← Back to dashboard' })).not.toBeInTheDocument()
-    expect(screen.getByTestId('path')).toHaveTextContent('/players/AAA111')
+  it('does not treat a still-restoring session as signed out (#1027)', () => {
+    // The regression this guards: Firebase restores asynchronously, so on every full page load
+    // `user` is briefly null. Rendering the signed-out branch then flashed the CTA and — worse —
+    // a Back clicked in that window sent a signed-in viewer to /login.
+    state.user = null
+    state.initializing = true
+    renderNav()
+    expect(screen.queryByText(/Sign up to track/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '← Back' })).not.toBeInTheDocument()
+  })
 
-    // The Back button wears the themed content-link style (#452).
-    expect(screen.getByRole('button', { name: '← Back' })).toHaveClass('content-link')
-    await user.click(screen.getByRole('button', { name: '← Back' }))
-    expect(screen.getByTestId('path')).toHaveTextContent('/dashboard/standings')
+  it('keeps the login link returning here, while Back leaves (#1027)', () => {
+    // Both point at /login but mean opposite things: "Log in" carries state.from so the viewer comes
+    // back after authenticating; "Back" must not, or it would bounce them straight back here.
+    renderNav()
+    expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login')
+    expect(screen.getByRole('link', { name: '← Back' })).toHaveAttribute('href', '/login')
   })
 })
