@@ -47,7 +47,7 @@ jobs:
         # to linear. `ubuntu-latest` has 4 vCPU, hence 4; each fork brings up its own Postgres
         # container, which is affordable here and is NOT on a developer machine (see build.gradle.kts).
         env:
-          SKOPEO_TEST_FORKS: 4
+          SKOPEO_TEST_FORKS: 3
         run: ./gradlew check
 
       # Quick overall coverage table on the run Summary page (even if the gate failed).
