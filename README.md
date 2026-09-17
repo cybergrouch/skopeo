@@ -507,6 +507,13 @@ Comprehensive documentation is available in the `docs/` directory:
   - Enforced thresholds (75% lines / 70% branches)
   - CI/CD integration
 
+- **[TEST_PERFORMANCE.md](docs/engineering/operations/TEST_PERFORMANCE.md)** - What the suite costs, and what cannot be measured
+  - `SKOPEO_TEST_FORKS` (default 1 locally, 4 in CI) and why container-per-fork is safe
+  - How to profile: the run Summary step and the `backend-test-results` artifact
+  - The diagnostic that finds real defects: suite time *minus* the sum of its tests
+  - Why per-suite CI deltas below ~50s are not measurable (heterogeneous runners, bimodal ~150s apart)
+  - Ideas tried and rejected, and where the remaining headroom actually is
+
 - **[JVM_COMPATIBILITY.md](docs/engineering/operations/JVM_COMPATIBILITY.md)** - JVM version strategy
   - Build failure investigation (detekt vs Java 25+)
   - Why all three JVM dials sit on Java 25, and what the compile-target move cost (#1030)
