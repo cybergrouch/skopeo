@@ -46,6 +46,7 @@ jobs:
         # rather than on slow tests — 547s sequential, slowest single suite 52s — so forking is close
         # to linear. `ubuntu-latest` has 4 vCPU, hence 4; each fork brings up its own Postgres
         # container, which is affordable here and is NOT on a developer machine (see build.gradle.kts).
+        # MEASUREMENT ONLY (#978): control arm of the fork-count experiment.
         env:
           SKOPEO_TEST_FORKS: 4
         run: ./gradlew check
