@@ -7,18 +7,36 @@ import type { GetApiV1UsersParams } from '@/api/generated/model'
 
 const SEXES = ['Male', 'Female'] as const
 
+/** The lifecycle states, in the precedence the backend derives them (#1050). */
+const STATUSES = ['ACTIVE', 'UNCLAIMED', 'DELETED', 'MERGED'] as const
+
+const STATUS_LABELS: Record<(typeof STATUSES)[number], string> = {
+  ACTIVE: 'Active',
+  UNCLAIMED: 'Unclaimed',
+  DELETED: 'Deleted',
+  MERGED: 'Merged',
+}
+
 /**
  * The shared player-search filter form (name, sex, age range, NTRP rating range) used by the Research
  * tab (#107) and the Ratings tab's search-and-rate (#205). On submit it builds the filter params (or
  * null when no filter is set) and hands them to [onApply]; the parent owns pagination + results.
+ *
+ * [showStatus] adds the lifecycle-state dropdown (#1050). Off by default, and deliberately so: the
+ * Ratings tab rates active players, and offering it a Deleted/Merged filter there would invite a
+ * search whose every result is unratable. Research turns it on because Research is where account
+ * history is the point.
  */
 export function PlayerSearchForm({
   onApply,
+  showStatus = false,
 }: {
   onApply: (params: GetApiV1UsersParams | null) => void
+  showStatus?: boolean
 }) {
   const [name, setName] = useState('')
   const [sex, setSex] = useState('')
+  const [status, setStatus] = useState('')
   const [ageMin, setAgeMin] = useState('')
   const [ageMax, setAgeMax] = useState('')
   const [ratingMin, setRatingMin] = useState('')
@@ -32,6 +50,8 @@ export function PlayerSearchForm({
     if (age) params.age = age
     const rating = interval(ratingMin, ratingMax)
     if (rating) params.rating = rating
+    // Only send `status` where the dropdown is rendered, so hiding it cannot leave a stale filter on.
+    if (showStatus && status) params.status = status as GetApiV1UsersParams['status']
     return Object.keys(params).length > 0 ? params : null
   }
 
@@ -62,6 +82,24 @@ export function PlayerSearchForm({
           ))}
         </select>
       </div>
+      {showStatus ? (
+        <div className="space-y-1">
+          <Label htmlFor="r-status">Status</Label>
+          <select
+            id="r-status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+          >
+            <option value="">Any</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
       <fieldset className="flex items-end gap-2">
         <div className="space-y-1">
           <Label htmlFor="r-age-min">Age from</Label>

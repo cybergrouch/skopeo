@@ -205,79 +205,18 @@ class UserRepository {
     ): List<UserAggregateEntity> =
         transaction {
             val order = if (direction == SortDirection.DESC) SortOrder.DESC else SortOrder.ASC
-            UsersTable
-                .selectAll()
-                .where { conditionsFor(query = query, includeInactive = includeInactive) }
-                // `id ASC` is appended as a tie-break even when sorting, so a page boundary cannot
-                // duplicate or drop a row when many rows share a sort value — e.g. the thousands that
-                // share a sex or a status.
-                .orderBy(*orderingFor(sort = sort, order = order), UsersTable.id to SortOrder.ASC)
-                .limit(count = limit).offset(start = offset.toLong())
-                .map { loadAggregate(id = it[UsersTable.id].value)!! }
+            // `id ASC` is appended as a tie-break even when sorting, so a page boundary cannot duplicate
+            // or drop a row when many rows share a sort value — e.g. the thousands that share a sex or a
+            // status. Applied one term at a time because Exposed's vararg `orderBy` would need a spread.
+            val terms = orderingFor(sort = sort, order = order) + (UsersTable.id to SortOrder.ASC)
+            val rows =
+                UsersTable
+                    .selectAll()
+                    .where { conditionsFor(query = query, includeInactive = includeInactive) }
+                    .apply { terms.forEach { (expression, sortOrder) -> orderBy(column = expression, order = sortOrder) } }
+                    .limit(count = limit).offset(start = offset.toLong())
+            rows.map { loadAggregate(id = it[UsersTable.id].value)!! }
         }
-
-    /**
-     * The ORDER BY terms for [sort], or none for the default `id ASC`.
-     *
-     * The name and rating columns live in other tables, so they order by a **correlated subquery**
-     * rather than a join: a join against the append-only `user_names` would multiply rows per user and
-     * break both `limit` and `countSearch`'s total. The subquery mirrors the mapper's resolution rule
-     * (`firstOrNull { active }`) so the column sorts by the value it displays.
-     */
-    private fun orderingFor(
-        sort: UserSearchSort?,
-        order: SortOrder,
-    ): Array<Pair<Expression<*>, SortOrder>> =
-        when (sort) {
-            null -> emptyArray()
-            UserSearchSort.DISPLAY_NAME -> arrayOf(activeNameValue(type = NameType.DISPLAY) to order)
-            UserSearchSort.LAST_NAME -> arrayOf(activeNameValue(type = NameType.LAST) to order)
-            UserSearchSort.FIRST_NAME -> arrayOf(activeNameValue(type = NameType.FIRST) to order)
-            UserSearchSort.SEX -> arrayOf(UsersTable.sex to order)
-            // Age is the INVERSE of date of birth: the oldest player has the earliest DOB. Ordering by
-            // the raw column would put "ascending age" in descending age order.
-            UserSearchSort.AGE ->
-                arrayOf(UsersTable.dateOfBirth to if (order == SortOrder.ASC) SortOrder.DESC else SortOrder.ASC)
-            UserSearchSort.RATING -> arrayOf(currentRatingValue() to order)
-            UserSearchSort.STATUS -> arrayOf(statusRank() to order)
-        }
-
-    /** The user's active name of [type], as a scalar subquery — mirrors the mapper's `firstOrNull`. */
-    private fun activeNameValue(type: NameType): Expression<String?> =
-        wrapAsExpression(
-            query =
-                UserNamesTable
-                    .select(columns = listOf(element = UserNamesTable.value))
-                    .where {
-                        (UserNamesTable.userId eq UsersTable.id) and
-                            (UserNamesTable.nameType eq type.name) and
-                            (UserNamesTable.isActive eq true)
-                    }.limit(count = 1),
-        )
-
-    /** The user's current rating, as a scalar subquery. Null-rated players sort together. */
-    private fun currentRatingValue(): Expression<BigDecimal?> =
-        wrapAsExpression(
-            query =
-                UserRatingsTable
-                    .select(columns = listOf(element = UserRatingsTable.currentRating))
-                    .where { UserRatingsTable.userId eq UsersTable.id }
-                    .limit(count = 1),
-        )
-
-    /**
-     * `AccountStatus` as a sortable rank, in the SAME precedence the domain uses
-     * (`User.accountStatus()`): MERGED 0, DELETED 1, UNCLAIMED 2, ACTIVE 3.
-     *
-     * Kept in step with that function by hand — the enum's ordinal is deliberately NOT used, because
-     * reordering the enum for readability would then silently change every sorted page.
-     */
-    private fun statusRank(): Expression<Int> =
-        Case()
-            .When(cond = UsersTable.canonicalUserId.isNotNull(), result = intLiteral(value = 0))
-            .When(cond = UsersTable.isActive eq false, result = intLiteral(value = 1))
-            .When(cond = UsersTable.placeholder eq true, result = intLiteral(value = 2))
-            .Else(e = intLiteral(value = 3))
 
     /** Total users matching [query] (#232) — the same predicate as [search], for paging totals. */
     fun countSearch(
@@ -975,6 +914,69 @@ private fun ratingMatches(range: NumericRange): Op<Boolean> =
                 op
             },
     )
+
+/**
+ * The ORDER BY terms for [sort], or none for the default `id ASC`.
+ *
+ * The name and rating columns live in other tables, so they order by a **correlated subquery**
+ * rather than a join: a join against the append-only `user_names` would multiply rows per user and
+ * break both `limit` and `countSearch`'s total. The subquery mirrors the mapper's resolution rule
+ * (`firstOrNull { active }`) so the column sorts by the value it displays.
+ */
+private fun orderingFor(
+    sort: UserSearchSort?,
+    order: SortOrder,
+): List<Pair<Expression<*>, SortOrder>> =
+    when (sort) {
+        null -> emptyList()
+        UserSearchSort.DISPLAY_NAME -> listOf(element = activeNameValue(type = NameType.DISPLAY) to order)
+        UserSearchSort.LAST_NAME -> listOf(element = activeNameValue(type = NameType.LAST) to order)
+        UserSearchSort.FIRST_NAME -> listOf(element = activeNameValue(type = NameType.FIRST) to order)
+        UserSearchSort.SEX -> listOf(element = UsersTable.sex to order)
+        // Age is the INVERSE of date of birth: the oldest player has the earliest DOB. Ordering by
+        // the raw column would put "ascending age" in descending age order.
+        UserSearchSort.AGE ->
+            listOf(element = UsersTable.dateOfBirth to if (order == SortOrder.ASC) SortOrder.DESC else SortOrder.ASC)
+        UserSearchSort.RATING -> listOf(element = currentRatingValue() to order)
+        UserSearchSort.STATUS -> listOf(element = statusRank() to order)
+    }
+
+/** The user's active name of [type], as a scalar subquery — mirrors the mapper's `firstOrNull`. */
+private fun activeNameValue(type: NameType): Expression<String?> =
+    wrapAsExpression(
+        query =
+            UserNamesTable
+                .select(columns = listOf(element = UserNamesTable.value))
+                .where {
+                    (UserNamesTable.userId eq UsersTable.id) and
+                        (UserNamesTable.nameType eq type.name) and
+                        (UserNamesTable.isActive eq true)
+                }.limit(count = 1),
+    )
+
+/** The user's current rating, as a scalar subquery. Null-rated players sort together. */
+private fun currentRatingValue(): Expression<BigDecimal?> =
+    wrapAsExpression(
+        query =
+            UserRatingsTable
+                .select(columns = listOf(element = UserRatingsTable.currentRating))
+                .where { UserRatingsTable.userId eq UsersTable.id }
+                .limit(count = 1),
+    )
+
+/**
+ * `AccountStatus` as a sortable rank, in the SAME precedence the domain uses
+ * (`User.accountStatus()`): MERGED 0, DELETED 1, UNCLAIMED 2, ACTIVE 3.
+ *
+ * Kept in step with that function by hand — the enum's ordinal is deliberately NOT used, because
+ * reordering the enum for readability would then silently change every sorted page.
+ */
+private fun statusRank(): Expression<Int> =
+    Case()
+        .When(cond = UsersTable.canonicalUserId.isNotNull(), result = intLiteral(value = 0))
+        .When(cond = UsersTable.isActive eq false, result = intLiteral(value = 1))
+        .When(cond = UsersTable.placeholder eq true, result = intLiteral(value = 2))
+        .Else(e = intLiteral(value = 3))
 
 private fun namesOf(id: UUID): List<NameEntity> =
     UserNamesTable

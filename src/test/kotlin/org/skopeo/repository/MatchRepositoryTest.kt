@@ -1095,6 +1095,80 @@ class MatchRepositoryTest {
     }
 
     @Test
+    fun `the batched rated-match count agrees with the per-user one, each with its own since (#1050)`() {
+        val early = newUser(uid = "cal-early")
+        val late = newUser(uid = "cal-late")
+        val none = newUser(uid = "cal-none")
+        val opponent = newUser(uid = "cal-opp")
+        val eventId =
+            event(creator = opponent, endDate = LocalDate.of(2026, 3, 1), members = listOf(early, late, none, opponent))
+
+        // `early` gets two rated matches, `late` one, `none` a match that is never rated.
+        listOf(early, early, late).forEach { player ->
+            val id = completedMatch(u1 = player, u2 = opponent, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId)
+            matches.markRated(matchId = id, ratedAt = LocalDateTime.now(), ratedBy = opponent)
+        }
+        completedMatch(u1 = none, u2 = opponent, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId)
+
+        // Deliberately DIFFERENT `since` values per player — the whole risk of folding N predicates into
+        // one OR'd query is that a shared bound leaks across users and nobody notices.
+        val sinceByUser =
+            mapOf(
+                early to LocalDateTime.of(2025, 1, 1, 0, 0),
+                late to LocalDateTime.of(2025, 6, 1, 0, 0),
+                none to LocalDateTime.of(2025, 6, 1, 0, 0),
+            )
+        val batch = matches.countRatedMatchesSince(sinceByUser = sinceByUser)
+
+        sinceByUser.forEach { (userId, since) ->
+            val single = matches.countRatedMatchesSince(userId = userId, since = since)
+            // Absent from the batch means zero: only players WITH a match get a grouped row, which is
+            // what lets the service skip a query for everyone who has none.
+            (batch[userId] ?: 0) shouldBe single
+        }
+        batch[early] shouldBe 2
+        batch[late] shouldBe 1
+        batch.containsKey(key = none).shouldBeFalse()
+        // `opponent` played all four but was not asked about, so it must not appear.
+        batch.containsKey(key = opponent).shouldBeFalse()
+    }
+
+    @Test
+    fun `the batched count excludes matches before the user's own since, and asks nothing for an empty map (#1050)`() {
+        val player = newUser(uid = "cal-bound")
+        val opponent = newUser(uid = "cal-bound-opp")
+        val eventId = event(creator = opponent, endDate = LocalDate.of(2026, 3, 1), members = listOf(player, opponent))
+        val before = completedMatch(u1 = player, u2 = opponent, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId)
+        val after = completedMatch(u1 = player, u2 = opponent, matchDate = LocalDate.of(2026, 2, 1), eventId = eventId)
+        matches.markRated(matchId = before, ratedAt = LocalDateTime.of(2026, 1, 2, 0, 0), ratedBy = opponent)
+        matches.markRated(matchId = after, ratedAt = LocalDateTime.of(2026, 2, 2, 0, 0), ratedBy = opponent)
+
+        // The bound is `ratedAt`, not the match date: rating happens at event finalization, days later.
+        val since = LocalDateTime.of(2026, 1, 15, 0, 0)
+        matches.countRatedMatchesSince(sinceByUser = mapOf(pair = player to since)) shouldBe mapOf(pair = player to 1)
+        matches.countRatedMatchesSince(userId = player, since = since) shouldBe 1
+
+        // No users asked about ⇒ no query and an empty answer, not every user in the table.
+        matches.countRatedMatchesSince(sinceByUser = emptyMap()).shouldBeEmpty()
+    }
+
+    @Test
+    fun `the batched count counts a doubles match once per player, not once per roster row (#1050)`() {
+        val a1 = newUser(uid = "dbl-a1")
+        val a2 = newUser(uid = "dbl-a2")
+        val b1 = newUser(uid = "dbl-b1")
+        val b2 = newUser(uid = "dbl-b2")
+        val id = completedDoubles(winners = listOf(a1, a2), losers = listOf(b1, b2))
+        matches.markRated(matchId = id, ratedAt = LocalDateTime.now(), ratedBy = a1)
+
+        // The batch joins team_users to reach the player, so one match yields four roster rows. Counting
+        // `MatchesTable.id` without DISTINCT would give each of them a count above one.
+        val since = LocalDateTime.of(2025, 1, 1, 0, 0)
+        matches.countRatedMatchesSince(sinceByUser = listOf(a1, a2, b1, b2).associateWith { since }) shouldBe
+            mapOf(a1 to 1, a2 to 1, b1 to 1, b2 to 1)
+    }
+
+    @Test
     fun `match numbers run 1_2_3 within an event, and restart per event (#898)`() {
         val u1 = newUser(uid = "u1")
         val u2 = newUser(uid = "u2")
