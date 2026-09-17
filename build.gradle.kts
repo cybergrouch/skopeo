@@ -59,7 +59,7 @@ val arrowVersion = "2.2.3"
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -316,7 +316,7 @@ tasks.register("uninstallGitHooks") {
 
 // JaCoCo configuration for code coverage
 jacoco {
-    toolVersion = "0.8.13"
+    toolVersion = "0.8.15"
 }
 
 tasks.jacocoTestReport {

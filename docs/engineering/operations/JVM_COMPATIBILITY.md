@@ -14,11 +14,11 @@ project.
 
 | Concern | Decision |
 |---|---|
-| Compile toolchain (bytecode target) | **Java 17** (`build.gradle.kts`, unchanged) |
+| Compile toolchain (bytecode target) | **Java 25** (`build.gradle.kts`) — was 17 until #1030 |
 | Gradle daemon / build tooling JVM | **Java 25**, pinned in `gradle/gradle-daemon-jvm.properties` (was 21 until #1008) |
-| Docker build stage | `eclipse-temurin:25-jdk` (Debian-based) — must track the daemon pin |
+| Docker build stage | `eclipse-temurin:25-jdk` (Debian-based) — must track the daemon pin; since #1030 it satisfies the compile toolchain too, so the old `jdk17` stage is gone |
 | Docker runtime stage (**production JVM**) | `eclipse-temurin:25-jre-noble` (was 17 until #1008) |
-| Production runtime upgrades | Change the Dockerfile runtime base image alone. Still independent of everything above: the compile target stays 17, so the bytecode runs on a 17 or a 25 JRE and the line can be swapped back without rebuilding |
+| Production runtime upgrades | Change the Dockerfile runtime base image alone — but **no longer freely revertible** since #1030. The compile target is now 25, so the bytecode is class-file major 69 and will not load on a 17 JRE; going back means moving the toolchain back and rebuilding |
 | Ceiling on build JVM | **None** since #1008. detekt 2.0.0-alpha.6 removed the Java 24 ceiling that 1.23.8 imposed |
 
 ---
@@ -188,15 +188,19 @@ expected database-connection attempt.
 
 ## Future Work
 
-- **When detekt 2.0 stable is released:** upgrade detekt (note: 2.x moves to new
-  Maven coordinates and is built on the K2 compiler), then raise
-  `toolchainVersion` in `gradle/gradle-daemon-jvm.properties` to 25. Optionally
-  raise the compile toolchain to 25 at the same time if Java 25 language
-  features are wanted — that also requires a Kotlin version with `jvmTarget = 25`
-  support.
-- **Production runtime upgrade (independent, any time):** bump the Dockerfile
-  runtime stage to `eclipse-temurin:21-jre-alpine` or `25-jre-alpine`. No build
-  tooling interaction.
+- **~~When detekt 2.0 stable is released:~~ DONE in #1008** — detekt moved to the
+  new `dev.detekt` coordinates on 2.0.0-alpha.6 and the daemon `toolchainVersion`
+  was raised to 25. **The compile toolchain followed in #1030**, so all three JVM
+  dials are now on 25 and `jvmTarget = 25` is confirmed working on Kotlin 2.4.20.
+- **~~Production runtime upgrade:~~ DONE in #1008** — the Dockerfile runtime stage
+  is `eclipse-temurin:25-jre-noble`. Note it is Debian, **not** Alpine, and that is
+  load-bearing: firebase-admin pulls in gRPC's precompiled glibc `netty-tcnative`,
+  which segfaults on musl before the server ever listens. Do not "finish" this item
+  by switching to `-alpine`.
+- **Next JVM move: Java 29 (September 2027, LTS).** Java 27 GA'd 15 Sep 2026 but is
+  **not** an LTS — the cadence is 21 → 25 → 29 — and gets roughly six months of
+  support, so moving there would mean re-upgrading almost immediately. Java 25 has
+  Oracle premier support to Sep 2030.
 - **Developer machine hygiene (optional):** repoint `JAVA_HOME` away from the
   stale jenv alias `~/.jenv/versions/20` (it tracks Homebrew's unversioned
   `openjdk` formula and will keep drifting). With the daemon pin in place this
