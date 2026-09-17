@@ -68,6 +68,8 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 ## Testing Notes
 
 - Tests are JUnit 5 + Kotest assertions + Ktor `testApplication`.
+- **Parallelism is opt-in**: `SKOPEO_TEST_FORKS` (default **1**; CI uses 4). Each fork costs a JVM *and* its own Postgres container — free on a runner, punishing on a constrained machine — so local runs stay serial unless you ask (`SKOPEO_TEST_FORKS=4 ./gradlew test`). Isolation is unchanged: `PostgresTestDatabase` is a per-JVM `object`, so N forks get N independent containers.
+- **Before optimising a slow suite, read `docs/engineering/operations/TEST_PERFORMANCE.md`.** Two traps it records: per-test timings hide setup cost (JUnit bills field init to nothing, which is how a 15×-repeated ArchUnit import went unnoticed — look at *suite time minus the sum of its tests*), and CI runner hardware is heterogeneous enough (bimodal, ~150s apart) that **per-suite deltas below ~50s are not measurable** from a single run.
 - Shared test fixtures: `TestScenarios.kt`, `TeamTestHelpers.kt`, `RankingTestCase.kt` under `src/test/.../calculator/impl/`.
 - JaCoCo excludes `dto/`, `model/`, `config/`, and `Application` from coverage; `check` fails below 75% line / 70% branch coverage on what remains.
 - The OpenAPI spec (`src/main/resources/openapi/documentation.yaml`) is hand-maintained and verified by `OpenAPIIntegrationTest` — update it when changing the API.
