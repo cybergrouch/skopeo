@@ -185,8 +185,11 @@ Skopeo has grown from a stateless rating calculator into a capability-gated rank
 
 ### Prerequisites
 
-- **JDK 25** — the Gradle daemon runs on 25 (`gradle/gradle-daemon-jvm.properties`), while the code
-  still *targets* Java 17, so the bytecode runs on either. A different JDK may stay your system
+- **JDK 25** — and it is now the only version that works. All three JVM dials are on 25: the compile
+  toolchain (`build.gradle.kts`, since #1030), the Gradle daemon
+  (`gradle/gradle-daemon-jvm.properties`, since #1008) and the production runtime (`Dockerfile`). The
+  emitted bytecode is class-file major 69, so it will **not** run on a 17 JRE — the target was 17 until
+  #1030, which is why older notes say the bytecode ran on either. A different JDK may stay your system
   default; the pin decides what Gradle uses. The daemon was held at 21 until #1008, because detekt
   1.23.8 crashed on Java 25+. See
   [JVM_COMPATIBILITY.md](docs/engineering/operations/JVM_COMPATIBILITY.md).
@@ -506,7 +509,7 @@ Comprehensive documentation is available in the `docs/` directory:
 
 - **[JVM_COMPATIBILITY.md](docs/engineering/operations/JVM_COMPATIBILITY.md)** - JVM version strategy
   - Build failure investigation (detekt vs Java 25+)
-  - Gradle daemon pinned to Java 21 LTS and why
+  - Why all three JVM dials sit on Java 25, and what the compile-target move cost (#1030)
   - GCP/AWS Java runtime support survey
   - Upgrade path when detekt 2.0 ships
 
