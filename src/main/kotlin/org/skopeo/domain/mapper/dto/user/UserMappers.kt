@@ -14,6 +14,7 @@ import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserRating
 import org.skopeo.domain.model.WinLossRecord
+import org.skopeo.domain.model.accountStatus
 import org.skopeo.domain.model.ageInYears
 import org.skopeo.domain.model.linkStatus
 import java.time.LocalDate
@@ -75,6 +76,9 @@ fun User.toSummary(
     // Soft-deleted flag, computed by the caller (service-side User.isDeleted()); mappers can't reach the
     // service layer, so the value is passed in rather than derived here.
     isDeleted: Boolean,
+    // Calibration (#881) needs a rated-match count and the live global N, so only the service can answer
+    // it; `CalibrationService` is the single source of that rule (#882). Defaults false.
+    inCalibration: Boolean = false,
 ): UserSummaryResponse =
     UserSummaryResponse(
         id = id.toString(),
@@ -96,4 +100,11 @@ fun User.toSummary(
         isPlaceholder = placeholder,
         isDeleted = isDeleted,
         linkStatus = linkStatus().name,
+        // Same resolution rule as displayName above: first ACTIVE row of the type, or null. `user_names`
+        // is append-only and does not structurally prevent two active rows of one type, so this follows
+        // the established convention rather than inventing a tie-break (#1050).
+        firstName = names.firstOrNull { it.type == NameType.FIRST && it.isActive }?.value,
+        lastName = names.firstOrNull { it.type == NameType.LAST && it.isActive }?.value,
+        status = accountStatus().name,
+        inCalibration = inCalibration,
     )

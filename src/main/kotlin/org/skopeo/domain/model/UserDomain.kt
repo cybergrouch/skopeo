@@ -151,6 +151,38 @@ data class User(
 enum class AccountLinkStatus { GOOGLE, FACEBOOK, PASSWORD, NONE }
 
 /**
+ * The account's lifecycle state (#1050) — one value, mutually exclusive, for display and for sorting.
+ *
+ * Deliberately NOT a place for calibration: a calibrating account is an ordinary active (or placeholder,
+ * or later merged) account whose rating is still settling, so folding it in here would force a false
+ * precedence and hide the real state behind it. Calibration is a separate boolean.
+ */
+enum class AccountStatus { MERGED, DELETED, UNCLAIMED, ACTIVE }
+
+/**
+ * Derive the [AccountStatus], highest precedence first. The states are not mutually exclusive in the
+ * data — a merged account is also inactive, and a placeholder can be merged or deleted — so the order
+ * below is the definition, not an optimisation.
+ *
+ * `MERGED` is `canonical_user_id IS NOT NULL` because that is exactly what `mergeAccounts` writes when
+ * it retires an absorbed account (`canonicalUserId = survivorId`, `isActive = false`), on purpose, so
+ * that it "becomes a merged → survivor card rather than a plain soft-delete" (#124).
+ *
+ * The `!isActive` branch is equivalent to `User.isDeleted()` (`!isActive && canonicalUserId == null`)
+ * **because the merged branch above has already returned** for anything with a canonical link. Please do
+ * not "fix" it by re-adding the null check — it would be redundant, and `isDeleted()` lives in the
+ * service layer, which `mapper` may not depend on.
+ */
+fun User.accountStatus(): AccountStatus =
+    when {
+        canonicalUserId != null -> AccountStatus.MERGED
+        !isActive -> AccountStatus.DELETED
+        // `placeholder` already means "login-less and NOT YET CLAIMED" (#496/#505) — claiming clears it.
+        placeholder -> AccountStatus.UNCLAIMED
+        else -> AccountStatus.ACTIVE
+    }
+
+/**
  * Derive the account's [AccountLinkStatus] (#643) from the login anchor + identities: [NONE] when there
  * is no login (firebase_uid null — a placeholder or freed account), otherwise the primary identity's
  * provider (falling back to any identity, then to PASSWORD for a login with no recorded identity row).

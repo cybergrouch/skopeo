@@ -110,7 +110,28 @@ data class UserSearchQuery(
     val rating: NumericRange?,
     // Restrict to users holding this capability (#317) — e.g. CLUB_OWNER for the club-owner picker.
     val capability: Capability? = null,
+    // Restrict to one lifecycle state (#1050). Note MERGED and DELETED are inactive by definition, so
+    // asking for either with `includeInactive = false` is a contradiction the service rejects rather
+    // than silently answering with an empty page.
+    val status: AccountStatus? = null,
 )
+
+/**
+ * The columns a user search may be ordered by (#1050).
+ *
+ * Seven of the Research table's ten columns. Absent on purpose:
+ *  - the **icon** and **code** columns are display-only by decision;
+ *  - **calibration** cannot be ordered in SQL without reimplementing `CalibrationService`'s rule, which
+ *    depends on a rated-match count and the live global N. That rule has one home (#882), so ordering by
+ *    it is deferred to the queryable-calibration work rather than duplicated here.
+ *
+ * Ordering is applied in the database, BEFORE paging — a sort over the current page only would reorder
+ * 25 rows while `total` described the whole result set.
+ */
+enum class UserSearchSort { DISPLAY_NAME, LAST_NAME, FIRST_NAME, SEX, AGE, RATING, STATUS }
+
+/** Ascending or descending, for [UserSearchSort]. */
+enum class SortDirection { ASC, DESC }
 
 /** A page of user-search results plus the total match count, for numbered pagination (#232). */
 data class UserSearchPage(

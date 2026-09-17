@@ -81,12 +81,18 @@ class CalibrationService(
         val distinct = userIds.distinct()
         val startedByUser =
             ratings.findCurrentRatings(userIds = distinct).mapValues { it.value.calibrationStartedAt }
+        // ONE query for the whole batch (#1050). This used to call the single-user count per player,
+        // which cost two queries each — fine for a profile, ~50 for a 25-row search page once
+        // calibration became a table column. Only players with a designation are asked about; the rest
+        // are not in calibration by definition and need no query at all.
+        val designated = distinct.mapNotNull { id -> startedByUser[id]?.let { id to it } }.toMap()
+        val ratedByUser = matches.countRatedMatchesSince(sinceByUser = designated)
         return distinct.associateWith { userId ->
             val startedAt = startedByUser[userId]
             if (startedAt == null) {
                 CalibrationStatus(inCalibration = false, matchesRated = 0, matchesRequired = required)
             } else {
-                val rated = matches.countRatedMatchesSince(userId = userId, since = startedAt)
+                val rated = ratedByUser[userId] ?: 0
                 CalibrationStatus(inCalibration = rated < required, matchesRated = rated, matchesRequired = required)
             }
         }
