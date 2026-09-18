@@ -114,7 +114,28 @@ data class UserSearchQuery(
     // asking for either with `includeInactive = false` is a contradiction the service rejects rather
     // than silently answering with an empty page.
     val status: AccountStatus? = null,
-)
+    // Whether the player's rating is still calibrating (#1065). Queryable at last because #1051 stores
+    // the rated-match count: the verdict is one comparison against the live global N, so this is a plain
+    // WHERE rather than the aggregate #1050 had to defer. Null means "don't filter on it".
+    val inCalibration: Boolean? = null,
+) {
+    companion object {
+        /** The facet names, for the "at least one filter" error (#116) — kept beside the fields they name. */
+        const val FACET_NAMES = "name, code, q, sex, age, rating, capability, status, inCalibration"
+    }
+}
+
+/**
+ * Does this query narrow anything at all (#116)? A search with no facet would return the whole member
+ * table, so it is refused.
+ *
+ * Lives here, next to the fields, so that adding a facet and forgetting to count it is one edit rather
+ * than two files apart — the service checks the built query instead of tracking its own locals.
+ */
+fun UserSearchQuery.hasAnyFacet(): Boolean =
+    name != null || code != null || q != null || sex != null ||
+        dobMin != null || dobMax != null || rating != null ||
+        capability != null || status != null || inCalibration != null
 
 /**
  * The columns a user search may be ordered by (#1050).
@@ -131,7 +152,7 @@ data class UserSearchQuery(
  * Ordering is applied in the database, BEFORE paging — a sort over the current page only would reorder
  * 25 rows while `total` described the whole result set.
  */
-enum class UserSearchSort { DISPLAY_NAME, LAST_NAME, FIRST_NAME, SEX, AGE, RATING, STATUS }
+enum class UserSearchSort { DISPLAY_NAME, LAST_NAME, FIRST_NAME, SEX, AGE, RATING, STATUS, CALIBRATION }
 
 /** Ascending or descending, for [UserSearchSort]. */
 enum class SortDirection { ASC, DESC }

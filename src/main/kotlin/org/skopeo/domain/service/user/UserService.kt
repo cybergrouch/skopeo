@@ -35,6 +35,7 @@ import org.skopeo.domain.model.UserSearchSort
 import org.skopeo.domain.model.ageRangeToDob
 import org.skopeo.domain.model.canSeeRawRatingOrFalse
 import org.skopeo.domain.model.effectivePhotoUrl
+import org.skopeo.domain.model.hasAnyFacet
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.rating.CalibrationService
 import org.skopeo.domain.service.rating.RatingAssembler
@@ -69,6 +70,8 @@ data class UserSearchFilters(
     val capability: String? = null,
     // Raw `AccountStatus` name to restrict to (#1050), parsed in [UserService.validatedQuery].
     val status: String? = null,
+    // Raw "true"/"false" calibration facet (#1065); anything else is a 400.
+    val inCalibration: String? = null,
 )
 
 /**
@@ -147,12 +150,15 @@ class UserService(
             requirePlayerSearchAccess(repository = repository, token = token).bind()
             val query = validatedQuery(filters = filters).bind()
             ensureStatusIsReachable(status = query.status, includeInactive = includeInactive)
+            // `validatedQuery` is shared, so the calibration facet reaches this search too and its N must
+            // be resolved here as well — only when asked for, so the pickers pay nothing.
             val users =
                 repository.search(
                     query = query,
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
                     offset = offset.coerceAtLeast(minimumValue = 0),
                     includeInactive = includeInactive,
+                    calibrationRequired = query.inCalibration?.let { calibration.requiredMatches() },
                 ).map { it.toDomain() }
             // Enrich each summary with the current rating + the raw-reveal flag here (was assembled in the
             // route), so the route stays thin and never touches the mapper.
@@ -185,6 +191,15 @@ class UserService(
             ensureStatusIsReachable(status = query.status, includeInactive = includeInactive)
             val sortKey = sort?.let { raw -> enumByName<UserSearchSort>(raw = raw, field = "sort") }
             val sortOrder = direction?.let { raw -> enumByName<SortDirection>(raw = raw, field = "direction") }
+            // ONE settings read per request, and only when calibration is actually referenced (#1065).
+            // The repository never reads settings itself, so N arrives as a value — and because the
+            // count is stored, changing N still re-derives for everyone at once with no sweep.
+            val calibrationRequired =
+                if (query.inCalibration != null || sortKey == UserSearchSort.CALIBRATION) {
+                    calibration.requiredMatches()
+                } else {
+                    null
+                }
             val items =
                 repository.search(
                     query = query,
@@ -193,8 +208,14 @@ class UserService(
                     includeInactive = includeInactive,
                     sort = sortKey,
                     direction = sortOrder ?: SortDirection.ASC,
+                    calibrationRequired = calibrationRequired,
                 ).map { it.toDomain() }
-            val total = repository.countSearch(query = query, includeInactive = includeInactive)
+            val total =
+                repository.countSearch(
+                    query = query,
+                    includeInactive = includeInactive,
+                    calibrationRequired = calibrationRequired,
+                )
             // Enrich with current ratings + calibration (#881) + the raw-reveal flag here (was in the
             // route), returning the finished page DTO so the route stays thin.
             //
@@ -256,13 +277,7 @@ class UserService(
             val rating = filters.rating?.let { NumericRange.parse(raw = it) }
             val capability = filters.capability?.let { raw -> enumByName<Capability>(raw = raw, field = "capability") }
             val status = filters.status?.let { raw -> enumByName<AccountStatus>(raw = raw, field = "status") }
-            ensure(
-                condition =
-                    nameTerm != null || codeTerm != null || qTerm != null || filters.sex != null ||
-                        age != null || rating != null || capability != null || status != null,
-            ) {
-                ServiceError.Validation(message = "at least one filter (name, code, q, sex, age, rating, capability, status) is required")
-            }
+            val inCalibration = filters.inCalibration?.let { raw -> booleanByName(raw = raw, field = "inCalibration") }
             val dob = age?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
             UserSearchQuery(
                 name = nameTerm,
@@ -274,7 +289,15 @@ class UserService(
                 rating = rating,
                 capability = capability,
                 status = status,
-            )
+                inCalibration = inCalibration,
+            ).also { built ->
+                // Checked on the BUILT query rather than on nine locals: one place that knows what
+                // counts as a facet, so adding a tenth cannot silently escape the "at least one
+                // filter" rule (#116). Also keeps this function under detekt's complexity ceiling.
+                ensure(condition = built.hasAnyFacet()) {
+                    ServiceError.Validation(message = "at least one filter (${UserSearchQuery.FACET_NAMES}) is required")
+                }
+            }
         }
 
     /**
@@ -543,6 +566,18 @@ class UserService(
 
 /** Trim a free-text search term, collapsing a null/blank value to null. */
 private fun blankToNull(raw: String?): String? = raw?.trim()?.ifEmpty { null }
+
+/**
+ * A strictly-parsed boolean facet, or a 400. Only `true`/`false` are accepted (any case); a typo is
+ * refused rather than coerced, because reading `inCalibration=yes` as `false` would quietly show
+ * settled players to someone who asked for calibrating ones (#1065).
+ */
+private fun Raise<ServiceError>.booleanByName(
+    raw: String,
+    field: String,
+): Boolean =
+    raw.lowercase().toBooleanStrictOrNull()
+        ?: raise(r = ServiceError.Validation(message = "Unknown $field '$raw'; expected one of true, false"))
 
 /**
  * Resolve [raw] to a [T] by name, case-insensitively, or raise a 400 naming every accepted value.

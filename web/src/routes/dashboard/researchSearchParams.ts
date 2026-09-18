@@ -126,6 +126,25 @@ function pageIndex(params: URLSearchParams, ignored: string[]): number {
 }
 
 /**
+ * A strictly-parsed boolean param, or `undefined` when absent. Only the exact strings `true` and
+ * `false` are accepted; anything else is named in [ignored] rather than coerced, because coercing
+ * would turn a typo into a silent filter (`inCalibration=yes` reading as `false` would show settled
+ * players to someone who asked for calibrating ones).
+ */
+function booleanFacet(
+  params: URLSearchParams,
+  key: string,
+  ignored: string[],
+): boolean | undefined {
+  const raw = params.get(key)
+  if (raw === null) return undefined
+  if (raw === 'true') return true
+  if (raw === 'false') return false
+  ignored.push(key)
+  return undefined
+}
+
+/**
  * Rebuild the Research search from the URL. Unknown or malformed values are dropped and named in
  * `ignored` rather than passed through: a stale `status=RETIRED` would 400 the whole request, which
  * would read as "no results" for every other filter the link got right.
@@ -138,6 +157,7 @@ export function readResearchSearch(params: URLSearchParams): ResearchSearch {
   const status = facet(params, 'status', GetApiV1UsersStatus, ignored)
   const age = range(params, 'age', ignored)
   const rating = range(params, 'rating', ignored)
+  const inCalibration = booleanFacet(params, 'inCalibration', ignored)
 
   const applied: GetApiV1UsersParams = {}
   if (name) applied.name = name
@@ -145,6 +165,8 @@ export function readResearchSearch(params: URLSearchParams): ResearchSearch {
   if (age) applied.age = age.raw
   if (rating) applied.rating = rating.raw
   if (status) applied.status = status
+  // `!== undefined`, not truthiness: `false` is a real filter ("Settled") and must survive (#1065).
+  if (inCalibration !== undefined) applied.inCalibration = inCalibration
 
   return {
     // No facets at all means the tab was never searched, which is what keeps the results card off
@@ -154,6 +176,8 @@ export function readResearchSearch(params: URLSearchParams): ResearchSearch {
       name,
       sex: sex ?? '',
       status: status ?? '',
+      // The form holds it as a tri-state string: '' = Any, 'true' / 'false' = a real filter.
+      inCalibration: inCalibration === undefined ? '' : String(inCalibration),
       ageMin: age?.min ?? '',
       ageMax: age?.max ?? '',
       ratingMin: rating?.min ?? '',
@@ -187,6 +211,13 @@ export function researchSearchParams({
   direction: SortDirection
 }): URLSearchParams {
   const next = new URLSearchParams(current)
+  // `inCalibration` is handled before the loop and excluded from FACET_KEYS on purpose: that loop
+  // writes on truthiness, which would silently delete `false` — a real filter, not an absent one.
+  if (filters?.inCalibration !== undefined) {
+    next.set('inCalibration', String(filters.inCalibration))
+  } else {
+    next.delete('inCalibration')
+  }
   for (const key of FACET_KEYS) {
     const value = filters?.[key]
     if (value) {

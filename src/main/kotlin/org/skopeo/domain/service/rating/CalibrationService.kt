@@ -53,6 +53,17 @@ class CalibrationService(
     private val settings: SettingsService = SettingsService(),
 ) {
     /**
+     * The live global N (#881): how many rated matches a calibration window requires before it closes.
+     *
+     * Exposed so a caller that filters or sorts on calibration in SQL (#1065) can resolve it ONCE per
+     * request and pass it down, rather than reaching for `SettingsService` itself. That keeps every
+     * input to the rule owned here even when the comparison happens in the database — the count is a
+     * stored column and this is the threshold, so nothing downstream re-derives the rule, it only
+     * applies it.
+     */
+    fun requiredMatches(): Int = settings.getCalibrationMatches().matches
+
+    /**
      * The player's calibration state — active or not, how many rated matches they have played since the
      * designation, and the N those are measured against.
      *
@@ -61,7 +72,7 @@ class CalibrationService(
      * what the band indicator needs to say "match 3 of 10".
      */
     fun statusFor(userId: UUID): CalibrationStatus {
-        val required = settings.getCalibrationMatches().matches
+        val required = requiredMatches()
         val current = ratings.findCurrentRating(userId = userId)
         // A null stamp is the whole answer: no window, so the stored count is not even read. That is what
         // keeps the rollout prospective for every row that predates #881.
@@ -90,7 +101,7 @@ class CalibrationService(
      * of one calculation disagree.
      */
     fun statusesFor(userIds: List<UUID>): Map<UUID, CalibrationStatus> {
-        val required = settings.getCalibrationMatches().matches
+        val required = requiredMatches()
         val distinct = userIds.distinct()
         // ONE query for the whole batch, and now it is the rating rows themselves — the count comes with
         // them (#1051). #1050 had already collapsed the per-player counting into a single batched

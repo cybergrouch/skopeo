@@ -29,6 +29,7 @@ const BLANK_FIELDS = {
   name: '',
   sex: '',
   status: '',
+  inCalibration: '',
   ageMin: '',
   ageMax: '',
   ratingMin: '',
@@ -61,6 +62,7 @@ describe('readResearchSearch', () => {
       name: 'ali',
       sex: 'Male',
       status: 'UNCLAIMED',
+      inCalibration: '',
       ageMin: '20',
       ageMax: '30',
       ratingMin: '3.0',
@@ -198,5 +200,64 @@ describe('researchSearchParams', () => {
     expect(state.sort).toBe('LAST_NAME')
     expect(state.direction).toBe('DESC')
     expect(state.ignored).toEqual([])
+  })
+})
+
+describe('the calibration facet (#1065)', () => {
+  it('keeps `false` through the round trip, where truthiness would drop it', () => {
+    // The regression this guards: the FACET_KEYS writer tests truthiness, so `false` — a real filter
+    // meaning "settled players only" — would be deleted from the URL rather than written.
+    const written = researchSearchParams({
+      current: new URLSearchParams('tab=research'),
+      filters: { inCalibration: false },
+      page: 0,
+      sort: null,
+      direction: 'ASC',
+    })
+    expect(written.get('inCalibration')).toBe('false')
+    expect(written.get('tab')).toBe('research')
+
+    const read = readResearchSearch(written)
+    expect(read.applied).toEqual({ inCalibration: false })
+    expect(read.fields.inCalibration).toBe('false')
+    expect(read.ignored).toEqual([])
+  })
+
+  it('round-trips `true` and omits the param when the filter is absent', () => {
+    const on = researchSearchParams({
+      current: new URLSearchParams(),
+      filters: { inCalibration: true },
+      page: 0,
+      sort: null,
+      direction: 'ASC',
+    })
+    expect(on.get('inCalibration')).toBe('true')
+    expect(readResearchSearch(on).applied).toEqual({ inCalibration: true })
+
+    // Absent means absent — an untouched filter leaves no param behind.
+    const off = researchSearchParams({
+      current: new URLSearchParams('inCalibration=true'),
+      filters: { name: 'ali' },
+      page: 0,
+      sort: null,
+      direction: 'ASC',
+    })
+    expect(off.has('inCalibration')).toBe(false)
+  })
+
+  it('reports a non-boolean as ignored rather than coercing it', () => {
+    // Coercing would be worse than dropping: `inCalibration=yes` read as `false` would quietly show
+    // settled players to someone who asked for calibrating ones.
+    const read = readResearchSearch(new URLSearchParams('name=ali&inCalibration=yes'))
+    expect(read.ignored).toContain('inCalibration')
+    expect(read.applied).toEqual({ name: 'ali' })
+    expect(read.fields.inCalibration).toBe('')
+  })
+
+  it('accepts CALIBRATION as a sort key', () => {
+    const read = readResearchSearch(new URLSearchParams('name=ali&sort=CALIBRATION&direction=DESC'))
+    expect(read.sort).toBe('CALIBRATION')
+    expect(read.direction).toBe('DESC')
+    expect(read.ignored).toEqual([])
   })
 })

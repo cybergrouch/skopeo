@@ -127,7 +127,7 @@ private fun Route.mergeRoutes(service: DuplicateService) {
     }
 }
 
-private val FILTER_PARAMS = listOf("name", "code", "q", "sex", "age", "rating", "capability", "status")
+private val FILTER_PARAMS = listOf("name", "code", "q", "sex", "age", "rating", "capability", "status", "inCalibration")
 
 // Page size used when a search request omits `limit` (preserves the pre-pagination behaviour).
 private const val DEFAULT_SEARCH_PAGE_SIZE = 20
@@ -157,6 +157,7 @@ private fun Route.searchUsers(service: UserService) {
                                 rating = params["rating"],
                                 capability = params["capability"],
                                 status = params["status"],
+                                inCalibration = params["inCalibration"],
                             ),
                         limit = params["limit"]?.toIntOrNull() ?: DEFAULT_SEARCH_PAGE_SIZE,
                         offset = params["offset"]?.toIntOrNull() ?: 0,
@@ -195,6 +196,7 @@ private fun Route.searchUsersPaged(service: UserService) {
                             rating = params["rating"],
                             capability = params["capability"],
                             status = params["status"],
+                            inCalibration = params["inCalibration"],
                         ),
                     limit = params["limit"]?.toIntOrNull() ?: DEFAULT_SEARCH_PAGE_SIZE,
                     offset = params["offset"]?.toIntOrNull() ?: 0,

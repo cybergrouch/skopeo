@@ -715,6 +715,43 @@ class UserServiceTest {
     }
 
     @Test
+    fun `the calibration facet stands alone as a filter, and a non-boolean is a 400 (#1065)`() {
+        provisionAdmin(uid = "staff-cal")
+        service.provision(token = token(uid = "cal1"), request = request).shouldBeRight()
+
+        // Stands alone: a search filtered only on calibration must not trip "at least one filter".
+        service
+            .searchPage(
+                token = token(uid = "staff-cal"),
+                filters = UserSearchFilters(inCalibration = "false"),
+                limit = 20,
+                offset = 0,
+            ).shouldBeRight()
+
+        // `false` is a real filter, so it must not be read as "absent" anywhere on the way down.
+        service
+            .searchPage(
+                token = token(uid = "staff-cal"),
+                filters = UserSearchFilters(inCalibration = "true"),
+                limit = 20,
+                offset = 0,
+            ).shouldBeRight()
+            .items
+            .shouldBeEmpty()
+
+        // A typo is refused rather than coerced — coercing "yes" to false would show settled players to
+        // someone who asked for calibrating ones.
+        service
+            .searchPage(
+                token = token(uid = "staff-cal"),
+                filters = UserSearchFilters(inCalibration = "yes"),
+                limit = 20,
+                offset = 0,
+            ).shouldBeLeft()
+            .message shouldContain "expected one of true, false"
+    }
+
+    @Test
     fun `an unknown status, sort or direction is a 400 that names the accepted values (#1050)`() {
         provisionAdmin(uid = "staff-enum")
         val staff = token(uid = "staff-enum")
