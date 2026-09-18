@@ -798,6 +798,66 @@ describe("LiveScoringPage", () => {
     expect(screen.queryByRole("button", { name: "Finalize" })).not.toBeInTheDocument();
   });
 
+  it("restores the right controls on re-entry, mid-game or mid-tiebreak (#937/#1083)", async () => {
+    // Leave-and-resume is the reason the state must not live in component state: a freshly mounted
+    // view holds no history at all, so whatever it shows came from the server's replayed log. Three
+    // separate mounts rather than one flow, because a mount IS the re-entry.
+    const user = userEvent.setup();
+
+    const cases = [
+      { view: { ...liveView, isInGame: true }, present: "Game to Ana", absent: "Set to Ana" },
+      {
+        view: { ...liveView, isInGame: false, isTiebreak: true },
+        present: "Set to Ana",
+        absent: "Game to Ana",
+      },
+      {
+        view: {
+          ...liveView,
+          isInGame: false,
+          isBetweenSets: true,
+          sets: [{ gamesTeam1: 6, gamesTeam2: 4 }],
+        },
+        present: "Ana retires",
+        absent: "Set to Ana",
+      },
+    ];
+
+    for (const { view, present, absent } of cases) {
+      useGetApiV1MatchesMatchIdLive.mockReturnValue({ data: view, isLoading: false });
+      const mounted = renderPage();
+      await start(user);
+      expect(screen.getByLabelText(present)).toBeInTheDocument();
+      expect(screen.queryByLabelText(absent)).not.toBeInTheDocument();
+      mounted.unmount();
+    }
+  });
+
+  it("starts a game, and the board comes alive when the server says so (#1083)", async () => {
+    const user = userEvent.setup();
+    // Between games: the board shows the score but is not a tap target, and Start game is the move.
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isInGame: false },
+      isLoading: false,
+    });
+    const between = renderPage();
+    await start(user);
+
+    expect(screen.queryByLabelText("Point to Ana")).not.toBeInTheDocument();
+    // The score itself is still readable — the affordance went, not the scoreboard.
+    expect(screen.getByText("30")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Start game" }));
+    expect(recordMutate).toHaveBeenCalledWith({ matchId: "m-1", data: { kind: "GAME_STARTED" } });
+    between.unmount();
+
+    // And once the log says a game is under way, the same board is a tap target.
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({ data: liveView, isLoading: false });
+    renderPage();
+    await start(user);
+    expect(screen.getByLabelText("Point to Ana")).toBeEnabled();
+  });
+
   it("leaves via Back, releasing fullscreen AND the claim on the way (#986, #1073)", async () => {
     // The umpire view is the only page that takes fullscreen, so leaving without releasing it would
     // strand the whole app.

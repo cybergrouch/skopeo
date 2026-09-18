@@ -183,6 +183,22 @@ describe('visibleControls', () => {
     expect(visibleControls(states.PRE_MATCH, true).has('undo')).toBe(false)
   })
 
+  it('follows an undo wherever the shortened log lands', () => {
+    // Undo has no destination to compute: it truncates the effective log, the server replays what is
+    // left, and the state falls out of that. So undoing the GameStarted that opened a game is not a
+    // special case -- it is the same derivation reading one fewer event.
+    const afterUndoOfGameStarted = { ...states.SCORING_GAME, isInGame: false }
+    expect(umpireStateOf(afterUndoOfGameStarted)).toBe('SET_TRANSITION')
+
+    // Undoing the SetStarted that began a set steps back out to the between-sets decision point...
+    expect(umpireStateOf({ ...states.SET_TRANSITION, isBetweenSets: true })).toBe('MATCH_TRANSITION')
+    // ...and undoing the concluding event of a retirement reopens the match, which is why Undo stays
+    // on offer once it is closed: `ScoreEngine.apply` documents that removing the ending from the fold
+    // restores the ability to score.
+    expect(umpireStateOf({ ...states.MATCH_CLOSED, outcome: undefined })).toBe('SCORING_GAME')
+    expect(visibleControls(states.MATCH_CLOSED, true).has('undo')).toBe(true)
+  })
+
   it('never puts Back in the table, so no state can take it away', () => {
     // It is the one control the gates must never touch: on an unstarted match it is the only way out.
     // Structural rather than a rule someone could add a state to and forget.
