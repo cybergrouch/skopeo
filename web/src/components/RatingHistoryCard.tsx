@@ -3,6 +3,8 @@ import { scoreline } from "@/lib/scoreline";
 import type { RatingHistoryResponse } from "@/api/generated/model";
 import { useGetApiV1MatchesIdCalculation } from "@/api/generated/matches/matches";
 import { CollapsibleCard } from "@/components/CollapsibleCard";
+import { IgnoredParamsNotice } from "@/components/IgnoredParamsNotice";
+import { pageField, useUrlViewState } from "@/hooks/useUrlViewState";
 import { Badge } from "@/components/ui/badge";
 import { CalculationBreakdownDetail } from "@/components/CalculationBreakdownDetail";
 import { NumberedPager } from "@/components/NumberedPager";
@@ -90,6 +92,12 @@ function MatchCalculationDetail({ matchId }: { matchId: string }) {
  * alongside the published NTRP band, and highlights rows where the band changed. A match-driven
  * entry is clickable and expands to show that match's result and calculation (issue #97); an
  * initial assessment (no match) is not clickable.
+ *
+ * The page lives in the URL (#1056), namespaced `ratings.` so it never collides with the match-history
+ * card beside it; `expanded` deliberately does NOT. That is the opt-in boundary: the page says *what
+ * data is shown* and belongs in a shareable, reload-proof link, while a set of open accordion rows says
+ * only *how the reader is poking at it* — in a URL it would be grotesque to share and would reopen rows
+ * nobody asked to reopen.
  */
 export function RatingHistoryCard({
   entries,
@@ -100,7 +108,11 @@ export function RatingHistoryCard({
 }: RatingHistoryCardProps) {
   const confidencePct = formatConfidence(confidence);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [page, setPage] = useState(0);
+  const { view, setView, ignored } = useUrlViewState({
+    ns: "ratings",
+    fields: { page: pageField() },
+  });
+  const page = view.page;
   const pageEntries = entries.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   // Raw NTRP values (and the drill-down calculation breakdown) are ADMINISTRATOR-only (#583). The
   // backend nulls the raw fields and returns band-jump entries only for non-admins, so infer the
@@ -137,6 +149,7 @@ export function RatingHistoryCard({
       }
       description={description}
     >
+      <IgnoredParamsNotice ignored={ignored} />
       {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : entries.length > 0 ? (
@@ -232,7 +245,7 @@ export function RatingHistoryCard({
                 page={page}
                 total={entries.length}
                 pageSize={PAGE_SIZE}
-                onPage={setPage}
+                onPage={(next) => setView({ page: next })}
               />
             ) : null}
           </>

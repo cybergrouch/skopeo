@@ -1,9 +1,10 @@
-import { useState } from 'react'
 import { NtrpLabel } from '@/components/NtrpLabel'
 import { ContentLink } from '@/components/ContentLink'
 import { useGetApiV1PlayersCodeMatchHistory } from '@/api/generated/users/users'
 import { CollapsibleCard } from '@/components/CollapsibleCard'
+import { IgnoredParamsNotice } from '@/components/IgnoredParamsNotice'
 import { MatchHistoryRow } from '@/components/MatchHistoryRow'
+import { choiceField, useUrlViewState } from '@/hooks/useUrlViewState'
 import { NTRP_LEVELS } from '@/lib/ntrp'
 
 /** Recent matches shown inline on the profile; the full, searchable history lives on its own page (#284). */
@@ -20,9 +21,17 @@ interface MatchHistoryCardProps {
  * A bounded preview of a player's match history (issue #65), on the owner's Profile tab and the public
  * profile alike. Shows the most recent {@link PREVIEW_COUNT} matches with a link to the full,
  * paginated + searchable history page (#284). Ratings appear only as the published NTRP band.
+ *
+ * The band filter lives in the URL (#1056) — it describes *which* matches are on screen, so a reload
+ * or a shared link keeps it. Namespaced `matches.` because this card shares a page with others that
+ * page and filter (the profile shows rating history beside it), and bare keys would collide.
  */
 export function MatchHistoryCard({ code, collapsible = false }: MatchHistoryCardProps) {
-  const [opponentBand, setOpponentBand] = useState('')
+  const { view, setView, ignored } = useUrlViewState({
+    ns: 'matches',
+    fields: { band: choiceField(NTRP_LEVELS) },
+  })
+  const opponentBand = view.band
   const query = useGetApiV1PlayersCodeMatchHistory(
     code,
     { limit: PREVIEW_COUNT, opponentBand: opponentBand || undefined },
@@ -43,11 +52,12 @@ export function MatchHistoryCard({ code, collapsible = false }: MatchHistoryCard
       contentClassName="space-y-3"
       collapsible={collapsible}
     >
+      <IgnoredParamsNotice ignored={ignored} />
       <select
           aria-label="Filter by opponent NTRP band"
           className="h-9 w-full rounded-md border bg-background px-2 text-sm"
           value={opponentBand}
-          onChange={(e) => setOpponentBand(e.target.value)}
+          onChange={(e) => setView({ band: e.target.value })}
         >
           <option value="">All opponent bands</option>
           {NTRP_LEVELS.map((level) => (

@@ -165,7 +165,65 @@ Query already provides (read from cache → mutate → invalidate → refetch).
 |---|---|---|
 | **Server state** | The TanStack Query cache, keyed per endpoint | Read via the generated hooks (`useGetApiV1PlayersCode(...)`); the cache — not component state — is the source of truth for anything from the API. No hand-written fetch/loading state. |
 | **Local UI state** | `useState` inside the component | Form fields, `saved`/`error` flags, expand/collapse — anything ephemeral and page-local. No shared store. |
+| **URL view state** | The query string, via `useUrlViewState` | Which data is on screen: page, filters, search, sort. Shareable and reload-proof, and the default for the public pages — see [URL-backed view state](#url-backed-view-state-1056). |
 | **Session / app-wide state** | One React context, `AuthProvider` (`web/src/auth/`) | The Firebase session + resolved profile + capabilities. This is the *only* global state; route guards and capability gates read it via `useAuth()`. |
+
+### URL-backed view state (#1056)
+
+**A new public page holds its view state in the query string, via `useUrlViewState`
+(`web/src/hooks/useUrlViewState.ts`) — not in `useState`.** The hook is the generalisation of
+[the Research tab's search params](#search-state-in-the-url-1054) (#1054), extracted once that
+shipped, and is adopted by `ClubEventsCard`, `MatchHistoryCard`, `RatingHistoryCard` and
+`PlayerMatchesPage`.
+
+```ts
+const { view, setView, ignored } = useUrlViewState({
+  ns: bucket.toLowerCase(),           // omit when the page owns its state alone
+  fields: { page: pageField() },      // plus choiceField(allowed) / textField()
+})
+// view.page   → 0-based, read from ?upcoming.page=2
+// setView({ page: 3 })  → one merged write, `replace`, defaults omitted
+// <IgnoredParamsNotice ignored={ignored} />
+```
+
+Why, and why not:
+
+- **The payoff is reload-proofing and shareability — *not* the "← Back" control.** `isOriginCandidate`
+  returns false for every public path on purpose (#1027), so a public page is never recorded as an
+  origin and its query string is never stored: Back returns to where the excursion *started*. That
+  limitation was reviewed and accepted. **Do not "fix" `isOriginCandidate` or
+  `PUBLIC_PATH_PATTERNS` to make Back restore a filter** — it would undo #1027. (Dashboard tabs do get
+  restoration, because the dashboard path *is* recorded with its query string.)
+- **`ShareCard` keeps sharing the bare canonical URL** (`${origin}/clubs/${code}`). A QR code must not
+  pin its recipient to page 3 of a filter they never chose. A "copy this view" affordance beside the QR
+  would be a separate feature.
+
+The rules the hook enforces:
+
+| Rule | Why |
+|---|---|
+| **Namespace per instance** (`?upcoming.page=2`) | `ClubPage` renders `ClubEventsCard` three times (Upcoming / Unfinalized / Finalized). A shared `?page=` would page all three at once. A page that owns its view state alone (`PlayerMatchesPage`) passes no `ns` and gets bare `?page=2&search=ben&band=4.0`. |
+| **Writes `replace`, never `push`** | Matches `?tab=` (#323): a filter tweak is not its own Back step, so the browser's Back keeps behaving like the on-page "← Back" control on pages that show both. |
+| **Defaults omitted** | An untouched page has a clean, pristine link — never `?page=1&band=`. |
+| **Validated on read, visible fallback** | An unusable value (`page=nope`, a band the API does not define) takes its default and is named in `ignored`, which `IgnoredParamsNotice` renders. A stale or hand-edited link must not 400 into an unexplained empty view. |
+| **One merged write per action** | `setView` takes a patch, so "filter changed, page back to 1" is a single write; two sequential writes would clobber each other. |
+
+#### The opt-in boundary
+
+Adoption is **per state item**, never "all `useState` → URL":
+
+> State describing **what data is shown** belongs in the URL. State describing **how the user is poking
+> at it** does not.
+
+Paging, filters, search and sort are the former. Expansion, hover, open menus and in-progress form
+input are the latter. `RatingHistoryCard` is the worked example: its `page` is in the URL and its
+`expanded` set of open rows stays in `useState`, because a link carrying a set of open accordions would
+be grotesque to share and would reopen rows nobody asked to reopen.
+
+**Only settled values may be written.** `PlayerMatchesPage` keeps its raw `searchInput` in `useState`
+and writes only the `useDebouncedValue` result, so typing rewrites the URL once rather than per
+keystroke. The raw input is also seeded from the URL *once per mount* — like `PlayerSearchForm`'s
+`initial` — never mirrored back, which would overwrite what the visitor is halfway through typing.
 
 ### The read → mutate → invalidate cycle
 
@@ -317,6 +375,11 @@ optional `initial: PlayerSearchFields`, seeded once per mount (not a controlled 
 overwrite in-progress typing). The Ratings tab passes nothing and keeps its previous blank-form
 behaviour; it has no navigation out of its results, so it has nothing to lose. Scroll restoration is
 not part of this — a separate mechanism, deferred.
+
+`useUrlViewState` (#1056) is the generalisation extracted from this file, and is what any *new* page
+should use; see [URL-backed view state](#url-backed-view-state-1056). The Research tab keeps its own
+read/write because its params are the search API's own facets (interval strings the form has to be
+able to reproduce), which is more than a reusable field codec should know about.
 
 ```mermaid
 classDiagram

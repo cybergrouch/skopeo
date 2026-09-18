@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { fullText } from "@/test/fullText"
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
+import { MemoryRouter, useLocation, useNavigationType } from "react-router-dom";
 import { RatingHistoryCard } from "./RatingHistoryCard";
 
 const { useGetApiV1MatchesIdCalculation } = vi.hoisted(() => ({
@@ -81,6 +83,37 @@ const rowButtons = () =>
   screen
     .queryAllByRole("button")
     .filter((b) => !/ntrp/i.test(b.getAttribute("aria-label") ?? ""));
+
+/** Surfaces the query string the card's page lives in (#1056), and how it got there. */
+function UrlProbe() {
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  return (
+    <>
+      <div data-testid="url">{decodeURIComponent(location.search)}</div>
+      <div data-testid="nav-type">{navigationType}</div>
+    </>
+  );
+}
+
+/**
+ * Renders inside a router, which the card now requires: its page lives in the URL (#1056). Wrapping
+ * here rather than at each call site keeps every existing test unchanged.
+ */
+function render(ui: ReactNode, entry = "/players/K7Q2MX") {
+  const wrap = (node: ReactNode) => (
+    <MemoryRouter initialEntries={[entry]}>
+      {node}
+      <UrlProbe />
+    </MemoryRouter>
+  );
+  const result = rtlRender(wrap(ui));
+  // `rerender` has to re-wrap too, or the card loses the router on the second render.
+  return {
+    ...result,
+    rerender: (node: ReactNode) => result.rerender(wrap(node)),
+  };
+}
 
 describe("RatingHistoryCard", () => {
   beforeEach(() => {
@@ -379,6 +412,61 @@ describe("RatingHistoryCard", () => {
     expect(screen.getByText("Showing 26–26 of 26")).toBeInTheDocument();
     expect(screen.getByText("2026-06-26")).toBeInTheDocument();
     expect(screen.queryByText("2026-06-01")).not.toBeInTheDocument();
+  });
+
+  describe("page in the URL, expansion not (#1056)", () => {
+    /** 26 entries with distinct dates: enough for two pages, each row identifiable. */
+    const twoPages = () =>
+      Array.from({ length: 26 }, (_, i) =>
+        entry({
+          id: `h${i}`,
+          calculatedAt: `2026-06-${String(i + 1).padStart(2, "0")}T12:00:00`,
+        }),
+      );
+
+    it("opens on the page its namespaced param names", () => {
+      render(
+        <RatingHistoryCard entries={twoPages()} />,
+        "/players/K7Q2MX?ratings.page=2",
+      );
+      // Reload-proof: the second page renders with no click.
+      expect(screen.getByText("Showing 26–26 of 26")).toBeInTheDocument();
+      expect(screen.getByText("2026-06-26")).toBeInTheDocument();
+    });
+
+    it("writes its page under the ratings namespace, by replace", async () => {
+      const user = userEvent.setup();
+      render(<RatingHistoryCard entries={twoPages()} />);
+      await user.click(screen.getByRole("button", { name: "Next" }));
+      // Namespaced so it cannot collide with the match-history card beside it on a profile.
+      expect(screen.getByTestId("url")).toHaveTextContent("?ratings.page=2");
+      expect(screen.getByTestId("nav-type")).toHaveTextContent("REPLACE");
+    });
+
+    it("keeps an expanded row out of the URL — that is the opt-in boundary", async () => {
+      const user = userEvent.setup();
+      render(<RatingHistoryCard entries={[entry({ matchId: "m1" })]} />);
+
+      await user.click(rowButtons()[0]);
+
+      // The row really did expand…
+      expect(screen.getByText(/dominance 0\.200000/)).toBeInTheDocument();
+      // …and the URL is untouched: which rows are open is how the reader is poking at the data,
+      // not what data is shown, so it would be grotesque to share and rude to restore.
+      expect(screen.getByTestId("url").textContent).toBe("");
+    });
+
+    it("says so and shows the first page when the link's page is unreadable", () => {
+      render(
+        <RatingHistoryCard entries={twoPages()} />,
+        "/players/K7Q2MX?ratings.page=0",
+      );
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "This link had 1 unreadable view setting (ratings.page)",
+      );
+      // A visible fallback, not an empty card.
+      expect(screen.getByText("Showing 1–25 of 26")).toBeInTheDocument();
+    });
   });
 
   it("shows a loading then an unavailable state for the calculation detail", async () => {
