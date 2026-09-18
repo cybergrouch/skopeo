@@ -83,12 +83,14 @@ class LiveMatchServiceTest {
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
 
     /**
-     * Rows [fixture] seeds before a test scores anything: MATCH_STARTED and SERVER_ASSIGNED.
+     * Rows [fixture] seeds before a test scores anything: MATCH_STARTED, SERVER_ASSIGNED, SET_STARTED
+     * and GAME_STARTED.
      *
      * Named rather than folded into each expected count, so a reader can see *why* a log of "two
-     * points" holds four rows, and so these assertions move together if the arrangement changes.
+     * points" holds six rows, and so these assertions move together if the arrangement changes — which
+     * is exactly what happened in #1083, when starting a set and a game became explicit steps.
      */
-    private val setupRows = 2
+    private val setupRows = 4
 
     private fun umpire(uid: String = "ump"): UUID = user(uid = uid, roles = setOf(Capability.PLAYER, Capability.SCORER))
 
@@ -146,6 +148,10 @@ class LiveMatchServiceTest {
         listOf(
             LiveMatchEventKinds.MATCH_STARTED to null,
             LiveMatchEventKinds.SERVER_ASSIGNED to server,
+            // Since #1083 a point also needs a set and a game under way: MATCH_STARTED lands between
+            // sets, and a set with no game open has nowhere to put a point.
+            LiveMatchEventKinds.SET_STARTED to null,
+            LiveMatchEventKinds.GAME_STARTED to null,
         ).forEach { (kind, playerId) ->
             live.append(
                 matchId = matchId,

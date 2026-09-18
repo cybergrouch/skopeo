@@ -91,6 +91,7 @@ class LiveMatchEventKindContractTest {
             ScoreEvent.GameAwarded(side = TeamSide.TEAM2),
             ScoreEvent.SetAwarded(side = TeamSide.TEAM1),
             ScoreEvent.SetStarted,
+            ScoreEvent.GameStarted,
             ScoreEvent.TiebreakStarted,
             ScoreEvent.ServerAssigned(playerId = server),
             ScoreEvent.Retired(side = TeamSide.TEAM2),

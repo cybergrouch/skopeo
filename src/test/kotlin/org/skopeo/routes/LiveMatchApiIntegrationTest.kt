@@ -120,13 +120,24 @@ class LiveMatchApiIntegrationTest {
     }
 
     /**
-     * A fixture that is **under way**: created, started, and with a server assigned.
+     * A fixture that is **under way**: created, started, with a server assigned, and **in a game**.
      *
      * Since #984/#985/#986 the API refuses scoring on a match that has not been started or has nobody
-     * serving. Seeded straight into the log rather than posted, so the arrangement does not depend on
-     * the guards under test.
+     * serving, and since #1083 a point also needs a set and a game under way. Seeded straight into the
+     * log rather than posted, so the arrangement does not depend on the guards under test.
+     *
+     * Use [seedBetweenGames] for the transitions that are only available with no game open — awarding
+     * a set, or starting a tiebreak.
      */
-    private fun seedFixture(): UUID {
+    private fun seedFixture(): UUID = seedInGame(upToGame = true)
+
+    /**
+     * Under way, in a set, with **no game open** (#1083) — the state that offers Set and Start
+     * tiebreak, and refuses a point.
+     */
+    private fun seedBetweenGames(): UUID = seedInGame(upToGame = false)
+
+    private fun seedInGame(upToGame: Boolean): UUID {
         val matchId = seedScheduledFixture()
         val users = UserRepository()
         val server = users.findByFirebaseUid(firebaseUid = "home")!!.toDomain().id
@@ -138,7 +149,15 @@ class LiveMatchApiIntegrationTest {
                 .firstNotNullOfOrNull { uid -> users.findByFirebaseUid(firebaseUid = uid)?.toDomain()?.id }
                 ?: server
         val live = LiveMatchRepository()
-        listOf(LiveMatchEventKinds.MATCH_STARTED to null, LiveMatchEventKinds.SERVER_ASSIGNED to server)
+        val setup =
+            listOf(
+                LiveMatchEventKinds.MATCH_STARTED to null,
+                LiveMatchEventKinds.SERVER_ASSIGNED to server,
+                // MATCH_STARTED leaves the match between sets (#1083), so the first set is started
+                // explicitly like every other one.
+                LiveMatchEventKinds.SET_STARTED to null,
+            ) + if (upToGame) listOf(element = LiveMatchEventKinds.GAME_STARTED to null) else emptyList()
+        setup
             .forEach { (kind, playerId) ->
                 live.append(
                     matchId = matchId,
@@ -206,8 +225,8 @@ class LiveMatchApiIntegrationTest {
 
             view.pointsTeam1 shouldBe "40"
             view.pointsTeam2 shouldBe "0"
-            // The two rows `seedFixture` seeds (start, server) plus the three points.
-            view.sequence shouldBe 5L
+            // The four rows `seedFixture` seeds (start, server, set, game) plus the three points.
+            view.sequence shouldBe 7L
         }
 
     @Test
@@ -349,9 +368,10 @@ class LiveMatchApiIntegrationTest {
     fun `a whole set is recorded through the API and banked with its tiebreak`() =
         withApp { client ->
             val token = seedScorer()
-            val matchId = seedFixture()
+            // Between games: a tiebreak is not started from inside one (#1083), and at 0-0 the games
+            // are level, which is what the guard asks for.
+            val matchId = seedBetweenGames()
 
-            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "MATCH_STARTED"))
             client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "TIEBREAK_STARTED"))
             repeat(times = 7) {
                 client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
@@ -390,7 +410,7 @@ class LiveMatchApiIntegrationTest {
             // Rotating here is the real rule: whoever served the tiebreak's first point receives first
             // in the set that follows.
             val token = seedScorer()
-            val matchId = seedFixture()
+            val matchId = seedBetweenGames()
             val users = UserRepository()
             val home = users.findByFirebaseUid(firebaseUid = "home")!!.toDomain().id
             val away = users.findByFirebaseUid(firebaseUid = "away")!!.toDomain().id
@@ -521,12 +541,20 @@ class LiveMatchApiIntegrationTest {
             stored.sets.map { it.abandoned } shouldBe listOf(element = true)
         }
 
-    /** Four points to [side] — one game, so a set awarded afterwards is not a winnerless 0-0. */
+    /**
+     * Four points to [side] — one game, so a set awarded afterwards is not a winnerless 0-0.
+     *
+     * Starts the game first (#1083). A game closing clears `isInGame`, so the second call in a row
+     * would otherwise have its points refused; issuing GAME_STARTED here keeps that a property of the
+     * helper rather than something every caller has to remember. Harmless when a game is already open:
+     * it is refused, and the points that follow are what the caller is asserting on.
+     */
     private suspend fun HttpClient.winAGame(
         token: String,
         matchId: UUID,
         side: String,
     ) {
+        postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "GAME_STARTED"))
         repeat(times = 4) {
             postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = side))
         }
@@ -590,6 +618,14 @@ class LiveMatchApiIntegrationTest {
             client
                 .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_STARTED"))
                 .status shouldBe HttpStatusCode.Created
+            // A set under way is not yet a game under way (#1083), so the point is still refused --
+            // one state further in, with its own reason.
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+                .status shouldBe HttpStatusCode.Conflict
+            client
+                .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "GAME_STARTED"))
+                .status shouldBe HttpStatusCode.Created
             client
                 .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
                 .status shouldBe HttpStatusCode.Created
@@ -621,7 +657,13 @@ class LiveMatchApiIntegrationTest {
             // rather than throw or invent one.
             val token = seedFinalizer()
             val matchId = seedScheduledFixture()
-            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "MATCH_STARTED"))
+            // Started, then a set, then a game -- none of which needs a server (#1083/#985). Only a
+            // POINT does, which is exactly the distinction this test is about.
+            listOf("MATCH_STARTED", "SET_STARTED", "GAME_STARTED").forEach { kind ->
+                client
+                    .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = kind))
+                    .status shouldBe HttpStatusCode.Created
+            }
 
             client
                 .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "GAME_AWARDED", side = "TEAM1"))
@@ -701,8 +743,8 @@ class LiveMatchApiIntegrationTest {
             // The credit is folded out because §8a makes the log disposable — but finalize itself does
             // NOT delete it, so a mis-finalized match can still be inspected.
             LiveMatchRepository().umpires(matchId = matchId).shouldHaveSize(size = 1)
-            // The award, plus the start and server rows the fixture was seeded with.
-            LiveMatchRepository().log(matchId = matchId).shouldHaveSize(size = 3)
+            // The award, plus the four rows the fixture seeds: start, server, set, game (#1083).
+            LiveMatchRepository().log(matchId = matchId).shouldHaveSize(size = 5)
         }
 
     @Test
