@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
+import { serverMessage } from '@/observability/serverMessage'
 import { Button } from '@/components/ui/button'
 import {
   useDeleteApiV1MatchesMatchIdLiveClaim,
@@ -12,6 +14,7 @@ import {
   usePostApiV1MatchesMatchIdLiveUndo,
 } from '@/api/generated/matches/matches'
 import type {
+  LiveMatchResponse,
   LiveScoreEventRequestKind,
   MatchPublicPlayer,
 } from '@/api/generated/model'
@@ -27,6 +30,62 @@ import {
 import { MatchClock } from '@/features/livematch/MatchClock'
 
 type Side = 'TEAM1' | 'TEAM2'
+
+/**
+ * Is the app already running as an installed home-screen app (#1076)?
+ *
+ * Two checks because the platforms disagree: `display-mode` covers Android/Chromium and modern iOS,
+ * while `navigator.standalone` is the older iOS-only signal and is not in the DOM lib's types. Either
+ * being true means the install hint has nothing left to offer.
+ *
+ * Defaults to "installed" if neither can be read, so a browser that cannot answer shows no hint. A
+ * missing tip is a smaller cost than a permanent one nobody can action.
+ */
+function isInstalled(): boolean {
+  if (typeof window === 'undefined') return true
+  const standalone = (window.navigator as Navigator & { standalone?: boolean }).standalone
+  if (standalone === true) return true
+  return window.matchMedia?.('(display-mode: standalone)').matches ?? true
+}
+
+/**
+ * The next step, or null while play is under way (#1070/#1075).
+ *
+ * One function for both gated states on purpose. #1070 is "no idea what to click first" before the
+ * match starts; #1075 is the same complaint between sets. They are the same problem — a screen whose
+ * live control is not obvious — so they get the same mechanism rather than two prompts that could
+ * drift apart in wording or placement.
+ *
+ * Null during play: a prompt that is always on screen is furniture, and furniture is not read.
+ */
+function scoringPrompt(view: LiveMatchResponse): string | null {
+  if (!view.hasStarted) {
+    return view.serverId == null
+      ? 'Set which side is serving to begin.'
+      : 'Ready — press Start match.'
+  }
+  if (view.isBetweenSets) {
+    return 'Set complete. Start the next set, or finalize the match.'
+  }
+  return null
+}
+
+/**
+ * What the centred set label reads (#1074).
+ *
+ * `sets.length + 1` is the set in progress, which is correct *while one is being played* and wrong at
+ * both edges. Between sets nothing is in progress — the next set has not begun — so announcing "Set 2"
+ * the instant set 1 is awarded is the same overclaim that made the old layout confusing, just relocated.
+ * Saying "next" instead is what the umpire is actually looking at: a decision point (#984), not a set.
+ *
+ * Before the match starts the plain number is kept. #1070 puts the "press Start match" guidance in its
+ * own prompt, so repeating it here would say the same thing twice in one band.
+ */
+function setLabel(view: LiveMatchResponse): string {
+  const current = view.sets.length + 1
+  if (view.isBetweenSets) return `Next: Set ${current}`
+  return `Set ${current}`
+}
 
 /** A side's players as one label, e.g. "Ana & Bea". Falls back so a placeholder still reads as someone. */
 function sideName(players: MatchPublicPlayer[] | undefined): string {
@@ -56,7 +115,7 @@ export function LiveScoringPage() {
   const navigate = useNavigate()
   const [flipped, setFlipped] = useState(false)
   const [started, setStarted] = useState(false)
-  const { isPortrait, enter, exit } = useLockedLandscape()
+  const { isPortrait, isFullscreen, enter, exit } = useLockedLandscape()
 
   const { data: me } = useGetApiV1UsersMe()
   const { data: match, isLoading } = useGetApiV1MatchesCodeCode(code ?? '', {
@@ -68,7 +127,20 @@ export function LiveScoringPage() {
     query: { enabled: Boolean(matchId) && started },
   })
 
-  const onError = (message: string) => () => toast.error(message)
+  /**
+   * Prefer the SERVER's sentence over our generic one (#1070/#1075).
+   *
+   * `LiveScoringRules` already writes exactly what the umpire needs to hear — "Nobody is serving yet.
+   * Set who is serving before recording a point.", "That set has ended. Start the next set, or
+   * finalize the match, before scoring again." — and its KDoc says refusing with a reason is what lets
+   * the view explain why a control did nothing. Replacing all of them with "Could not record that"
+   * discarded every one of those sentences, which is what both issues reported as "no feedback".
+   *
+   * The generic string stays as the fallback: a network failure or a 500 carries nothing worth showing.
+   * Routed through `toastError` so an unexpected failure is still reported (#807).
+   */
+  const onError = (fallback: string) => (error: unknown) =>
+    toastError(serverMessage(error) ?? fallback, { cause: error })
   const afterWrite = { onSuccess: () => void refetch() }
 
   const claim = usePostApiV1MatchesMatchIdLiveClaim({
@@ -180,6 +252,22 @@ export function LiveScoringPage() {
             {sideName(match.team2)}
           </p>
         </div>
+        {/*
+          Installing is the ONLY lever that helps iOS (#1076): element full-screen does not exist in a
+          Safari tab, so the whole gap between the best and worst iOS outcome rides on an action we
+          otherwise never mention. Said here because this screen is already a deliberate tap-gated
+          step (#956), seen once per match by exactly the right person.
+
+          Gated on not already being installed, so it self-hides the moment it is acted on — a
+          standing instruction to do something already done is noise. Names the actual steps, because
+          "install the app" is not actionable on iOS without them.
+        */}
+        {!isInstalled() && (
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Tip: add Skopeo to your home screen (Share → Add to Home Screen) to score without the
+            browser and system bars taking up the board.
+          </p>
+        )}
         <div className="flex items-center gap-3">
           <Button variant="secondary" onClick={() => navigate(`/matches/${code}`)}>
             Back
@@ -205,8 +293,25 @@ export function LiveScoringPage() {
 
   return (
     <div className="flex h-[100dvh] w-[100dvw] flex-col overflow-hidden bg-background px-[1.5dvw] py-[1dvh]">
-      <div className="flex shrink-0 items-center justify-between gap-[1dvw]">
+      <div className="relative flex shrink-0 items-center justify-between gap-[1dvw]">
         <div className="flex min-w-0 items-center gap-[1.2dvw]">
+          {/*
+            The only way out (#986/#1073). There were two Back controls — this one and a second in the
+            right-hand cluster — and they were NOT equivalent: that one called `exit()` and navigated,
+            leaving the claim behind, so the match still looked claimed by an umpire who had walked
+            away. This one goes through `leave()`, which releases the claim first. The duplicate was
+            removed rather than this one for exactly that reason.
+
+            Stays live whatever state the match is in: it is the one control the gates must never
+            disable. On a match that has not started it is the only way out, so a `busy` guard here
+            would strand an umpire who opened the wrong court.
+
+            Deliberately still `ghost`, unlike the board's controls (#1071). Two reasons: it is
+            navigation rather than a scoring action, and it sits alone in the header rather than beside
+            disabled siblings — so the inverted-affordance problem that forced Retire/Default off ghost
+            does not arise here. Making it prominent would invite an accidental mid-match exit, and
+            leaving releases the claim.
+          */}
           <Button size="sm" variant="ghost" onClick={() => void leave()}>
             ← Back
           </Button>
@@ -214,12 +319,36 @@ export function LiveScoringPage() {
           <span className="truncate text-[2.2dvh] text-muted-foreground">
             {match.event?.name ? `${match.event.name} · ` : ''}Match #{match.matchNumber}
           </span>
-          {/* The set IN PROGRESS, which is one more than the number banked. */}
-          <span className="whitespace-nowrap text-[2.2dvh] font-semibold">
-            Set {view.sets.length + 1}
-          </span>
           <CompletedSets view={view} />
         </div>
+        {/*
+          The current set, floating dead centre (#1074).
+
+          It used to sit in the left cluster immediately before the banked-set chips, so after a 6-4
+          first set the band read "Set 2  [6-4]" and the chip parsed as the CURRENT set's score. Moving
+          it away from the chips is the fix; the chips gained their own set numbers in the same change,
+          because a bare "6-4" invites the same misreading wherever it sits.
+
+          Absolutely positioned rather than a third flex child: the left cluster truncates a long event
+          name, which would drag a flex-centred label off-centre. Absolute positioning is independent of
+          its siblings' widths, so the label is centred whatever the match is called.
+
+          `pointer-events-none` is not optional — this floats over the header and, at narrow widths,
+          could overlap a control. A label that swallowed a tap on the server toggle or Start match
+          would be a bad courtside bug with an invisible cause.
+
+          The gradient stops are theme tokens, never literal colours: #394 records a shared hardcoded
+          treatment failing WCAG-AA against the card surface in the AO and Off-Season themes.
+        */}
+        <span
+          role="status"
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap
+                     rounded-full bg-gradient-to-r from-transparent via-secondary to-transparent
+                     px-[2dvw] py-[0.2dvh] text-[2.4dvh] font-semibold text-foreground"
+        >
+          {setLabel(view)}
+        </span>
+
         <div className="flex items-center gap-[1dvw] text-[2.2dvh] text-muted-foreground">
           <ServerControl
             view={view}
@@ -234,30 +363,75 @@ export function LiveScoringPage() {
             className="text-[2.4dvh] font-semibold tabular-nums text-foreground"
           />
           {/*
-            The way out (#986). The entry screen had a Back control and the scoring view had none, so
-            an umpire who opened the wrong match — or one who is not ready to start — could only leave
-            via the browser, which does not release fullscreen. Stays live whatever state the match is
-            in: it is the one control the gates must never disable.
+            Full-screen is best-effort and its failure was invisible (#1076). `enter()` swallows a
+            rejected `requestFullscreen` on purpose — the layout still fits — and `isFullscreen` was
+            tracked from the `fullscreenchange` event and then read by nobody. So a view that had
+            silently lost full-screen looked identical to one that never had it, and the system bar a
+            scorer reported could not be attributed: a refused request, an iOS Safari tab where
+            element full-screen does not exist, or an installed PWA whose status bar is by design.
+
+            This is the reading that distinguishes them, and it is a control rather than a warning
+            because re-entering needs a user gesture — the same constraint that put "Start scoring" on
+            the entry screen. Not shown when full-screen is held, so it is silent in the normal case.
           */}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              void exit()
-              navigate(`/matches/${code}`)
-            }}
-          >
-            Back
-          </Button>
+          {!isFullscreen && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void enter()}
+              title="This view is not full-screen, so the system bar is taking height from the board"
+            >
+              Full screen
+            </Button>
+          )}
           {view.isPaused && <span className="font-semibold text-amber-600">Paused</span>}
           {view.isTiebreak && <span className="font-semibold">Tiebreak</span>}
+          {/* One slot, two controls (#1075). `!hasStarted` and `isBetweenSets` cannot both be true, so
+              these never compete for the space — which matters in a cluster this full. */}
+          {view.isBetweenSets && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => send('SET_STARTED')}
+            >
+              Start next set
+            </Button>
+          )}
           {!view.hasStarted && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => send('MATCH_STARTED')}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || view.serverId == null}
+              // A disabled control that says nothing is the whole complaint in #1070. The title
+              // answers "why can't I click this" on hover, and the prompt beside it answers it
+              // without a hover at all — which is what a phone needs.
+              title={
+                view.serverId == null ? 'Set which side is serving before starting the match' : undefined
+              }
+              onClick={() => send('MATCH_STARTED')}
+            >
               Start match
             </Button>
           )}
         </div>
       </div>
+
+      {/*
+        What to do next, said BEFORE the umpire probes a dead control (#1070/#1075).
+
+        An error is the wrong mechanism for this: nothing has gone wrong, and an error only appears
+        after a wrong guess. This is a next step, so it is stated up front and announced politely
+        rather than asserted as an alert.
+      */}
+      {scoringPrompt(view) ? (
+        <p
+          role="status"
+          className="shrink-0 py-[0.3dvh] text-center text-[2.2dvh] font-medium text-muted-foreground"
+        >
+          {scoringPrompt(view)}
+        </p>
+      ) : null}
 
       <LiveScoringBoard
         view={view}
@@ -280,7 +454,6 @@ export function LiveScoringPage() {
         onTiebreak={() => send('TIEBREAK_STARTED')}
         onPauseResume={() => send(view.isPaused ? 'RESUMED' : 'PAUSED')}
         onFlip={() => setFlipped((f) => !f)}
-        onStartSet={() => send('SET_STARTED')}
         onFinalize={() => finalize.mutate({ matchId })}
       />
     </div>

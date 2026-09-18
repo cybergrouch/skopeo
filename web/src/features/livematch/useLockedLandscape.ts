@@ -62,6 +62,12 @@ type LockableOrientation = ScreenOrientation & {
   unlock?: () => void
 }
 
+/** Whether the document is full-screen right now — the initial value, before any event fires. */
+function isFullscreenNow(): boolean {
+  if (typeof document === 'undefined') return false
+  return Boolean(document.fullscreenElement)
+}
+
 function isPortraitNow(): boolean {
   // matchMedia rather than comparing width to height: it is what actually changes on rotation, and it
   // does not misreport a landscape phone whose on-screen keyboard has squashed the viewport.
@@ -71,7 +77,11 @@ function isPortraitNow(): boolean {
 
 export function useLockedLandscape(): LockedLandscape {
   const [isPortrait, setIsPortrait] = useState(isPortraitNow)
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  // Seeded from the DOM, not assumed false (#1076). Tracking CHANGES from `fullscreenchange` is
+  // right, but the initial value is a separate question: re-entering a match that is already
+  // full-screen fires no event, so `false` would have reported "not full-screen" until something
+  // unrelated changed. Harmless while nobody read the flag — which is exactly why it survived.
+  const [isFullscreen, setIsFullscreen] = useState(isFullscreenNow)
 
   // Pin the document for as long as the umpire view is mounted.
   useEffect(() => {

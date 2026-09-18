@@ -35,6 +35,7 @@ vi.mock("@/api/generated/matches/matches", () => ({
 }));
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+import { toast } from "sonner";
 
 const recordMutate = vi.fn();
 const undoMutate = vi.fn();
@@ -638,7 +639,7 @@ describe("LiveScoringPage", () => {
     renderPage();
     await start(user);
 
-    await user.click(screen.getByRole("button", { name: "Set who is serving" }));
+    await user.click(screen.getByRole("button", { name: "Set which side is serving" }));
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
       data: { kind: "SERVER_ASSIGNED", playerId: "p-1" },
@@ -707,7 +708,7 @@ describe("LiveScoringPage", () => {
     expect(screen.getByLabelText("Set to Ana")).toBeDisabled();
     expect(screen.getByLabelText("Ana retires")).toBeDisabled();
     // Back stays available throughout — an umpire must be able to leave a match opened by mistake.
-    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "← Back" })).toBeEnabled();
   });
 
   it("refuses points until somebody is serving, but still allows a declared game (#985)", async () => {
@@ -772,16 +773,497 @@ describe("LiveScoringPage", () => {
     expect(screen.getByRole("button", { name: "Finalize" })).toBeDisabled();
   });
 
-  it("leaves via Back, releasing fullscreen on the way (#986)", async () => {
+  it("leaves via Back, releasing fullscreen AND the claim on the way (#986, #1073)", async () => {
     // The umpire view is the only page that takes fullscreen, so leaving without releasing it would
-    // strand the whole app. Back existed on the entry screen and not in the scoring view, which is
-    // why an umpire who opened the wrong match could only escape through the browser.
+    // strand the whole app.
+    //
+    // The claim assertion is the #1073 half and is the reason this test matters: there used to be a
+    // second Back control that released fullscreen but NOT the claim, so a match still looked claimed
+    // by an umpire who had walked away. That control is gone; this one goes through `leave()`. Without
+    // the releaseMutate assertion, deleting the wrong one of the two would have passed.
     const user = userEvent.setup();
     renderPage();
     await start(user);
 
-    await user.click(screen.getByRole("button", { name: "Back" }));
+    await user.click(screen.getByRole("button", { name: "← Back" }));
     expect(exitFullscreen).toHaveBeenCalled();
+    expect(releaseMutate).toHaveBeenCalled();
+  });
+
+  it("is a two-state side toggle, named by side rather than by player (#1072)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // Visible label is static, so the button stops being as wide as the longest name — and "Toggle"
+    // is accurate because the designation is the serving TEAM, which really is two-state.
+    const control = screen.getByRole("button", { name: /Serving: Ana/ });
+    expect(control).toHaveTextContent("Toggle server");
+    expect(control).not.toHaveTextContent("Ana");
+    // Singles: the side IS the player, so the spoken name is just the name — no "Team" prefix.
+    expect(control).toHaveAttribute(
+      "aria-label",
+      "Serving: Ana. Tap to switch sides.",
+    );
+  });
+
+  it("speaks a doubles side as a team, not a player (#1072)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        players: [
+          { userId: "p-1", name: "Ana", side: "TEAM1" },
+          { userId: "p-1b", name: "Bea", side: "TEAM1" },
+          { userId: "p-2", name: "Bob", side: "TEAM2" },
+          { userId: "p-2b", name: "Cal", side: "TEAM2" },
+        ],
+      },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // Naming a single player would be a claim the app does not make: only the team is tracked, and
+    // the umpire calls out which partner is up. "and" rather than "&" because this is read aloud.
+    expect(
+      screen.getByRole("button", { name: /Serving: Team Ana and Bea/ }),
+    ).toHaveTextContent("Toggle server");
+  });
+
+  it("switches the serving SIDE, not to the next player (#1072)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        players: [
+          { userId: "p-1", name: "Ana", side: "TEAM1" },
+          { userId: "p-1b", name: "Bea", side: "TEAM1" },
+          { userId: "p-2", name: "Bob", side: "TEAM2" },
+          { userId: "p-2b", name: "Cal", side: "TEAM2" },
+        ],
+      },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // Ana (TEAM1) is serving, so one tap must hand over to TEAM2 — NOT advance to Bea, her partner.
+    // Doubles serving order changes at tiebreaks and alternates across games, so the app tracks only
+    // the team and leaves the partner to the umpire's call.
+    await user.click(screen.getByRole("button", { name: /Serving: Team Ana and Bea/ }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "SERVER_ASSIGNED", playerId: "p-2" },
+    });
+  });
+
+  it('says "Set server" while nothing is assigned, not "Change server" (#1072)', async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, hasStarted: false, serverId: null, serverName: null },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // An outstanding step reads differently from a change — and #1070's prompt relies on it.
+    expect(
+      screen.getByRole("button", { name: "Set which side is serving" }),
+    ).toHaveTextContent("Set server");
+  });
+
+  it("marks the serving side with a ball that has a text alternative (#1072)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // Ana (TEAM1) is serving in the fixture. A shape alone tells a screen reader nothing, so the
+    // graphic is aria-hidden and carries an adjacent sr-only word.
+    expect(screen.getAllByText("serving")).toHaveLength(1);
+  });
+
+  it("splits doubles partners onto their own rows, ready for a per-player ball (#1072)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        players: [
+          { userId: "p-1", name: "Ana", side: "TEAM1" },
+          { userId: "p-1b", name: "Bea", side: "TEAM1" },
+          { userId: "p-2", name: "Bob", side: "TEAM2" },
+          { userId: "p-2b", name: "Cal", side: "TEAM2" },
+        ],
+      },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // Four separate rows, not two joined strings. Nothing hangs off them yet — the ball still marks
+    // the side — but a per-player indicator can attach later without moving anything.
+    for (const name of ["Ana", "Bea", "Bob", "Cal"]) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    // Still exactly one ball: it marks the serving SIDE, and doubling it onto both partners would
+    // claim something the umpire has not told us.
+    expect(screen.getAllByText("serving")).toHaveLength(1);
+  });
+
+  it("keeps singles on a single full-size row (#1072)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // The common case must not regress: one name, one row, original size. Two smaller rows exist
+    // only for doubles, and cost no extra height so the action bar stays on screen.
+    const label = screen.getByText("Ana");
+    expect(label.className).toContain("text-[3.4dvh]");
+  });
+
+  it("offers Start next set in the header between sets (#1075)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isBetweenSets: true },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // It used to live in the bottom action row while Start match sat top-right — same kind of action,
+    // two places to look. Both are "begin play", so both belong in one slot.
+    await user.click(screen.getByRole("button", { name: "Start next set" }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "SET_STARTED" },
+    });
+  });
+
+  it("never renders both start controls at once (#1075)", async () => {
+    const user = userEvent.setup();
+
+    // `!hasStarted` and `isBetweenSets` are mutually exclusive, which is what lets one header slot
+    // hold both. Asserting it means a future state change cannot quietly put two in a full cluster.
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, hasStarted: false },
+      isLoading: false,
+    });
+    const first = renderPage();
+    await start(user);
+    expect(screen.getByRole("button", { name: "Start match" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start next set" }),
+    ).not.toBeInTheDocument();
+    first.unmount();
+
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isBetweenSets: true },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+    expect(
+      screen.getByRole("button", { name: "Start next set" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start match" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps Retire and Default live between sets (#1075, #984/#986)", async () => {
+    const user = userEvent.setup();
+    // HOST as well as SCORER: Finalize is gated on match-management (`canFinalize`), so a plain
+    // SCORER never sees it. Asserting it needs a user who could finalize — otherwise the test would
+    // "pass" on a button that was never rendered for a reason unrelated to the between-sets state.
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "u1", capabilities: ["PLAYER", "SCORER", "HOST"] },
+    });
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isBetweenSets: true },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // A DECISION, not an oversight: these are transitions rather than scoring actions, and a player
+    // retiring after losing a set is ordinary tennis — the most common way a match ends early.
+    // Disabling them "for consistency" would make a frequent, legitimate event unrecordable, leaving
+    // the umpire to start a set they know will not be played just to retire out of it.
+    expect(screen.getByLabelText("Ana retires")).toBeEnabled();
+    expect(screen.getByLabelText("Ana defaults")).toBeEnabled();
+    expect(screen.getByLabelText("Bob retires")).toBeEnabled();
+    // While the scoring actions stay correctly inert.
+    expect(screen.getByLabelText("Point to Ana")).toBeDisabled();
+    expect(screen.getByLabelText("Game to Ana")).toBeDisabled();
+    // And the two the request named as needing to stay usable.
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Finalize" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "← Back" })).toBeEnabled();
+  });
+
+  it("prompts for the server before the match starts, then for Start match (#1070)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, hasStarted: false, serverId: null, serverName: null },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // Said BEFORE the umpire probes a dead control — the whole complaint in #1070 was silence.
+    expect(
+      screen.getByText("Set which side is serving to begin."),
+    ).toBeInTheDocument();
+    // And Start match is gated on the server, which is the ordering that was never enforced: it used
+    // to be clickable with nobody serving, leaving the point buttons dead for a second silent reason.
+    const startMatch = screen.getByRole("button", { name: "Start match" });
+    expect(startMatch).toBeDisabled();
+    expect(startMatch).toHaveAttribute(
+      "title",
+      "Set which side is serving before starting the match",
+    );
+  });
+
+  it("advances the prompt once a server is set (#1070)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, hasStarted: false },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    expect(screen.getByText("Ready — press Start match.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start match" })).toBeEnabled();
+  });
+
+  it("says nothing once play is under way (#1070)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // A prompt that is always on screen is furniture, and furniture is not read.
+    expect(screen.queryByText(/Set which side is serving/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/press Start match/)).not.toBeInTheDocument();
+  });
+
+  it("shows the server's own refusal instead of a generic toast (#1070)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // Pull the handler the page actually wired up and hand it a real ErrorResponse shape. Before
+    // #1070 every one of these became "Could not record that", so LiveScoringRules' sentences —
+    // written expressly so the view could explain itself — were never seen by anyone.
+    const options = usePostApiV1MatchesMatchIdLiveEvents.mock.calls.at(-1)?.[0];
+    options?.mutation?.onError?.({
+      response: {
+        data: {
+          message:
+            "That set has ended. Start the next set, or finalize the match, before scoring again.",
+        },
+      },
+    });
+    expect(toast.error).toHaveBeenCalledWith(
+      "That set has ended. Start the next set, or finalize the match, before scoring again.",
+      expect.anything(),
+    );
+  });
+
+  it("falls back to its own copy when the failure carries no message (#1070)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // A network failure or a 500 has nothing worth showing, so the generic string is still right —
+    // surfacing "undefined" would be worse than the toast it replaced.
+    const options = usePostApiV1MatchesMatchIdLiveEvents.mock.calls.at(-1)?.[0];
+    options?.mutation?.onError?.(new Error("Network Error"));
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not record that",
+      expect.anything(),
+    );
+  });
+
+  it("floats the current-set label away from the banked-set chips (#1074)", async () => {
+    // The bug: the label sat immediately before the chips, so after a 6-4 first set the band read
+    // "Set 2  [6-4]" and the chip parsed as the CURRENT set's score.
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, sets: [{ gamesTeam1: 6, gamesTeam2: 4 }] },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // The chip now identifies itself, so a bare score cannot be mistaken for the live one.
+    expect(screen.getByText("S1")).toBeInTheDocument();
+    expect(screen.getByText("6-4")).toBeInTheDocument();
+    // And the current set is announced separately, as a status region.
+    const label = screen.getByRole("status");
+    expect(label).toHaveTextContent("Set 2");
+    // Floating over the header: it MUST NOT be hit-testable, or it could swallow a tap on the server
+    // toggle or Start match at narrow widths, with no visible cause.
+    expect(label).toHaveClass("pointer-events-none");
+  });
+
+  it("says a set is NEXT rather than in progress between sets (#1074)", async () => {
+    // Announcing "Set 2" the instant set 1 is awarded is the same overclaim as the old layout, just
+    // relocated: between sets nothing is in progress — it is a decision point (#984).
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        isBetweenSets: true,
+        sets: [{ gamesTeam1: 6, gamesTeam2: 4 }],
+      },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // Two live regions between sets, announcing different things: the label says WHICH set is next,
+    // the prompt (#1070/#1075) says what to do about it. Queried by text rather than by role for
+    // exactly that reason — `getByRole("status")` would find both and throw.
+    const statuses = screen
+      .getAllByRole("status")
+      .map((node) => node.textContent?.trim());
+    expect(statuses).toContain("Next: Set 2");
+    expect(statuses).toContain(
+      "Set complete. Start the next set, or finalize the match.",
+    );
+  });
+
+  it("numbers every banked set, so three chips are not ambiguous (#1074)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        sets: [
+          { gamesTeam1: 6, gamesTeam2: 4 },
+          { gamesTeam1: 3, gamesTeam2: 6 },
+        ],
+      },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    expect(screen.getByText("S1")).toBeInTheDocument();
+    expect(screen.getByText("S2")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Set 3");
+  });
+
+  it("renders Retire, Default and Switch sides as buttons, not text (#1071)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // `ghost` has only a hover state — no border, no shadow — so these read as text at rest. A border
+    // is the affordance, and it is exactly what ghost lacks, so that is what this asserts.
+    for (const name of ["Ana retires", "Ana defaults", "Bob retires", "Bob defaults"]) {
+      expect(screen.getByLabelText(name)).toHaveClass("border");
+    }
+    expect(screen.getByRole("button", { name: "Switch sides" })).toHaveClass("border");
+
+    // Retire/Default keep a caution cue as well: the border is affordance, the red is danger, and
+    // ending a match deserves both. Switch sides changes nothing, so it gets no warning colour.
+    expect(screen.getByLabelText("Ana retires")).toHaveClass("text-destructive");
+    expect(screen.getByRole("button", { name: "Switch sides" })).not.toHaveClass(
+      "text-destructive",
+    );
+  });
+
+  it("does not let disabled controls out-signal live ones between sets (#1071)", async () => {
+    // The inversion this fixes: `disabled:opacity-50` applies to every variant, so a disabled
+    // `outline` Game kept its border while a live `ghost` Retire had none — the control the umpire
+    // could NOT use looked more pressable than the one they could. Both now carry a border, so the
+    // difference between them is the disabled state alone rather than the presence of a button shape.
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isBetweenSets: true },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    expect(screen.getByLabelText("Game to Ana")).toBeDisabled();
+    expect(screen.getByLabelText("Ana retires")).toBeEnabled();
+    expect(screen.getByLabelText("Game to Ana")).toHaveClass("border");
+    expect(screen.getByLabelText("Ana retires")).toHaveClass("border");
+  });
+
+  it("stays silent about full screen while it is actually held (#1076)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // `fullscreenElement` is set in the harness, and the hook now seeds its initial state from the
+    // DOM — so a view that IS full-screen offers nothing. Before that seeding it reported `false`
+    // until an event fired, which on a re-entered match would have been permanently wrong.
+    expect(
+      screen.queryByRole("button", { name: "Full screen" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers a way back into full screen when it is not held (#1076)", async () => {
+    Object.defineProperty(document, "fullscreenElement", {
+      value: null,
+      configurable: true,
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // The reading that makes the reported system bar attributable: a refused request, an iOS Safari
+    // tab where element full-screen does not exist, or an installed PWA whose status bar is by
+    // design. `enter()` swallows the rejection deliberately, so without this the failure is invisible.
+    const control = screen.getByRole("button", { name: "Full screen" });
+    expect(control).toHaveAttribute(
+      "title",
+      "This view is not full-screen, so the system bar is taking height from the board",
+    );
+    // A control rather than a warning, because re-entering needs a user gesture.
+    await user.click(control);
+    expect(document.documentElement.requestFullscreen).toHaveBeenCalled();
+  });
+
+  it("suggests installing on the confirm screen, and only when not installed (#1076)", async () => {
+    // Installing is the only lever that helps iOS at all, and this screen is already a tap-gated
+    // step seen once per match (#956).
+    renderPage();
+    expect(
+      screen.getByText(/add Skopeo to your home screen/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Share → Add to Home Screen/)).toBeInTheDocument();
+  });
+
+  it("hides the install tip once the app is installed (#1076)", async () => {
+    // A standing instruction to do something already done is noise.
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(display-mode: standalone)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    renderPage();
+    expect(
+      screen.queryByText(/add Skopeo to your home screen/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("has exactly one Back control in the scoring view (#1073)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // Two used to render side by side in the same header row. Asserting the count, not just the
+    // survivor, is what stops a future change quietly reintroducing a claim-leaking second one.
+    expect(screen.getAllByRole("button", { name: /Back/ })).toHaveLength(1);
   });
 
   it("keeps Back available even when everything else is inert (#986)", async () => {
@@ -795,7 +1277,7 @@ describe("LiveScoringPage", () => {
     renderPage();
     await start(user);
 
-    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "← Back" })).toBeEnabled();
   });
 
 });
