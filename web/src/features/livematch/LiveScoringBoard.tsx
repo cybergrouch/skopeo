@@ -223,7 +223,6 @@ export function ScoringActions({
   onTiebreak,
   onPauseResume,
   onFlip,
-  onStartSet,
   onFinalize,
 }: {
   view: LiveMatchResponse
@@ -238,7 +237,6 @@ export function ScoringActions({
   onTiebreak: () => void
   onPauseResume: () => void
   onFlip: () => void
-  onStartSet: () => void
   onFinalize: () => void
 }) {
   const finished = view.outcome != null
@@ -276,11 +274,10 @@ export function ScoringActions({
         next, so the umpire chooses: play on, or this was the last set. Before this existed there was
         no moment at which Finalize could be reached on a match that simply finished.
       */}
-      {betweenSets && (
-        <Button size="sm" variant="outline" disabled={busy} onClick={onStartSet}>
-          Start next set
-        </Button>
-      )}
+      {/* "Start next set" moved to the header (#1075), beside where "Start match" renders. Both mean
+          "begin play", both appear exactly when play is not under way, and both are the one control
+          the umpire is waiting for — so they belong in one place rather than two. They are mutually
+          exclusive, so a single header slot holds both. */}
       {canFinalize && (
         <Button
           size="sm"

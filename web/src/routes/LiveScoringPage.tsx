@@ -31,7 +31,6 @@ import { MatchClock } from '@/features/livematch/MatchClock'
 
 type Side = 'TEAM1' | 'TEAM2'
 
-/** A side's players as one label, e.g. "Ana & Bea". Falls back so a placeholder still reads as someone. */
 /**
  * The next step, or null while play is under way (#1070/#1075).
  *
@@ -71,6 +70,7 @@ function setLabel(view: LiveMatchResponse): string {
   return `Set ${current}`
 }
 
+/** A side's players as one label, e.g. "Ana & Bea". Falls back so a placeholder still reads as someone. */
 function sideName(players: MatchPublicPlayer[] | undefined): string {
   const names = (players ?? []).map((p) => p.displayName ?? p.publicCode ?? 'Unknown')
   return names.length > 0 ? names.join(' & ') : 'Unknown'
@@ -331,6 +331,18 @@ export function LiveScoringPage() {
           />
           {view.isPaused && <span className="font-semibold text-amber-600">Paused</span>}
           {view.isTiebreak && <span className="font-semibold">Tiebreak</span>}
+          {/* One slot, two controls (#1075). `!hasStarted` and `isBetweenSets` cannot both be true, so
+              these never compete for the space — which matters in a cluster this full. */}
+          {view.isBetweenSets && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => send('SET_STARTED')}
+            >
+              Start next set
+            </Button>
+          )}
           {!view.hasStarted && (
             <Button
               size="sm"
@@ -387,7 +399,6 @@ export function LiveScoringPage() {
         onTiebreak={() => send('TIEBREAK_STARTED')}
         onPauseResume={() => send(view.isPaused ? 'RESUMED' : 'PAUSED')}
         onFlip={() => setFlipped((f) => !f)}
-        onStartSet={() => send('SET_STARTED')}
         onFinalize={() => finalize.mutate({ matchId })}
       />
     </div>

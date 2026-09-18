@@ -790,6 +790,86 @@ describe("LiveScoringPage", () => {
     expect(releaseMutate).toHaveBeenCalled();
   });
 
+  it("offers Start next set in the header between sets (#1075)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isBetweenSets: true },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // It used to live in the bottom action row while Start match sat top-right — same kind of action,
+    // two places to look. Both are "begin play", so both belong in one slot.
+    await user.click(screen.getByRole("button", { name: "Start next set" }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "SET_STARTED" },
+    });
+  });
+
+  it("never renders both start controls at once (#1075)", async () => {
+    const user = userEvent.setup();
+
+    // `!hasStarted` and `isBetweenSets` are mutually exclusive, which is what lets one header slot
+    // hold both. Asserting it means a future state change cannot quietly put two in a full cluster.
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, hasStarted: false },
+      isLoading: false,
+    });
+    const first = renderPage();
+    await start(user);
+    expect(screen.getByRole("button", { name: "Start match" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start next set" }),
+    ).not.toBeInTheDocument();
+    first.unmount();
+
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isBetweenSets: true },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+    expect(
+      screen.getByRole("button", { name: "Start next set" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start match" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps Retire and Default live between sets (#1075, #984/#986)", async () => {
+    const user = userEvent.setup();
+    // HOST as well as SCORER: Finalize is gated on match-management (`canFinalize`), so a plain
+    // SCORER never sees it. Asserting it needs a user who could finalize — otherwise the test would
+    // "pass" on a button that was never rendered for a reason unrelated to the between-sets state.
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "u1", capabilities: ["PLAYER", "SCORER", "HOST"] },
+    });
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isBetweenSets: true },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // A DECISION, not an oversight: these are transitions rather than scoring actions, and a player
+    // retiring after losing a set is ordinary tennis — the most common way a match ends early.
+    // Disabling them "for consistency" would make a frequent, legitimate event unrecordable, leaving
+    // the umpire to start a set they know will not be played just to retire out of it.
+    expect(screen.getByLabelText("Ana retires")).toBeEnabled();
+    expect(screen.getByLabelText("Ana defaults")).toBeEnabled();
+    expect(screen.getByLabelText("Bob retires")).toBeEnabled();
+    // While the scoring actions stay correctly inert.
+    expect(screen.getByLabelText("Point to Ana")).toBeDisabled();
+    expect(screen.getByLabelText("Game to Ana")).toBeDisabled();
+    // And the two the request named as needing to stay usable.
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Finalize" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "← Back" })).toBeEnabled();
+  });
+
   it("prompts for the server before the match starts, then for Start match (#1070)", async () => {
     const user = userEvent.setup();
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
