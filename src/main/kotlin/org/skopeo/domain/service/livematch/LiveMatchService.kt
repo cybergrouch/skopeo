@@ -508,21 +508,28 @@ internal fun LiveMatchRepository.view(matchId: UUID): LiveMatchView {
  * One holder rather than two lookups: both come from the same match, and fetching them separately
  * would load it twice per response and leave room for the two to disagree.
  *
- * Not a `data class`: it is assembled in one place and read in another, never compared, copied or
- * printed. The generated `equals`/`hashCode`/`toString`/`copy` would be dead code that JaCoCo counts
- * against the patch, and "add a test for a synthetic method" is the wrong way to fix that.
+ * Not a `data class`, and with no default parameter values: it is assembled in one place and read in
+ * another, never compared, copied or printed. A `data class` generates `equals`/`hashCode`/`toString`/
+ * `copy`, and defaults generate a synthetic constructor overload per combination — all dead here, and
+ * all attributed by JaCoCo to the declaration line. One constructor and an [EMPTY] constant give the
+ * same ergonomics with nothing uncalled. "Add a test for a synthetic method" is the wrong fix.
  */
 private class LiveRoster(
-    val players: List<LivePlayerResponse> = emptyList(),
-    val team1Name: String? = null,
-    val team2Name: String? = null,
-)
+    val players: List<LivePlayerResponse>,
+    val team1Name: String?,
+    val team2Name: String?,
+) {
+    companion object {
+        /** No match, or no roster resolved — the shape every early return wants. */
+        val EMPTY = LiveRoster(players = emptyList(), team1Name = null, team2Name = null)
+    }
+}
 
 /** The wire view plus its clock, in one place so the two cannot be assembled inconsistently. */
 private fun LiveMatchRepository.responseFor(
     matchId: UUID,
     now: LocalDateTime,
-    roster: LiveRoster = LiveRoster(),
+    roster: LiveRoster = LiveRoster.EMPTY,
 ): LiveMatchResponse =
     view(matchId = matchId).toResponse(
         timing = matchTiming(rows = log(matchId = matchId), now = now),
@@ -542,7 +549,7 @@ private fun rosterOf(
     users: UserRepository,
     matchId: UUID,
 ): LiveRoster {
-    val match = matches.findById(matchId = matchId).getOrNull()?.toDomain() ?: return LiveRoster()
+    val match = matches.findById(matchId = matchId).getOrNull()?.toDomain() ?: return LiveRoster.EMPTY
     val named = { ids: List<UUID>, side: TeamSide ->
         ids.map { id ->
             LivePlayerResponse(
