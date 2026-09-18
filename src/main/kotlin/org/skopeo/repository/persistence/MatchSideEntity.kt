@@ -14,4 +14,10 @@ import java.util.UUID
 data class MatchSideEntity(
     val teamId: UUID,
     val userIds: List<UUID>,
+    // The team's stored name (#1079). Always present — `teams.name` is NOT NULL — but its nature
+    // depends on [isStanding], which is why both travel together rather than a single "display me" field.
+    val name: String = "",
+    // False for the ad-hoc team a fixture creates, true for a standing event team (#720). The
+    // distinction decides whether the name is worth showing; see the domain model's note.
+    val isStanding: Boolean = false,
 )

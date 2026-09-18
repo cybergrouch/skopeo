@@ -351,6 +351,21 @@ data class MatchPublicResponse(
     val isActive: Boolean = true,
     val team1: List<MatchPublicPlayer>,
     val team2: List<MatchPublicPlayer>,
+    /**
+     * The teams' own names (#1079), or null when there is nothing worth showing.
+     *
+     * Sibling fields rather than promoting `team1`/`team2` into `{ name, players }` objects: that
+     * would be a breaking reshape for the four surfaces that read them, for a purely additive fact.
+     * The asymmetry is the price, and it is cheaper than the reshape.
+     *
+     * **Null for an ad-hoc fixture team, set for a standing event team (#720).** An ad-hoc team is
+     * named from its members' display names at creation, so the stored value is a snapshot that goes
+     * stale when a player renames — a client deriving the label from the current roster is strictly
+     * more correct. A standing team's name is the event's own label for that pairing and is what a
+     * client should prefer.
+     */
+    val team1Name: String? = null,
+    val team2Name: String? = null,
     // The winning side, named relative to team1/team2: "TEAM1" | "TEAM2" | "NONE".
     val winner: String,
     val sets: List<MatchPublicSet>,

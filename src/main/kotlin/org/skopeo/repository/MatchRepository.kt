@@ -1114,10 +1114,22 @@ private fun ResultRow.toMatchEntity(): MatchEntity =
         placementBracket = this[MatchesTable.placementBracket],
     )
 
-/** Load one side of a match as the raw [MatchSideEntity]: its team id + ordered participant user ids. */
-private fun sideOf(teamId: UUID): MatchSideEntity =
-    MatchSideEntity(
+/**
+ * Load one side of a match as the raw [MatchSideEntity]: its team id, ordered participant user ids,
+ * and the team's own name plus whether it is a standing one (#1079).
+ *
+ * The `teams` row was already being read for `is_temporary` elsewhere; this reads both columns in one
+ * go rather than adding a second lookup per side.
+ */
+private fun sideOf(teamId: UUID): MatchSideEntity {
+    val team = TeamsTable.selectAll().where { TeamsTable.id eq teamId }.singleOrNull()
+    return MatchSideEntity(
         teamId = teamId,
+        name = team?.get(TeamsTable.name) ?: "",
+        // Inverted deliberately: the column records what a team is NOT. `is_temporary` is true for the
+        // ad-hoc team a fixture creates and false for a standing event team, so a missing row reads as
+        // not-standing — the conservative answer, since it means the name is not shown.
+        isStanding = team?.get(TeamsTable.isTemporary)?.not() ?: false,
         userIds =
             TeamUsersTable
                 .selectAll()
@@ -1125,6 +1137,7 @@ private fun sideOf(teamId: UUID): MatchSideEntity =
                 .orderBy(TeamUsersTable.position to SortOrder.ASC)
                 .map { it[TeamUsersTable.userId].value },
     )
+}
 
 /**
  * The statuses that mean "played or playable, but no result recorded yet" (#945).

@@ -13,6 +13,7 @@ import org.skopeo.common.dto.match.MatchResponse
 import org.skopeo.common.dto.match.MatchSetResponse
 import org.skopeo.common.dto.match.MatchSideResponse
 import org.skopeo.domain.model.Match
+import org.skopeo.domain.model.officialName
 import java.util.UUID
 
 fun Match.toResponse(): MatchResponse =
@@ -86,6 +87,12 @@ fun Match.toPublicResponse(
         isActive = isActive,
         team1 = side(userIds = team1.userIds),
         team2 = side(userIds = team2.userIds),
+        // Only a STANDING team's name goes on the wire (#1079). An ad-hoc fixture team's stored name is
+        // its members' display names joined at creation, so it is a snapshot that goes stale on a
+        // rename — the client's roster-derived label is more correct there. Deciding it here rather
+        // than shipping both facts keeps the rule in one place instead of in every consumer.
+        team1Name = team1.officialName(),
+        team2Name = team2.officialName(),
         winner = winnerSide,
         sets =
             sets.map {
