@@ -38,6 +38,11 @@ vi.mock("@/api/generated/events/events", () => ({
 vi.mock("@/api/generated/clubs/clubs", () => ({
   useGetApiV1Clubs,
   getGetApiV1ClubsCodeCodeQueryKey: (code: string) => ["clubs", code],
+  // The club's EVENTS query — a different key from the detail above, and the one the
+  // Upcoming/Unfinalized/Finalized cards actually read (#1055).
+  getGetApiV1ClubsCodeCodeEventsQueryKey: (code: string) => [
+    `/api/v1/clubs/code/${code}/events`,
+  ],
 }));
 vi.mock("@/api/generated/circuits/circuits", () => ({ useGetApiV1Circuits }));
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
@@ -176,8 +181,20 @@ describe("NewEventForm — fixed club (#780)", () => {
     renderForm({ clubPublicCode: "CLB001", publicCodeToRefresh: "CLB001" });
     await fillAndSubmit();
 
-    // The new event must appear in the club page's listing without a reload.
+    // The club DETAIL query, which renders the page header.
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["clubs", "CLB001"] });
+  });
+
+  it("refreshes the club's EVENT LISTS so the new event appears without a reload (#1055)", async () => {
+    renderForm({ clubPublicCode: "CLB001", publicCodeToRefresh: "CLB001" });
+    await fillAndSubmit();
+
+    // THIS is the assertion whose absence let the bug ship. The test above asserts the club *detail*
+    // key while claiming the new event becomes visible — but the Upcoming/Unfinalized/Finalized cards
+    // read `…/events`, so invalidating the detail alone left them serving their cached page.
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["/api/v1/clubs/code/CLB001/events"],
+    });
   });
 
   it("does not touch a club page query when none was named", async () => {
@@ -187,6 +204,10 @@ describe("NewEventForm — fixed club (#780)", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["events"] });
     expect(invalidate).not.toHaveBeenCalledWith({
       queryKey: ["clubs", "CLB001"],
+    });
+    // No club named ⇒ no club-scoped invalidation of either kind.
+    expect(invalidate).not.toHaveBeenCalledWith({
+      queryKey: ["/api/v1/clubs/code/CLB001/events"],
     });
   });
 

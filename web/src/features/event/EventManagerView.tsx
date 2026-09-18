@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { CreateFixtureRequest } from "@/api/generated/model";
+import { invalidateClubEvents } from "@/lib/clubEventsCache";
 import {
   getGetApiV1EventsIdQueryKey,
   getGetApiV1EventsIdSeedingQueryKey,
@@ -213,6 +214,11 @@ export function EventManagerView({ eventId }: { eventId: string }) {
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
         });
+        // …and the club page's bucket cards (#1055). This view knows the event's `clubId` but not the
+        // club's public CODE, which is what those queries are keyed by — so it invalidates by URL
+        // shape across clubs. Correct rather than coarse: re-filing an event (#319) changes the lists
+        // of both the club it left and the club it joined.
+        invalidateClubEvents(queryClient);
       },
     },
   });
@@ -226,6 +232,11 @@ export function EventManagerView({ eventId }: { eventId: string }) {
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
         });
+        // …and the club page's bucket cards (#1055). This view knows the event's `clubId` but not the
+        // club's public CODE, which is what those queries are keyed by — so it invalidates by URL
+        // shape across clubs. Correct rather than coarse: re-filing an event (#319) changes the lists
+        // of both the club it left and the club it joined.
+        invalidateClubEvents(queryClient);
       },
     },
   });
@@ -266,6 +277,11 @@ export function EventManagerView({ eventId }: { eventId: string }) {
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
         });
+        // …and the club page's bucket cards (#1055). This view knows the event's `clubId` but not the
+        // club's public CODE, which is what those queries are keyed by — so it invalidates by URL
+        // shape across clubs. Correct rather than coarse: re-filing an event (#319) changes the lists
+        // of both the club it left and the club it joined.
+        invalidateClubEvents(queryClient);
         // The event is gone, so its page is too — return to the organizer list.
         void navigate("/dashboard");
       },
@@ -292,6 +308,11 @@ export function EventManagerView({ eventId }: { eventId: string }) {
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
         });
+        // …and the club page's bucket cards (#1055). This view knows the event's `clubId` but not the
+        // club's public CODE, which is what those queries are keyed by — so it invalidates by URL
+        // shape across clubs. Correct rather than coarse: re-filing an event (#319) changes the lists
+        // of both the club it left and the club it joined.
+        invalidateClubEvents(queryClient);
       },
     },
   });
@@ -316,6 +337,11 @@ export function EventManagerView({ eventId }: { eventId: string }) {
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
         });
+        // …and the club page's bucket cards (#1055). This view knows the event's `clubId` but not the
+        // club's public CODE, which is what those queries are keyed by — so it invalidates by URL
+        // shape across clubs. Correct rather than coarse: re-filing an event (#319) changes the lists
+        // of both the club it left and the club it joined.
+        invalidateClubEvents(queryClient);
       },
     },
   });
@@ -341,6 +367,11 @@ export function EventManagerView({ eventId }: { eventId: string }) {
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
         });
+        // …and the club page's bucket cards (#1055). This view knows the event's `clubId` but not the
+        // club's public CODE, which is what those queries are keyed by — so it invalidates by URL
+        // shape across clubs. Correct rather than coarse: re-filing an event (#319) changes the lists
+        // of both the club it left and the club it joined.
+        invalidateClubEvents(queryClient);
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1MatchesQueryKey(),
         });
