@@ -3,10 +3,14 @@
 
 package org.skopeo.repository
 
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -106,12 +110,124 @@ class UserSearchSortTest {
         direction: SortDirection = SortDirection.ASC,
         query: UserSearchQuery = allMale,
         includeInactive: Boolean = false,
+        required: Int? = null,
     ): List<String?> =
         repository
-            .search(query = query, sort = sort, direction = direction, includeInactive = includeInactive)
+            .search(
+                query = query,
+                sort = sort,
+                direction = direction,
+                includeInactive = includeInactive,
+                calibrationRequired = required,
+            )
             .map { entity ->
                 entity.toDomain().names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
             }
+
+    /**
+     * Open a calibration window and park the stored count at [rated], without seeding matches.
+     *
+     * `setRating` stamps the window and zeroes the count (#1051); the count is then written directly
+     * because what these tests exercise is the SQL that reads it, not the recompute that maintains it —
+     * `CalibrationCountsTest` owns that, and going through matches here would test it twice while making
+     * the arrangement unreadable.
+     */
+    private fun calibrating(
+        userId: UUID,
+        rated: Int,
+    ) {
+        ratings.setRating(userId = userId, rating = BigDecimal("4.0"), level = "4.0")
+        transaction {
+            UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
+                it[calibrationMatchesRated] = rated
+            }
+        }
+    }
+
+    /**
+     * A rating row with NO window: `calibration_started_at` null and the count 0 — the pre-#881 shape,
+     * and the trap this filter has to survive. A predicate of `count < N` alone would match it, because
+     * 0 is below every N.
+     */
+    private fun ratedButNeverDesignated(userId: UUID) {
+        ratings.setRating(userId = userId, rating = BigDecimal("4.0"), level = "4.0")
+        transaction {
+            UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
+                it[calibrationStartedAt] = null
+                it[calibrationMatchesRated] = 0
+            }
+        }
+    }
+
+    @Test
+    fun `filters on calibration without sweeping in players who were never designated (#1065)`() {
+        val mid = player(display = "Midway", first = "M", last = "M")
+        val nearlyDone = player(display = "NearlyDone", first = "N", last = "N")
+        val finished = player(display = "Finished", first = "F", last = "F")
+        val neverDesignated = player(display = "NeverDesignated", first = "X", last = "X")
+        player(display = "NoRatingRow", first = "Z", last = "Z")
+        calibrating(userId = mid, rated = 2)
+        calibrating(userId = nearlyDone, rated = 9)
+        calibrating(userId = finished, rated = 10)
+        ratedButNeverDesignated(userId = neverDesignated)
+
+        // N = 10. "Finished" has exactly 10, and the rule is `rated < required`, so 10 is settled.
+        val calibrating = displayNames(sort = null, query = allMale.copy(inCalibration = true), required = 10).toSet()
+        calibrating shouldBe setOf("Midway", "NearlyDone")
+
+        // The negation must include BOTH the player with a null window and the one with no rating row —
+        // neither is calibrating, and a filter that dropped them from both sides would lose rows.
+        displayNames(sort = null, query = allMale.copy(inCalibration = false), required = 10).toSet() shouldBe
+            setOf("Finished", "NeverDesignated", "NoRatingRow")
+    }
+
+    @Test
+    fun `the calibration filter narrows countSearch identically to search (#1065)`() {
+        val mid = player(display = "Midway", first = "M", last = "M")
+        player(display = "Bystander", first = "B", last = "B")
+        calibrating(userId = mid, rated = 3)
+
+        val query = allMale.copy(inCalibration = true)
+        // One predicate feeds both, so the pager cannot claim more rows than the filter matches.
+        repository.search(query = query, calibrationRequired = 10) shouldHaveSize 1
+        repository.countSearch(query = query, calibrationRequired = 10) shouldBe 1L
+    }
+
+    @Test
+    fun `lowering N ends in-flight calibrations immediately, with no sweep (#881, #1065)`() {
+        val mid = player(display = "Midway", first = "M", last = "M")
+        calibrating(userId = mid, rated = 7)
+
+        // THE property the stored-count design exists to preserve: the verdict is derived at read time
+        // from a stored count against a live N, so changing N re-answers for everyone at once. A stored
+        // boolean would still say "calibrating" here until something swept it.
+        displayNames(sort = null, query = allMale.copy(inCalibration = true), required = 10).toSet() shouldBe
+            setOf(element = "Midway")
+        displayNames(sort = null, query = allMale.copy(inCalibration = true), required = 5).shouldBeEmpty()
+        displayNames(sort = null, query = allMale.copy(inCalibration = false), required = 5).toSet() shouldBe
+            setOf(element = "Midway")
+    }
+
+    @Test
+    fun `sorts calibrating players first, furthest through the window leading (#1065)`() {
+        val mid = player(display = "Midway", first = "M", last = "M")
+        val nearlyDone = player(display = "NearlyDone", first = "N", last = "N")
+        val settled = player(display = "Settled", first = "S", last = "S")
+        calibrating(userId = mid, rated = 2)
+        calibrating(userId = nearlyDone, rated = 9)
+        ratedButNeverDesignated(userId = settled)
+
+        // ASC = calibrating block first; within it the secondary is the count DESC, so the player nearest
+        // the end of their window leads. Sorting on the boolean alone would have left these two in id
+        // order, which is what the fixed secondary exists to avoid.
+        displayNames(sort = UserSearchSort.CALIBRATION, required = 10) shouldContainExactly
+            listOf("NearlyDone", "Midway", "Settled")
+
+        // DESC flips the BLOCKS but not the secondary: "nearly finished first" is the interesting end
+        // whichever way round the blocks sit.
+        displayNames(sort = UserSearchSort.CALIBRATION, direction = SortDirection.DESC, required = 10) shouldContainExactly
+            listOf("Settled", "NearlyDone", "Midway")
+    }
 
     @Test
     fun `sorts by the display name in both directions (#1050)`() {
@@ -286,7 +402,9 @@ class UserSearchSortTest {
         val unsorted = displayNames(sort = null, includeInactive = true).toSet()
         unsorted shouldHaveSize 3
         UserSearchSort.entries.forEach { sort ->
-            displayNames(sort = sort, includeInactive = true).toSet() shouldBe unsorted
+            // N is supplied for every sort, not just CALIBRATION: the parameter is ignored by the others,
+            // and iterating the enum is the point — a new sort key joins this guarantee automatically.
+            displayNames(sort = sort, includeInactive = true, required = 10).toSet() shouldBe unsorted
         }
     }
 }

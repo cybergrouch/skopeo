@@ -7,6 +7,16 @@ import type { GetApiV1UsersParams } from '@/api/generated/model'
 
 const SEXES = ['Male', 'Female'] as const
 
+/**
+ * The calibration facet (#1065) — a tri-state on the form, because "Any" must send no param at all
+ * while `false` ("Settled") is a real filter. An empty string can therefore never be coerced to a
+ * boolean here; see `buildParams`.
+ */
+const CALIBRATION_OPTIONS = [
+  { value: 'true', label: 'Calibrating' },
+  { value: 'false', label: 'Settled' },
+] as const
+
 /** The lifecycle states, in the precedence the backend derives them (#1050). */
 const STATUSES = ['ACTIVE', 'UNCLAIMED', 'DELETED', 'MERGED'] as const
 
@@ -25,6 +35,7 @@ export interface PlayerSearchFields {
   name: string
   sex: string
   status: string
+  inCalibration: string
   ageMin: string
   ageMax: string
   ratingMin: string
@@ -36,6 +47,7 @@ const BLANK: PlayerSearchFields = {
   name: '',
   sex: '',
   status: '',
+  inCalibration: '',
   ageMin: '',
   ageMax: '',
   ratingMin: '',
@@ -47,10 +59,11 @@ const BLANK: PlayerSearchFields = {
  * tab (#107) and the Ratings tab's search-and-rate (#205). On submit it builds the filter params (or
  * null when no filter is set) and hands them to [onApply]; the parent owns pagination + results.
  *
- * [showStatus] adds the lifecycle-state dropdown (#1050). Off by default, and deliberately so: the
- * Ratings tab rates active players, and offering it a Deleted/Merged filter there would invite a
- * search whose every result is unratable. Research turns it on because Research is where account
- * history is the point.
+ * [showStatus] adds the lifecycle-state dropdown (#1050) and the calibration dropdown (#1065). Off by
+ * default, and deliberately so: the Ratings tab rates active players, and offering it a Deleted/Merged
+ * filter there would invite a search whose every result is unratable — while a calibration filter there
+ * narrows by a rating-history artefact a rater has no use for. Research turns both on, because Research
+ * is where account history is the point. One flag governs both, so the two tabs cannot drift apart.
  *
  * [initial] seeds the inputs for a search that already exists — the Research tab restoring one from
  * the URL (#1054), where results are on screen and the form has to describe *them* rather than sit
@@ -74,6 +87,7 @@ export function PlayerSearchForm({
   const [name, setName] = useState(initial.name)
   const [sex, setSex] = useState(initial.sex)
   const [status, setStatus] = useState(initial.status)
+  const [inCalibration, setInCalibration] = useState(initial.inCalibration)
   const [ageMin, setAgeMin] = useState(initial.ageMin)
   const [ageMax, setAgeMax] = useState(initial.ageMax)
   const [ratingMin, setRatingMin] = useState(initial.ratingMin)
@@ -87,8 +101,11 @@ export function PlayerSearchForm({
     if (age) params.age = age
     const rating = interval(ratingMin, ratingMax)
     if (rating) params.rating = rating
-    // Only send `status` where the dropdown is rendered, so hiding it cannot leave a stale filter on.
+    // Only send these where their dropdowns are rendered, so hiding one cannot leave a stale filter on.
     if (showStatus && status) params.status = status as GetApiV1UsersParams['status']
+    // `''` is "Any" and sends nothing; `'false'` is a real filter. Hence the string compare rather than
+    // a truthiness check, which would silently drop "Settled".
+    if (showStatus && inCalibration) params.inCalibration = inCalibration === 'true'
     return Object.keys(params).length > 0 ? params : null
   }
 
@@ -132,6 +149,24 @@ export function PlayerSearchForm({
             {STATUSES.map((s) => (
               <option key={s} value={s}>
                 {STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+      {showStatus ? (
+        <div className="space-y-1">
+          <Label htmlFor="r-calibration">Calibration</Label>
+          <select
+            id="r-calibration"
+            value={inCalibration}
+            onChange={(e) => setInCalibration(e.target.value)}
+            className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+          >
+            <option value="">Any</option>
+            {CALIBRATION_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>

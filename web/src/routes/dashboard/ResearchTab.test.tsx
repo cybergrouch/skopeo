@@ -102,7 +102,7 @@ describe('ResearchTab', () => {
       'Age▲',
       'Rating▲',
       'Status▲',
-      'Calibration',
+      'Calibration▲',
     ])
 
     const row = screen.getAllByRole('row')[1]
@@ -225,6 +225,44 @@ describe('ResearchTab', () => {
     )
   })
 
+  it('sends the calibration filter and sorts on it (#1065)', async () => {
+    const user = userEvent.setup()
+    renderTab()
+
+    // 'Settled' is `false` — a real filter. A truthiness check anywhere on the way down would drop it.
+    await user.selectOptions(screen.getByLabelText('Calibration'), 'false')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(useGetApiV1UsersSearch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ inCalibration: false }),
+      { query: { enabled: true } },
+    )
+
+    await user.selectOptions(screen.getByLabelText('Calibration'), 'true')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(useGetApiV1UsersSearch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ inCalibration: true }),
+      { query: { enabled: true } },
+    )
+  })
+
+  it('offers a sort affordance on the calibration column (#1065 revises #1050)', async () => {
+    useGetApiV1UsersSearch.mockReturnValue(page(ONE_ROW))
+    const user = userEvent.setup()
+    renderTab()
+    await search(user)
+
+    // #1050 listed this column as NOT sortable, correctly at the time — calibration was derived per row.
+    // #1051 stored the count, reducing the verdict to one comparison, so the constraint went away.
+    await user.click(screen.getByRole('button', { name: 'Calibration' }))
+    expect(useGetApiV1UsersSearch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'CALIBRATION', direction: 'ASC' }),
+      { query: { enabled: true } },
+    )
+    expect(
+      screen.getByRole('button', { name: 'Calibration' }).closest('th'),
+    ).toHaveAttribute('aria-sort', 'ascending')
+  })
+
   it('distinguishes all four lifecycle states, merged included', async () => {
     useGetApiV1UsersSearch.mockReturnValue(
       page([
@@ -272,8 +310,11 @@ describe('ResearchTab', () => {
     renderTab()
     await search(user, 'player')
 
-    expect(screen.getAllByText('Calibrating')).toHaveLength(1)
-    expect(screen.getAllByLabelText('Not calibrating')).toHaveLength(2)
+    // Scoped to the table: the calibration FILTER dropdown renders its own "Calibrating" option (#1065),
+    // so an unscoped query now matches the control as well as the cell.
+    const table = within(screen.getByRole('table'))
+    expect(table.getAllByText('Calibrating')).toHaveLength(1)
+    expect(table.getAllByLabelText('Not calibrating')).toHaveLength(2)
   })
 
   it('renders an em-dash for every value a player is missing', async () => {

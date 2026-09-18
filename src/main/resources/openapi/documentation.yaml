@@ -226,16 +226,33 @@ paths:
             Restrict to one lifecycle state (#1050); mutually exclusive, in this precedence. MERGED and
             DELETED exist only among inactive accounts, so either one requires `includeInactive=true` —
             the combination is a 400 rather than an unexplained empty page.
+        - name: inCalibration
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: >-
+            Restrict to players whose rating is (or is not) still calibrating (#1065). Queryable because
+            #1051 stores the rated-match count, so this is a `WHERE` applied before paging and `total`
+            stays correct. Note it is NOT simply "count below N": a player who was never designated has
+            no window and is never calibrating, whatever their count. `false` therefore includes players
+            with no rating row at all.
         - name: sort
           in: query
           required: false
           schema:
             type: string
-            enum: [DISPLAY_NAME, LAST_NAME, FIRST_NAME, SEX, AGE, RATING, STATUS]
+            enum: [DISPLAY_NAME, LAST_NAME, FIRST_NAME, SEX, AGE, RATING, STATUS, CALIBRATION]
           description: >-
             Column to order by (#1050); omitted means insertion order (`id`). `AGE` orders by age, which
             is the inverse of date of birth. Ties break on `id`, so a page boundary cannot repeat or drop
             a row among the many that share a sex or a status.
+
+
+            `CALIBRATION` (#1065) is a boolean, so it sorts in two blocks — calibrating first when ASC —
+            with a fixed secondary of "furthest through the window first", so "match 9 of 10" precedes
+            "match 1 of 10". The secondary does not follow `direction`: "nearly finished" is the
+            interesting end whichever way the blocks are arranged.
         - name: direction
           in: query
           required: false
@@ -367,6 +384,14 @@ paths:
             Restrict to one lifecycle state (#1050). MERGED and DELETED exist only among inactive
             accounts, so either one requires `includeInactive=true`; the combination is a 400 rather
             than an unexplained empty result.
+        - name: inCalibration
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: >-
+            Restrict to players still calibrating, or not (#1065). Same semantics as on
+            `GET /api/v1/users/search`; a null `calibration_started_at` is never calibrating.
         - name: ids
           in: query
           required: false

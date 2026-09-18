@@ -40,6 +40,12 @@ const SORTABLE: ReadonlyArray<{ column: SortColumn; label: ReactNode }> = [
   { column: 'AGE', label: 'Age' },
   { column: 'RATING', label: 'Rating' },
   { column: 'STATUS', label: 'Status' },
+  // Calibration became sortable in #1065. #1050 listed it as NOT sortable, and that was correct at the
+  // time: calibration was derived per row, so ordering by it would have meant either reimplementing
+  // `CalibrationService`'s rule in SQL or pulling every row into memory. #1051 stored the rated-match
+  // count, which reduced the verdict to one comparison against the live N — a plain ORDER BY. The spec
+  // line changed because the constraint behind it went away, not because it was overruled.
+  { column: 'CALIBRATION', label: 'Calibration' },
 ]
 
 /**
@@ -224,9 +230,6 @@ export function ResearchTab() {
                           onSort={onSort}
                         />
                       ))}
-                      <th scope="col" className="py-1 font-medium">
-                        Calibration
-                      </th>
                     </tr>
                   </thead>
                   <tbody>

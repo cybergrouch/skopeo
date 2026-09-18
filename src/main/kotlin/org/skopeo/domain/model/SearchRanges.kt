@@ -118,7 +118,24 @@ data class UserSearchQuery(
     // the rated-match count: the verdict is one comparison against the live global N, so this is a plain
     // WHERE rather than the aggregate #1050 had to defer. Null means "don't filter on it".
     val inCalibration: Boolean? = null,
-)
+) {
+    companion object {
+        /** The facet names, for the "at least one filter" error (#116) — kept beside the fields they name. */
+        const val FACET_NAMES = "name, code, q, sex, age, rating, capability, status, inCalibration"
+    }
+}
+
+/**
+ * Does this query narrow anything at all (#116)? A search with no facet would return the whole member
+ * table, so it is refused.
+ *
+ * Lives here, next to the fields, so that adding a facet and forgetting to count it is one edit rather
+ * than two files apart — the service checks the built query instead of tracking its own locals.
+ */
+fun UserSearchQuery.hasAnyFacet(): Boolean =
+    name != null || code != null || q != null || sex != null ||
+        dobMin != null || dobMax != null || rating != null ||
+        capability != null || status != null || inCalibration != null
 
 /**
  * The columns a user search may be ordered by (#1050).

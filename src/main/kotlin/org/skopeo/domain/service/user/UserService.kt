@@ -35,6 +35,7 @@ import org.skopeo.domain.model.UserSearchSort
 import org.skopeo.domain.model.ageRangeToDob
 import org.skopeo.domain.model.canSeeRawRatingOrFalse
 import org.skopeo.domain.model.effectivePhotoUrl
+import org.skopeo.domain.model.hasAnyFacet
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.rating.CalibrationService
 import org.skopeo.domain.service.rating.RatingAssembler
@@ -276,22 +277,7 @@ class UserService(
             val rating = filters.rating?.let { NumericRange.parse(raw = it) }
             val capability = filters.capability?.let { raw -> enumByName<Capability>(raw = raw, field = "capability") }
             val status = filters.status?.let { raw -> enumByName<AccountStatus>(raw = raw, field = "status") }
-            val inCalibration =
-                filters.inCalibration?.let { raw ->
-                    raw.lowercase().toBooleanStrictOrNull()
-                        ?: raise(
-                            r = ServiceError.Validation(message = "Unknown inCalibration '$raw'; expected one of true, false"),
-                        )
-                }
-            ensure(
-                condition =
-                    nameTerm != null || codeTerm != null || qTerm != null || filters.sex != null ||
-                        age != null || rating != null || capability != null || status != null || inCalibration != null,
-            ) {
-                ServiceError.Validation(
-                    message = "at least one filter (name, code, q, sex, age, rating, capability, status, inCalibration) is required",
-                )
-            }
+            val inCalibration = filters.inCalibration?.let { raw -> booleanByName(raw = raw, field = "inCalibration") }
             val dob = age?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
             UserSearchQuery(
                 name = nameTerm,
@@ -304,7 +290,14 @@ class UserService(
                 capability = capability,
                 status = status,
                 inCalibration = inCalibration,
-            )
+            ).also { built ->
+                // Checked on the BUILT query rather than on nine locals: one place that knows what
+                // counts as a facet, so adding a tenth cannot silently escape the "at least one
+                // filter" rule (#116). Also keeps this function under detekt's complexity ceiling.
+                ensure(condition = built.hasAnyFacet()) {
+                    ServiceError.Validation(message = "at least one filter (${UserSearchQuery.FACET_NAMES}) is required")
+                }
+            }
         }
 
     /**
@@ -573,6 +566,18 @@ class UserService(
 
 /** Trim a free-text search term, collapsing a null/blank value to null. */
 private fun blankToNull(raw: String?): String? = raw?.trim()?.ifEmpty { null }
+
+/**
+ * A strictly-parsed boolean facet, or a 400. Only `true`/`false` are accepted (any case); a typo is
+ * refused rather than coerced, because reading `inCalibration=yes` as `false` would quietly show
+ * settled players to someone who asked for calibrating ones (#1065).
+ */
+private fun Raise<ServiceError>.booleanByName(
+    raw: String,
+    field: String,
+): Boolean =
+    raw.lowercase().toBooleanStrictOrNull()
+        ?: raise(r = ServiceError.Validation(message = "Unknown $field '$raw'; expected one of true, false"))
 
 /**
  * Resolve [raw] to a [T] by name, case-insensitively, or raise a 400 naming every accepted value.
