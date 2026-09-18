@@ -207,6 +207,17 @@ export function LiveScoringPage() {
     <div className="flex h-[100dvh] w-[100dvw] flex-col overflow-hidden bg-background px-[1.5dvw] py-[1dvh]">
       <div className="flex shrink-0 items-center justify-between gap-[1dvw]">
         <div className="flex min-w-0 items-center gap-[1.2dvw]">
+          {/*
+            The only way out (#986/#1073). There were two Back controls — this one and a second in the
+            right-hand cluster — and they were NOT equivalent: that one called `exit()` and navigated,
+            leaving the claim behind, so the match still looked claimed by an umpire who had walked
+            away. This one goes through `leave()`, which releases the claim first. The duplicate was
+            removed rather than this one for exactly that reason.
+
+            Stays live whatever state the match is in: it is the one control the gates must never
+            disable. On a match that has not started it is the only way out, so a `busy` guard here
+            would strand an umpire who opened the wrong court.
+          */}
           <Button size="sm" variant="ghost" onClick={() => void leave()}>
             ← Back
           </Button>
@@ -233,22 +244,6 @@ export function LiveScoringPage() {
             isRunning={view.isRunning ?? false}
             className="text-[2.4dvh] font-semibold tabular-nums text-foreground"
           />
-          {/*
-            The way out (#986). The entry screen had a Back control and the scoring view had none, so
-            an umpire who opened the wrong match — or one who is not ready to start — could only leave
-            via the browser, which does not release fullscreen. Stays live whatever state the match is
-            in: it is the one control the gates must never disable.
-          */}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              void exit()
-              navigate(`/matches/${code}`)
-            }}
-          >
-            Back
-          </Button>
           {view.isPaused && <span className="font-semibold text-amber-600">Paused</span>}
           {view.isTiebreak && <span className="font-semibold">Tiebreak</span>}
           {!view.hasStarted && (

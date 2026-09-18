@@ -707,7 +707,7 @@ describe("LiveScoringPage", () => {
     expect(screen.getByLabelText("Set to Ana")).toBeDisabled();
     expect(screen.getByLabelText("Ana retires")).toBeDisabled();
     // Back stays available throughout — an umpire must be able to leave a match opened by mistake.
-    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "← Back" })).toBeEnabled();
   });
 
   it("refuses points until somebody is serving, but still allows a declared game (#985)", async () => {
@@ -772,16 +772,31 @@ describe("LiveScoringPage", () => {
     expect(screen.getByRole("button", { name: "Finalize" })).toBeDisabled();
   });
 
-  it("leaves via Back, releasing fullscreen on the way (#986)", async () => {
+  it("leaves via Back, releasing fullscreen AND the claim on the way (#986, #1073)", async () => {
     // The umpire view is the only page that takes fullscreen, so leaving without releasing it would
-    // strand the whole app. Back existed on the entry screen and not in the scoring view, which is
-    // why an umpire who opened the wrong match could only escape through the browser.
+    // strand the whole app.
+    //
+    // The claim assertion is the #1073 half and is the reason this test matters: there used to be a
+    // second Back control that released fullscreen but NOT the claim, so a match still looked claimed
+    // by an umpire who had walked away. That control is gone; this one goes through `leave()`. Without
+    // the releaseMutate assertion, deleting the wrong one of the two would have passed.
     const user = userEvent.setup();
     renderPage();
     await start(user);
 
-    await user.click(screen.getByRole("button", { name: "Back" }));
+    await user.click(screen.getByRole("button", { name: "← Back" }));
     expect(exitFullscreen).toHaveBeenCalled();
+    expect(releaseMutate).toHaveBeenCalled();
+  });
+
+  it("has exactly one Back control in the scoring view (#1073)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // Two used to render side by side in the same header row. Asserting the count, not just the
+    // survivor, is what stops a future change quietly reintroducing a claim-leaking second one.
+    expect(screen.getAllByRole("button", { name: /Back/ })).toHaveLength(1);
   });
 
   it("keeps Back available even when everything else is inert (#986)", async () => {
@@ -795,7 +810,7 @@ describe("LiveScoringPage", () => {
     renderPage();
     await start(user);
 
-    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "← Back" })).toBeEnabled();
   });
 
 });
