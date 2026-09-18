@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { toastError } from '@/observability/toastError'
+import { serverMessage } from '@/observability/serverMessage'
 import { Button } from '@/components/ui/button'
 import {
   useDeleteApiV1MatchesMatchIdLiveClaim,
@@ -30,6 +32,28 @@ import { MatchClock } from '@/features/livematch/MatchClock'
 type Side = 'TEAM1' | 'TEAM2'
 
 /** A side's players as one label, e.g. "Ana & Bea". Falls back so a placeholder still reads as someone. */
+/**
+ * The next step, or null while play is under way (#1070/#1075).
+ *
+ * One function for both gated states on purpose. #1070 is "no idea what to click first" before the
+ * match starts; #1075 is the same complaint between sets. They are the same problem — a screen whose
+ * live control is not obvious — so they get the same mechanism rather than two prompts that could
+ * drift apart in wording or placement.
+ *
+ * Null during play: a prompt that is always on screen is furniture, and furniture is not read.
+ */
+function scoringPrompt(view: LiveMatchResponse): string | null {
+  if (!view.hasStarted) {
+    return view.serverId == null
+      ? 'Set who is serving to begin.'
+      : 'Ready — press Start match.'
+  }
+  if (view.isBetweenSets) {
+    return 'Set complete. Start the next set, or finalize the match.'
+  }
+  return null
+}
+
 /**
  * What the centred set label reads (#1074).
  *
@@ -86,7 +110,20 @@ export function LiveScoringPage() {
     query: { enabled: Boolean(matchId) && started },
   })
 
-  const onError = (message: string) => () => toast.error(message)
+  /**
+   * Prefer the SERVER's sentence over our generic one (#1070/#1075).
+   *
+   * `LiveScoringRules` already writes exactly what the umpire needs to hear — "Nobody is serving yet.
+   * Set who is serving before recording a point.", "That set has ended. Start the next set, or
+   * finalize the match, before scoring again." — and its KDoc says refusing with a reason is what lets
+   * the view explain why a control did nothing. Replacing all of them with "Could not record that"
+   * discarded every one of those sentences, which is what both issues reported as "no feedback".
+   *
+   * The generic string stays as the fallback: a network failure or a 500 carries nothing worth showing.
+   * Routed through `toastError` so an unexpected failure is still reported (#807).
+   */
+  const onError = (fallback: string) => (error: unknown) =>
+    toastError(serverMessage(error) ?? fallback, { cause: error })
   const afterWrite = { onSuccess: () => void refetch() }
 
   const claim = usePostApiV1MatchesMatchIdLiveClaim({
@@ -295,12 +332,39 @@ export function LiveScoringPage() {
           {view.isPaused && <span className="font-semibold text-amber-600">Paused</span>}
           {view.isTiebreak && <span className="font-semibold">Tiebreak</span>}
           {!view.hasStarted && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => send('MATCH_STARTED')}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || view.serverId == null}
+              // A disabled control that says nothing is the whole complaint in #1070. The title
+              // answers "why can't I click this" on hover, and the prompt beside it answers it
+              // without a hover at all — which is what a phone needs.
+              title={
+                view.serverId == null ? 'Set who is serving before starting the match' : undefined
+              }
+              onClick={() => send('MATCH_STARTED')}
+            >
               Start match
             </Button>
           )}
         </div>
       </div>
+
+      {/*
+        What to do next, said BEFORE the umpire probes a dead control (#1070/#1075).
+
+        An error is the wrong mechanism for this: nothing has gone wrong, and an error only appears
+        after a wrong guess. This is a next step, so it is stated up front and announced politely
+        rather than asserted as an alert.
+      */}
+      {scoringPrompt(view) ? (
+        <p
+          role="status"
+          className="shrink-0 py-[0.3dvh] text-center text-[2.2dvh] font-medium text-muted-foreground"
+        >
+          {scoringPrompt(view)}
+        </p>
+      ) : null}
 
       <LiveScoringBoard
         view={view}

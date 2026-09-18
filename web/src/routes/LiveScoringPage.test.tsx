@@ -35,6 +35,7 @@ vi.mock("@/api/generated/matches/matches", () => ({
 }));
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+import { toast } from "sonner";
 
 const recordMutate = vi.fn();
 const undoMutate = vi.fn();
@@ -789,6 +790,90 @@ describe("LiveScoringPage", () => {
     expect(releaseMutate).toHaveBeenCalled();
   });
 
+  it("prompts for the server before the match starts, then for Start match (#1070)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, hasStarted: false, serverId: null, serverName: null },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // Said BEFORE the umpire probes a dead control — the whole complaint in #1070 was silence.
+    expect(
+      screen.getByText("Set who is serving to begin."),
+    ).toBeInTheDocument();
+    // And Start match is gated on the server, which is the ordering that was never enforced: it used
+    // to be clickable with nobody serving, leaving the point buttons dead for a second silent reason.
+    const startMatch = screen.getByRole("button", { name: "Start match" });
+    expect(startMatch).toBeDisabled();
+    expect(startMatch).toHaveAttribute(
+      "title",
+      "Set who is serving before starting the match",
+    );
+  });
+
+  it("advances the prompt once a server is set (#1070)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, hasStarted: false },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    expect(screen.getByText("Ready — press Start match.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start match" })).toBeEnabled();
+  });
+
+  it("says nothing once play is under way (#1070)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // A prompt that is always on screen is furniture, and furniture is not read.
+    expect(screen.queryByText(/Set who is serving/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/press Start match/)).not.toBeInTheDocument();
+  });
+
+  it("shows the server's own refusal instead of a generic toast (#1070)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // Pull the handler the page actually wired up and hand it a real ErrorResponse shape. Before
+    // #1070 every one of these became "Could not record that", so LiveScoringRules' sentences —
+    // written expressly so the view could explain itself — were never seen by anyone.
+    const options = usePostApiV1MatchesMatchIdLiveEvents.mock.calls.at(-1)?.[0];
+    options?.mutation?.onError?.({
+      response: {
+        data: {
+          message:
+            "That set has ended. Start the next set, or finalize the match, before scoring again.",
+        },
+      },
+    });
+    expect(toast.error).toHaveBeenCalledWith(
+      "That set has ended. Start the next set, or finalize the match, before scoring again.",
+      expect.anything(),
+    );
+  });
+
+  it("falls back to its own copy when the failure carries no message (#1070)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // A network failure or a 500 has nothing worth showing, so the generic string is still right —
+    // surfacing "undefined" would be worse than the toast it replaced.
+    const options = usePostApiV1MatchesMatchIdLiveEvents.mock.calls.at(-1)?.[0];
+    options?.mutation?.onError?.(new Error("Network Error"));
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not record that",
+      expect.anything(),
+    );
+  });
+
   it("floats the current-set label away from the banked-set chips (#1074)", async () => {
     // The bug: the label sat immediately before the chips, so after a 6-4 first set the band read
     // "Set 2  [6-4]" and the chip parsed as the CURRENT set's score.
@@ -826,7 +911,16 @@ describe("LiveScoringPage", () => {
     renderPage();
     await start(user);
 
-    expect(screen.getByRole("status")).toHaveTextContent("Next: Set 2");
+    // Two live regions between sets, announcing different things: the label says WHICH set is next,
+    // the prompt (#1070/#1075) says what to do about it. Queried by text rather than by role for
+    // exactly that reason — `getByRole("status")` would find both and throw.
+    const statuses = screen
+      .getAllByRole("status")
+      .map((node) => node.textContent?.trim());
+    expect(statuses).toContain("Next: Set 2");
+    expect(statuses).toContain(
+      "Set complete. Start the next set, or finalize the match.",
+    );
   });
 
   it("numbers every banked set, so three chips are not ambiguous (#1074)", async () => {
