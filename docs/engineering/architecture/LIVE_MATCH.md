@@ -356,6 +356,231 @@ persists it, allocates a sequence number, or knows about a match id.
 
 ---
 
+---
+
+## 7a. Decision — the umpire view is one state machine, and only interactable controls are visible
+
+The view's controls used to carry their own `disabled` predicates — `scorable`, `canScorePoints`,
+`busy || finished || betweenSets || !hasStarted || isTiebreak` — assembled per control and drifting
+apart as #984, #985 and #986 each added a gate. #1071 found where that ends: `disabled:opacity-50`
+applies to every button variant, so between sets the *disabled* Game and Set kept a visible border while
+Retire and Default, the only live controls in the row, had none. **The controls the umpire could not use
+looked more pressable than the ones they could.**
+
+So visibility is derived, from one table, and an unavailable control is **not on screen**.
+
+### The machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pre_Match : "click: Start scoring"
+
+    Pre_Match --> Pre_Match : "click: Switch Sides"
+    Pre_Match --> Ready : "click: Toggle Server"
+
+    Ready --> Ready : "click: Switch Sides"
+    Ready --> Ready : "click: Toggle Server"
+    Ready --> Match_Transition : "click: Start Match"
+
+    Match_Transition --> Match_Transition : "click: Switch Sides"
+    Match_Transition --> Match_Transition : "click: Toggle Server"
+    Match_Transition --> Set_Transition : "click: Start Set"
+    Match_Transition --> Set_Transition : "click: Start Next Set"
+    Match_Transition --> Paused : "click: Pause"
+    Match_Transition --> Retired : "click: Retired"
+    Match_Transition --> GameDefault : "click: Default"
+    Match_Transition --> Match_Closed : "click: Finalized"
+
+    Set_Transition --> Set_Transition : "click: Switch Sides"
+    Set_Transition --> Set_Transition : "click: Toggle Server"
+    Set_Transition --> Match_Transition : "click: Set"
+    Set_Transition --> Scoring_Game : "click: Start Game"
+    Set_Transition --> Scoring_Tiebreak : "click: Start Tiebreak [games level]"
+    Set_Transition --> Paused : "click: Pause"
+    Set_Transition --> Retired : "click: Retired"
+    Set_Transition --> GameDefault : "click: Default"
+
+    Scoring_Game --> Scoring_Game : "click: Switch Sides"
+    Scoring_Game --> Scoring_Game : "click: Toggle Server"
+    Scoring_Game --> Scoring_Game : "click: Any Score Box"
+    Scoring_Game --> Set_Transition : "click: Game"
+    Scoring_Game --> Paused : "click: Pause"
+    Scoring_Game --> Retired : "click: Retired"
+    Scoring_Game --> GameDefault : "click: Default"
+
+    Scoring_Tiebreak --> Scoring_Tiebreak : "click: Switch Sides"
+    Scoring_Tiebreak --> Scoring_Tiebreak : "click: Toggle Server"
+    Scoring_Tiebreak --> Scoring_Tiebreak : "click: Any Score Box"
+    Scoring_Tiebreak --> Match_Transition : "click: Set"
+    Scoring_Tiebreak --> Paused : "click: Pause"
+    Scoring_Tiebreak --> Retired : "click: Retired"
+    Scoring_Tiebreak --> GameDefault : "click: Default"
+
+    Paused --> Match_Transition : "click: Resume (from Match_Transition)"
+    Paused --> Set_Transition : "click: Resume (from Set_Transition)"
+    Paused --> Scoring_Game : "click: Resume (from Scoring_Game)"
+    Paused --> Scoring_Tiebreak : "click: Resume (from Scoring_Tiebreak)"
+
+    Retired --> Match_Closed : "record: Retired"
+    GameDefault --> Match_Closed : "record: Default"
+    Match_Closed --> Finalized : "record: Score"
+    Finalized --> [*]
+```
+
+### Three kinds of state
+
+The visibility table applies to the **user-facing** ones only. The others are not screens an umpire
+sits in.
+
+| Kind | Renders controls? | States |
+|---|---|---|
+| **User-facing** | yes | `Pre_Match`, `Ready`, `Match_Transition`, `Set_Transition`, `Scoring_Game`, `Scoring_Tiebreak`, `Paused` |
+| **Intermediate** | no — entered, runs an effect, transitions out | `Retired`, `GameDefault` |
+| **Terminal** | no — leaves the view | `Finalized` |
+
+An intermediate state is just *the window between dispatching an event and the log confirming it*, which
+is what the existing `busy` flag already represents. Nothing is stored for it.
+
+**`Match_Closed` is the one the implementation treats as user-facing**, and that is a deliberate
+divergence. The diagram reads `Match_Closed → Finalized : "record: Score"` as an effect, which would
+make a retirement finalize itself — but writing the result is a **different right** from scoring (#934,
+§9), so auto-finalizing would 403 for a plain `SCORER` and strand the match. A closed match therefore
+shows **Finalize** (to whoever may press it) and **Back**, and the retirement path passes through both
+kinds: `Scoring_Game → Retired` (record the retirement) `→ Match_Closed`, where the umpire or an
+organizer records the score.
+
+### `ScoreState` → `UmpireState`
+
+Read **outside-in** — the match's own containment, match then set then game. The flags are independent
+booleans on the wire and `ScoreEngine` keeps them consistent (`setTo` clears both inner flags as it
+banks), but a client that trusted the innermost one would show a live board for a set that had ended if
+the two ever disagreed.
+
+| Order | State | Derivation |
+|---|---|---|
+| 1 | `MATCH_CLOSED` | `outcome != null` — a retired match is not "between sets" |
+| 2 | `PAUSED` | `isPaused` — a pause is what the screen is about while it lasts |
+| 3 | `PRE_MATCH` / `READY` | `!hasStarted`, split on `serverId == null` |
+| 4 | `MATCH_TRANSITION` | `isBetweenSets` |
+| 5 | `SCORING_TIEBREAK` | `isTiebreak` |
+| 6 | `SCORING_GAME` | `isInGame` |
+| 7 | `SET_TRANSITION` | the fallthrough: in a set, between games |
+
+`MatchStarted` lands in `Match_Transition` (#1083). The first set begins explicitly like every other
+one, so "before the first set" is a state rather than an exception, and one rule covers both ends of a
+set. `GameStarted` (#1083, `V62`) is the same split one level down: without it, points were scorable the
+instant a set started and stayed scorable after every game closed, and there was no moment at which
+starting a tiebreak was the alternative to starting a game.
+
+**The state is derived from the replayed log, never held in component state.** Two things follow for
+free: **Resume** returns to whatever the pause interrupted, because replaying a closed `Paused`/`Resumed`
+pair simply yields the prior state — nothing remembers an origin — and **Undo** lands wherever
+truncating the log lands, with no destination to compute. A local mode flag would also break
+leave-and-resume (#937): the umpire would return mid-game to dead score boxes.
+
+### `UmpireState` → visible controls
+
+| Control | Pre_Match | Ready | Match_Trans. | Set_Trans. | Scoring_Game | Scoring_Tiebreak | Paused | Match_Closed |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| Back | ● | ● | ● | ● | ● | ● | ● | ● |
+| Undo | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | | ◐ |
+| Switch sides | ● | ● | ● | ● | ● | ● | | |
+| Toggle server | ● | ● | ● | ● | ● | ● | | |
+| Start match | | ● | | | | | | |
+| Start set / next set | | | ● | | | | | |
+| Start game | | | | ● | | | | |
+| Start tiebreak | | | | ◐ | | | | |
+| Score box (point) | | | | | ● | ● | | |
+| Game | | | | | ● | | | |
+| Set | | | | ● | | ● | | |
+| Retire / Default | | | ● | ● | ● | ● | | |
+| Pause | | | ● | ● | ● | ● | | |
+| Resume | | | | | | | ● | |
+| Finalize | | | ◐ | | | | | ◐ |
+
+● always in that state · ◐ subject to one of the three guards below
+
+Three readings each rule out a mis-tap rather than merely tidying the screen:
+
+- **no Set in `Scoring_Game`** — award the game first, so a stray tap cannot end a set mid-rally
+- **no point outside a game or a tiebreak** — a point between games has nowhere to go
+- **Finalize only from `Match_Transition`** — never between games, which preserves #984's decision point
+  and rules out finalizing a partial set
+
+### The three guards
+
+Everything else is state alone. These three depend on data, and they live together rather than each
+sitting on its control:
+
+1. **Undo** needs something still in force (`canUndo`). An always-visible Undo is the silently-inert
+   control this decision exists to remove: `LiveMatchService` treats undoing nothing as a no-op rather
+   than an error, so *interactable* has to mean **has an effect**. `canUndo` is computed from the same
+   `ScoreEngine.surviving(log)` the undo target comes from, so the button and the endpoint cannot
+   disagree — and it is what keeps Undo off `Pre_Match` with no special case.
+2. **Start tiebreak** needs the games **level** — `gamesTeam1 == gamesTeam2`. Level, not
+   even-numbered: 5-5 qualifies for a shortened format, 6-4 does not, and 0-0 qualifies for a
+   deciding-set match tiebreak, which is what keeps that format working. Enforced server-side too, since
+   the API is public (#225).
+3. **Finalize** needs the right to write a result, which is not the right to score (#934). Hidden rather
+   than left to 403 — the #867 lesson.
+
+### `Paused` admits only Resume and Back — and Undo's absence is about the clock
+
+A pause cements the match. On resume everything must be as it was, including which end each side is on
+and who is serving; an umpire who wants to change either does it after resuming.
+
+**Undo is hidden too, and the reason is the match timer rather than tidiness.**
+`lastUndoableSequence` is *the highest sequence still in force* with **no filter on event kind**, and
+`PAUSED` is a logged event — so an Undo during a pause cancels the pause rather than taking back a point.
+That is not merely mislabelled: `matchTiming` walks `survivingRows`, the same undo-aware filter, and a
+`PAUSED` row is what stops the clock. Cancel it and the engine concludes the clock never stopped, so the
+**entire rain delay is retroactively counted as playing time**. A control that silently inflates a
+match's elapsed time is considerably worse than an absent one, and **Resume** already covers an
+accidental pause.
+
+### Hidden, not disabled — a recorded reversal
+
+`LiveScoringBoard` used to carry the opposite note: *"Disabled rather than hidden: a board that vanishes
+and returns is disorienting, and a greyed one beside a prominent action reads as 'do that first'."*
+
+That was right about a control **temporarily unavailable within** a screen. A change of state is a change
+in what the screen is **for**, and a state machine whose controls merely grey out is a weak signal. The
+table also removes the #1071 failure mode rather than balancing it: there is no dimmed sibling left to
+out-signal anything, which a test now asserts directly — *nothing rendered between sets is disabled at
+all*. The only remaining `disabled` is `busy`, a write in flight, which is orthogonal to the machine.
+
+**One reading the rule needed.** The score box is both a control and the scoreboard. Hiding it between
+games would hide the score, which is the last thing to take from an umpire — so the *affordance* goes and
+the readout stays: a plain element with no hover, no active state and no `aria-label`, not a disabled
+button. A disabled button is still announced as a button, and `disabled:opacity-60` would dim the score
+exactly while the umpire is reading it to decide whether the set is over.
+
+### The write-path asymmetry, because the obvious assumption is backwards
+
+| Path | Transport | Failure semantics |
+|---|---|---|
+| Umpire action | `POST /matches/{id}/live/events` → append-only log in Postgres | **System of record.** Awaited, `sequence`-guarded via `appendWithRetry`. A failure means *nothing was recorded*. |
+| Spectator score | Firestore document | **Projection.** Best-effort by contract — `LiveScoreBroadcaster.publish` must not throw, and implementations swallow their own failures (§4). |
+
+The fire-and-forget write is the one **to spectators**, not the one from the umpire. That is what settles
+two things at once.
+
+**The machine needs no failure edge.** A failed write means the log did not move, so the derived state
+does not change and the umpire stays exactly where they were. Nothing strands.
+
+**But the failure still has to be reported.** A missing point cannot be spotted and corrected later from
+the Match page, because there is no wrong value there to notice — the point is simply **absent**, and
+absence is far harder to see than a wrong number. So a refusal carries the server's own sentence (#1070),
+and every game-level rule's message names the action that *would* work.
+
+A failed write also **refetches** (#1083). Normally that changes nothing, which is the point. The case it
+exists for is a write that landed and lost its response: without it the board keeps showing the
+pre-action score, the umpire taps again, and nothing rejects the repeat — `LiveScoreEventRequest` carries
+no expected sequence, so there is no concurrency guard on the write and the point is counted twice.
+Sending the expected sequence so the server can reject a stale append is the thorough fix and needs its
+own decision about what the client does with the rejection; refetching makes the failure honest in the
+meantime.
+
 ## 8. Decision — finalize goes through the existing result path
 
 **Decided.**

@@ -51,8 +51,12 @@ export function LiveScoringBoard({
   // names would be worse than no labels at all — it would confidently say the wrong thing.
   const ordered = flipped ? [sides[1], sides[0]] : sides
   // Every gate is now one lookup (#1083). The flags this used to compute -- `scorable`,
-  // `canScorePoints` -- were the ad-hoc predicates the state machine replaces, and `disabled` gave way
-  // to hidden: see `umpireState.ts` for why that note was reversed.
+  // `canScorePoints` -- were the ad-hoc predicates the state machine replaces.
+  //
+  // This is also where the "disabled rather than hidden" note used to sit, and it is REVERSED: an
+  // unavailable control is now absent. That was a recorded decision, so its reversal is recorded too --
+  // see `docs/engineering/architecture/LIVE_MATCH.md` section 7a, which holds the diagram, both
+  // derivation tables and the reasoning. `umpireState.ts` is the implementation of it.
   //
   // The ONE survivor of the point rule (#985) is the server check. It is not a state: a side can be
   // serving in any scoring state and in none of them, and the state machine is about which *moves*

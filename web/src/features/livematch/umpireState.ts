@@ -85,7 +85,8 @@ export function umpireStateOf(view: LiveMatchResponse): UmpireState {
  * The table: which controls are interactable — and therefore visible — in each state.
  *
  * A direct transcription of the state diagram in
- * `docs/engineering/architecture/LIVE_MATCH.md`. Read it as the diagram's edges grouped by origin.
+ * `docs/engineering/architecture/LIVE_MATCH.md` section 7a, which is the specification and holds the
+ * reasoning. Read this as that diagram's edges grouped by origin; change them together.
  *
  * Three readings worth stating, because each rules out a mis-tap rather than merely tidying the screen:
  * - **no `set` in `SCORING_GAME`** — award the game first, so a stray tap cannot end a set mid-rally
