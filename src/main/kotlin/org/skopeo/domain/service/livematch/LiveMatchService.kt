@@ -507,8 +507,12 @@ internal fun LiveMatchRepository.view(matchId: UUID): LiveMatchView {
  *
  * One holder rather than two lookups: both come from the same match, and fetching them separately
  * would load it twice per response and leave room for the two to disagree.
+ *
+ * Not a `data class`: it is assembled in one place and read in another, never compared, copied or
+ * printed. The generated `equals`/`hashCode`/`toString`/`copy` would be dead code that JaCoCo counts
+ * against the patch, and "add a test for a synthetic method" is the wrong way to fix that.
  */
-private data class LiveRoster(
+private class LiveRoster(
     val players: List<LivePlayerResponse> = emptyList(),
     val team1Name: String? = null,
     val team2Name: String? = null,
