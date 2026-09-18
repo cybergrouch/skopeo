@@ -32,7 +32,6 @@ import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserRating
 import org.skopeo.domain.model.UserSearchQuery
 import org.skopeo.domain.model.UserSearchSort
-import org.skopeo.domain.model.WinLossRecord
 import org.skopeo.domain.model.ageRangeToDob
 import org.skopeo.domain.model.canSeeRawRatingOrFalse
 import org.skopeo.domain.model.effectivePhotoUrl
@@ -41,7 +40,6 @@ import org.skopeo.domain.service.rating.CalibrationService
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.InviteRepository
-import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -85,7 +83,6 @@ class UserService(
     private val capabilities: CapabilityRepository = CapabilityRepository(),
     private val ratings: RatingAssembler = RatingAssembler(),
     private val invites: InviteRepository = InviteRepository(),
-    private val matches: MatchRepository = MatchRepository(),
     private val audit: AuditService = AuditService(),
     // The verdict is derived, never stored (#881); the count behind it is (#1051). The search page needs
     // it per row, so it is still asked in one batch — now a single read of the rating rows.
@@ -129,9 +126,6 @@ class UserService(
             )
             value
         }
-
-    /** Decided win–loss records (singles + doubles) for the given users, keyed by id — enriches research (#342). */
-    fun winLossRecords(ids: List<UUID>): Map<UUID, WinLossRecord> = matches.winLossByUsers(userIds = ids)
 
     /**
      * Player search backing the player-picker, role-grants, and the Research tab — RESEARCHER or staff
@@ -201,11 +195,16 @@ class UserService(
                     direction = sortOrder ?: SortDirection.ASC,
                 ).map { it.toDomain() }
             val total = repository.countSearch(query = query, includeInactive = includeInactive)
-            // Enrich with current ratings + win–loss records (#342) + calibration (#881) + the raw-reveal
-            // flag here (was in the route), returning the finished page DTO so the route stays thin.
+            // Enrich with current ratings + calibration (#881) + the raw-reveal flag here (was in the
+            // route), returning the finished page DTO so the route stays thin.
+            //
+            // NOT the win–loss record (#342) any more: #1050's column spec excluded it and #1053 removed
+            // it from the table, but this call was left behind — so every Research, Ratings-search and
+            // Deleted-accounts page ran a `team_users` scan plus match aggregation across 25 users and
+            // threw the answer away (#1062). `record` stays nullable on the DTO, already documented as
+            // "populated for research results, else null", so dropping it changes no wire shape.
             val ids = items.map { it.id }
             val ratingsById = currentRatings(ids = ids)
-            val records = winLossRecords(ids = ids)
             val calibrating = calibration.statusesFor(userIds = ids)
             val showRaw = callerCanSeeRawRating(token = token)
             UserSummaryPageResponse(
@@ -213,7 +212,6 @@ class UserService(
                     items.map {
                         it.toSummary(
                             rating = ratingsById[it.id],
-                            record = records[it.id],
                             showRawRating = showRaw,
                             isDeleted = it.isDeleted(),
                             inCalibration = calibrating[it.id]?.inCalibration,

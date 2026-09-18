@@ -3,6 +3,7 @@
 
 package org.skopeo.routes
 
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
@@ -435,8 +436,14 @@ class UserSearchApiIntegrationTest {
             second.items.size shouldBe 1 // the remainder
         }
 
+    /**
+     * The inverse of the #342 test this replaces. Kept rather than deleted because the retirement is
+     * worth pinning: the fixture still seeds a genuinely decided match, so an absent `record` is
+     * evidence the endpoint no longer *pays* for the aggregate, not merely that no match existed.
+     * If someone re-adds the fetch, this fails and asks them why.
+     */
     @Test
-    fun `paged search results carry each player's decided win-loss record (#342)`() =
+    fun `the paged search no longer pays for a win-loss record nobody reads (#1062)`() =
         withApp { client ->
             val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
             val alice = client.provisionNamed(uid = "alice", displayName = "Alice Racer")
@@ -473,13 +480,16 @@ class UserSearchApiIntegrationTest {
                     header(key = HttpHeaders.Authorization, value = "Bearer $host")
                 }.body<UserSummaryPageResponse>()
 
-            val aliceRecord = page.items.single { it.id == alice.id }.record.shouldNotBeNull()
-            aliceRecord.wins shouldBe 1
-            aliceRecord.losses shouldBe 0
-            aliceRecord.total shouldBe 1
-            val bobRecord = page.items.single { it.id == bob.id }.record.shouldNotBeNull()
-            bobRecord.wins shouldBe 0
-            bobRecord.losses shouldBe 1
+            // Both players have a decided match, so #342's version of this test saw 1-0 and 0-1 here.
+            // #1050's column spec excluded the record and #1053 removed its display; #1062 removed the
+            // query that had outlived both. `record` stays nullable on the schema — the bare
+            // `GET /users` search never populated it either — so no client contract changes shape.
+            page.items.single { it.id == alice.id }.record.shouldBeNull()
+            page.items.single { it.id == bob.id }.record.shouldBeNull()
+            // The other enrichments still arrive, so this asserts a targeted removal rather than a
+            // wholesale gutting of the page's enrichment.
+            page.items.single { it.id == alice.id }.status shouldBe "ACTIVE"
+            page.items.single { it.id == alice.id }.inCalibration.shouldNotBeNull()
         }
 
     @Test
