@@ -9,7 +9,9 @@
  *
  * Read and write live here, as pure functions over `URLSearchParams`, so the round trip
  * (form → URL → form) can be tested without rendering anything. They are deliberately
- * Research-specific; the generic hook is #1056, to be extracted from this one real use.
+ * Research-specific, and stay that way: `useUrlViewState` (#1056) was extracted from this one real use
+ * and is what a new page should adopt, but these params are the search API's own facets — interval
+ * strings the form must be able to reproduce — which is more than a reusable field codec should know.
  *
  * Param names are the wire's own (`name`, `sex`, `status`, `age`, `rating`, `sort`, `direction`), so
  * the URL reads like the request it produces. The one exception is `page`, which is 1-based here

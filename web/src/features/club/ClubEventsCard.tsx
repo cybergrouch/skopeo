@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -12,7 +11,9 @@ import type {
   GetApiV1ClubsCodeCodeEventsBucket,
 } from "@/api/generated/model";
 import { ContentLink } from "@/components/ContentLink";
+import { IgnoredParamsNotice } from "@/components/IgnoredParamsNotice";
 import { NumberedPager } from "@/components/NumberedPager";
+import { pageField, useUrlViewState } from "@/hooks/useUrlViewState";
 
 /** Ten at a time (#786) — matches the endpoint's own default. */
 const PAGE_SIZE = 10;
@@ -52,6 +53,10 @@ function EventRow({
  * makes per-bucket paging possible at all.
  *
  * `total` is the size of the whole bucket rather than the page, so the pager can say "Showing 1–10 of 37".
+ *
+ * The page lives in the URL (#1056) so a reload or a shared link keeps it — **namespaced by bucket**
+ * (`?upcoming.page=2`), which is what keeps three cards on one page from paging in lockstep. It is the
+ * case that forced the hook to namespace at all.
  */
 export function ClubEventsCard({
   code,
@@ -64,7 +69,13 @@ export function ClubEventsCard({
   title: string;
   emptyLabel: string;
 }) {
-  const [page, setPage] = useState(0);
+  // Lower-cased for the URL's sake: `?finalized.page=2` reads better than `?FINALIZED.page=2`, and
+  // the bucket is already shouting in the API's enum, not in the link a visitor sees.
+  const { view, setView, ignored } = useUrlViewState({
+    ns: bucket.toLowerCase(),
+    fields: { page: pageField() },
+  });
+  const page = view.page;
   const query = useGetApiV1ClubsCodeCodeEvents(code, {
     bucket,
     limit: PAGE_SIZE,
@@ -85,6 +96,7 @@ export function ClubEventsCard({
         ) : null}
       </CardHeader>
       <CardContent className="text-sm">
+        <IgnoredParamsNotice ignored={ignored} />
         {query.isLoading ? (
           <p className="text-muted-foreground">Loading…</p>
         ) : query.isError ? (
@@ -106,7 +118,7 @@ export function ClubEventsCard({
               page={page}
               total={total}
               pageSize={PAGE_SIZE}
-              onPage={setPage}
+              onPage={(next) => setView({ page: next })}
             />
           </>
         ) : (

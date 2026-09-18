@@ -17,25 +17,7 @@ import { ShareCard } from "@/components/ShareCard";
 import { PublicPageShell } from "@/components/PublicPageShell";
 import { NewEventForm } from "@/features/event/NewEventForm";
 import { ClubEventsCard } from "@/features/club/ClubEventsCard";
-
-/** The three groupings, in the order they appear down the page (#483/#786). */
-const BUCKETS = [
-  {
-    bucket: "UPCOMING",
-    title: "Upcoming events",
-    emptyLabel: "No upcoming events.",
-  },
-  {
-    bucket: "UNFINALIZED",
-    title: "Unfinalized events",
-    emptyLabel: "No unfinalized events.",
-  },
-  {
-    bucket: "FINALIZED",
-    title: "Finalized events",
-    emptyLabel: "No finalized events.",
-  },
-] as const;
+import { BUCKETS } from "@/features/club/eventBuckets";
 
 /**
  * Public club page reached via `/clubs/:code` (#327), and that club's own event organizer (#780).
