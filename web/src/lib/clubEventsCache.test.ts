@@ -3,6 +3,18 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
+
+// Mocked rather than imported for real: the generated client chains through `api/axios.ts` into
+// `lib/firebase.ts`, which initialises Firebase at module load and throws without an API key. The mock
+// reproduces the real builder EXACTLY — including omitting the params element when none is given, which
+// is the behaviour the partial-key prefix match depends on.
+vi.mock("@/api/generated/clubs/clubs", () => ({
+  getGetApiV1ClubsCodeCodeEventsQueryKey: (
+    code: string,
+    params?: Record<string, unknown>,
+  ) => [`/api/v1/clubs/code/${code}/events`, ...(params ? [params] : [])],
+}));
+
 import { invalidateClubEvents } from "./clubEventsCache";
 
 /** The key shape the generated client produces for one bucket page of a club's events. */
