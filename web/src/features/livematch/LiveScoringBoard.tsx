@@ -103,9 +103,21 @@ export function LiveScoringBoard({
             >
               Set
             </Button>
+            {/*
+              `outline` plus the destructive colour, NOT `ghost` (#1071). Ghost has only a hover state —
+              no border, no shadow — so at rest these read as text. Worse, `disabled:opacity-50` applies
+              to every variant, so between sets the DISABLED Game/Set above kept a visible border while
+              these two, the only live controls in the row, had none: the unusable controls looked more
+              pressable than the usable ones.
+
+              The border is the affordance; the red is the caution. They are separable, and ending a
+              match deserves both — promoting these to a plain `outline` would make them as inviting as
+              Game, which for a mis-tap on a phone at the net is the opposite mistake.
+            */}
             <Button
               size="sm"
-              variant="ghost"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
               disabled={busy || finished || !view.hasStarted}
               aria-label={`${side.name} retires`}
               onClick={() => onRetire(side.id)}
@@ -114,7 +126,8 @@ export function LiveScoringBoard({
             </Button>
             <Button
               size="sm"
-              variant="ghost"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
               disabled={busy || finished || !view.hasStarted}
               aria-label={`${side.name} defaults`}
               onClick={() => onDefault(side.id)}
@@ -244,8 +257,11 @@ export function ScoringActions({
       >
         {view.isPaused ? 'Resume' : 'Pause'}
       </Button>
-      {/* A display preference only. Never recorded, so the log cannot be corrupted by a flip (#911 §6). */}
-      <Button size="sm" variant="ghost" disabled={busy} onClick={onFlip}>
+      {/* A display preference only. Never recorded, so the log cannot be corrupted by a flip (#911 §6).
+          `outline` rather than `ghost` (#1071): it has no reason to be quiet — nothing is destroyed by a
+          flip — and every reason to look like the control it is. No destructive colour, unlike
+          Retire/Default, precisely because it changes nothing. */}
+      <Button size="sm" variant="outline" disabled={busy} onClick={onFlip}>
         Switch sides
       </Button>
       {/*

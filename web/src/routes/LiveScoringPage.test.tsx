@@ -789,6 +789,45 @@ describe("LiveScoringPage", () => {
     expect(releaseMutate).toHaveBeenCalled();
   });
 
+  it("renders Retire, Default and Switch sides as buttons, not text (#1071)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // `ghost` has only a hover state — no border, no shadow — so these read as text at rest. A border
+    // is the affordance, and it is exactly what ghost lacks, so that is what this asserts.
+    for (const name of ["Ana retires", "Ana defaults", "Bob retires", "Bob defaults"]) {
+      expect(screen.getByLabelText(name)).toHaveClass("border");
+    }
+    expect(screen.getByRole("button", { name: "Switch sides" })).toHaveClass("border");
+
+    // Retire/Default keep a caution cue as well: the border is affordance, the red is danger, and
+    // ending a match deserves both. Switch sides changes nothing, so it gets no warning colour.
+    expect(screen.getByLabelText("Ana retires")).toHaveClass("text-destructive");
+    expect(screen.getByRole("button", { name: "Switch sides" })).not.toHaveClass(
+      "text-destructive",
+    );
+  });
+
+  it("does not let disabled controls out-signal live ones between sets (#1071)", async () => {
+    // The inversion this fixes: `disabled:opacity-50` applies to every variant, so a disabled
+    // `outline` Game kept its border while a live `ghost` Retire had none — the control the umpire
+    // could NOT use looked more pressable than the one they could. Both now carry a border, so the
+    // difference between them is the disabled state alone rather than the presence of a button shape.
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isBetweenSets: true },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    expect(screen.getByLabelText("Game to Ana")).toBeDisabled();
+    expect(screen.getByLabelText("Ana retires")).toBeEnabled();
+    expect(screen.getByLabelText("Game to Ana")).toHaveClass("border");
+    expect(screen.getByLabelText("Ana retires")).toHaveClass("border");
+  });
+
   it("has exactly one Back control in the scoring view (#1073)", async () => {
     const user = userEvent.setup();
     renderPage();

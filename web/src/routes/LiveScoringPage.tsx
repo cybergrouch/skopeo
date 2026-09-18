@@ -217,6 +217,12 @@ export function LiveScoringPage() {
             Stays live whatever state the match is in: it is the one control the gates must never
             disable. On a match that has not started it is the only way out, so a `busy` guard here
             would strand an umpire who opened the wrong court.
+
+            Deliberately still `ghost`, unlike the board's controls (#1071). Two reasons: it is
+            navigation rather than a scoring action, and it sits alone in the header rather than beside
+            disabled siblings — so the inverted-affordance problem that forced Retire/Default off ghost
+            does not arise here. Making it prominent would invite an accidental mid-match exit, and
+            leaving releases the claim.
           */}
           <Button size="sm" variant="ghost" onClick={() => void leave()}>
             ← Back
