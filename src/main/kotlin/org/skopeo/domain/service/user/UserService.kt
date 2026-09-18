@@ -69,6 +69,8 @@ data class UserSearchFilters(
     val capability: String? = null,
     // Raw `AccountStatus` name to restrict to (#1050), parsed in [UserService.validatedQuery].
     val status: String? = null,
+    // Raw "true"/"false" calibration facet (#1065); anything else is a 400.
+    val inCalibration: String? = null,
 )
 
 /**
@@ -147,12 +149,15 @@ class UserService(
             requirePlayerSearchAccess(repository = repository, token = token).bind()
             val query = validatedQuery(filters = filters).bind()
             ensureStatusIsReachable(status = query.status, includeInactive = includeInactive)
+            // `validatedQuery` is shared, so the calibration facet reaches this search too and its N must
+            // be resolved here as well — only when asked for, so the pickers pay nothing.
             val users =
                 repository.search(
                     query = query,
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
                     offset = offset.coerceAtLeast(minimumValue = 0),
                     includeInactive = includeInactive,
+                    calibrationRequired = query.inCalibration?.let { calibration.requiredMatches() },
                 ).map { it.toDomain() }
             // Enrich each summary with the current rating + the raw-reveal flag here (was assembled in the
             // route), so the route stays thin and never touches the mapper.
@@ -185,6 +190,15 @@ class UserService(
             ensureStatusIsReachable(status = query.status, includeInactive = includeInactive)
             val sortKey = sort?.let { raw -> enumByName<UserSearchSort>(raw = raw, field = "sort") }
             val sortOrder = direction?.let { raw -> enumByName<SortDirection>(raw = raw, field = "direction") }
+            // ONE settings read per request, and only when calibration is actually referenced (#1065).
+            // The repository never reads settings itself, so N arrives as a value — and because the
+            // count is stored, changing N still re-derives for everyone at once with no sweep.
+            val calibrationRequired =
+                if (query.inCalibration != null || sortKey == UserSearchSort.CALIBRATION) {
+                    calibration.requiredMatches()
+                } else {
+                    null
+                }
             val items =
                 repository.search(
                     query = query,
@@ -193,8 +207,14 @@ class UserService(
                     includeInactive = includeInactive,
                     sort = sortKey,
                     direction = sortOrder ?: SortDirection.ASC,
+                    calibrationRequired = calibrationRequired,
                 ).map { it.toDomain() }
-            val total = repository.countSearch(query = query, includeInactive = includeInactive)
+            val total =
+                repository.countSearch(
+                    query = query,
+                    includeInactive = includeInactive,
+                    calibrationRequired = calibrationRequired,
+                )
             // Enrich with current ratings + calibration (#881) + the raw-reveal flag here (was in the
             // route), returning the finished page DTO so the route stays thin.
             //
@@ -256,12 +276,21 @@ class UserService(
             val rating = filters.rating?.let { NumericRange.parse(raw = it) }
             val capability = filters.capability?.let { raw -> enumByName<Capability>(raw = raw, field = "capability") }
             val status = filters.status?.let { raw -> enumByName<AccountStatus>(raw = raw, field = "status") }
+            val inCalibration =
+                filters.inCalibration?.let { raw ->
+                    raw.lowercase().toBooleanStrictOrNull()
+                        ?: raise(
+                            r = ServiceError.Validation(message = "Unknown inCalibration '$raw'; expected one of true, false"),
+                        )
+                }
             ensure(
                 condition =
                     nameTerm != null || codeTerm != null || qTerm != null || filters.sex != null ||
-                        age != null || rating != null || capability != null || status != null,
+                        age != null || rating != null || capability != null || status != null || inCalibration != null,
             ) {
-                ServiceError.Validation(message = "at least one filter (name, code, q, sex, age, rating, capability, status) is required")
+                ServiceError.Validation(
+                    message = "at least one filter (name, code, q, sex, age, rating, capability, status, inCalibration) is required",
+                )
             }
             val dob = age?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
             UserSearchQuery(
@@ -274,6 +303,7 @@ class UserService(
                 rating = rating,
                 capability = capability,
                 status = status,
+                inCalibration = inCalibration,
             )
         }
 

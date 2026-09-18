@@ -114,6 +114,10 @@ data class UserSearchQuery(
     // asking for either with `includeInactive = false` is a contradiction the service rejects rather
     // than silently answering with an empty page.
     val status: AccountStatus? = null,
+    // Whether the player's rating is still calibrating (#1065). Queryable at last because #1051 stores
+    // the rated-match count: the verdict is one comparison against the live global N, so this is a plain
+    // WHERE rather than the aggregate #1050 had to defer. Null means "don't filter on it".
+    val inCalibration: Boolean? = null,
 )
 
 /**
@@ -131,7 +135,7 @@ data class UserSearchQuery(
  * Ordering is applied in the database, BEFORE paging — a sort over the current page only would reorder
  * 25 rows while `total` described the whole result set.
  */
-enum class UserSearchSort { DISPLAY_NAME, LAST_NAME, FIRST_NAME, SEX, AGE, RATING, STATUS }
+enum class UserSearchSort { DISPLAY_NAME, LAST_NAME, FIRST_NAME, SEX, AGE, RATING, STATUS, CALIBRATION }
 
 /** Ascending or descending, for [UserSearchSort]. */
 enum class SortDirection { ASC, DESC }

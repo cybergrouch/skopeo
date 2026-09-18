@@ -31,6 +31,7 @@ import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.lowerCase
+import org.jetbrains.exposed.v1.core.not
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.stringParam
 import org.jetbrains.exposed.v1.core.wrapAsExpression
@@ -202,17 +203,28 @@ class UserRepository {
         // `id ASC`, which every existing caller (pickers, Ratings search) relies on for stable paging.
         sort: UserSearchSort? = null,
         direction: SortDirection = SortDirection.ASC,
+        // The live global N (#1051/#1065), needed only when filtering or sorting on calibration. The
+        // service resolves it once per request; the repository never reads settings itself.
+        calibrationRequired: Int? = null,
     ): List<UserAggregateEntity> =
         transaction {
             val order = if (direction == SortDirection.DESC) SortOrder.DESC else SortOrder.ASC
             // `id ASC` is appended as a tie-break even when sorting, so a page boundary cannot duplicate
             // or drop a row when many rows share a sort value — e.g. the thousands that share a sex or a
             // status. Applied one term at a time because Exposed's vararg `orderBy` would need a spread.
-            val terms = orderingFor(sort = sort, order = order) + (UsersTable.id to SortOrder.ASC)
+            val terms =
+                orderingFor(sort = sort, order = order, calibrationRequired = calibrationRequired) +
+                    (UsersTable.id to SortOrder.ASC)
             val rows =
                 UsersTable
                     .selectAll()
-                    .where { conditionsFor(query = query, includeInactive = includeInactive) }
+                    .where {
+                        conditionsFor(
+                            query = query,
+                            includeInactive = includeInactive,
+                            calibrationRequired = calibrationRequired,
+                        )
+                    }
                     .apply { terms.forEach { (expression, sortOrder) -> orderBy(column = expression, order = sortOrder) } }
                     .limit(count = limit).offset(start = offset.toLong())
             rows.map { loadAggregate(id = it[UsersTable.id].value)!! }
@@ -222,43 +234,21 @@ class UserRepository {
     fun countSearch(
         query: UserSearchQuery,
         includeInactive: Boolean = false,
-    ): Long = transaction { UsersTable.selectAll().where { conditionsFor(query = query, includeInactive = includeInactive) }.count() }
+        calibrationRequired: Int? = null,
+    ): Long =
+        transaction {
+            UsersTable
+                .selectAll()
+                .where {
+                    conditionsFor(
+                        query = query,
+                        includeInactive = includeInactive,
+                        calibrationRequired = calibrationRequired,
+                    )
+                }.count()
+        }
 
     /** The AND-combined predicate for [search]/[countSearch]: every supplied facet of [query]. */
-    private fun conditionsFor(
-        query: UserSearchQuery,
-        includeInactive: Boolean,
-    ): Op<Boolean> =
-        buildList {
-            // Normal search/pickers exclude inactive; Research opts in (#518) to surface deleted accounts.
-            if (!includeInactive) add(element = UsersTable.isActive eq true)
-            query.sex?.let { sex -> add(element = UsersTable.sex eq sex) }
-            query.dobMin?.let { min -> add(element = UsersTable.dateOfBirth greaterEq min) }
-            query.dobMax?.let { max -> add(element = UsersTable.dateOfBirth lessEq max) }
-            query.name?.let { name -> add(element = nameMatches(name = name)) }
-            // Prefix match (#86): the service uppercases the term and codes are stored uppercase, so a
-            // plain LIKE 'PREFIX%' matches partial codes case-insensitively.
-            query.code?.let { code -> add(element = UsersTable.publicCode like "$code%") }
-            query.q?.let { term -> add(element = nameOrCodeMatches(term = term)) }
-            query.rating?.let { range -> add(element = ratingMatches(range = range)) }
-            // Lifecycle state (#1050), expressed with the same precedence as `User.accountStatus()`.
-            query.status?.let { status -> add(element = statusMatches(status = status)) }
-            // Correlated EXISTS: the user has an active grant of the requested capability (#317).
-            query.capability?.let { capability ->
-                add(
-                    element =
-                        exists(
-                            query =
-                                UserCapabilitiesTable.selectAll().where {
-                                    (UserCapabilitiesTable.userId eq UsersTable.id) and
-                                        (UserCapabilitiesTable.capability eq capability.name) and
-                                        UserCapabilitiesTable.isActive
-                                },
-                        ),
-                )
-            }
-        }.reduce { acc, op -> acc and op }
-
     fun findByFirebaseUid(firebaseUid: String): UserAggregateEntity? =
         transaction {
             UsersTable
@@ -923,6 +913,60 @@ private fun ratingMatches(range: NumericRange): Op<Boolean> =
     )
 
 /**
+ * The AND-combined predicate for [UserRepository.search]/[UserRepository.countSearch]: every supplied
+ * facet of [query]. Top-level like the ordering builders — it uses no repository state, and keeping it
+ * out of the class body keeps that body under detekt's `LargeClass` ceiling.
+ */
+private fun conditionsFor(
+    query: UserSearchQuery,
+    includeInactive: Boolean,
+    calibrationRequired: Int?,
+): Op<Boolean> =
+    buildList {
+        // Normal search/pickers exclude inactive; Research opts in (#518) to surface deleted accounts.
+        if (!includeInactive) add(element = UsersTable.isActive eq true)
+        query.sex?.let { sex -> add(element = UsersTable.sex eq sex) }
+        query.dobMin?.let { min -> add(element = UsersTable.dateOfBirth greaterEq min) }
+        query.dobMax?.let { max -> add(element = UsersTable.dateOfBirth lessEq max) }
+        query.name?.let { name -> add(element = nameMatches(name = name)) }
+        // Prefix match (#86): the service uppercases the term and codes are stored uppercase, so a
+        // plain LIKE 'PREFIX%' matches partial codes case-insensitively.
+        query.code?.let { code -> add(element = UsersTable.publicCode like "$code%") }
+        query.q?.let { term -> add(element = nameOrCodeMatches(term = term)) }
+        query.rating?.let { range -> add(element = ratingMatches(range = range)) }
+        // Lifecycle state (#1050), expressed with the same precedence as `User.accountStatus()`.
+        query.status?.let { status -> add(element = statusMatches(status = status)) }
+        // Calibration (#1065). Applied HERE, in the predicate both `search` and `countSearch` share, so
+        // the two narrow identically and the pager cannot claim more rows than the filter matches.
+        query.inCalibration?.let { wanted ->
+            add(
+                element =
+                    calibrationMatches(
+                        inCalibration = wanted,
+                        required =
+                            requireNotNull(value = calibrationRequired) {
+                                "Filtering on calibration needs the global N; the service must resolve it (#1065)"
+                            },
+                    ),
+            )
+        }
+        // Correlated EXISTS: the user has an active grant of the requested capability (#317).
+        query.capability?.let { capability ->
+            add(
+                element =
+                    exists(
+                        query =
+                            UserCapabilitiesTable.selectAll().where {
+                                (UserCapabilitiesTable.userId eq UsersTable.id) and
+                                    (UserCapabilitiesTable.capability eq capability.name) and
+                                    UserCapabilitiesTable.isActive
+                            },
+                    ),
+            )
+        }
+    }.reduce { acc, op -> acc and op }
+
+/**
  * The ORDER BY terms for [sort], or none for the default `id ASC`.
  *
  * The name and rating columns live in other tables, so they order by a **correlated subquery**
@@ -933,6 +977,9 @@ private fun ratingMatches(range: NumericRange): Op<Boolean> =
 private fun orderingFor(
     sort: UserSearchSort?,
     order: SortOrder,
+    // The live global N (#1051). Only the CALIBRATION branch reads it, so it is null for every other
+    // sort; requiring it unconditionally would force every caller to resolve a setting it never uses.
+    calibrationRequired: Int?,
 ): List<Pair<Expression<*>, SortOrder>> =
     when (sort) {
         null -> emptyList()
@@ -946,7 +993,69 @@ private fun orderingFor(
             listOf(element = UsersTable.dateOfBirth to if (order == SortOrder.ASC) SortOrder.DESC else SortOrder.ASC)
         UserSearchSort.RATING -> listOf(element = currentRatingValue() to order)
         UserSearchSort.STATUS -> listOf(element = statusRank() to order)
+        // Calibration is a BOOLEAN, so ordering by it alone yields two blocks in `id` order — true but
+        // not useful. The secondary is the count itself, always DESC, so within the calibrating block
+        // the players furthest through their window come first ("match 9 of 10" before "match 1 of 10").
+        // Fixed rather than following `order`, because "nearly finished" is the interesting end whichever
+        // way the blocks are arranged.
+        UserSearchSort.CALIBRATION ->
+            listOf(
+                calibrationRank(
+                    required =
+                        requireNotNull(value = calibrationRequired) {
+                            "Sorting by CALIBRATION needs the global N; the service must resolve it (#1065)"
+                        },
+                ) to order,
+                calibrationMatchesRatedValue() to SortOrder.DESC,
+            )
     }
+
+/**
+ * Calibration as a sortable rank: 0 while calibrating, 1 otherwise, so ASC puts calibrating players
+ * first. The `EXISTS` mirrors [calibrationMatches] exactly rather than restating the rule — the two
+ * must not be able to disagree about who is calibrating.
+ */
+private fun calibrationRank(required: Int): Expression<Int> =
+    Case()
+        .When(cond = calibrationMatches(inCalibration = true, required = required), result = intLiteral(value = 0))
+        .Else(e = intLiteral(value = 1))
+
+/** How far through the window the player is, as a scalar subquery; null for a player with no rating row. */
+private fun calibrationMatchesRatedValue(): Expression<Int?> =
+    wrapAsExpression(
+        query =
+            UserRatingsTable
+                .select(columns = listOf(element = UserRatingsTable.calibrationMatchesRated))
+                .where { UserRatingsTable.userId eq UsersTable.id }
+                .limit(count = 1),
+    )
+
+/**
+ * Whether the player is (or is not) calibrating (#1065) — the filter counterpart of [calibrationRank].
+ *
+ * **BOTH conditions, not just the count.** `CalibrationService` answers "not calibrating" from a null
+ * `calibration_started_at` alone, and the stored count is 0-and-unread there (see `V61`'s column
+ * comment). So a predicate of `count < N` on its own would match every player who was never designated,
+ * since 0 < N — which is the whole population, not the calibrating subset.
+ *
+ * `inCalibration = false` is the negation of the same expression, so a player with no rating row at all
+ * correctly lands there rather than being dropped from both sides of the filter.
+ */
+private fun calibrationMatches(
+    inCalibration: Boolean,
+    required: Int,
+): Op<Boolean> {
+    val calibrating =
+        exists(
+            query =
+                UserRatingsTable.selectAll().where {
+                    (UserRatingsTable.userId eq UsersTable.id) and
+                        UserRatingsTable.calibrationStartedAt.isNotNull() and
+                        (UserRatingsTable.calibrationMatchesRated less required)
+                },
+        )
+    return if (inCalibration) calibrating else not(op = calibrating)
+}
 
 /** The user's active name of [type], as a scalar subquery — mirrors the mapper's `firstOrNull`. */
 private fun activeNameValue(type: NameType): Expression<String?> =
