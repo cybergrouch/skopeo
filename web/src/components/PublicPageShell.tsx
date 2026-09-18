@@ -22,8 +22,12 @@ export function PublicPageShell({
   columns?: boolean;
 }) {
   return (
-    <div className="min-h-svh bg-muted/40 pb-8">
-      <PageContainer className="pt-10">
+    // Safe-area insets (#1076): the nav's "← Back" control is the topmost thing on these pages and
+    // 40px of headroom is *just* under a notched iPhone's ~47-59px top inset, so it would end up
+    // partly behind the status bar now that `viewport-fit=cover` lets the page draw there. `max()`
+    // keeps the old spacing as a floor at both edges.
+    <div className="min-h-svh bg-muted/40 pb-[max(2rem,env(safe-area-inset-bottom))]">
+      <PageContainer className="pt-[max(2.5rem,env(safe-area-inset-top))]">
         <PublicPageNav />
         <div
           className={cn(

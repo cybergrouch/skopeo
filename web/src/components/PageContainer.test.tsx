@@ -15,7 +15,12 @@ describe("PageContainer", () => {
     const el = screen.getByText("content");
     expect(el.className).toContain("mx-auto");
     expect(el.className).toContain("w-full");
-    expect(el.className).toContain("px-4");
+    // The gutter is a `max()` of the old flat value and the safe-area insets (#1076): 1rem is still
+    // the floor, but a notched phone in landscape gets the wider of the two so a heading can't end
+    // up behind the sensor housing now that `viewport-fit=cover` lets the page draw there.
+    expect(el.className).toContain("px-[max(1rem,env(safe-area-inset-left)");
+    expect(el.className).toContain("sm:px-[max(1.5rem,");
+    expect(el.className).toContain("lg:px-[max(2rem,");
   });
 
   it("caps data pages well beyond the old 384px column", () => {

@@ -14,7 +14,30 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="apple-mobile-web-app-title" content="Skopeo" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Installed-app / edge-to-edge plumbing for the umpire view (#1076). The umpire view is sized in
+      `dvh` and forbidden to scroll (#911), so a reserved OS band is not cosmetic — it steals height
+      from a layout that has nowhere to put the overflow. These four declarations reclaim it:
+
+      - `viewport-fit=cover` lets the page draw into the safe-area insets instead of being letterboxed
+        inside them. It is the prerequisite for the rest, and it applies to EVERY page — which is why
+        the shared gutter (PageContainer) and every element pinned to a viewport edge now pad
+        themselves with `max(<old value>, env(safe-area-inset-*))`.
+      - `mobile-web-app-capable` / `apple-mobile-web-app-capable` run an installed home-screen launch
+        without browser chrome. The modern name is the unprefixed one; the Apple-prefixed name is kept
+        because iOS still reads it and ignoring it costs an iOS user the whole benefit.
+      - `apple-mobile-web-app-status-bar-style=black-translucent` makes iOS draw content *under* the
+        status bar rather than below it. That is what actually returns the height — but the status-bar
+        icons are then composited over our canvas, so the top inset is a place for background, not for
+        text. Anything readable there needs `padding-top: env(safe-area-inset-top)`.
+
+      What this does NOT do: there is no web API that hides the status bar in an iOS Safari *tab*.
+      See `web/src/features/livematch/useLockedLandscape.ts` for the per-platform ceiling.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Skopeo</title>
     <meta
       name="description"

@@ -196,7 +196,11 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-svh bg-muted/40">
-      <header className="border-b bg-background py-3">
+      {/* The app's topmost element, so it owns the top safe-area inset (#1076): with
+          `viewport-fit=cover` — and on an installed iOS app, a translucent status bar drawn over our
+          own canvas — 12px of padding would put the logo and the sign-out button under the clock.
+          `max()` keeps 12px as the floor, so nothing changes where there is no inset. */}
+      <header className="border-b bg-background pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <PageContainer className="flex items-center justify-between">
           <BrandLogo className="text-lg" />
           <Button

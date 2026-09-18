@@ -19,9 +19,12 @@ export function NewVersionBanner() {
   if (!available || dismissed) return null
 
   return (
+    // Bottom safe-area inset (#1076): this is pinned to `bottom-0`, and its Reload / Not now
+    // buttons would otherwise sit in the iOS home-indicator (or Android gesture-pill) band, where a
+    // tap is claimed by the OS swipe. `max()` floors at the old 12px.
     <div
       role="status"
-      className="fixed inset-x-0 bottom-0 z-50 flex flex-wrap items-center justify-center gap-3 border-t bg-background/95 px-4 py-3 text-sm shadow-lg backdrop-blur"
+      className="fixed inset-x-0 bottom-0 z-50 flex flex-wrap items-center justify-center gap-3 border-t bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-sm shadow-lg backdrop-blur"
     >
       <span>A new version of Skopeo is available.</span>
       <span className="flex items-center gap-2">

@@ -12,7 +12,12 @@ import { PageContainer } from "@/components/PageContainer";
 export function AboutPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <PageContainer size="prose" className="space-y-6 py-8">
+      {/* Safe-area insets (#1076): 32px clears most notches, but `max()` costs nothing and the nav
+          link at the top of this page is the first thing a viewer reaches for. */}
+      <PageContainer
+        size="prose"
+        className="space-y-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))]"
+      >
         <PublicPageNav />
         <AboutContent showAuthActions />
       </PageContainer>
