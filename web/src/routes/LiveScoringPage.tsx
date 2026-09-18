@@ -12,6 +12,7 @@ import {
   usePostApiV1MatchesMatchIdLiveUndo,
 } from '@/api/generated/matches/matches'
 import type {
+  LiveMatchResponse,
   LiveScoreEventRequestKind,
   MatchPublicPlayer,
 } from '@/api/generated/model'
@@ -29,6 +30,23 @@ import { MatchClock } from '@/features/livematch/MatchClock'
 type Side = 'TEAM1' | 'TEAM2'
 
 /** A side's players as one label, e.g. "Ana & Bea". Falls back so a placeholder still reads as someone. */
+/**
+ * What the centred set label reads (#1074).
+ *
+ * `sets.length + 1` is the set in progress, which is correct *while one is being played* and wrong at
+ * both edges. Between sets nothing is in progress — the next set has not begun — so announcing "Set 2"
+ * the instant set 1 is awarded is the same overclaim that made the old layout confusing, just relocated.
+ * Saying "next" instead is what the umpire is actually looking at: a decision point (#984), not a set.
+ *
+ * Before the match starts the plain number is kept. #1070 puts the "press Start match" guidance in its
+ * own prompt, so repeating it here would say the same thing twice in one band.
+ */
+function setLabel(view: LiveMatchResponse): string {
+  const current = view.sets.length + 1
+  if (view.isBetweenSets) return `Next: Set ${current}`
+  return `Set ${current}`
+}
+
 function sideName(players: MatchPublicPlayer[] | undefined): string {
   const names = (players ?? []).map((p) => p.displayName ?? p.publicCode ?? 'Unknown')
   return names.length > 0 ? names.join(' & ') : 'Unknown'
@@ -205,7 +223,7 @@ export function LiveScoringPage() {
 
   return (
     <div className="flex h-[100dvh] w-[100dvw] flex-col overflow-hidden bg-background px-[1.5dvw] py-[1dvh]">
-      <div className="flex shrink-0 items-center justify-between gap-[1dvw]">
+      <div className="relative flex shrink-0 items-center justify-between gap-[1dvw]">
         <div className="flex min-w-0 items-center gap-[1.2dvw]">
           {/*
             The only way out (#986/#1073). There were two Back controls — this one and a second in the
@@ -231,12 +249,36 @@ export function LiveScoringPage() {
           <span className="truncate text-[2.2dvh] text-muted-foreground">
             {match.event?.name ? `${match.event.name} · ` : ''}Match #{match.matchNumber}
           </span>
-          {/* The set IN PROGRESS, which is one more than the number banked. */}
-          <span className="whitespace-nowrap text-[2.2dvh] font-semibold">
-            Set {view.sets.length + 1}
-          </span>
           <CompletedSets view={view} />
         </div>
+        {/*
+          The current set, floating dead centre (#1074).
+
+          It used to sit in the left cluster immediately before the banked-set chips, so after a 6-4
+          first set the band read "Set 2  [6-4]" and the chip parsed as the CURRENT set's score. Moving
+          it away from the chips is the fix; the chips gained their own set numbers in the same change,
+          because a bare "6-4" invites the same misreading wherever it sits.
+
+          Absolutely positioned rather than a third flex child: the left cluster truncates a long event
+          name, which would drag a flex-centred label off-centre. Absolute positioning is independent of
+          its siblings' widths, so the label is centred whatever the match is called.
+
+          `pointer-events-none` is not optional — this floats over the header and, at narrow widths,
+          could overlap a control. A label that swallowed a tap on the server toggle or Start match
+          would be a bad courtside bug with an invisible cause.
+
+          The gradient stops are theme tokens, never literal colours: #394 records a shared hardcoded
+          treatment failing WCAG-AA against the card surface in the AO and Off-Season themes.
+        */}
+        <span
+          role="status"
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap
+                     rounded-full bg-gradient-to-r from-transparent via-secondary to-transparent
+                     px-[2dvw] py-[0.2dvh] text-[2.4dvh] font-semibold text-foreground"
+        >
+          {setLabel(view)}
+        </span>
+
         <div className="flex items-center gap-[1dvw] text-[2.2dvh] text-muted-foreground">
           <ServerControl
             view={view}

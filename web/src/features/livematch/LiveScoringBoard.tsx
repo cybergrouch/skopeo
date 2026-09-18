@@ -192,6 +192,13 @@ export function CompletedSets({ view }: { view: LiveMatchResponse }) {
           key={index}
           className="whitespace-nowrap rounded bg-secondary px-[1dvw] py-[0.4dvh] text-[2.4dvh] tabular-nums"
         >
+          {/* The set number, so a chip identifies itself (#1074). A bare "6-4" beside anything
+              set-related invites being read as the CURRENT set's score, and with three banked sets
+              "[6-4] [3-6] [7-5]" said nothing about which was which. Small and muted: it is a label,
+              not data, and the score is what the umpire is reading. */}
+          <span className="mr-[0.4dvw] text-[1.5dvh] font-medium text-muted-foreground">
+            S{index + 1}
+          </span>
           {set.gamesTeam1}-{set.gamesTeam2}
           {set.tiebreakTeam1Points != null && set.tiebreakTeam2Points != null && (
             <sup className="ml-0.5">

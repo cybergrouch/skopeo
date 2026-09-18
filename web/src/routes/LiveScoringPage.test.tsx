@@ -789,6 +789,66 @@ describe("LiveScoringPage", () => {
     expect(releaseMutate).toHaveBeenCalled();
   });
 
+  it("floats the current-set label away from the banked-set chips (#1074)", async () => {
+    // The bug: the label sat immediately before the chips, so after a 6-4 first set the band read
+    // "Set 2  [6-4]" and the chip parsed as the CURRENT set's score.
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, sets: [{ gamesTeam1: 6, gamesTeam2: 4 }] },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // The chip now identifies itself, so a bare score cannot be mistaken for the live one.
+    expect(screen.getByText("S1")).toBeInTheDocument();
+    expect(screen.getByText("6-4")).toBeInTheDocument();
+    // And the current set is announced separately, as a status region.
+    const label = screen.getByRole("status");
+    expect(label).toHaveTextContent("Set 2");
+    // Floating over the header: it MUST NOT be hit-testable, or it could swallow a tap on the server
+    // toggle or Start match at narrow widths, with no visible cause.
+    expect(label).toHaveClass("pointer-events-none");
+  });
+
+  it("says a set is NEXT rather than in progress between sets (#1074)", async () => {
+    // Announcing "Set 2" the instant set 1 is awarded is the same overclaim as the old layout, just
+    // relocated: between sets nothing is in progress — it is a decision point (#984).
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        isBetweenSets: true,
+        sets: [{ gamesTeam1: 6, gamesTeam2: 4 }],
+      },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Next: Set 2");
+  });
+
+  it("numbers every banked set, so three chips are not ambiguous (#1074)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        sets: [
+          { gamesTeam1: 6, gamesTeam2: 4 },
+          { gamesTeam1: 3, gamesTeam2: 6 },
+        ],
+      },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    expect(screen.getByText("S1")).toBeInTheDocument();
+    expect(screen.getByText("S2")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Set 3");
+  });
+
   it("renders Retire, Default and Switch sides as buttons, not text (#1071)", async () => {
     const user = userEvent.setup();
     renderPage();
