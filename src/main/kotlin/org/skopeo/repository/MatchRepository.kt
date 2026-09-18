@@ -753,6 +753,12 @@ class MatchRepository {
      * (#502), mirroring [listByUser]; a user sits on exactly one team per match, so each is one win or
      * loss. Users with no decided matches are absent. Own matches only — a canonical account's merged
      * duplicates (#124) are not folded in here, keeping this cheap for a whole search-result page.
+     *
+     * **No production caller as of #1062, deliberately kept.** The Research table's win–loss column was
+     * excluded by #1050's spec and removed by #1053, and #1062 dropped the `UserService` call that had
+     * outlived it. This stays because it is correct, tested (#342/#497/#502) and the natural
+     * implementation if the column is ever wanted back — the profile's own card uses a different
+     * aggregate (`GET /players/{code}/results-summary`, #276) and is unaffected either way.
      */
     fun winLossByUsers(userIds: List<UUID>): Map<UUID, WinLossRecord> =
         transaction {

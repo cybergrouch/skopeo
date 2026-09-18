@@ -6629,7 +6629,12 @@ components:
         record:
           nullable: true
           type: object
-          description: Decided win–loss record, singles + doubles combined (#342); populated for research results, else absent.
+          description: >-
+            Decided win–loss record, singles + doubles combined (#342). **Currently never populated**
+            (#1062): the Research table's column was excluded by #1050 and removed by #1053, and the
+            search no longer pays for the aggregate. Retained on the schema because it is nullable and
+            always has been — the bare `GET /users` search never set it — so a client must already treat
+            it as optional. A player's own record is at `GET /players/{code}/results-summary` (#276).
           required:
             - wins
             - losses
