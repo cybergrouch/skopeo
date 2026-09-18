@@ -211,9 +211,92 @@ class ScoreEngineTest {
         set.tiebreakTeam1Points shouldBe 7
         set.tiebreakTeam2Points shouldBe 5
         set.winner shouldBe TeamSide.TEAM1
+        // The tiebreak IS a game, and winning it counts as one (#1084). Nothing else could count it:
+        // pointTo returns early on isTiebreak, so gameTo never runs during one.
+        set.gamesTeam1 shouldBe 1
+        set.gamesTeam2 shouldBe 0
         // Back to ordinary scoring for the next set.
         decided.isTiebreak shouldBe false
         decided.displayPoints(side = TeamSide.TEAM1) shouldBe "0"
+    }
+
+    /** Six games each, the ordinary way in. */
+    private fun sixAll(): List<ScoreEvent> =
+        (1..6).flatMap { points(side = TeamSide.TEAM1, times = 4) } +
+            (1..6).flatMap { points(side = TeamSide.TEAM2, times = 4) }
+
+    @Test
+    fun `a tiebreak decided at six-all banks the set as seven-six, not six-six (#1084)`() {
+        val decided =
+            stateOf(
+                events =
+                    sixAll() +
+                        listOf(element = ScoreEvent.TiebreakStarted) +
+                        points(side = TeamSide.TEAM1, times = 7) + points(side = TeamSide.TEAM2, times = 5) +
+                        listOf(element = ScoreEvent.SetAwarded(side = TeamSide.TEAM1)),
+            )
+
+        val set = decided.completedSets.single()
+        // The whole point of the bug: banked level, this set had zero game margin, so the rating
+        // algorithm read the closest possible win as evidence-free and moved nobody.
+        set.gamesTeam1 shouldBe 7
+        set.gamesTeam2 shouldBe 6
+        set.tiebreakTeam1Points shouldBe 7
+        set.tiebreakTeam2Points shouldBe 5
+        set.winner shouldBe TeamSide.TEAM1
+    }
+
+    @Test
+    fun `the loser of a tiebreak gains nothing from it`() {
+        val decided =
+            stateOf(
+                events =
+                    sixAll() +
+                        listOf(element = ScoreEvent.TiebreakStarted) +
+                        points(side = TeamSide.TEAM1, times = 5) + points(side = TeamSide.TEAM2, times = 7) +
+                        listOf(element = ScoreEvent.SetAwarded(side = TeamSide.TEAM2)),
+            )
+
+        val set = decided.completedSets.single()
+        set.gamesTeam1 shouldBe 6
+        set.gamesTeam2 shouldBe 7
+        set.winner shouldBe TeamSide.TEAM2
+    }
+
+    @Test
+    fun `a tiebreak that did not start from six-all increments whatever is there`() {
+        // A deciding-set match tiebreak (first to 10) is played with the games at 0-0, so 6 -> 7 would
+        // be nonsense here. It banks 1-0 -- one game, which is what was actually won.
+        val decided =
+            stateOf(
+                events =
+                    listOf(element = ScoreEvent.TiebreakStarted) +
+                        points(side = TeamSide.TEAM2, times = 10) + points(side = TeamSide.TEAM1, times = 8) +
+                        listOf(element = ScoreEvent.SetAwarded(side = TeamSide.TEAM2)),
+            )
+
+        val set = decided.completedSets.single()
+        set.gamesTeam1 shouldBe 0
+        set.gamesTeam2 shouldBe 1
+        set.tiebreakTeam1Points shouldBe 8
+        set.tiebreakTeam2Points shouldBe 10
+    }
+
+    @Test
+    fun `a set won without a tiebreak banks its games untouched`() {
+        // The increment is conditional on isTiebreak, and this is what says so: an ordinary 6-4 must
+        // not bank as 7-4, because gameTo already counted every game as it was won.
+        val decided =
+            stateOf(
+                events =
+                    (1..6).flatMap { points(side = TeamSide.TEAM1, times = 4) } +
+                        (1..4).flatMap { points(side = TeamSide.TEAM2, times = 4) } +
+                        listOf(element = ScoreEvent.SetAwarded(side = TeamSide.TEAM1)),
+            )
+
+        val set = decided.completedSets.single()
+        set.gamesTeam1 shouldBe 6
+        set.gamesTeam2 shouldBe 4
     }
 
     @Test
