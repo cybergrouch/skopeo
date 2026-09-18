@@ -59,6 +59,7 @@ import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.domain.model.ageInYears
+import org.skopeo.domain.service.match.MatchService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.CircuitRepository
@@ -708,6 +709,10 @@ class EventServiceTest {
 
     private val matchRepo = MatchRepository()
 
+    // The other half of the delete story (#1052): this suite's refusal tells the organizer to delete
+    // the recorded matches first, and only MatchService can honour that.
+    private val matchService = MatchService(users = users, events = events)
+
     private fun seedFixture(
         eventId: UUID,
         host: User,
@@ -785,6 +790,41 @@ class EventServiceTest {
         val error = service.delete(token = token(uid = "host"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
         error.message shouldContain "recorded matches first"
         events.findById(id = event.id)!!.toDomain().isActive.shouldBeTrue()
+    }
+
+    /**
+     * The exact sequence the refusal above advises, end to end (#1052).
+     *
+     * It was impossible between #970 and #1052: the match-delete gate refused a COMPLETED fixture
+     * outright, so an organizer who followed this error hit a wall and the event could never be
+     * deleted. The two gates now agree rather than merely both existing.
+     */
+    @Test
+    fun `the advice to delete recorded matches first can actually be followed (#1052)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val event = service.create(token = token(uid = "host"), input = input(participants = listOf(p1.id, p2.id))).shouldBeRight().domain()
+        val recorded = seedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+        val scheduled = seedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+        recordResult(match = recorded)
+
+        // 1. Try to delete the event: refused, with advice.
+        service
+            .delete(token = token(uid = "host"), id = event.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+            .message shouldContain "recorded matches first"
+
+        // 2. Follow the advice.
+        matchService.setActive(token = token(uid = "host"), matchId = recorded.id, active = false).shouldBeRight()
+
+        // 3. The event now deletes, taking the remaining scheduled fixture with it.
+        service.delete(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        events.findById(id = event.id)!!.toDomain().isActive.shouldBeFalse()
+        matchRepo.listByEvent(eventId = event.id) shouldHaveSize 0
+        matchRepo.findById(matchId = scheduled.id).shouldBeRight().toDomain().isActive.shouldBeFalse()
     }
 
     @Test

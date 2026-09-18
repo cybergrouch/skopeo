@@ -2,7 +2,7 @@ import type { EventParticipantResponse } from "@/api/generated/model";
 import { useState } from "react";
 import { EditFixturePlayersDialog } from "@/features/match/EditFixturePlayersDialog";
 import { scoreline } from "@/lib/scoreline";
-import { hasResult, playHasBegun } from "@/lib/matchResult";
+import { hasResult, isDeletable, playHasBegun } from "@/lib/matchResult";
 import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/observability/toastError";
 import { PublicPageLink } from "@/components/PublicPageLink";
@@ -141,12 +141,17 @@ function MatchResultRow({
   const rated = match.ratedAt != null;
   const begun = playHasBegun(match);
   const [editing, setEditing] = useState(false);
-  // Changing who plays (#957), and deleting the fixture, both alter WHAT the match is rather than what
-  // it scored — so both stop the moment play begins. The server refuses either way (#970); hiding them
-  // keeps the UI from offering something that will be rejected.
+  // Changing who plays (#957) stops the moment play begins: the umpire's screen, the score log and the
+  // spectator broadcast all keep the roster they started with (#970).
+  //
+  // Deleting the fixture does NOT follow the same line (#1052). A recorded but unrated result in an
+  // unfinalized event is deletable — event delete refuses while one exists and tells the organizer to
+  // delete those matches first, so the control has to be here for that advice to mean anything. A
+  // match being scored right now is still refused, and so is a rated one. `readOnly` carries the other
+  // two server conditions (finalized event, #403; an ended event for a plain HOST, #310).
   const [editingPlayers, setEditingPlayers] = useState(false);
   const canEditPlayers = !readOnly && !begun;
-  const canDelete = !readOnly && !begun;
+  const canDelete = !readOnly && isDeletable(match);
   // A fresh fixture starts with a single empty set row (#571) — most results are single-set, so hosts
   // needn't delete a spare row; the "Add set" control adds more when needed.
   const [rows, setRows] = useState<SetRow[]>(
@@ -181,7 +186,8 @@ function MatchResultRow({
     mutation: { onSuccess: invalidateMatches },
   });
 
-  // Delete a fixture = soft-disable it (#138): the server refuses once a match has been rated.
+  // Delete a fixture = soft-disable it (#138). The record survives for audit; the match number it
+  // held is never recycled, so the event's numbering keeps a permanent gap (#898).
   const remove = usePutApiV1MatchesIdState({
     mutation: { onSuccess: invalidateMatches },
   });

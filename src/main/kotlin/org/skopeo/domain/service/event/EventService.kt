@@ -598,7 +598,12 @@ class EventService(
     /**
      * Delete an event (#243), soft-delete via is_active. The event's matches gate it: any *rated* match
      * blocks deletion outright (results are permanent); any *recorded* (COMPLETED) but unrated match is
-     * refused with advice to delete those matches first (they're still deletable while unrated, #138).
+     * refused with advice to delete those matches first.
+     *
+     * **That advice is now honourable (#1052).** It was not: the match-delete gate refused a COMPLETED
+     * fixture outright (#970), so an organizer following this error hit a wall. `ensureDeletable` gives
+     * deletion its own gate, which allows exactly the state this message names — recorded, unrated, in
+     * an unfinalized event.
      * Remaining scheduled fixtures — the only matches that can survive the guard — are soft-disabled
      * alongside the event so they don't outlive it. Scoped by [ClubAccess.mayOrganize] (#789): an owner
      * of the event's club, its creator, or an ADMINISTRATOR.

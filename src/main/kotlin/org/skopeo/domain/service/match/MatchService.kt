@@ -108,8 +108,8 @@ data class FixtureInput(
  * Match fixtures & results. Creating fixtures, uploading results, and disabling are
  * HOST/ADMINISTRATOR actions; the oversight queries are ADMINISTRATOR-only. Recording a result
  * does NOT compute ratings — that's the separate calculation trigger (PR2b). Matches are
- * append-only: disabling (allowed only before a match is rated) plus a new record is how
- * corrections are made.
+ * append-only: disabling plus a new record is how corrections are made. When a fixture may be
+ * disabled is [ensureDeletable]'s question (#1052), not a bare `ratedAt` check.
  *
  * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
@@ -455,6 +455,15 @@ class MatchService(
             updated.toResponse()
         }
 
+    /**
+     * Soft-delete a fixture (`active = false`) or restore one.
+     *
+     * The club rule (#789) is resolved first so a caller who may not organize the event learns nothing
+     * about its matches' state; the lifecycle question is [ensureDeletable]'s (#1052).
+     *
+     * **Disabling only.** Re-enabling a soft-deleted fixture stays open whatever its status — the gate
+     * is on deleting, not on touching `is_active`, or anything already soft-deleted would be stranded.
+     */
     fun setActive(
         token: VerifiedFirebaseToken,
         matchId: UUID,
@@ -463,15 +472,12 @@ class MatchService(
         either {
             val caller = staffCaller(token = token).bind()
             val match = matches.findById(matchId = matchId).bind().toDomain()
-            // Disabling only: re-enabling a soft-deleted fixture stays open whatever its status.
-            // `ratedAt` was the whole gate here and is the wrong question (#970) — rating happens at
-            // event finalization days later (#952), so a match being scored right now, or one an umpire
-            // has just finalized, was deletable out from under them.
-            if (!active) {
-                ensurePlayNotBegun(match = match, operation = "This fixture cannot be deleted").bind()
-            }
             // An evented fixture inherits its event's club rule (#789).
             organizer.ensureForEventId(eventId = match.eventId, caller = caller).bind()
+            if (!active) {
+                val event = events.getById(id = match.eventId).toDomain()
+                ensureDeletable(match = match, event = event, caller = caller).bind()
+            }
             val disabledAt = if (active) null else LocalDateTime.now()
             matches.setActive(matchId = matchId, active = active, disabledAt = disabledAt).bind().toDomain().toResponse()
         }
