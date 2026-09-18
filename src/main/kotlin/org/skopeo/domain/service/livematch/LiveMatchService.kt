@@ -499,6 +499,10 @@ internal fun LiveMatchRepository.view(matchId: UUID): LiveMatchView {
         state = ScoreEngine.replay(log = log),
         sequence = log.maxOfOrNull { it.sequence } ?: 0L,
         scorerId = scorer(matchId = matchId)?.scorerId,
+        // The same `surviving` the undo target comes from, so the control cannot be offered when
+        // `undo` would find nothing -- which is what made an always-visible Undo inert on a fresh
+        // match (#1083).
+        canUndo = ScoreEngine.surviving(log = log).isNotEmpty(),
     )
 }
 

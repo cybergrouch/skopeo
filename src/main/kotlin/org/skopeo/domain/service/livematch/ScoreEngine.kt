@@ -71,12 +71,21 @@ object ScoreEngine {
             is ScoreEvent.GameAwarded -> gameTo(state = state, side = event.side)
             is ScoreEvent.SetAwarded -> setTo(state = state, side = event.side)
             is ScoreEvent.SetStarted -> state.copy(isBetweenSets = false)
-            is ScoreEvent.TiebreakStarted -> state.copy(isTiebreak = true, pointsTeam1 = 0, pointsTeam2 = 0)
+            is ScoreEvent.GameStarted -> state.copy(isInGame = true)
+            // A tiebreak is its own state, not a flavour of game scoring (#1083), so it does not set
+            // isInGame: it is scored by points and ended by awarding the set, and the control that ends
+            // it is Set rather than Game.
+            is ScoreEvent.TiebreakStarted -> state.copy(isTiebreak = true, isInGame = false, pointsTeam1 = 0, pointsTeam2 = 0)
             is ScoreEvent.ServerAssigned -> state.copy(serverId = event.playerId)
             // The three ways a match ends share a branch: each sets an outcome and changes nothing else.
             is ScoreEvent.Ending -> state.copy(outcome = endingOf(event = event))
             // Starting also clears a pause, so a restart after a suspension needs no separate Resumed.
-            is ScoreEvent.MatchStarted -> state.copy(hasStarted = true, isPaused = false)
+            //
+            // It lands BETWEEN SETS (#1083). The first set now begins explicitly like every other one,
+            // which is what makes "before the first set" a state rather than a special case: previously
+            // points were scorable the instant the match started, so there was nowhere to stand between
+            // starting a match and scoring in it, and the derivation needed an exception for set one.
+            is ScoreEvent.MatchStarted -> state.copy(hasStarted = true, isPaused = false, isBetweenSets = true)
             is ScoreEvent.Paused -> state.copy(isPaused = true)
             is ScoreEvent.Resumed -> state.copy(isPaused = false)
         }
@@ -187,7 +196,10 @@ object ScoreEngine {
             } else {
                 state.copy(gamesTeam2 = state.gamesTeam2 + 1)
             }
-        return withGame.copy(pointsTeam1 = 0, pointsTeam2 = 0)
+        // The game is over, so the in-game state ends with it (#1083) — whether it closed on the fourth
+        // point or on an umpire's declaration. The next game is started explicitly, which is the moment
+        // at which a tiebreak is the alternative.
+        return withGame.copy(pointsTeam1 = 0, pointsTeam2 = 0, isInGame = false)
     }
 
     /**
@@ -238,6 +250,9 @@ object ScoreEngine {
             pointsTeam2 = 0,
             isTiebreak = false,
             isBetweenSets = true,
+            // Banking a set cannot leave a game open behind it (#1083). Ordinarily the game already
+            // closed; a set awarded mid-game (daylight, a retirement's score) closes it here.
+            isInGame = false,
         )
     }
 

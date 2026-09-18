@@ -80,7 +80,22 @@ data class LiveMatchResponse(
      * of those happens, so the view greys the board rather than letting taps fail.
      */
     val isBetweenSets: Boolean = false,
+    /**
+     * A game is under way (#1083), so the score boxes mean something.
+     *
+     * The level the view had no flag for. False between games — in a set, with no game open — which is
+     * where Start game and Start tiebreak are the available moves. A tiebreak is not a game, so this is
+     * false throughout one and [isTiebreak] is the state instead.
+     */
+    val isInGame: Boolean = false,
     val isTiebreak: Boolean,
+    /**
+     * Whether Undo would do anything (#1083).
+     *
+     * Not derivable from [sequence]: a log whose every action has been undone still has a high one. The
+     * client is never sent the undo markers, so this is the only answer available to it.
+     */
+    val canUndo: Boolean = false,
     val serverId: String? = null,
     /** The server's display name, so a client need not resolve the id itself. */
     val serverName: String? = null,
