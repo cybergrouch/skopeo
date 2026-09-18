@@ -28,7 +28,9 @@ export function AuthLayout({
   footer,
 }: AuthLayoutProps) {
   return (
-    <div className="flex min-h-svh items-center justify-center bg-muted/40 py-4">
+    // Safe-area insets (#1076): the card is centred, so it only meets an edge once it outgrows the
+    // viewport — which it does on a small phone with the keyboard up. `max()` floors at the old 16px.
+    <div className="flex min-h-svh items-center justify-center bg-muted/40 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
       <PageContainer size="form">
         <Card>
           <CardHeader className="text-center">

@@ -85,7 +85,18 @@ function App() {
           <LocalThemeApplier />
           {/* App-wide toast notifications (#661): richColors gives success/error styling, closeButton a
               manual dismiss; toasts also auto-dismiss. Sonner renders an aria live region for a11y. */}
-          <Toaster richColors closeButton position="top-center" />
+          {/* The offsets are sonner's own defaults (24px desktop / 16px mobile) floored against the
+              top safe-area inset (#1076): `top-center` puts a toast at the very top of the viewport,
+              which `viewport-fit=cover` — and an installed iOS app's translucent status bar — turns
+              into the clock's territory. Sonner passes a string offset straight through to its CSS
+              custom property, so `max()` works. */}
+          <Toaster
+            richColors
+            closeButton
+            position="top-center"
+            offset={{ top: "max(24px, env(safe-area-inset-top))" }}
+            mobileOffset={{ top: "max(16px, env(safe-area-inset-top))" }}
+          />
           {/* Offers a reload when a newer bundle has been deployed (#752), so a long-lived tab doesn't
               keep rendering options the server has since started rejecting. */}
           <NewVersionBanner />

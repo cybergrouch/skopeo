@@ -17,6 +17,33 @@ import { useCallback, useEffect, useState } from 'react'
  * Everything is restored on unmount, including when the user leaves fullscreen with the Escape key or a
  * system gesture — which is why `isFullscreen` is tracked from the `fullscreenchange` event rather than
  * assumed from a successful `requestFullscreen`.
+ *
+ * ## The platform ceiling: the OS system bar cannot always be removed (#1076)
+ *
+ * Fullscreen here is **best-effort about the browser's chrome, and says nothing about the OS bar.** The
+ * same iOS Safari gap recorded for `screen.orientation.lock` above applies to fullscreen itself:
+ * **element fullscreen is not supported in an iOS Safari tab at all** (only `<video>` gets it), and
+ * there is **no web API — no meta tag, no CSS — that hides the iOS status bar in a tab.** So a bar on an
+ * iPhone opened from a Safari link is the platform, not a bug, and `requestFullscreen` rejecting there
+ * is the expected path rather than a failure worth reporting.
+ *
+ * The **installed home-screen PWA is the only lever**, which is why the plumbing for it lives outside
+ * this hook, in `web/index.html` and `web/public/site.webmanifest`:
+ *
+ * | Case | Outcome |
+ * |---|---|
+ * | Android installed | No status bar — `display_override: ["fullscreen", …]` in the manifest |
+ * | Android browser tab | No status bar — this hook's `requestFullscreen` |
+ * | iOS installed | Full `dvh` reclaimed; the status bar becomes a translucent overlay on our own canvas (`apple-mobile-web-app-capable` + `apple-mobile-web-app-status-bar-style=black-translucent` + `viewport-fit=cover`) |
+ * | iOS Safari tab | Status bar and Safari chrome remain. **Not fixable from the web.** |
+ *
+ * Note what the third row buys and what it does not: the height comes back, but iOS composites the
+ * status-bar icons **over** our content, so the top inset is somewhere to put *background*, not text.
+ * Anything that must be read needs `padding-top: env(safe-area-inset-top)`.
+ *
+ * So `requestFullscreen` is retained for the Android-tab case and is deliberately left as a swallowed
+ * rejection everywhere else. Consumers wanting to surface "not actually fullscreen" should read
+ * {@link LockedLandscape.isFullscreen}; a `false` there is a *normal* state on iOS, not an error.
  */
 export interface LockedLandscape {
   /** True while the viewport is portrait — the page must show its rotate prompt and nothing else. */
