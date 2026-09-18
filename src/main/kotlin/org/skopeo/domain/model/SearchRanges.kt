@@ -121,9 +121,12 @@ data class UserSearchQuery(
  *
  * Seven of the Research table's ten columns. Absent on purpose:
  *  - the **icon** and **code** columns are display-only by decision;
- *  - **calibration** cannot be ordered in SQL without reimplementing `CalibrationService`'s rule, which
- *    depends on a rated-match count and the live global N. That rule has one home (#882), so ordering by
- *    it is deferred to the queryable-calibration work rather than duplicated here.
+ *  - **calibration** is still absent, but the reason has narrowed (#1051). The rated-match count is now a
+ *    column on `user_ratings`, so the aggregate no longer stands in the way; what remains is that the
+ *    verdict is `count < N` against a live global setting, and expressing that comparison in an ORDER BY
+ *    would put a second copy of the rule in SQL — the drift #882 records. Adding it means deciding where
+ *    N enters the query (bound parameter supplied by `CalibrationService`, so the rule keeps one home),
+ *    which is a separate decision from the schema change and is left to the follow-up.
  *
  * Ordering is applied in the database, BEFORE paging — a sort over the current page only would reorder
  * 25 rows while `total` described the whole result set.
