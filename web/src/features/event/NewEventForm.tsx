@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { invalidateClubEvents } from "@/lib/clubEventsCache";
 import {
   getGetApiV1EventsQueryKey,
   usePostApiV1Events,
@@ -130,6 +131,12 @@ export function NewEventForm({
           void queryClient.invalidateQueries({
             queryKey: getGetApiV1ClubsCodeCodeQueryKey(publicCodeToRefresh),
           });
+          // The club DETAIL query above only feeds the page header. The Upcoming/Unfinalized/Finalized
+          // cards read the club's EVENTS query, which is why a new event used to stay invisible until a
+          // refresh (#1055). Refetching rather than inserting the row is deliberate: which bucket an
+          // event belongs in is decided in SQL (`EventBucket`, #786), so an optimistic insert would mean
+          // reimplementing that rule against the server's clock.
+          invalidateClubEvents(queryClient, publicCodeToRefresh);
         }
       },
     },
