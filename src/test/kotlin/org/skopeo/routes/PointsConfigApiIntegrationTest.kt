@@ -27,7 +27,6 @@ import org.skopeo.common.contract.TournamentPointsConfig
 import org.skopeo.common.dto.settings.FullMatchConfigResponse
 import org.skopeo.common.dto.settings.OpenPlayConfigResponse
 import org.skopeo.common.dto.settings.TournamentConfigResponse
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -71,7 +70,7 @@ class PointsConfigApiIntegrationTest {
         UserRepository().provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,

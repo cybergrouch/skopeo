@@ -7,12 +7,21 @@ plugins {
     application
     id("org.jlleitschuh.gradle.ktlint") version "12.3.0"
     id("dev.detekt") version "2.0.0-alpha.6"
+    id("dev.zacsweers.redacted") version "1.18.0"
     jacoco
 }
 
 group = "org.skopeo"
 version = "3.1.2-SNAPSHOT"
 description = "Skopeo - Performance-based tennis rating system"
+
+// The redaction mask (#825). `***` rather than the plugin's default `██` on purpose: it is the string
+// the hand-rolled `Redactable` emitted, so every existing assertion and every log a reader has seen
+// before stays exactly as it was. Swapping the wrapper for the plugin is meant to change the mechanism,
+// not the output.
+redacted {
+    replacementString = "***"
+}
 
 application {
     mainClass.set("org.skopeo.ApplicationKt")

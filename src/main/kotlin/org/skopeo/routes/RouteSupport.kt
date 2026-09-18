@@ -20,7 +20,6 @@ import kotlinx.serialization.SerializationException
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.logging.redactedForLogging
 import org.skopeo.common.logging.sqlFailureFacts
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.ClientAuthResult
 import org.skopeo.common.security.ClientPrincipal
 import org.skopeo.domain.service.client.ApiClientService
@@ -68,12 +67,12 @@ private fun JWTPrincipal.toVerifiedToken(): VerifiedFirebaseToken {
 
     return VerifiedFirebaseToken(
         uid = payload.subject,
-        email = payload.getClaim("email").asString()?.asRedactable(),
+        email = payload.getClaim("email").asString(),
         emailVerified = payload.getClaim("email_verified").asBoolean() ?: false,
         name = payload.getClaim("name").asString(),
         picture = payload.getClaim("picture").asString(),
         signInProvider = signInProvider,
-        providerUid = providerUid.asRedactable(),
+        providerUid = providerUid,
     )
 }
 

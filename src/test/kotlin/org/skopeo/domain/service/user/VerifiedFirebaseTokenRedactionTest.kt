@@ -6,7 +6,6 @@ package org.skopeo.domain.service.user
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
-import org.skopeo.common.redaction.asRedactable
 
 /**
  * [VerifiedFirebaseToken] is built on **every authenticated request** from the JWT claims, so it is the
@@ -19,12 +18,12 @@ class VerifiedFirebaseTokenRedactionTest {
     private fun token() =
         VerifiedFirebaseToken(
             uid = "firebase-uid-1",
-            email = email.asRedactable(),
+            email = email,
             emailVerified = true,
             name = "Juan Canary",
             picture = "https://example.invalid/p.jpg",
             signInProvider = "google.com",
-            providerUid = providerUid.asRedactable(),
+            providerUid = providerUid,
         )
 
     @Test
@@ -47,7 +46,7 @@ class VerifiedFirebaseTokenRedactionTest {
 
     @Test
     fun `the values remain readable, so auth still works`() {
-        token().email?.revealed shouldBe email
-        token().providerUid.revealed shouldBe providerUid
+        token().email shouldBe email
+        token().providerUid shouldBe providerUid
     }
 }

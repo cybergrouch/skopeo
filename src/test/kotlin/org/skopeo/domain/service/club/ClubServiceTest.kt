@@ -17,7 +17,6 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.event.toDomain
 import org.skopeo.domain.mapper.entity.match.toDomain
@@ -74,14 +73,14 @@ class ClubServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
         ).toDomain()
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     /** One page of a club's events in [bucket] (#786); defaults to the first page of ten. */
     private fun publicEvents(
@@ -439,7 +438,7 @@ class ClubServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "nameless".asRedactable(),
+                        firebaseUid = "nameless",
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "nameless", isPrimary = true),
                         names = emptyList(),
                         capabilities = setOf(element = Capability.CLUB_OWNER),

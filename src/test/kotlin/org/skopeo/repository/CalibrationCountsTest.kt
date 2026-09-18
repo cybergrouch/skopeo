@@ -12,7 +12,6 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.domain.mapper.entity.event.toDomain
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -72,7 +71,7 @@ class CalibrationCountsTest {
             .provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = uid.asRedactable(),
+                        firebaseUid = uid,
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     ),

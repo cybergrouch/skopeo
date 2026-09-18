@@ -3,20 +3,28 @@
 
 package org.skopeo.common.redaction
 
+import dev.zacsweers.redacted.annotations.Redacted
 import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
- * Fails the build when a sensitive-looking field is declared with a raw type instead of
- * [Redactable] (#822).
+ * Fails the build when a sensitive-looking field is not marked `@Redacted` (#822/#825).
  *
- * [Redactable] (#801) protects a model as soon as a sensitive field uses it. Nothing makes anyone *use*
- * it — so without this test the build stays green when someone adds `val phoneNumber: String` to a
- * domain model, and the protection quietly becomes a snapshot of whatever happened to be wrapped once.
+ * The redacted compiler plugin (#825) rewrites a data class's generated `toString()` so an annotated
+ * property renders as `***`. Nothing makes anyone *apply* the annotation — so without this test the
+ * build stays green when someone adds `val phoneNumber: String` to a domain model, and the protection
+ * quietly becomes a snapshot of whatever happened to be annotated once.
+ *
+ * Retargeted from the wrapper it replaced: the rule is unchanged, only the thing it looks for. Where it
+ * used to require the declared TYPE to be `Redactable<…>`, it now requires the ANNOTATION — which is
+ * the whole point of the swap, since the field keeps its raw type and every call site loses its
+ * `.asRedactable()` / `.revealed` ceremony.
  *
  * **This is a name-based scan, and that limitation is real:** `val e: String` slips through. It catches
  * carelessness, not evasion. The stronger alternative — instantiating every data class reflectively and
@@ -76,16 +84,6 @@ class RedactionConventionTest {
                 "InsertApiKeyCommand.keyHash" to "a hash, not the secret; not usable to authenticate",
             )
 
-        /** `val <name>: Redactable<…>` — the fields currently protected. */
-        val WRAPPED_DECL = Regex(pattern = """val (\w+): Redactable""")
-
-        /**
-         * Names too common to match bare: `value.toString()` could be any local. For these the scan
-         * requires a receiver (`contact.value.toString()`), which is precise enough to be useful without
-         * crying wolf on every unrelated local variable.
-         */
-        val GENERIC_NAMES_NEEDING_A_RECEIVER = setOf(element = "value")
-
         /** `val <name>: <Type>` — enough to spot a raw declaration without parsing Kotlin. */
         val FIELD = Regex(pattern = """^\s*(?:@\w+\s+)*val\s+(\w+)\s*:\s*([\w<>?.]+)""")
         val DATA_CLASS = Regex(pattern = """^\s*(?:internal\s+|private\s+)?data class (\w+)""")
@@ -116,10 +114,24 @@ class RedactionConventionTest {
     private fun scanFile(file: File): List<Finding> {
         val findings = mutableListOf<Finding>()
         var current: String? = null
+        // `@Redacted` sits on its own line above the property far more often than inline, so the scan
+        // has to carry it forward one line. Reset on every line that is not an annotation, or an
+        // annotation three fields up would vouch for a field that has none.
+        var annotated = false
         file.readLines().forEach { line ->
             DATA_CLASS.find(input = line)?.let { current = it.groupValues[1] }
-            val type = current ?: return@forEach
-            violationIn(line = line, type = type, fileName = file.name)?.let { findings.add(element = it) }
+            val trimmed = line.trim()
+            if (trimmed == "@Redacted") {
+                annotated = true
+                return@forEach
+            }
+            val type = current
+            if (type != null && !annotated) {
+                violationIn(line = line, type = type, fileName = file.name)?.let { findings.add(element = it) }
+            }
+            if (trimmed.isNotEmpty() && !trimmed.startsWith(prefix = "@") && !trimmed.startsWith(prefix = "//")) {
+                annotated = false
+            }
         }
         return findings
     }
@@ -135,9 +147,11 @@ class RedactionConventionTest {
         val match = FIELD.find(input = line) ?: return null
         val name = match.groupValues[1]
         val declared = match.groupValues[2]
+        // Inline `@Redacted val email: String` is handled here; the on-its-own-line form is handled by
+        // the caller, which is the shape the migration in #825 actually produced.
         val exempt =
             name !in SENSITIVE_NAMES ||
-                declared.startsWith(prefix = "Redactable") ||
+                line.contains(other = "@Redacted") ||
                 "$type.$name" in ALLOWED
         return if (exempt) null else Finding(type = type, field = name, declared = declared, file = fileName)
     }
@@ -171,7 +185,7 @@ class RedactionConventionTest {
             println(
                 message =
                     "Sensitive fields declared with a raw type (#822):\n$detail\n\n" +
-                        "Either wrap the field as Redactable<...> (see LOGGING_AND_METRICS.md), or add an " +
+                        "Either annotate the field @Redacted (see LOGGING_AND_METRICS.md), or add an " +
                         "entry to RedactionConventionTest.ALLOWED with the reason it is not a defect.",
             )
         }
@@ -179,75 +193,44 @@ class RedactionConventionTest {
         findings.shouldBeEmpty()
     }
 
-    // ---- Usage scan: `.toString()` on a wrapped field (#822) -----------------------------------
+    // ---- The usage scan is GONE, and that is the headline of #825 ------------------------------
     //
-    // A DIFFERENT failure from the declaration scan above, and the one that actually shipped a bug.
-    // Two DTO mappers did `dateOfBirth?.toString()`; on a Redactable that yields "***", so the API
-    // returned a redacted placeholder instead of the date. It compiled cleanly, because `toString()`
-    // exists on everything — neither the type checker nor detekt can see it.
+    // It used to fail the build on `.toString()` applied to a wrapped field, because on a Redactable
+    // that yielded "***" — two DTO mappers had exactly that bug and would have shipped a redacted
+    // placeholder to clients as a date of birth. It compiled cleanly, since `toString()` exists on
+    // everything.
     //
-    // Note the scope difference: those mappers live in `domain/mapper`, which the declaration scan does
-    // NOT cover. A usage can be anywhere, so this sweeps all of src/main.
-
-    /**
-     * Field names currently declared as `Redactable<…>`, read from the source rather than hardcoded, so
-     * the guard stays correct as fields are wrapped or unwrapped.
-     */
-    private fun wrappedFieldNames(): Set<String> =
-        sourceRoot()
-            .walkTopDown()
-            .filter { it.extension == "kt" }
-            .flatMap { f -> WRAPPED_DECL.findAll(input = f.readText()).map { it.groupValues[1] } }
-            .toSet()
-
-    private fun stringifications(): List<String> {
-        val names = wrappedFieldNames() - GENERIC_NAMES_NEEDING_A_RECEIVER
-        val findings = mutableListOf<String>()
-        sourceRoot().walkTopDown().filter { it.extension == "kt" }.forEach { file ->
-            file.readLines().forEachIndexed { index, line ->
-                // `.revealed` anywhere in the expression means the author unwrapped deliberately.
-                if (line.contains(other = ".revealed")) return@forEachIndexed
-                val bare = names.any { Regex(pattern = """\b$it\??\.toString\(\)""").containsMatchIn(input = line) }
-                val qualified =
-                    GENERIC_NAMES_NEEDING_A_RECEIVER.any {
-                        Regex(pattern = """\.$it\??\.toString\(\)""").containsMatchIn(input = line)
-                    }
-                if (bare || qualified) {
-                    findings.add(element = "${file.name}:${index + 1}  ${line.trim()}")
-                }
-            }
-        }
-        return findings
-    }
+    // That hazard cannot recur. The field now keeps its raw type and only the ENCLOSING data class's
+    // generated `toString()` is rewritten, so `dateOfBirth?.toString()` returns the date, exactly as a
+    // reader expects. A guard for a bug the design no longer permits is noise, so it is deleted rather
+    // than retargeted.
+    //
+    // The trade runs the other way, and is recorded honestly: `"${user.dateOfBirth}"` in a log line
+    // used to print "***" by accident, because the wrapper's own toString redacted. It now prints the
+    // date. Field-level interpolation was never in scope — Redactable's own KDoc said so — but the
+    // wrapper did cover it incidentally, and that cover is gone. `PiiLeakTest` (#806) is the layer that
+    // catches it, behaviourally: it drives real flows with canary values and asserts no log line
+    // contains them, which is independent of how redaction is implemented.
 
     @Test
-    fun `the usage scan discovers the wrapped field names`() {
-        // A scan that resolves no names checks nothing and passes vacuously — which is exactly what an
-        // earlier version of this test did, because it walked a doubled path.
-        val names = wrappedFieldNames()
+    fun `the plugin is wired, and it masks with the same string the wrapper used`() {
+        // Cheap, but it is the assertion that would catch the plugin silently not applying — a compiler
+        // plugin that fails to run leaves code that compiles and tests that pass, with the protection
+        // simply absent. Asserting the MASK as well as the masking pins `replacementString = "***"` in
+        // build.gradle.kts, so a default-valued upgrade to "██" fails here rather than in a log review.
+        val probe = Probe(harmless = "visible", secret = "s3cret-canary")
 
-        names shouldContain "dateOfBirth"
-        names shouldContain "firebaseUid"
-        names shouldContain "plaintext"
-        (names.size >= 5) shouldBe true
+        probe.toString() shouldContain "visible"
+        probe.toString() shouldNotContain "s3cret-canary"
+        probe.toString() shouldContain "***"
+        // The field itself is untouched: this is what makes the old stringification bug impossible.
+        probe.secret shouldBe "s3cret-canary"
     }
 
-    @Test
-    fun `no wrapped field is stringified instead of revealed`() {
-        val findings = stringifications()
-
-        if (findings.isNotEmpty()) {
-            println(
-                message =
-                    "`.toString()` on a Redactable field yields \"***\" (#822):\n" +
-                        findings.joinToString(separator = "\n") { "  $it" } +
-                        "\n\nUse `?.revealed?.toString()`. Two DTO mappers had exactly this bug and would " +
-                        "have shipped \"***\" to clients as a date of birth.",
-            )
-        }
-
-        findings.shouldBeEmpty()
-    }
+    private data class Probe(
+        val harmless: String,
+        @Redacted val secret: String,
+    )
 
     @Test
     fun `every allowlist entry carries a reason`() {

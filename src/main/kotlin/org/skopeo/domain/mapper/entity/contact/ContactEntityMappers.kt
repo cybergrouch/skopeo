@@ -3,7 +3,6 @@
 
 package org.skopeo.domain.mapper.entity.contact
 
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.domain.model.Contact
 import org.skopeo.domain.model.ContactSource
 import org.skopeo.domain.model.ContactType
@@ -22,7 +21,7 @@ fun ContactEntity.toDomain(): Contact =
         id = id,
         userId = userId,
         type = ContactType.valueOf(value = type),
-        value = value.asRedactable(),
+        value = value,
         source = ContactSource.valueOf(value = source),
         status = VerificationStatus.valueOf(value = status),
         method = method?.let(block = VerificationMethod::valueOf),

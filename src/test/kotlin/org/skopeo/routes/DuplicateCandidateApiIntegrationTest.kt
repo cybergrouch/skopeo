@@ -26,7 +26,6 @@ import org.skopeo.common.dto.duplicate.ConfirmCandidateRequest
 import org.skopeo.common.dto.duplicate.DuplicateCandidatePageResponse
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.UserResponse
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.NameType
@@ -68,7 +67,7 @@ class DuplicateCandidateApiIntegrationTest {
         UserRepository().provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = "Admin")),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),

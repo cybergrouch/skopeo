@@ -27,7 +27,6 @@ import org.skopeo.common.dto.match.MatchResponse
 import org.skopeo.common.dto.match.MatchResultRequest
 import org.skopeo.common.dto.match.SetScoreRequest
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.club.toDomain
 import org.skopeo.domain.mapper.entity.event.toDomain
@@ -96,7 +95,7 @@ class MatchServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = uid.asRedactable(),
+                        firebaseUid = uid,
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                         names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                         capabilities = roles,
@@ -116,7 +115,7 @@ class MatchServiceTest {
     private fun placeholderUser(displayName: String): User =
         users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = "Male")).toDomain()
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     private fun fixtureRequest(
         p1: UUID,

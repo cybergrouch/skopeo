@@ -3,7 +3,6 @@
 
 package org.skopeo.domain.mapper.entity.invite
 
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.domain.model.Invite
 import org.skopeo.domain.model.InviteStatus
 import org.skopeo.repository.persistence.InviteEntity
@@ -18,7 +17,7 @@ import org.skopeo.repository.persistence.InviteEntity
 fun InviteEntity.toDomain(): Invite =
     Invite(
         id = id,
-        email = email.asRedactable(),
+        email = email,
         status = InviteStatus.valueOf(value = status),
         invitedBy = invitedBy,
         expiresAt = expiresAt,

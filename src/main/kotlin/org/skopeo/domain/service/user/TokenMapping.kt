@@ -5,7 +5,6 @@ package org.skopeo.domain.service.user
 
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.ProfileRequest
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.ContactInfo
@@ -109,20 +108,20 @@ internal fun buildProvisionCommand(
         request.phone?.let { number ->
             ContactInfo(
                 type = ContactType.PHONE,
-                value = number.asRedactable(),
+                value = number,
                 source = ContactSource.MANUAL,
                 status = VerificationStatus.PENDING,
                 isPrimary = true,
             )
         }
     return ProvisionUserCommand(
-        firebaseUid = token.uid.asRedactable(),
-        identity = UserIdentity(provider = provider, providerUid = token.providerUid.revealed, isPrimary = true),
+        firebaseUid = token.uid,
+        identity = UserIdentity(provider = provider, providerUid = token.providerUid, isPrimary = true),
         names = displayName(token = token, request = request),
         photoUrl = token.picture,
         email = email,
         phone = phone,
-        dateOfBirth = parseDateOfBirth(value = request.dateOfBirth)?.asRedactable(),
+        dateOfBirth = parseDateOfBirth(value = request.dateOfBirth),
         sex = validatedSex(value = request.sex),
         city = request.city,
         country = request.country,
@@ -149,11 +148,11 @@ internal fun buildProvisionCommand(
 internal fun isBootstrapAdmin(
     token: VerifiedFirebaseToken,
     adminEmails: Set<String>,
-): Boolean = token.emailVerified && token.email?.revealed?.trim()?.lowercase() in adminEmails
+): Boolean = token.emailVerified && token.email?.trim()?.lowercase() in adminEmails
 
 internal fun ProfileRequest.toProfilePatch(): ProfilePatch =
     ProfilePatch(
-        dateOfBirth = parseDateOfBirth(value = dateOfBirth)?.asRedactable(),
+        dateOfBirth = parseDateOfBirth(value = dateOfBirth),
         sex = validatedSex(value = sex),
         city = city,
     )

@@ -23,14 +23,14 @@ fun User.toResponse(): UserResponse =
     UserResponse(
         id = id.toString(),
         publicCode = publicCode,
-        firebaseUid = firebaseUid?.revealed,
+        firebaseUid = firebaseUid,
         photoUrl = photoUrl,
         customPhotoUrl = customPhotoUrl,
         photoHidden = photoHidden,
         matchHistoryHidden = matchHistoryHidden,
-        // .revealed, not .toString(): stringifying the wrapper yields "***", which would ship
+        // , not .toString(): stringifying the wrapper yields "***", which would ship
         // a redacted placeholder to the client instead of the date (#822).
-        dateOfBirth = dateOfBirth?.revealed?.toString(),
+        dateOfBirth = dateOfBirth?.toString(),
         sex = sex,
         city = city,
         country = country,
@@ -51,7 +51,7 @@ fun User.toResponse(): UserResponse =
                 ContactDto(
                     id = it.id.toString(),
                     type = it.type.name,
-                    value = it.value.revealed,
+                    value = it.value,
                     source = it.source.name,
                     status = it.status.name,
                     method = it.method?.name,
@@ -86,7 +86,7 @@ fun User.toSummary(
         displayName = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value,
         photoUrl = photoUrl,
         sex = sex,
-        age = dateOfBirth?.revealed?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
+        age = dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
         rating =
             rating?.let {
                 PublicRatingDto(

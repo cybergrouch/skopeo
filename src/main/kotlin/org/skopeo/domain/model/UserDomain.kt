@@ -3,7 +3,7 @@
 
 package org.skopeo.domain.model
 
-import org.skopeo.common.redaction.Redactable
+import dev.zacsweers.redacted.annotations.Redacted
 import org.skopeo.common.security.Capability
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -67,7 +67,8 @@ data class Name(
 /** A contact to be written (provisioning input); identity is assigned by the database. */
 data class ContactInfo(
     val type: ContactType,
-    val value: Redactable<String>,
+    @Redacted
+    val value: String,
     val source: ContactSource,
     val status: VerificationStatus,
     val method: VerificationMethod? = null,
@@ -83,7 +84,8 @@ data class Contact(
     val id: UUID,
     val userId: UUID,
     val type: ContactType,
-    val value: Redactable<String>,
+    @Redacted
+    val value: String,
     val source: ContactSource,
     val status: VerificationStatus,
     val method: VerificationMethod? = null,
@@ -105,7 +107,8 @@ data class User(
     val id: UUID,
     // Short, human-readable, shareable player code (e.g. "K7Q2MX"); unique. See issue #56.
     val publicCode: String,
-    val firebaseUid: Redactable<String>?,
+    @Redacted
+    val firebaseUid: String?,
     // The effective profile photo to display (#303) — derived from the fields below via
     // [effectivePhotoUrl]: null when hidden, else the custom URL, else the provider photo.
     val photoUrl: String?,
@@ -117,7 +120,8 @@ data class User(
     // When true, the player's match history is withheld from unprivileged viewers on the public
     // profile (#622); the owner and elevated roles still see it. Default false = visible to all.
     val matchHistoryHidden: Boolean = false,
-    val dateOfBirth: Redactable<LocalDate>?,
+    @Redacted
+    val dateOfBirth: LocalDate?,
     val sex: String?,
     val city: String?,
     val country: String,
@@ -248,13 +252,15 @@ fun ageInYears(
 
 /** Everything needed to provision a new user in one transaction (e.g. on first sign-in). */
 data class ProvisionUserCommand(
-    val firebaseUid: Redactable<String>,
+    @Redacted
+    val firebaseUid: String,
     val identity: UserIdentity,
     val names: List<UserName>,
     val photoUrl: String? = null,
     val email: ContactInfo? = null,
     val phone: ContactInfo? = null,
-    val dateOfBirth: Redactable<LocalDate>? = null,
+    @Redacted
+    val dateOfBirth: LocalDate? = null,
     val sex: String? = null,
     val city: String? = null,
     val country: String? = null,
@@ -264,7 +270,8 @@ data class ProvisionUserCommand(
 
 /** Partial update of mutable profile fields; null means "leave unchanged". */
 data class ProfilePatch(
-    val dateOfBirth: Redactable<LocalDate>? = null,
+    @Redacted
+    val dateOfBirth: LocalDate? = null,
     val sex: String? = null,
     val city: String? = null,
 )
@@ -277,7 +284,8 @@ data class ProfilePatch(
 data class CreatePlaceholderCommand(
     val displayName: String,
     val sex: String,
-    val dateOfBirth: Redactable<LocalDate>? = null,
+    @Redacted
+    val dateOfBirth: LocalDate? = null,
 )
 
 /** Lifecycle of a placeholder claim code (#496): ACTIVE (usable) or CONSUMED (claimed or superseded). */
@@ -311,7 +319,8 @@ data class ClaimCode(
 data class GeneratedClaimCode(
     // A bearer credential: whoever holds it can adopt the placeholder account, so it is shown once and
     // stored only as a hash. Same treatment as an API key (#822).
-    val plaintext: Redactable<String>,
+    @Redacted
+    val plaintext: String,
     val code: ClaimCode,
     // The placeholder's shareable public code, so the caller can render which account the code adopts.
     val placeholderPublicCode: String,

@@ -213,7 +213,7 @@ class RatingService(
             photoUrl = photoUrl,
             sex = sex,
             dateOfBirth = dateOfBirth,
-            age = dateOfBirth?.revealed?.let { ageInYears(dateOfBirth = it, asOf = today) },
+            age = dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = today) },
             // Surface the self-reported value as its published NTRP band (e.g. "4.0"), not the raw decimal.
             proposedRating = proposedRating?.let { Level.fromValue(value = it.toPlainString()).value },
         )

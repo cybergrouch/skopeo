@@ -8,7 +8,6 @@
 
 package org.skopeo.domain.mapper.entity.user
 
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.domain.mapper.entity.contact.toDomain
 import org.skopeo.domain.mapper.entity.name.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -38,7 +37,7 @@ fun UserAggregateEntity.toDomain(): User =
     User(
         id = user.id,
         publicCode = user.publicCode,
-        firebaseUid = user.firebaseUid?.asRedactable(),
+        firebaseUid = user.firebaseUid,
         photoUrl =
             effectivePhotoUrl(
                 providerPhotoUrl = user.providerPhotoUrl,
@@ -49,7 +48,7 @@ fun UserAggregateEntity.toDomain(): User =
         customPhotoUrl = user.customPhotoUrl,
         photoHidden = user.photoHidden,
         matchHistoryHidden = user.matchHistoryHidden,
-        dateOfBirth = user.dateOfBirth?.asRedactable(),
+        dateOfBirth = user.dateOfBirth,
         sex = user.sex,
         city = user.city,
         country = user.country,

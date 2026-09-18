@@ -13,7 +13,6 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -92,7 +91,7 @@ class StandingsServiceTest {
         )
     }
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     private val viewerToken = token(uid = "viewer")
 
@@ -106,10 +105,10 @@ class StandingsServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = if (withName) listOf(element = UserName(type = NameType.DISPLAY, value = uid)) else emptyList(),
-                    dateOfBirth = dateOfBirth?.asRedactable(),
+                    dateOfBirth = dateOfBirth,
                     sex = sex,
                     capabilities = capabilities,
                 ),

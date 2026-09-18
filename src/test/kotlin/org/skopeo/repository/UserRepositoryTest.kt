@@ -18,7 +18,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -65,7 +64,7 @@ class UserRepositoryTest {
         firebaseUid: String = "firebase-${UUID.randomUUID()}",
         email: String = "${UUID.randomUUID()}@example.com",
     ) = ProvisionUserCommand(
-        firebaseUid = firebaseUid.asRedactable(),
+        firebaseUid = firebaseUid,
         identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "google-sub-123", isPrimary = true),
         names =
             listOf(
@@ -77,7 +76,7 @@ class UserRepositoryTest {
         email =
             ContactInfo(
                 type = ContactType.EMAIL,
-                value = email.asRedactable(),
+                value = email,
                 source = ContactSource.GOOGLE,
                 status = VerificationStatus.VERIFIED,
                 method = VerificationMethod.OAUTH_PROVIDER,
@@ -101,7 +100,7 @@ class UserRepositoryTest {
         created.identities.single().provider shouldBe AuthProvider.GOOGLE
         created.contacts.single().let {
             it.type shouldBe ContactType.EMAIL
-            it.value.revealed shouldBe "juan@example.com"
+            it.value shouldBe "juan@example.com"
             it.status shouldBe VerificationStatus.VERIFIED
         }
         created.capabilities shouldBe setOf(Capability.PLAYER)
@@ -164,7 +163,7 @@ class UserRepositoryTest {
                 phone =
                     ContactInfo(
                         type = ContactType.PHONE,
-                        value = "+639170000000".asRedactable(),
+                        value = "+639170000000",
                         source = ContactSource.MANUAL,
                         status = VerificationStatus.PENDING,
                     ),
@@ -182,12 +181,12 @@ class UserRepositoryTest {
 
         val updated =
             repository
-                .updateProfile(id = created.id, patch = ProfilePatch(city = "Cebu", dateOfBirth = LocalDate.of(1990, 1, 2).asRedactable()))
+                .updateProfile(id = created.id, patch = ProfilePatch(city = "Cebu", dateOfBirth = LocalDate.of(1990, 1, 2)))
                 .shouldBeRight()
                 .toDomain()
 
         updated.city shouldBe "Cebu"
-        updated.dateOfBirth?.revealed shouldBe LocalDate.of(1990, 1, 2)
+        updated.dateOfBirth shouldBe LocalDate.of(1990, 1, 2)
         updated.sex shouldBe "Male" // untouched
     }
 

@@ -30,7 +30,6 @@ import org.skopeo.common.dto.event.CreateEventTeamRequest
 import org.skopeo.common.dto.event.EventResponse
 import org.skopeo.common.dto.event.EventTeamResponse
 import org.skopeo.common.dto.event.UpdateEventTeamRequest
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -77,7 +76,7 @@ class EventTeamApiIntegrationTest {
         UserRepository().provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,

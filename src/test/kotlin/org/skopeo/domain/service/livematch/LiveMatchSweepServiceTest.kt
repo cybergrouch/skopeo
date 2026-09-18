@@ -13,7 +13,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.livematch.LiveMatchSweepRequest
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.livematch.LiveMatchEventKinds
 import org.skopeo.domain.mapper.entity.match.toDomain
@@ -73,7 +72,7 @@ class LiveMatchSweepServiceTest {
             .provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = uid.asRedactable(),
+                        firebaseUid = uid,
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                         capabilities = roles,
@@ -81,7 +80,7 @@ class LiveMatchSweepServiceTest {
             ).toDomain()
             .id
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     private fun admin(): String {
         user(uid = "boss", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))

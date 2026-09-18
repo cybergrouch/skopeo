@@ -23,7 +23,6 @@ import org.skopeo.common.dto.user.OpponentBand
 import org.skopeo.common.dto.user.PlayerPointsByBandResponse
 import org.skopeo.common.dto.user.ResultsTotals
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.event.toDomain
 import org.skopeo.domain.mapper.entity.match.toDomain
@@ -89,7 +88,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = names,
                     sex = sex,
@@ -102,19 +101,19 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = display(name = "Admin"),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
                 ),
         ).toDomain()
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     private fun emailContact(value: String): ContactInfo =
         ContactInfo(
             type = ContactType.EMAIL,
-            value = value.asRedactable(),
+            value = value,
             source = ContactSource.MANUAL,
             status = VerificationStatus.VERIFIED,
             isPrimary = true,
@@ -128,7 +127,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = display(name = name),
                     email = emailContact(value = email),
@@ -142,7 +141,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = display(name = uid),
                     capabilities = capabilities,
@@ -451,7 +450,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "res".asRedactable(),
+                    firebaseUid = "res",
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "res", isPrimary = true),
                     names = display(name = "Res"),
                     capabilities = setOf(Capability.PLAYER, Capability.RESEARCHER),
@@ -938,7 +937,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "admin".asRedactable(),
+                    firebaseUid = "admin",
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
                     names = display(name = "Admin"),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
@@ -967,7 +966,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "rater".asRedactable(),
+                    firebaseUid = "rater",
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "rater", isPrimary = true),
                     names = display(name = "Rater"),
                     capabilities = setOf(Capability.PLAYER, Capability.RATER),
@@ -976,7 +975,7 @@ class PlayerServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "admin".asRedactable(),
+                    firebaseUid = "admin",
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
                     names = display(name = "Admin"),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
@@ -1010,7 +1009,7 @@ class PlayerServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "admin".asRedactable(),
+                        firebaseUid = "admin",
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
                         names = display(name = "Admin"),
                         capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),

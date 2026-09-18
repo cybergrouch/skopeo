@@ -74,8 +74,8 @@ class InviteService(
                         // Deliberate: the audit entry records WHO was invited, so the address is
                         // the content. It lands in our own audit table, read by administrators (#801) —
                         // not in a log sink or a third-party error tracker.
-                        summary = "Invited ${invite.email.revealed}",
-                        details = mapOf("email" to invite.email.revealed, "status" to invite.status.name),
+                        summary = "Invited ${invite.email}",
+                        details = mapOf("email" to invite.email, "status" to invite.status.name),
                     ),
             )
             invite.toResponse()

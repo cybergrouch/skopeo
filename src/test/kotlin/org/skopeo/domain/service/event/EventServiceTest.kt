@@ -29,7 +29,6 @@ import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.common.contract.TournamentPointsConfig
 import org.skopeo.common.dto.event.EventResponse
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.club.toDomain
 import org.skopeo.domain.mapper.entity.event.toDomain
@@ -110,7 +109,7 @@ class EventServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
@@ -137,7 +136,7 @@ class EventServiceTest {
         return club.id
     }
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     // A club [owner] is a NAMED OWNER of (#789). `created_by` on a club is provenance, not ownership, so
     // the club_owners row is what event authorization actually reads.
@@ -505,11 +504,11 @@ class EventServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "p1".asRedactable(),
+                        firebaseUid = "p1",
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "p1", isPrimary = true),
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = "Maria")),
                         sex = "Female",
-                        dateOfBirth = dob.asRedactable(),
+                        dateOfBirth = dob,
                     ),
             ).toDomain()
         RatingRepository().setRating(
@@ -1612,7 +1611,7 @@ class EventServiceTest {
             .provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = uid.asRedactable(),
+                        firebaseUid = uid,
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                         capabilities = setOf(element = Capability.PLAYER),

@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditAction
@@ -57,7 +56,7 @@ class RatingServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
@@ -66,7 +65,7 @@ class RatingServiceTest {
 
     private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     @Test
     fun `admin sets a rating and the published level is derived`() {
@@ -263,10 +262,10 @@ class RatingServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "rich".asRedactable(),
+                        firebaseUid = "rich",
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "rich", isPrimary = true),
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = "Rich")),
-                        dateOfBirth = dob.asRedactable(),
+                        dateOfBirth = dob,
                         sex = "Female",
                         capabilities = setOf(element = Capability.PLAYER),
                     ),
@@ -289,7 +288,7 @@ class RatingServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "self".asRedactable(),
+                        firebaseUid = "self",
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "self", isPrimary = true),
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = "Self")),
                         proposedRating = BigDecimal("3.5"),
@@ -335,7 +334,7 @@ class RatingServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "nameless".asRedactable(),
+                        firebaseUid = "nameless",
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "nameless", isPrimary = true),
                         names = listOf(UserName(type = NameType.FIRST, value = "First")),
                         capabilities = setOf(Capability.PLAYER),

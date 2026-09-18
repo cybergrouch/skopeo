@@ -3,7 +3,7 @@
 
 package org.skopeo.domain.service.user
 
-import org.skopeo.common.redaction.Redactable
+import dev.zacsweers.redacted.annotations.Redacted
 
 /**
  * The trustworthy identity carried by a verified Firebase ID token, lifted out of
@@ -13,10 +13,12 @@ import org.skopeo.common.redaction.Redactable
  */
 data class VerifiedFirebaseToken(
     val uid: String,
-    val email: Redactable<String>? = null,
+    @Redacted
+    val email: String? = null,
     val emailVerified: Boolean = false,
     val name: String? = null,
     val picture: String? = null,
     val signInProvider: String? = null,
-    val providerUid: Redactable<String>,
+    @Redacted
+    val providerUid: String,
 )

@@ -3,7 +3,7 @@
 
 package org.skopeo.domain.model
 
-import org.skopeo.common.redaction.Redactable
+import dev.zacsweers.redacted.annotations.Redacted
 import org.skopeo.common.security.Capability
 import java.time.LocalDateTime
 import java.util.UUID
@@ -83,7 +83,8 @@ data class IssuedApiKey(
      * persisted, so interpolating this object into a log line would put a *working* API key into Cloud
      * Logging, where it would outlive the request by the retention period.
      */
-    val plaintext: Redactable<String>,
+    @Redacted
+    val plaintext: String,
 )
 
 /** A key resolved together with its owning client's status, so the resolver can reject a suspended client. */

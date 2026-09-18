@@ -917,7 +917,7 @@ class EventService(
                     displayName = user.displayName(),
                     publicCode = user.publicCode,
                     sex = user.sex,
-                    age = user.dateOfBirth?.revealed?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
+                    age = user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
                     rating = ratingById[entry.userId],
                     // Only while unassented: once a rating exists the proposal is spent, and showing both
                     // would invite a host to "approve" a number that has already been superseded.

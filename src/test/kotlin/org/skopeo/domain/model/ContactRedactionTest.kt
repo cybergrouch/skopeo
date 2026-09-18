@@ -6,7 +6,6 @@ package org.skopeo.domain.model
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
-import org.skopeo.common.redaction.asRedactable
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -25,7 +24,7 @@ class ContactRedactionTest {
                 id = UUID.randomUUID(),
                 userId = UUID.randomUUID(),
                 type = ContactType.EMAIL,
-                value = address.asRedactable(),
+                value = address,
                 source = ContactSource.MANUAL,
                 status = VerificationStatus.VERIFIED,
             )
@@ -43,7 +42,7 @@ class ContactRedactionTest {
         val info =
             ContactInfo(
                 type = ContactType.PHONE,
-                value = "+639170000000".asRedactable(),
+                value = "+639170000000",
                 source = ContactSource.MANUAL,
                 status = VerificationStatus.PENDING,
             )
@@ -56,7 +55,7 @@ class ContactRedactionTest {
         val invite =
             Invite(
                 id = UUID.randomUUID(),
-                email = address.asRedactable(),
+                email = address,
                 status = InviteStatus.PENDING,
                 invitedBy = null,
                 expiresAt = LocalDateTime.now().plusDays(7),
