@@ -32,6 +32,23 @@ import { MatchClock } from '@/features/livematch/MatchClock'
 type Side = 'TEAM1' | 'TEAM2'
 
 /**
+ * Is the app already running as an installed home-screen app (#1076)?
+ *
+ * Two checks because the platforms disagree: `display-mode` covers Android/Chromium and modern iOS,
+ * while `navigator.standalone` is the older iOS-only signal and is not in the DOM lib's types. Either
+ * being true means the install hint has nothing left to offer.
+ *
+ * Defaults to "installed" if neither can be read, so a browser that cannot answer shows no hint. A
+ * missing tip is a smaller cost than a permanent one nobody can action.
+ */
+function isInstalled(): boolean {
+  if (typeof window === 'undefined') return true
+  const standalone = (window.navigator as Navigator & { standalone?: boolean }).standalone
+  if (standalone === true) return true
+  return window.matchMedia?.('(display-mode: standalone)').matches ?? true
+}
+
+/**
  * The next step, or null while play is under way (#1070/#1075).
  *
  * One function for both gated states on purpose. #1070 is "no idea what to click first" before the
@@ -98,7 +115,7 @@ export function LiveScoringPage() {
   const navigate = useNavigate()
   const [flipped, setFlipped] = useState(false)
   const [started, setStarted] = useState(false)
-  const { isPortrait, enter, exit } = useLockedLandscape()
+  const { isPortrait, isFullscreen, enter, exit } = useLockedLandscape()
 
   const { data: me } = useGetApiV1UsersMe()
   const { data: match, isLoading } = useGetApiV1MatchesCodeCode(code ?? '', {
@@ -235,6 +252,22 @@ export function LiveScoringPage() {
             {sideName(match.team2)}
           </p>
         </div>
+        {/*
+          Installing is the ONLY lever that helps iOS (#1076): element full-screen does not exist in a
+          Safari tab, so the whole gap between the best and worst iOS outcome rides on an action we
+          otherwise never mention. Said here because this screen is already a deliberate tap-gated
+          step (#956), seen once per match by exactly the right person.
+
+          Gated on not already being installed, so it self-hides the moment it is acted on — a
+          standing instruction to do something already done is noise. Names the actual steps, because
+          "install the app" is not actionable on iOS without them.
+        */}
+        {!isInstalled() && (
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Tip: add Skopeo to your home screen (Share → Add to Home Screen) to score without the
+            browser and system bars taking up the board.
+          </p>
+        )}
         <div className="flex items-center gap-3">
           <Button variant="secondary" onClick={() => navigate(`/matches/${code}`)}>
             Back
@@ -329,6 +362,28 @@ export function LiveScoringPage() {
             isRunning={view.isRunning ?? false}
             className="text-[2.4dvh] font-semibold tabular-nums text-foreground"
           />
+          {/*
+            Full-screen is best-effort and its failure was invisible (#1076). `enter()` swallows a
+            rejected `requestFullscreen` on purpose — the layout still fits — and `isFullscreen` was
+            tracked from the `fullscreenchange` event and then read by nobody. So a view that had
+            silently lost full-screen looked identical to one that never had it, and the system bar a
+            scorer reported could not be attributed: a refused request, an iOS Safari tab where
+            element full-screen does not exist, or an installed PWA whose status bar is by design.
+
+            This is the reading that distinguishes them, and it is a control rather than a warning
+            because re-entering needs a user gesture — the same constraint that put "Start scoring" on
+            the entry screen. Not shown when full-screen is held, so it is silent in the normal case.
+          */}
+          {!isFullscreen && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void enter()}
+              title="This view is not full-screen, so the system bar is taking height from the board"
+            >
+              Full screen
+            </Button>
+          )}
           {view.isPaused && <span className="font-semibold text-amber-600">Paused</span>}
           {view.isTiebreak && <span className="font-semibold">Tiebreak</span>}
           {/* One slot, two controls (#1075). `!hasStarted` and `isBetweenSets` cannot both be true, so

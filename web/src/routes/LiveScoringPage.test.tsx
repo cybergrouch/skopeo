@@ -1193,6 +1193,69 @@ describe("LiveScoringPage", () => {
     expect(screen.getByLabelText("Ana retires")).toHaveClass("border");
   });
 
+  it("stays silent about full screen while it is actually held (#1076)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // `fullscreenElement` is set in the harness, and the hook now seeds its initial state from the
+    // DOM — so a view that IS full-screen offers nothing. Before that seeding it reported `false`
+    // until an event fired, which on a re-entered match would have been permanently wrong.
+    expect(
+      screen.queryByRole("button", { name: "Full screen" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers a way back into full screen when it is not held (#1076)", async () => {
+    Object.defineProperty(document, "fullscreenElement", {
+      value: null,
+      configurable: true,
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // The reading that makes the reported system bar attributable: a refused request, an iOS Safari
+    // tab where element full-screen does not exist, or an installed PWA whose status bar is by
+    // design. `enter()` swallows the rejection deliberately, so without this the failure is invisible.
+    const control = screen.getByRole("button", { name: "Full screen" });
+    expect(control).toHaveAttribute(
+      "title",
+      "This view is not full-screen, so the system bar is taking height from the board",
+    );
+    // A control rather than a warning, because re-entering needs a user gesture.
+    await user.click(control);
+    expect(document.documentElement.requestFullscreen).toHaveBeenCalled();
+  });
+
+  it("suggests installing on the confirm screen, and only when not installed (#1076)", async () => {
+    // Installing is the only lever that helps iOS at all, and this screen is already a tap-gated
+    // step seen once per match (#956).
+    renderPage();
+    expect(
+      screen.getByText(/add Skopeo to your home screen/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Share → Add to Home Screen/)).toBeInTheDocument();
+  });
+
+  it("hides the install tip once the app is installed (#1076)", async () => {
+    // A standing instruction to do something already done is noise.
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(display-mode: standalone)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    renderPage();
+    expect(
+      screen.queryByText(/add Skopeo to your home screen/i),
+    ).not.toBeInTheDocument();
+  });
+
   it("has exactly one Back control in the scoring view (#1073)", async () => {
     const user = userEvent.setup();
     renderPage();
