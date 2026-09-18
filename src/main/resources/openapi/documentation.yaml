@@ -7451,6 +7451,17 @@ components:
             serverId back to without it. Static per match and small enough to ride along.
           items:
             $ref: '#/components/schemas/LivePlayerResponse'
+        team1Name:
+          type: string
+          nullable: true
+          description: >-
+            The side's own name (#1079) — set for a standing event team (#720), null for the ad-hoc team
+            a fixture creates. Alongside `players` rather than repeated on each entry, because a name
+            belongs to the side and not to the person. Same rule as the public match response.
+        team2Name:
+          type: string
+          nullable: true
+          description: As `team1Name`, for the other side.
         pointsTeam1:
           type: string
           description: 0, 15, 30, 40 or AD — or a plain ordinal while isTiebreak is true.
@@ -8431,6 +8442,23 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MatchPublicPlayer'
+        team1Name:
+          type: string
+          nullable: true
+          description: >-
+            The team's own name (#1079) — set for a standing event team (#720), and **null for the
+            ad-hoc team a fixture creates**. An ad-hoc team is named from its members' display names at
+            creation, so the stored value is a snapshot that goes stale when a player renames; a client
+            deriving the label from the current roster is more correct there. Prefer this when present
+            and fall back to the roster otherwise.
+
+
+            Sibling fields rather than `team1`/`team2` becoming `{ name, players }` objects: that would
+            be a breaking reshape for several consumers in exchange for a purely additive fact.
+        team2Name:
+          type: string
+          nullable: true
+          description: As `team1Name`, for the other side.
         winner:
           type: string
           enum: [TEAM1, TEAM2, NONE]

@@ -1125,11 +1125,13 @@ private fun sideOf(teamId: UUID): MatchSideEntity {
     val team = TeamsTable.selectAll().where { TeamsTable.id eq teamId }.singleOrNull()
     return MatchSideEntity(
         teamId = teamId,
-        name = team?.get(TeamsTable.name) ?: "",
+        // `let` + indexing rather than `?.get(...)`: the indexing operator is how every other read in
+        // this file reaches a column, and it sidesteps the named-argument rule a bare `get` call trips.
+        name = team?.let { it[TeamsTable.name] }.orEmpty(),
         // Inverted deliberately: the column records what a team is NOT. `is_temporary` is true for the
         // ad-hoc team a fixture creates and false for a standing event team, so a missing row reads as
         // not-standing — the conservative answer, since it means the name is not shown.
-        isStanding = team?.get(TeamsTable.isTemporary)?.not() ?: false,
+        isStanding = team?.let { !it[TeamsTable.isTemporary] } ?: false,
         userIds =
             TeamUsersTable
                 .selectAll()
