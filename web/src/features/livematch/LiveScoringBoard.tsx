@@ -66,11 +66,39 @@ export function LiveScoringBoard({
                        bg-muted px-[1dvw] transition-colors hover:bg-muted/70 active:bg-muted/50
                        disabled:opacity-60"
           >
-            {/* Truncated rather than wrapped: a long doubles pairing must not grow the row and push the
-                action bar off a screen that is not allowed to scroll. */}
-            <span className="max-w-full truncate text-[3.4dvh] font-semibold leading-none">
-              {side.name}
-            </span>
+            {/*
+              One row per player (#1072), derived from `view.players` — which already carries
+              `{ userId, name, side }`, so nothing new had to be threaded through the props.
+
+              Singles renders one row at the original size and is unchanged. Doubles splits into two
+              smaller rows whose combined height matches that one row, because the comment this
+              replaces was right: "a long doubles pairing must not grow the row and push the action bar
+              off a screen that is not allowed to scroll." Two rows here cost no height, they just
+              divide it.
+
+              The split is groundwork. The ball marks the SIDE for now — doubles serving order is a
+              complicated rule set and designing a UI for it is a separate problem — but a per-player
+              indicator can later hang off one of these rows without moving anything else.
+            */}
+            {playersOn({ view, sideId: side.id, fallback: side.name }).map((label, index, all) => (
+              <span
+                key={label + index}
+                className={`max-w-full truncate font-semibold leading-none ${
+                  all.length > 1 ? 'text-[1.7dvh]' : 'text-[3.4dvh]'
+                }`}
+              >
+                {label}
+                {view.serverId != null && all.length === 1 && isServingSide({ view, sideId: side.id }) ? (
+                  <ServingBall />
+                ) : null}
+              </span>
+            ))}
+            {/* Doubles: the ball sits with the SIDE rather than a partner, so it goes after the rows
+                instead of inside one. Singles puts it inline above, where the side IS the player. */}
+            {isServingSide({ view, sideId: side.id }) &&
+            playersOn({ view, sideId: side.id, fallback: side.name }).length > 1 ? (
+              <ServingBall />
+            ) : null}
             <span className="text-[13dvh] font-bold leading-none tabular-nums">{side.points}</span>
             <span className="text-[3.6dvh] leading-none text-muted-foreground tabular-nums">
               {side.games} {side.games === 1 ? 'game' : 'games'}
@@ -142,6 +170,75 @@ export function LiveScoringBoard({
 }
 
 /**
+ * A side's players as one label each (#1072), or the pre-joined name when the live view has no player
+ * rows — an older payload, or a match whose roster never loaded.
+ *
+ * `view.players` already carries `side`, so this needs nothing new from the caller. The joined
+ * `side.name` stays as the fallback and remains what the entry/confirmation screen shows (#956); only
+ * the board splits.
+ */
+function playersOn({
+  view,
+  sideId,
+  fallback,
+}: {
+  view: LiveMatchResponse
+  sideId: 'TEAM1' | 'TEAM2'
+  fallback: string
+}): string[] {
+  const names = (view.players ?? [])
+    .filter((player) => player.side === sideId)
+    .map((player) => player.name)
+  return names.length > 0 ? names : [fallback]
+}
+
+/** Is this the side whose player is serving? Resolved through `players`, the only side↔player link. */
+function isServingSide({
+  view,
+  sideId,
+}: {
+  view: LiveMatchResponse
+  sideId: 'TEAM1' | 'TEAM2'
+}): boolean {
+  if (view.serverId == null) return false
+  return (view.players ?? []).some(
+    (player) => player.userId === view.serverId && player.side === sideId,
+  )
+}
+
+/**
+ * The serving indicator (#1072).
+ *
+ * A ball rather than a word, so it reads at a glance on a phone at the net — but with a text
+ * alternative, because a shape alone tells a screen reader nothing. Inline SVG rather than a lucide
+ * icon: lucide has no tennis ball, and a generic circle would not read as one.
+ *
+ * `aria-hidden` on the graphic with an adjacent screen-reader-only label, so the announcement is a
+ * sentence rather than "image".
+ */
+function ServingBall() {
+  return (
+    <>
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        className="ml-[0.6dvw] inline-block h-[2.2dvh] w-[2.2dvh] align-middle text-yellow-500"
+      >
+        <circle cx="12" cy="12" r="10" fill="currentColor" />
+        {/* The two seams, which is what makes it a tennis ball rather than a dot. */}
+        <path
+          d="M4 6a12 12 0 0 1 0 12M20 6a12 12 0 0 0 0 12"
+          fill="none"
+          stroke="white"
+          strokeWidth="1.6"
+        />
+      </svg>
+      <span className="sr-only">serving</span>
+    </>
+  )
+}
+
+/**
  * Who is serving, and a one-tap way to change it (#943).
  *
  * A **cycle** rather than a dropdown: the candidates are the two or four players in this match, and an
@@ -172,12 +269,18 @@ export function ServerControl({
       size="sm"
       variant={view.serverId ? 'secondary' : 'outline'}
       disabled={busy}
+      // The accessible label still NAMES the server (#1072): the visible label went static to stop the
+      // button being as wide as the longest name, but a screen-reader user would otherwise lose the
+      // one place the serving player is stated — the ball marks a side, not a partner.
       aria-label={
         view.serverName ? `Serving: ${view.serverName}. Tap to change.` : 'Set who is serving'
       }
       onClick={() => onAssign(next.userId)}
     >
-      {view.serverName ? `Serving: ${view.serverName}` : 'Set server'}
+      {/* "Change server", not "Toggle server": in doubles this cycles FOUR players, and a toggle
+          implies two. "Set server" is kept while nothing is assigned, because that state is a
+          to-do rather than a change — and #1070 relies on it reading as an outstanding step. */}
+      {view.serverId ? 'Change server' : 'Set server'}
     </Button>
   )
 }

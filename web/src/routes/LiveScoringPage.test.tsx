@@ -790,6 +790,83 @@ describe("LiveScoringPage", () => {
     expect(releaseMutate).toHaveBeenCalled();
   });
 
+  it("keeps the server control's label static while still naming the server to AT (#1072)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // Visible label no longer carries the name, so the button stops being as wide as the longest one.
+    const control = screen.getByRole("button", { name: /Serving: Ana/ });
+    expect(control).toHaveTextContent("Change server");
+    expect(control).not.toHaveTextContent("Ana");
+    // But the accessible name still states it: the ball marks a SIDE, not a partner, so a
+    // screen-reader user would otherwise lose the only place the serving player is named.
+    expect(control).toHaveAttribute("aria-label", "Serving: Ana. Tap to change.");
+  });
+
+  it('says "Set server" while nothing is assigned, not "Change server" (#1072)', async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, hasStarted: false, serverId: null, serverName: null },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // An outstanding step reads differently from a change — and #1070's prompt relies on it.
+    expect(
+      screen.getByRole("button", { name: "Set who is serving" }),
+    ).toHaveTextContent("Set server");
+  });
+
+  it("marks the serving side with a ball that has a text alternative (#1072)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // Ana (TEAM1) is serving in the fixture. A shape alone tells a screen reader nothing, so the
+    // graphic is aria-hidden and carries an adjacent sr-only word.
+    expect(screen.getAllByText("serving")).toHaveLength(1);
+  });
+
+  it("splits doubles partners onto their own rows, ready for a per-player ball (#1072)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        players: [
+          { userId: "p-1", name: "Ana", side: "TEAM1" },
+          { userId: "p-1b", name: "Bea", side: "TEAM1" },
+          { userId: "p-2", name: "Bob", side: "TEAM2" },
+          { userId: "p-2b", name: "Cal", side: "TEAM2" },
+        ],
+      },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // Four separate rows, not two joined strings. Nothing hangs off them yet — the ball still marks
+    // the side — but a per-player indicator can attach later without moving anything.
+    for (const name of ["Ana", "Bea", "Bob", "Cal"]) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    // Still exactly one ball: it marks the serving SIDE, and doubling it onto both partners would
+    // claim something the umpire has not told us.
+    expect(screen.getAllByText("serving")).toHaveLength(1);
+  });
+
+  it("keeps singles on a single full-size row (#1072)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    // The common case must not regress: one name, one row, original size. Two smaller rows exist
+    // only for doubles, and cost no extra height so the action bar stays on screen.
+    const label = screen.getByText("Ana");
+    expect(label.className).toContain("text-[3.4dvh]");
+  });
+
   it("offers Start next set in the header between sets (#1075)", async () => {
     const user = userEvent.setup();
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
