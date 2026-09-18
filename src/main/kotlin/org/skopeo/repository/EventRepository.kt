@@ -256,17 +256,29 @@ class EventRepository {
             Unit
         }
 
-    /** Soft-delete/restore an event (#243): flip is_active and stamp/clear disabled_at. Returns false if absent. */
+    /**
+     * Soft-delete/restore an event (#243): flip is_active and stamp/clear disabled_at. Returns false if absent.
+     *
+     * An inactive event hides its matches from every match read, including the calibration clock, so the
+     * stored calibration count (#1051) is recomputed for the event's players. `EventService.delete`
+     * refuses while any match is rated, but `ClubService.delete` cascades onto every event of the club
+     * with no such guard — which is exactly why this lives at the write site rather than in a caller.
+     */
     fun setActive(
         id: UUID,
         active: Boolean,
         disabledAt: LocalDateTime?,
     ): Boolean =
         transaction {
-            EventsTable.update(where = { EventsTable.id eq id }) {
-                it[isActive] = active
-                it[EventsTable.disabledAt] = disabledAt
-            } > 0
+            val updated =
+                EventsTable.update(where = { EventsTable.id eq id }) {
+                    it[isActive] = active
+                    it[EventsTable.disabledAt] = disabledAt
+                } > 0
+            if (updated) {
+                refreshCalibrationCountsForEvent(eventId = id)
+            }
+            updated
         }
 
     /**

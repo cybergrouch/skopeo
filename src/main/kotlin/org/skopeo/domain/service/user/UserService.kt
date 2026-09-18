@@ -87,7 +87,8 @@ class UserService(
     private val invites: InviteRepository = InviteRepository(),
     private val matches: MatchRepository = MatchRepository(),
     private val audit: AuditService = AuditService(),
-    // Derived, never stored (#881) — the search page reads it per row, so it is asked in one batch.
+    // The verdict is derived, never stored (#881); the count behind it is (#1051). The search page needs
+    // it per row, so it is still asked in one batch — now a single read of the rating rows.
     private val calibration: CalibrationService = CalibrationService(),
     // Verified-email allowlist for the ADMINISTRATOR bootstrap (from ADMIN_EMAILS); empty = none.
     private val adminEmails: Set<String> = emptySet(),

@@ -726,6 +726,12 @@ class UserRepository {
     /**
      * team_users re-point (#496): re-point the placeholder's rows to the claimant, dropping any row for a
      * team the claimant is already on (UNIQUE team_id, user_id, joined_at). Must run in a transaction.
+     *
+     * This is the only path on which rated-match participation moves between accounts, so it is where the
+     * stored calibration count (#1051) is recomputed for both sides — the survivor gains the retired
+     * account's rated matches, and a deduped row means the survivor's own count can move too. Editing a
+     * fixture's players ([setFixturePlayers]) cannot reach a rated match: it is refused once the match is
+     * `IN_PROGRESS`/`COMPLETED` or its event is finalized, and rating requires both.
      */
     private fun repointTeamUsers(
         fromUserId: UUID,
@@ -741,6 +747,7 @@ class UserRepository {
                 TeamUsersTable.update(where = { TeamUsersTable.id eq row[TeamUsersTable.id] }) { it[userId] = intoUserId }
             }
         }
+        refreshCalibrationCounts(userIds = listOf(fromUserId, intoUserId))
     }
 
     /** event_participants re-point (#496): re-point, dropping duplicates (UNIQUE event_id, user_id). In a transaction. */

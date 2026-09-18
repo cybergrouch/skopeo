@@ -164,6 +164,12 @@ class MatchRepository {
             loadMatchOrThrow(id = matchId).right()
         }
 
+    /**
+     * Soft-delete or restore a match. Recomputes the stored calibration count (#1051) for its players
+     * either way: an inactive match counts for nothing, so disabling a rated one has to take it off the
+     * clock, and re-enabling it — which `MatchService.setActive` deliberately leaves ungated, whatever the
+     * match's status — has to put it back.
+     */
     fun setActive(
         matchId: UUID,
         active: Boolean,
@@ -178,6 +184,7 @@ class MatchRepository {
             if (updated == 0) {
                 ServiceError.NotFound(message = "Match $matchId not found").left()
             } else {
+                refreshCalibrationCountsForMatches(matchIds = listOf(element = matchId))
                 loadMatchOrThrow(id = matchId).right()
             }
         }
@@ -389,7 +396,14 @@ class MatchRepository {
             }
         }
 
-    /** Stamp a match as rating-calculated (the calculation trigger committing it). */
+    /**
+     * Stamp a match as rating-calculated (the calculation trigger committing it).
+     *
+     * Also advances the stored calibration count (#1051) for this match's players, in the same
+     * transaction — the clock is "rated matches since the designation", and this is the moment a match
+     * becomes rated. Doing it here rather than in the caller is deliberate: see
+     * [refreshCalibrationCounts].
+     */
     fun markRated(
         matchId: UUID,
         ratedAt: LocalDateTime,
@@ -400,6 +414,7 @@ class MatchRepository {
                 it[MatchesTable.ratedAt] = ratedAt
                 it[MatchesTable.ratedBy] = ratedBy
             }
+            refreshCalibrationCountsForMatches(matchIds = listOf(element = matchId))
         }
     }
 
@@ -425,13 +440,22 @@ class MatchRepository {
      * Clear rated_at/rated_by on every match belonging to [eventId] (#478 reversal) so they re-enter the
      * pending-calculation queue after the score is corrected and the event re-finalized. Returns the
      * number of rows updated. The inverse of [markRated], scoped to an event.
+     *
+     * Being the inverse, it also **rewinds** the stored calibration count (#1051) for everyone who played
+     * in the event: those matches no longer count as rated, so a player mid-window gets their clock back
+     * rather than staying stuck near the end of a window that was reversed underneath them. The affected
+     * players are resolved from participation, not from rating history — a suppressed player has no
+     * history row (see [refreshCalibrationCountsForEvent]).
      */
     fun clearRatedForEvent(eventId: UUID): Int =
         transaction {
-            MatchesTable.update(where = { MatchesTable.eventId eq eventId }) {
-                it[ratedAt] = null
-                it[ratedBy] = null
-            }
+            val updated =
+                MatchesTable.update(where = { MatchesTable.eventId eq eventId }) {
+                    it[ratedAt] = null
+                    it[ratedBy] = null
+                }
+            refreshCalibrationCountsForEvent(eventId = eventId)
+            updated
         }
 
     /**
@@ -862,6 +886,12 @@ class MatchRepository {
      * Excludes soft-deleted matches and those whose event/club container is gone, matching what
      * [windowedMatchesInWindow] excludes from confidence: a match that counts for nothing else should not
      * advance the clock either.
+     *
+     * **Not on the hot path any more** (#1051): the count is stored on `user_ratings` and
+     * `CalibrationService` reads it from there. This overload survives as the *independent* recomputation
+     * of the same number — what `CalibrationCountsTest` reconciles the stored counter against, per user,
+     * over a populated database. A drifted cache is invisible without something that computes the answer
+     * a second way, so deleting this would remove the only guard on the denormalisation.
      */
     fun countRatedMatchesSince(
         userId: UUID,
@@ -895,6 +925,11 @@ class MatchRepository {
      * One query for a whole page, where the overload above costs **two** — a `team_users` lookup plus
      * a count — so a 25-row Research page went from ~50 queries to 1. That mattered once calibration
      * became a table column rather than a per-profile question.
+     *
+     * Now (#1051) it is what **materialises** `user_ratings.calibration_matches_rated`: every write path
+     * that changes which matches are rated calls [refreshCalibrationCounts], which re-runs this and
+     * overwrites the stored value. That is why the cache cannot drift by arithmetic — it is this query's
+     * answer, not an increment of its own.
      *
      * Thresholds are supplied by the caller rather than joined from `user_ratings` here, deliberately:
      * this repository stays about matches, and `CalibrationService` remains the only thing that knows

@@ -39,6 +39,17 @@ internal object UserRatingsTable : UUIDTable(name = "user_ratings") {
     // Only the START is stored. "Is this player calibrating?" is derived from this plus their rated-match
     // count and the global N, because N is mutable and must take effect without a sweep.
     val calibrationStartedAt = datetime(name = "calibration_started_at").nullable()
+
+    // Rated matches counted toward the CURRENT window (#1051) — a cache of
+    // `MatchRepository.countRatedMatchesSince`, which stays the single definition of "a match that counts
+    // as rated". Stored so calibration can be filtered and sorted in SQL, which the derived-per-read
+    // version could not be (#1050). 0 when [calibrationStartedAt] is null.
+    //
+    // The COUNT is stored; the VERDICT is not. "Is this player calibrating?" is still this count against
+    // the live global N, so changing N moves everyone at once with no sweep — the property that ruled out
+    // a stored boolean. Maintained by [refreshCalibrationCounts] at the write paths that change which
+    // matches are rated, and set to 0 by `setRating` because a fresh designation restarts the window.
+    val calibrationMatchesRated = integer(name = "calibration_matches_rated").default(defaultValue = 0)
 }
 
 /** Append-only rating-change history (match-driven, or initial assessment when match_id is null). */

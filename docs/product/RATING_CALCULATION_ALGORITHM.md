@@ -869,7 +869,9 @@ The first N **rated** matches after a rating is assigned by hand (#881), N being
 
 Distinct from [confidence](RATING_CONFIDENCE.md) even though both describe an unproven rating: confidence is a *displayed, advisory* measure that rises with match count and recency, while calibration is a *hard rule* about whose rating may move at all. A manual assessment computes to 0% confidence **and** opens a calibration window; they are two different consequences of the same event, and neither substitutes for the other.
 
-Calibration is **derived, never stored**: it is computed from the designation timestamp, the count of rated matches since, and the current N. Because N is global and mutable, lowering it ends several in-flight calibrations at once with no migration.
+The **verdict** is derived, never stored: it is computed from the designation timestamp, the count of rated matches since, and the current N. Because N is global and mutable, lowering it ends several in-flight calibrations at once with no migration.
+
+The **count** is stored (#1051), on `user_ratings.calibration_matches_rated`, and maintained by the repository write paths that change which matches are rated. Only the aggregate moved: it is a fact about matches, not a judgement, so caching it freezes nothing — the comparison against N still happens on every read, and lowering N still takes effect for everyone at once. It moved because an aggregate cannot be filtered or sorted on without either duplicating the rule in SQL or giving up pagination, which is what deferred the Research tab's calibration filter (#1050).
 
 #### Smoothing factor
 An optional damping multiplier applied to the raw change before clamping: 0.5 means only half the calculated change is applied. Reduces volatility from single outlier performances. See [§5.1](#51-smoothing-optional) and [RATING_SMOOTHING.md](RATING_SMOOTHING.md).

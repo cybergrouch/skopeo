@@ -25,4 +25,12 @@ data class UserRatingEntity(
     val matchRatedAt: LocalDateTime?,
     /** When the current calibration window opened (#881); null if never manually designated. */
     val calibrationStartedAt: LocalDateTime? = null,
+    /**
+     * Rated matches counted toward the current calibration window (#1051); 0 when there is no window.
+     *
+     * As-stored, like every other field here — a cache of the match aggregate, not a verdict. Whether the
+     * player is calibrating is this count against the live global N, and `CalibrationService` is still the
+     * only place that comparison is made.
+     */
+    val calibrationMatchesRated: Int = 0,
 )

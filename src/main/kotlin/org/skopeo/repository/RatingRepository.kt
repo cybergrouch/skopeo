@@ -84,6 +84,10 @@ class RatingRepository {
             UserRatingsTable.update(where = { UserRatingsTable.userId eq survivorId }) {
                 it[calibrationStartedAt] = retiredStart
             }
+            // The window moved earlier, so the stored count (#1051) is now measured from a different
+            // instant and has to be recomputed. Only this branch needs it: both early returns above leave
+            // the stamp exactly as `repointTeamUsers` already refreshed it against.
+            refreshCalibrationCounts(userIds = listOf(element = survivorId))
         }
     }
 
@@ -119,6 +123,11 @@ class RatingRepository {
      * Re-stamping unconditionally is deliberate — a fresh designation is a fresh guess, so the window
      * restarts. `applyMatchRating` does **not** touch the column, so match-derived movement never
      * re-opens or extends a window.
+     *
+     * Because the window restarts, the stored rated-match count (#1051) goes back to **0** in the same
+     * statement: the count is "matches rated *since* the stamp", and nothing can have been rated after an
+     * instant that is only now being written. No recompute is needed to know that, which is why this one
+     * site sets the value directly rather than going through [refreshCalibrationCounts].
      */
     fun setRating(
         userId: UUID,
@@ -134,6 +143,7 @@ class RatingRepository {
                     it[matchRatedAt] = null
                     it[matchesSinceReset] = 0
                     it[calibrationStartedAt] = LocalDateTime.now()
+                    it[calibrationMatchesRated] = 0
                 }
             } else {
                 UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
@@ -142,6 +152,7 @@ class RatingRepository {
                     it[matchRatedAt] = null
                     it[matchesSinceReset] = 0
                     it[calibrationStartedAt] = LocalDateTime.now()
+                    it[calibrationMatchesRated] = 0
                 }
             }
             UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single().toUserRatingEntity()
@@ -467,6 +478,7 @@ internal fun ResultRow.toUserRatingEntity(): UserRatingEntity =
         lastMatchDate = this[UserRatingsTable.lastMatchDate],
         matchRatedAt = this[UserRatingsTable.matchRatedAt],
         calibrationStartedAt = this[UserRatingsTable.calibrationStartedAt],
+        calibrationMatchesRated = this[UserRatingsTable.calibrationMatchesRated],
     )
 
 /** Map a `user_rating_history` row to the raw persistence entity (#633) — `setBreakdown` stays raw JSON. */
