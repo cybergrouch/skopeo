@@ -639,7 +639,7 @@ describe("LiveScoringPage", () => {
     renderPage();
     await start(user);
 
-    await user.click(screen.getByRole("button", { name: "Set who is serving" }));
+    await user.click(screen.getByRole("button", { name: "Set which side is serving" }));
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
       data: { kind: "SERVER_ASSIGNED", playerId: "p-1" },
@@ -790,18 +790,72 @@ describe("LiveScoringPage", () => {
     expect(releaseMutate).toHaveBeenCalled();
   });
 
-  it("keeps the server control's label static while still naming the server to AT (#1072)", async () => {
+  it("is a two-state side toggle, named by side rather than by player (#1072)", async () => {
     const user = userEvent.setup();
     renderPage();
     await start(user);
 
-    // Visible label no longer carries the name, so the button stops being as wide as the longest one.
+    // Visible label is static, so the button stops being as wide as the longest name — and "Toggle"
+    // is accurate because the designation is the serving TEAM, which really is two-state.
     const control = screen.getByRole("button", { name: /Serving: Ana/ });
-    expect(control).toHaveTextContent("Change server");
+    expect(control).toHaveTextContent("Toggle server");
     expect(control).not.toHaveTextContent("Ana");
-    // But the accessible name still states it: the ball marks a SIDE, not a partner, so a
-    // screen-reader user would otherwise lose the only place the serving player is named.
-    expect(control).toHaveAttribute("aria-label", "Serving: Ana. Tap to change.");
+    // Singles: the side IS the player, so the spoken name is just the name — no "Team" prefix.
+    expect(control).toHaveAttribute(
+      "aria-label",
+      "Serving: Ana. Tap to switch sides.",
+    );
+  });
+
+  it("speaks a doubles side as a team, not a player (#1072)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        players: [
+          { userId: "p-1", name: "Ana", side: "TEAM1" },
+          { userId: "p-1b", name: "Bea", side: "TEAM1" },
+          { userId: "p-2", name: "Bob", side: "TEAM2" },
+          { userId: "p-2b", name: "Cal", side: "TEAM2" },
+        ],
+      },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // Naming a single player would be a claim the app does not make: only the team is tracked, and
+    // the umpire calls out which partner is up. "and" rather than "&" because this is read aloud.
+    expect(
+      screen.getByRole("button", { name: /Serving: Team Ana and Bea/ }),
+    ).toHaveTextContent("Toggle server");
+  });
+
+  it("switches the serving SIDE, not to the next player (#1072)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        players: [
+          { userId: "p-1", name: "Ana", side: "TEAM1" },
+          { userId: "p-1b", name: "Bea", side: "TEAM1" },
+          { userId: "p-2", name: "Bob", side: "TEAM2" },
+          { userId: "p-2b", name: "Cal", side: "TEAM2" },
+        ],
+      },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // Ana (TEAM1) is serving, so one tap must hand over to TEAM2 — NOT advance to Bea, her partner.
+    // Doubles serving order changes at tiebreaks and alternates across games, so the app tracks only
+    // the team and leaves the partner to the umpire's call.
+    await user.click(screen.getByRole("button", { name: /Serving: Team Ana and Bea/ }));
+    expect(recordMutate).toHaveBeenCalledWith({
+      matchId: "m-1",
+      data: { kind: "SERVER_ASSIGNED", playerId: "p-2" },
+    });
   });
 
   it('says "Set server" while nothing is assigned, not "Change server" (#1072)', async () => {
@@ -815,7 +869,7 @@ describe("LiveScoringPage", () => {
 
     // An outstanding step reads differently from a change — and #1070's prompt relies on it.
     expect(
-      screen.getByRole("button", { name: "Set who is serving" }),
+      screen.getByRole("button", { name: "Set which side is serving" }),
     ).toHaveTextContent("Set server");
   });
 
@@ -958,7 +1012,7 @@ describe("LiveScoringPage", () => {
 
     // Said BEFORE the umpire probes a dead control — the whole complaint in #1070 was silence.
     expect(
-      screen.getByText("Set who is serving to begin."),
+      screen.getByText("Set which side is serving to begin."),
     ).toBeInTheDocument();
     // And Start match is gated on the server, which is the ordering that was never enforced: it used
     // to be clickable with nobody serving, leaving the point buttons dead for a second silent reason.
@@ -966,7 +1020,7 @@ describe("LiveScoringPage", () => {
     expect(startMatch).toBeDisabled();
     expect(startMatch).toHaveAttribute(
       "title",
-      "Set who is serving before starting the match",
+      "Set which side is serving before starting the match",
     );
   });
 
@@ -989,7 +1043,7 @@ describe("LiveScoringPage", () => {
     await start(user);
 
     // A prompt that is always on screen is furniture, and furniture is not read.
-    expect(screen.queryByText(/Set who is serving/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Set which side is serving/)).not.toBeInTheDocument();
     expect(screen.queryByText(/press Start match/)).not.toBeInTheDocument();
   });
 

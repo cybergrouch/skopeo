@@ -239,15 +239,57 @@ function ServingBall() {
 }
 
 /**
- * Who is serving, and a one-tap way to change it (#943).
+ * A side's spoken name for assistive tech (#1072): the player in singles, "Team Ana and Bea" in
+ * doubles.
  *
- * A **cycle** rather than a dropdown: the candidates are the two or four players in this match, and an
- * umpire mid-game wants one tap, not a menu. The alternative — re-picking from a list every game — is
- * enough friction that the field simply stops being maintained, and a serving indicator nobody updates
- * is worse than none because the scoreboard then shows something confidently wrong.
+ * "Team" is prefixed only when there is more than one player — "Team Ana" for a singles player would
+ * be odd, and the side IS the player there.
+ *
+ * "and" rather than the "&" the visible label uses: a screen reader reads this as a sentence, and an
+ * ampersand mid-phrase is read inconsistently across engines.
+ *
+ * **An official team name would be better and is not available — see #1079.** Hosts name teams when
+ * they create a fixture and `teams.name` stores it, but the name is never read back: the domain
+ * `MatchSide` carries only `teamId` and `userIds`, so no DTO can expose what the model does not hold.
+ * #1079 tracks threading it through. Until then this derives from the roster, and should prefer the
+ * official name once it exists.
+ */
+function teamLabel({
+  view,
+  sideId,
+}: {
+  view: LiveMatchResponse
+  sideId: string
+}): string | null {
+  const names = (view.players ?? [])
+    .filter((player) => player.side === sideId)
+    .map((player) => player.name)
+  if (names.length === 0) return null
+  if (names.length === 1) return names[0]
+  return `Team ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
+/**
+ * Which SIDE is serving, and a one-tap way to switch it (#943/#1072).
+ *
+ * A two-state toggle, not a four-player cycle. Doubles serving order is genuinely complicated — it
+ * changes at tiebreaks, and partners alternate across games — so the app deliberately tracks only the
+ * serving *team* and leaves the umpire to call out which partner is up. That is a simplification with
+ * a known expiry: when the doubles rules are modelled properly this becomes per-player again.
+ *
+ * A toggle rather than a dropdown for the original #943 reason: an umpire mid-game wants one tap, not
+ * a menu, and a serving indicator nobody maintains is worse than none because the scoreboard then
+ * shows something confidently wrong.
  *
  * Nothing auto-rotates. Whose turn it is is a format rule and the umpire is the authority (#928); this
  * only makes saying so cheap.
+ *
+ * **The wire is still per-player** (`SERVER_ASSIGNED` carries a `playerId`, and `serverId` is a player),
+ * so switching assigns the target side's first player as a stand-in. That is safe rather than sloppy:
+ * `serverId` never reaches the finalized match — `MatchDomain` has no server field — so it is live
+ * display state and the point gate, never a persisted claim about who served. Nothing in the UI shows
+ * the stand-in either, which is what keeps the simplification honest: the app only ever asserts the
+ * side.
  */
 export function ServerControl({
   view,
@@ -261,26 +303,32 @@ export function ServerControl({
   const players = view.players ?? []
   if (players.length === 0) return null
 
-  const current = players.findIndex((p) => p.userId === view.serverId)
-  const next = players[(current + 1) % players.length]
+  // The side currently serving, and therefore the one to switch TO. Derived through `players`, the
+  // only link between a side and its people.
+  const servingSide = players.find((p) => p.userId === view.serverId)?.side
+  const targetSide = servingSide === 'TEAM1' ? 'TEAM2' : 'TEAM1'
+  // First player of the target side as the stand-in the wire needs. In singles this is simply that
+  // side's player, so the behaviour is unchanged for the common case.
+  const next = players.find((p) => p.side === targetSide) ?? players[0]
+  const servingLabel = servingSide ? teamLabel({ view, sideId: servingSide }) : null
 
   return (
     <Button
       size="sm"
       variant={view.serverId ? 'secondary' : 'outline'}
       disabled={busy}
-      // The accessible label still NAMES the server (#1072): the visible label went static to stop the
-      // button being as wide as the longest name, but a screen-reader user would otherwise lose the
-      // one place the serving player is stated — the ball marks a side, not a partner.
+      // Names the SIDE, not a player (#1072). Naming one would be a claim the app does not make: the
+      // umpire may have called the partner, and only the team is tracked. The visible label is static
+      // so the button stops being as wide as the longest name.
       aria-label={
-        view.serverName ? `Serving: ${view.serverName}. Tap to change.` : 'Set who is serving'
+        servingLabel ? `Serving: ${servingLabel}. Tap to switch sides.` : 'Set which side is serving'
       }
       onClick={() => onAssign(next.userId)}
     >
-      {/* "Change server", not "Toggle server": in doubles this cycles FOUR players, and a toggle
-          implies two. "Set server" is kept while nothing is assigned, because that state is a
-          to-do rather than a change — and #1070 relies on it reading as an outstanding step. */}
-      {view.serverId ? 'Change server' : 'Set server'}
+      {/* "Toggle server" is accurate because this really is two-state — the serving TEAM. "Set server"
+          while nothing is assigned, because that is an outstanding step rather than a switch, and
+          #1070's prompt relies on it reading that way. */}
+      {view.serverId ? 'Toggle server' : 'Set server'}
     </Button>
   )
 }

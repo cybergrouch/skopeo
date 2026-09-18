@@ -44,7 +44,7 @@ type Side = 'TEAM1' | 'TEAM2'
 function scoringPrompt(view: LiveMatchResponse): string | null {
   if (!view.hasStarted) {
     return view.serverId == null
-      ? 'Set who is serving to begin.'
+      ? 'Set which side is serving to begin.'
       : 'Ready — press Start match.'
   }
   if (view.isBetweenSets) {
@@ -352,7 +352,7 @@ export function LiveScoringPage() {
               // answers "why can't I click this" on hover, and the prompt beside it answers it
               // without a hover at all — which is what a phone needs.
               title={
-                view.serverId == null ? 'Set who is serving before starting the match' : undefined
+                view.serverId == null ? 'Set which side is serving before starting the match' : undefined
               }
               onClick={() => send('MATCH_STARTED')}
             >
