@@ -187,9 +187,52 @@ describe("ClubsSection", () => {
       isLoading: false,
     });
     renderSection();
+    // The club's NAME is the link now (#1068), not a separate generic anchor.
+    expect(screen.getByRole("link", { name: "Downtown TC" })).toHaveAttribute(
+      "href",
+      "/clubs/CLB001",
+    );
+    // The anchor it replaced is gone, so the action row is navigation-free.
     expect(
-      screen.getByRole("link", { name: "Public page (QR)" }),
-    ).toHaveAttribute("href", "/clubs/CLB001");
+      screen.queryByRole("link", { name: "Public page (QR)" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("gives each club's link its own accessible name (#1068)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [
+        { id: "c1", name: "Downtown TC", publicCode: "CLB001", isActive: true, owners: [] },
+        { id: "c2", name: "Riverside TC", publicCode: "CLB002", isActive: true, owners: [] },
+      ],
+      isLoading: false,
+    });
+    renderSection();
+
+    // The accessibility reason for the change: ten clubs used to mean ten links reading "Public page
+    // (QR)" and going to ten different places, which is a link list a screen-reader user cannot use.
+    expect(screen.getByRole("link", { name: "Downtown TC" })).toHaveAttribute(
+      "href",
+      "/clubs/CLB001",
+    );
+    expect(screen.getByRole("link", { name: "Riverside TC" })).toHaveAttribute(
+      "href",
+      "/clubs/CLB002",
+    );
+  });
+
+  it("keeps the public-page theme treatment rather than text-primary (#394)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [
+        { id: "c1", name: "Downtown TC", publicCode: "CLB001", isActive: true, owners: [] },
+      ],
+      isLoading: false,
+    });
+    renderSection();
+    // #394 moved these anchors onto per-theme `--link` tokens because `text-primary` failed WCAG-AA
+    // against the white card surface in the AO and Off-Season themes. Moving the link must not lose it.
+    expect(screen.getByRole("link", { name: "Downtown TC" })).toHaveClass(
+      "public-page-link",
+    );
   });
 
   it("creates a club", async () => {
@@ -295,6 +338,11 @@ describe("ClubsSection", () => {
     renderSection();
 
     await user.click(screen.getByRole("button", { name: "Edit" }));
+    // The name is a link when idle and an <input> while editing (#1068) — the link must not survive
+    // into the editor, where it would sit beside the field that replaces it.
+    expect(
+      screen.queryByRole("link", { name: "Downtown TC" }),
+    ).not.toBeInTheDocument();
     const input = screen.getByLabelText("Club name");
     await user.clear(input);
     await user.type(input, "Uptown TC");

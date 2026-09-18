@@ -231,14 +231,25 @@ function ClubRow({
           </div>
         ) : (
           <>
-            <p className="font-medium">{club.name}</p>
+            {/* The NAME is the link (#1068), replacing a separate "Public page (QR)" anchor in the
+                action row below. Two reasons beyond the row's width: that anchor read as an action
+                while it was only navigation, and a card listing ten clubs rendered ten links with
+                identical text going to ten different places — indistinguishable in a screen reader's
+                link list. The club's own name is self-describing.
+
+                Keeps `PublicPageLink`, so the per-theme `--link` tokens come with it. A plain `Link`
+                with `text-primary` is the exact regression #394 fixed: it failed WCAG-AA against the
+                white card surface in the AO and Off-Season themes.
+
+                The dropped "(QR)" was a hint that the destination carries a shareable QR code. Judged
+                not worth the row: the public page's ShareCard is the first thing you see on arrival. */}
+            <PublicPageLink
+              to={`/clubs/${club.publicCode}`}
+              className="font-medium"
+            >
+              {club.name}
+            </PublicPageLink>
             <div className="flex items-center gap-1">
-              <PublicPageLink
-                to={`/clubs/${club.publicCode}`}
-                className="text-xs"
-              >
-                Public page (QR)
-              </PublicPageLink>
               {isAdmin ? (
                 <Button
                   type="button"
