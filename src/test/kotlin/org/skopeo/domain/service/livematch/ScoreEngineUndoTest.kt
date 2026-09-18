@@ -34,8 +34,13 @@ class ScoreEngineUndoTest {
     private fun log(vararg actions: LoggedAction): List<LoggedAction> =
         listOf(element = scored(sequence = 0, event = ScoreEvent.MatchStarted)) + actions
 
-    /** What [log] folds to with everything undone: started, nothing scored. */
-    private val startedOnly = ScoreState(hasStarted = true)
+    /**
+     * What [log] folds to with everything undone: started, nothing scored.
+     *
+     * `isBetweenSets` because `MatchStarted` lands there (#1083) — the first set begins explicitly like
+     * every other one, so a match that has only been started has no set under way.
+     */
+    private val startedOnly = ScoreState(hasStarted = true, isBetweenSets = true)
 
     private fun scored(
         sequence: Long,

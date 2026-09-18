@@ -283,6 +283,61 @@ class ScoreEngineTest {
     }
 
     @Test
+    fun `starting the match lands between sets, so the first set begins explicitly (#1083)`() {
+        val started = stateOf(events = emptyList())
+
+        started.hasStarted shouldBe true
+        // The correction that makes "before the first set" a state rather than an exception: points
+        // used to be scorable the instant the match started.
+        started.isBetweenSets shouldBe true
+        started.isInGame shouldBe false
+    }
+
+    @Test
+    fun `a game is under way only between its start and its close (#1083)`() {
+        val inSet = state(ScoreEvent.SetStarted)
+        inSet.isBetweenSets shouldBe false
+        // In a set, but not in a game -- the level that had no state at all.
+        inSet.isInGame shouldBe false
+
+        val inGame = state(ScoreEvent.SetStarted, ScoreEvent.GameStarted)
+        inGame.isInGame shouldBe true
+
+        // Closing on the fourth point ends it, so the next game is started explicitly too.
+        val afterPoints =
+            stateOf(
+                events =
+                    listOf(ScoreEvent.SetStarted, ScoreEvent.GameStarted) +
+                        points(side = TeamSide.TEAM1, times = 4),
+            )
+        afterPoints.gamesTeam1 shouldBe 1
+        afterPoints.isInGame shouldBe false
+
+        // And so does an umpire's declaration.
+        val afterAward =
+            state(ScoreEvent.SetStarted, ScoreEvent.GameStarted, ScoreEvent.GameAwarded(side = TeamSide.TEAM2))
+        afterAward.isInGame shouldBe false
+    }
+
+    @Test
+    fun `a tiebreak is not a game, and banking a set closes whatever was open (#1083)`() {
+        val tiebreak = state(ScoreEvent.SetStarted, ScoreEvent.TiebreakStarted)
+        tiebreak.isTiebreak shouldBe true
+        // Its own state rather than a flavour of game scoring: the control that ends it is Set.
+        tiebreak.isInGame shouldBe false
+
+        // A set awarded mid-game -- daylight, or a retirement's score -- cannot leave a game open.
+        val banked =
+            state(
+                ScoreEvent.SetStarted,
+                ScoreEvent.GameStarted,
+                ScoreEvent.SetAwarded(side = TeamSide.TEAM1),
+            )
+        banked.isInGame shouldBe false
+        banked.isBetweenSets shouldBe true
+    }
+
+    @Test
     fun `a set won without a tiebreak banks its games untouched`() {
         // The increment is conditional on isTiebreak, and this is what says so: an ordinary 6-4 must
         // not bank as 7-4, because gameTo already counted every game as it was won.

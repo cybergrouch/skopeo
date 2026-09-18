@@ -1,5 +1,7 @@
+import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import type { LiveMatchResponse } from '@/api/generated/model'
+import type { Control } from '@/features/livematch/umpireState'
 
 type Side = 'TEAM1' | 'TEAM2'
 
@@ -16,6 +18,7 @@ type Side = 'TEAM1' | 'TEAM2'
  */
 export function LiveScoringBoard({
   view,
+  controls,
   flipped,
   busy,
   team1Name,
@@ -27,6 +30,8 @@ export function LiveScoringBoard({
   onDefault,
 }: {
   view: LiveMatchResponse
+  /** What this state may show (#1083). The board asks; it decides nothing itself. */
+  controls: ReadonlySet<Control>
   /** View-only side swap for when the players change ends. NEVER recorded — see #911 §6. */
   flipped: boolean
   busy: boolean
@@ -45,26 +50,41 @@ export function LiveScoringBoard({
   // The label travels WITH its side through the flip (#937). A flip that moved the scores but left the
   // names would be worse than no labels at all — it would confidently say the wrong thing.
   const ordered = flipped ? [sides[1], sides[0]] : sides
-  const finished = view.outcome != null
-  // Scoring is inert until the match is started (#986), while between sets (#984), and once finished.
-  // The server rule (#985) applies to points only — a game or set is an umpire declaration, which does
-  // not need one. Disabled rather than hidden: a board that vanishes and returns is disorienting, and
-  // a greyed one beside a prominent action reads as "do that first".
-  const scorable = view.hasStarted && !view.isBetweenSets && !finished
-  const canScorePoints = scorable && view.serverId != null
+  // Every gate is now one lookup (#1083). The flags this used to compute -- `scorable`,
+  // `canScorePoints` -- were the ad-hoc predicates the state machine replaces.
+  //
+  // This is also where the "disabled rather than hidden" note used to sit, and it is REVERSED: an
+  // unavailable control is now absent. That was a recorded decision, so its reversal is recorded too --
+  // see `docs/engineering/architecture/LIVE_MATCH.md` section 7a, which holds the diagram, both
+  // derivation tables and the reasoning. `umpireState.ts` is the implementation of it.
+  //
+  // The ONE survivor of the point rule (#985) is the server check. It is not a state: a side can be
+  // serving in any scoring state and in none of them, and the state machine is about which *moves*
+  // exist, not whether their preconditions are met. So a point stays gated on someone serving, and
+  // #1070's prompt is what says so.
+  const canScorePoints = controls.has('point') && view.serverId != null
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-2 gap-[1dvh]">
       {ordered.map((side) => (
         <div key={side.id} className="flex min-h-0 flex-col gap-[0.6dvh]">
-          <button
-            type="button"
+          {/*
+            The one place "hide what is not interactable" (#1083) needs a reading rather than a rule:
+            the score box is BOTH a control and the scoreboard. Hiding it between games would hide the
+            score, which is the last thing to take away from an umpire — so the *affordance* goes and
+            the readout stays. Rendered as a plain element with no hover, no active state and no
+            `aria-label`, it is not a button in any sense a mouse, a finger or a screen reader can find;
+            the issue's words for this state are "the side score boxes are not-interactable".
+
+            The tag itself switches, rather than `disabled` doing the work: a disabled button is still
+            announced as a button, and `disabled:opacity-60` would dim the score just when the umpire is
+            reading it to decide whether the set is over.
+          */}
+          <ScoreBox
+            asButton={controls.has('point')}
             disabled={busy || !canScorePoints}
-            aria-label={`Point to ${side.name}`}
+            label={`Point to ${side.name}`}
             onClick={() => onPoint(side.id)}
-            className="flex min-h-0 flex-1 flex-col items-center justify-center gap-[0.5dvh] rounded-lg
-                       bg-muted px-[1dvw] transition-colors hover:bg-muted/70 active:bg-muted/50
-                       disabled:opacity-60"
           >
             {/*
               One row per player (#1072), derived from `view.players` — which already carries
@@ -103,7 +123,7 @@ export function LiveScoringBoard({
             <span className="text-[3.6dvh] leading-none text-muted-foreground tabular-nums">
               {side.games} {side.games === 1 ? 'game' : 'games'}
             </span>
-          </button>
+          </ScoreBox>
 
           {/*
             Per-side actions live UNDER their side rather than in the shared row (#944). Two reasons: a
@@ -113,24 +133,30 @@ export function LiveScoringBoard({
             invalid HTML and the inner clicks would not be reachable.
           */}
           <div className="flex shrink-0 flex-wrap justify-center gap-[0.6dvw]">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy || !scorable}
-              aria-label={`Game to ${side.name}`}
-              onClick={() => onGame(side.id)}
-            >
-              Game
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy || !scorable}
-              aria-label={`Set to ${side.name}`}
-              onClick={() => onEndSet(side.id)}
-            >
-              Set
-            </Button>
+            {/* Game is offered only inside a game, and Set only outside one (#1083) — so they are
+                never both on screen, and the mis-tap that ended a set mid-rally is gone. */}
+            {controls.has('game') && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                aria-label={`Game to ${side.name}`}
+                onClick={() => onGame(side.id)}
+              >
+                Game
+              </Button>
+            )}
+            {controls.has('set') && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                aria-label={`Set to ${side.name}`}
+                onClick={() => onEndSet(side.id)}
+              >
+                Set
+              </Button>
+            )}
             {/*
               `outline` plus the destructive colour, NOT `ghost` (#1071). Ghost has only a hover state —
               no border, no shadow — so at rest these read as text. Worse, `disabled:opacity-50` applies
@@ -142,30 +168,74 @@ export function LiveScoringBoard({
               match deserves both — promoting these to a plain `outline` would make them as inviting as
               Game, which for a mis-tap on a phone at the net is the opposite mistake.
             */}
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-destructive hover:text-destructive"
-              disabled={busy || finished || !view.hasStarted}
-              aria-label={`${side.name} retires`}
-              onClick={() => onRetire(side.id)}
-            >
-              Retire
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-destructive hover:text-destructive"
-              disabled={busy || finished || !view.hasStarted}
-              aria-label={`${side.name} defaults`}
-              onClick={() => onDefault(side.id)}
-            >
-              Default
-            </Button>
+            {controls.has('retire') && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                disabled={busy}
+                aria-label={`${side.name} retires`}
+                onClick={() => onRetire(side.id)}
+              >
+                Retire
+              </Button>
+            )}
+            {controls.has('default') && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                disabled={busy}
+                aria-label={`${side.name} defaults`}
+                onClick={() => onDefault(side.id)}
+              >
+                Default
+              </Button>
+            )}
           </div>
         </div>
       ))}
     </div>
+  )
+}
+
+/**
+ * The score readout, as a tap target or not (#1083).
+ *
+ * One component rather than two branches at the call site, so the two renderings cannot drift in
+ * padding, sizing or layout — a board that shifted by a few pixels as a game started would be a
+ * distracting flicker on the one screen that must not move.
+ *
+ * `bg-muted` and the geometry are shared; only the interactive affordances differ.
+ */
+function ScoreBox({
+  asButton,
+  disabled,
+  label,
+  onClick,
+  children,
+}: {
+  asButton: boolean
+  disabled: boolean
+  label: string
+  onClick: () => void
+  children: ReactNode
+}) {
+  const shared =
+    'flex min-h-0 flex-1 flex-col items-center justify-center gap-[0.5dvh] rounded-lg bg-muted px-[1dvw]'
+  if (!asButton) {
+    return <div className={shared}>{children}</div>
+  }
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      aria-label={label}
+      onClick={onClick}
+      className={`${shared} transition-colors hover:bg-muted/70 active:bg-muted/50 disabled:opacity-60`}
+    >
+      {children}
+    </button>
   )
 }
 
@@ -369,58 +439,68 @@ export function CompletedSets({ view }: { view: LiveMatchResponse }) {
  */
 export function ScoringActions({
   view,
+  controls,
   busy,
-  canFinalize,
   onUndo,
+  onStartGame,
   onTiebreak,
   onPauseResume,
   onFlip,
   onFinalize,
 }: {
   view: LiveMatchResponse
-  busy: boolean
   /**
-   * Whether this caller may write the result. Scoring and finalizing are **different rights** (#934):
-   * a plain SCORER keys points in, but recording the result keeps the #789 organizer gate. Hiding the
-   * button rather than letting it 403 is the #867 lesson.
+   * What this state may show (#1083), including whether this caller may finalize at all — scoring and
+   * writing the result are **different rights** (#934), and hiding the button rather than letting it
+   * 403 is the #867 lesson. The capability now enters through the same table as everything else, so
+   * there is one answer to "why is this not on screen".
    */
-  canFinalize: boolean
+  controls: ReadonlySet<Control>
+  busy: boolean
   onUndo: () => void
+  onStartGame: () => void
   onTiebreak: () => void
   onPauseResume: () => void
   onFlip: () => void
   onFinalize: () => void
 }) {
-  const finished = view.outcome != null
-  const betweenSets = view.isBetweenSets && !finished
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-[0.8dvw] py-[0.6dvh]">
-      <Button size="sm" variant="secondary" disabled={busy} onClick={onUndo}>
-        Undo
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={busy || finished || betweenSets || !view.hasStarted || view.isTiebreak}
-        onClick={onTiebreak}
-      >
-        Start tiebreak
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={busy || finished || !view.hasStarted}
-        onClick={onPauseResume}
-      >
-        {view.isPaused ? 'Resume' : 'Pause'}
-      </Button>
+      {/* Only when there is something in force (#1083) — an Undo that provably does nothing is the
+          silently-inert control this work removes. */}
+      {controls.has('undo') && (
+        <Button size="sm" variant="secondary" disabled={busy} onClick={onUndo}>
+          Undo
+        </Button>
+      )}
+      {/* Left of Start tiebreak, because between games they are the two ways forward and at a level
+          score they are a genuine choice. */}
+      {controls.has('startGame') && (
+        <Button size="sm" disabled={busy} onClick={onStartGame}>
+          Start game
+        </Button>
+      )}
+      {controls.has('startTiebreak') && (
+        <Button size="sm" variant="outline" disabled={busy} onClick={onTiebreak}>
+          Start tiebreak
+        </Button>
+      )}
+      {/* One control, two states. `Resume` is the label the spec settled on and the code already used;
+          the pause itself is a logged event, so this is a transition like any other. */}
+      {(controls.has('pause') || controls.has('resume')) && (
+        <Button size="sm" variant="outline" disabled={busy} onClick={onPauseResume}>
+          {view.isPaused ? 'Resume' : 'Pause'}
+        </Button>
+      )}
       {/* A display preference only. Never recorded, so the log cannot be corrupted by a flip (#911 §6).
           `outline` rather than `ghost` (#1071): it has no reason to be quiet — nothing is destroyed by a
           flip — and every reason to look like the control it is. No destructive colour, unlike
           Retire/Default, precisely because it changes nothing. */}
-      <Button size="sm" variant="outline" disabled={busy} onClick={onFlip}>
-        Switch sides
-      </Button>
+      {controls.has('switchSides') && (
+        <Button size="sm" variant="outline" disabled={busy} onClick={onFlip}>
+          Switch sides
+        </Button>
+      )}
       {/*
         The decision point (#984). Awarding a set stops the match here rather than rolling into the
         next, so the umpire chooses: play on, or this was the last set. Before this existed there was
@@ -430,13 +510,8 @@ export function ScoringActions({
           "begin play", both appear exactly when play is not under way, and both are the one control
           the umpire is waiting for — so they belong in one place rather than two. They are mutually
           exclusive, so a single header slot holds both. */}
-      {canFinalize && (
-        <Button
-          size="sm"
-          disabled={busy || !(finished || betweenSets)}
-          onClick={onFinalize}
-          className="ml-auto"
-        >
+      {controls.has('finalize') && (
+        <Button size="sm" disabled={busy} onClick={onFinalize} className="ml-auto">
           Finalize
         </Button>
       )}

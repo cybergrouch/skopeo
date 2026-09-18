@@ -28,6 +28,7 @@ import {
   ServerControl,
 } from '@/features/livematch/LiveScoringBoard'
 import { MatchClock } from '@/features/livematch/MatchClock'
+import { scoringPrompt, umpireStateOf, visibleControls } from '@/features/livematch/umpireState'
 
 type Side = 'TEAM1' | 'TEAM2'
 
@@ -49,28 +50,6 @@ function isInstalled(): boolean {
 }
 
 /**
- * The next step, or null while play is under way (#1070/#1075).
- *
- * One function for both gated states on purpose. #1070 is "no idea what to click first" before the
- * match starts; #1075 is the same complaint between sets. They are the same problem — a screen whose
- * live control is not obvious — so they get the same mechanism rather than two prompts that could
- * drift apart in wording or placement.
- *
- * Null during play: a prompt that is always on screen is furniture, and furniture is not read.
- */
-function scoringPrompt(view: LiveMatchResponse): string | null {
-  if (!view.hasStarted) {
-    return view.serverId == null
-      ? 'Set which side is serving to begin.'
-      : 'Ready — press Start match.'
-  }
-  if (view.isBetweenSets) {
-    return 'Set complete. Start the next set, or finalize the match.'
-  }
-  return null
-}
-
-/**
  * What the centred set label reads (#1074).
  *
  * `sets.length + 1` is the set in progress, which is correct *while one is being played* and wrong at
@@ -83,7 +62,10 @@ function scoringPrompt(view: LiveMatchResponse): string | null {
  */
 function setLabel(view: LiveMatchResponse): string {
   const current = view.sets.length + 1
-  if (view.isBetweenSets) return `Next: Set ${current}`
+  // `MATCH_TRANSITION` now covers before the first set as well as between later ones (#1083), so this
+  // reads "Next: Set 1" on a match that has started but whose first set has not — which is exactly
+  // what that state is.
+  if (umpireStateOf(view) === 'MATCH_TRANSITION') return `Next: Set ${current}`
   return `Set ${current}`
 }
 
@@ -151,8 +133,19 @@ export function LiveScoringPage() {
    * The generic string stays as the fallback: a network failure or a 500 carries nothing worth showing.
    * Routed through `toastError` so an unexpected failure is still reported (#807).
    */
-  const onError = (fallback: string) => (error: unknown) =>
+  const onError = (fallback: string) => (error: unknown) => {
     toastError(serverMessage(error) ?? fallback, { cause: error })
+    // Refetch on FAILURE too (#1083). Normally the log did not move and this changes nothing — which
+    // is why the state machine needs no failure edge. The case it exists for is a write that landed
+    // and lost its response: without this the board keeps showing the pre-action score, the umpire
+    // taps again, and nothing rejects the repeat (the client sends no expected sequence), so the point
+    // is counted twice. One request on a path that is already failing turns an ambiguous failure into
+    // a visible truth.
+    //
+    // Composed here rather than per mutation because each mutation's own `onError` OVERRIDES
+    // `afterWrite`'s via the spread below — so this is also the only place both can happen.
+    void refetch()
+  }
   const afterWrite = { onSuccess: () => void refetch() }
 
   const claim = usePostApiV1MatchesMatchIdLiveClaim({
@@ -303,6 +296,11 @@ export function LiveScoringPage() {
     return <div className="flex h-[100dvh] items-center justify-center">Loading score…</div>
   }
 
+  // One table, consulted once, read by everything below (#1083) — so every control in this view has
+  // the same answer to "why is this on screen", and none of them carries a predicate of its own.
+  // After the guards, so there is no undefined `view` to work around.
+  const controls = visibleControls(view, canManageMatches(capabilities))
+
   return (
     <div className="flex h-[100dvh] w-[100dvw] flex-col overflow-hidden bg-background px-[1.5dvw] py-[1dvh]">
       <div className="relative flex shrink-0 items-center justify-between gap-[1dvw]">
@@ -362,13 +360,15 @@ export function LiveScoringPage() {
         </span>
 
         <div className="flex items-center gap-[1dvw] text-[2.2dvh] text-muted-foreground">
-          <ServerControl
-            view={view}
-            busy={busy}
-            onAssign={(playerId) =>
-              record.mutate({ matchId, data: { kind: 'SERVER_ASSIGNED', playerId } })
-            }
-          />
+          {controls.has('toggleServer') && (
+            <ServerControl
+              view={view}
+              busy={busy}
+              onAssign={(playerId) =>
+                record.mutate({ matchId, data: { kind: 'SERVER_ASSIGNED', playerId } })
+              }
+            />
+          )}
           <MatchClock
             elapsedSeconds={view.elapsedSeconds ?? 0}
             isRunning={view.isRunning ?? false}
@@ -398,31 +398,25 @@ export function LiveScoringPage() {
           )}
           {view.isPaused && <span className="font-semibold text-amber-600">Paused</span>}
           {view.isTiebreak && <span className="font-semibold">Tiebreak</span>}
-          {/* One slot, two controls (#1075). `!hasStarted` and `isBetweenSets` cannot both be true, so
-              these never compete for the space — which matters in a cluster this full. */}
-          {view.isBetweenSets && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() => send('SET_STARTED')}
-            >
-              Start next set
+          {/*
+            One slot, two controls (#1075), and now the table guarantees what a comment used to assert:
+            `startSet` and `startMatch` belong to different states, so they can never compete for the
+            space — which matters in a cluster this full.
+
+            "Start set" before the first one and "Start next set" after (#1083). Same event and the
+            same edge; only the wording differs, because "next" before there has been a first would be
+            wrong in the one place an umpire is most likely to hesitate.
+          */}
+          {controls.has('startSet') && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => send('SET_STARTED')}>
+              {view.sets.length === 0 ? 'Start set' : 'Start next set'}
             </Button>
           )}
-          {!view.hasStarted && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy || view.serverId == null}
-              // A disabled control that says nothing is the whole complaint in #1070. The title
-              // answers "why can't I click this" on hover, and the prompt beside it answers it
-              // without a hover at all — which is what a phone needs.
-              title={
-                view.serverId == null ? 'Set which side is serving before starting the match' : undefined
-              }
-              onClick={() => send('MATCH_STARTED')}
-            >
+          {/* No `title` explaining a disabled state any more: `startMatch` appears only in READY, which
+              is by definition after a server has been set, so there is nothing left to explain. The
+              #1070 prompt still names the outstanding step while in PRE_MATCH. */}
+          {controls.has('startMatch') && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => send('MATCH_STARTED')}>
               Start match
             </Button>
           )}
@@ -447,6 +441,7 @@ export function LiveScoringPage() {
 
       <LiveScoringBoard
         view={view}
+        controls={controls}
         flipped={flipped}
         busy={busy}
         team1Name={sideName(match.team1, match.team1Name)}
@@ -460,9 +455,10 @@ export function LiveScoringPage() {
 
       <ScoringActions
         view={view}
+        controls={controls}
         busy={busy}
-        canFinalize={canManageMatches(capabilities)}
         onUndo={() => undo.mutate({ matchId })}
+        onStartGame={() => send('GAME_STARTED')}
         onTiebreak={() => send('TIEBREAK_STARTED')}
         onPauseResume={() => send(view.isPaused ? 'RESUMED' : 'PAUSED')}
         onFlip={() => setFlipped((f) => !f)}

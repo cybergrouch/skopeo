@@ -7288,14 +7288,18 @@ components:
       properties:
         kind:
           type: string
-          enum: [POINT_WON, GAME_AWARDED, SET_AWARDED, SET_STARTED, TIEBREAK_STARTED, SERVER_ASSIGNED,
-                 RETIRED, DEFAULTED, MATCH_AWARDED, MATCH_STARTED, PAUSED, RESUMED]
+          enum: [POINT_WON, GAME_AWARDED, SET_AWARDED, SET_STARTED, GAME_STARTED, TIEBREAK_STARTED,
+                 SERVER_ASSIGNED, RETIRED, DEFAULTED, MATCH_AWARDED, MATCH_STARTED, PAUSED, RESUMED]
           description: >-
             POINT_WON advances the game and may close it. SET_AWARDED banks the current set at whatever
             the score is, and is also how a tiebreak ends (the umpire marks who won; no target is
             assumed) — it leaves the match BETWEEN sets, where scoring is refused until SET_STARTED
-            begins the next one or the match is finalized (#984). MATCH_STARTED is distinct from the
-            first point so match duration can be measured, and scoring is refused before it (#986).
+            begins the next one or the match is finalized (#984). GAME_STARTED is the same split one
+            level down (#1083): a point is refused until a game is under way, and between games the
+            available moves are GAME_STARTED, TIEBREAK_STARTED (which needs the games level) or
+            SET_AWARDED. MATCH_STARTED is distinct from the first point so match duration can be
+            measured, and scoring is refused before it (#986); it leaves the match BETWEEN sets, so the
+            first set begins with a SET_STARTED like every other.
             PAUSED/RESUMED suspend play without ending the match — a rain delay may last days, which is
             why it is stated rather than inferred from a timeout. UNDONE is absent: undo has its own
             endpoint because the server picks the target.
@@ -7433,8 +7437,23 @@ components:
           description: >-
             A set has been awarded and the next has not begun (#984). The umpire's decision point:
             start the next set, or finalize here. Scoring is refused until one of those happens.
+        isInGame:
+          type: boolean
+          default: false
+          description: >-
+            A game is under way (#1083), so the score boxes mean something. False between games — in a
+            set with no game open — which is where GAME_STARTED and TIEBREAK_STARTED are the available
+            moves. A tiebreak is not a game: this stays false throughout one and isTiebreak is the
+            state instead.
         isTiebreak:
           type: boolean
+        canUndo:
+          type: boolean
+          default: false
+          description: >-
+            Whether an undo would do anything (#1083) — i.e. whether any action is still in force. Not
+            derivable from `sequence`, which counts undone actions too, and the undo markers themselves
+            are never sent to a client.
         serverId:
           type: string
           format: uuid

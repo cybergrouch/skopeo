@@ -60,6 +60,13 @@ const liveView = {
   // A match under way has a server: since #985 a point is refused without one, so a fixture lacking it
   // would not represent a scorable match.
   isBetweenSets: false,
+  // ...and since #1083 it is IN A GAME. "Started, in a set, between games" is now a real state with no
+  // score boxes, so a fixture that omits this represents the transition state rather than play, and
+  // every test about scoring would be testing the wrong screen.
+  isInGame: true,
+  // Three actions in, so Undo has something to take back. It is hidden when the log is empty (#1083),
+  // which is a property of the log rather than of the state.
+  canUndo: true,
   serverId: "p-1",
   serverName: "Ana",
   isTiebreak: false,
@@ -376,7 +383,8 @@ describe("LiveScoringPage", () => {
     const { unmount } = renderPage();
     await start(user);
 
-    expect(screen.getByRole("button", { name: "Finalize" })).toBeDisabled();
+    // Hidden rather than greyed (#1083): mid-game, finalizing is not a move that exists.
+    expect(screen.queryByRole("button", { name: "Finalize" })).not.toBeInTheDocument();
     unmount();
 
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
@@ -518,6 +526,12 @@ describe("LiveScoringPage", () => {
 
   it("ends a set, starts a tiebreak, and records a default", async () => {
     const user = userEvent.setup();
+    // Between games at six-all: the state that offers Set and Start tiebreak (#1083). Mid-game neither
+    // is on screen — award the game first — and a tiebreak needs the games level.
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isInGame: false, gamesTeam1: 6, gamesTeam2: 6 },
+      refetch: vi.fn(),
+    });
     renderPage();
     await start(user);
 
@@ -579,6 +593,11 @@ describe("LiveScoringPage", () => {
   });
 
   it("every action names the side it was pressed for, on both sides", async () => {
+    // Between games, so Set is on screen alongside the rest (#1083).
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isInGame: false },
+      refetch: vi.fn(),
+    });
     // The whole control row is symmetric, and a copy-paste slip that wired both buttons to TEAM1 would
     // be invisible in a test that only ever presses one of each pair. So press the other one.
     const user = userEvent.setup();
@@ -703,12 +722,17 @@ describe("LiveScoringPage", () => {
     renderPage();
     await start(user);
 
-    expect(screen.getByLabelText("Point to Ana")).toBeDisabled();
-    expect(screen.getByLabelText("Game to Ana")).toBeDisabled();
-    expect(screen.getByLabelText("Set to Ana")).toBeDisabled();
-    expect(screen.getByLabelText("Ana retires")).toBeDisabled();
-    // Back stays available throughout — an umpire must be able to leave a match opened by mistake.
+    // Hidden, not greyed (#1083). The score itself stays readable — the box loses its affordance, not
+    // its numbers — which is why this asserts the absence of the LABEL rather than of the text.
+    expect(screen.queryByLabelText("Point to Ana")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Game to Ana")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Set to Ana")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Ana retires")).not.toBeInTheDocument();
+    // The one control the state machine never touches (#1073): an umpire must be able to leave a match
+    // opened by mistake, and here it is the only way out.
     expect(screen.getByRole("button", { name: "← Back" })).toBeEnabled();
+    // A server is set in the fixture, so this is READY and the one live move is starting the match.
+    expect(screen.getByRole("button", { name: "Start match" })).toBeEnabled();
   });
 
   it("refuses points until somebody is serving, but still allows a declared game (#985)", async () => {
@@ -734,13 +758,13 @@ describe("LiveScoringPage", () => {
       data: { id: "u1", capabilities: ["PLAYER", "SCORER", "HOST"] },
     });
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
-      data: { ...liveView, isBetweenSets: true },
+      data: { ...liveView, sets: [{ gamesTeam1: 6, gamesTeam2: 4 }], isBetweenSets: true },
       isLoading: false,
     });
     renderPage();
     await start(user);
 
-    expect(screen.getByLabelText("Point to Ana")).toBeDisabled();
+    expect(screen.queryByLabelText("Point to Ana")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start next set" })).toBeEnabled();
     // Finalize is reachable HERE, on a match that simply finished — no retirement required.
     expect(screen.getByRole("button", { name: "Finalize" })).toBeEnabled();
@@ -749,7 +773,7 @@ describe("LiveScoringPage", () => {
   it("starts the next set on request (#984)", async () => {
     const user = userEvent.setup();
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
-      data: { ...liveView, isBetweenSets: true },
+      data: { ...liveView, sets: [{ gamesTeam1: 6, gamesTeam2: 4 }], isBetweenSets: true },
       isLoading: false,
     });
     renderPage();
@@ -769,8 +793,69 @@ describe("LiveScoringPage", () => {
     await start(user);
 
     expect(screen.queryByRole("button", { name: "Start next set" })).not.toBeInTheDocument();
-    // And Finalize stays unreachable mid-set, as it always was.
-    expect(screen.getByRole("button", { name: "Finalize" })).toBeDisabled();
+    // And Finalize stays unreachable mid-set, as it always was — now by not being there at all, which
+    // also rules out finalizing a partial set (#984).
+    expect(screen.queryByRole("button", { name: "Finalize" })).not.toBeInTheDocument();
+  });
+
+  it("restores the right controls on re-entry, mid-game or mid-tiebreak (#937/#1083)", async () => {
+    // Leave-and-resume is the reason the state must not live in component state: a freshly mounted
+    // view holds no history at all, so whatever it shows came from the server's replayed log. Three
+    // separate mounts rather than one flow, because a mount IS the re-entry.
+    const user = userEvent.setup();
+
+    const cases = [
+      { view: { ...liveView, isInGame: true }, present: "Game to Ana", absent: "Set to Ana" },
+      {
+        view: { ...liveView, isInGame: false, isTiebreak: true },
+        present: "Set to Ana",
+        absent: "Game to Ana",
+      },
+      {
+        view: {
+          ...liveView,
+          isInGame: false,
+          isBetweenSets: true,
+          sets: [{ gamesTeam1: 6, gamesTeam2: 4 }],
+        },
+        present: "Ana retires",
+        absent: "Set to Ana",
+      },
+    ];
+
+    for (const { view, present, absent } of cases) {
+      useGetApiV1MatchesMatchIdLive.mockReturnValue({ data: view, isLoading: false });
+      const mounted = renderPage();
+      await start(user);
+      expect(screen.getByLabelText(present)).toBeInTheDocument();
+      expect(screen.queryByLabelText(absent)).not.toBeInTheDocument();
+      mounted.unmount();
+    }
+  });
+
+  it("starts a game, and the board comes alive when the server says so (#1083)", async () => {
+    const user = userEvent.setup();
+    // Between games: the board shows the score but is not a tap target, and Start game is the move.
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isInGame: false },
+      isLoading: false,
+    });
+    const between = renderPage();
+    await start(user);
+
+    expect(screen.queryByLabelText("Point to Ana")).not.toBeInTheDocument();
+    // The score itself is still readable — the affordance went, not the scoreboard.
+    expect(screen.getByText("30")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Start game" }));
+    expect(recordMutate).toHaveBeenCalledWith({ matchId: "m-1", data: { kind: "GAME_STARTED" } });
+    between.unmount();
+
+    // And once the log says a game is under way, the same board is a tap target.
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({ data: liveView, isLoading: false });
+    renderPage();
+    await start(user);
+    expect(screen.getByLabelText("Point to Ana")).toBeEnabled();
   });
 
   it("leaves via Back, releasing fullscreen AND the claim on the way (#986, #1073)", async () => {
@@ -971,7 +1056,7 @@ describe("LiveScoringPage", () => {
   it("offers Start next set in the header between sets (#1075)", async () => {
     const user = userEvent.setup();
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
-      data: { ...liveView, isBetweenSets: true },
+      data: { ...liveView, sets: [{ gamesTeam1: 6, gamesTeam2: 4 }], isBetweenSets: true },
       isLoading: false,
     });
     renderPage();
@@ -989,8 +1074,9 @@ describe("LiveScoringPage", () => {
   it("never renders both start controls at once (#1075)", async () => {
     const user = userEvent.setup();
 
-    // `!hasStarted` and `isBetweenSets` are mutually exclusive, which is what lets one header slot
-    // hold both. Asserting it means a future state change cannot quietly put two in a full cluster.
+    // READY and MATCH_TRANSITION are different states, which is what lets one header slot hold both
+    // controls (#1083) — it is now structural rather than a coincidence of two flags that happened not
+    // to overlap. Asserting it means a future state change cannot quietly put two in a full cluster.
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
       data: { ...liveView, hasStarted: false },
       isLoading: false,
@@ -1004,7 +1090,7 @@ describe("LiveScoringPage", () => {
     first.unmount();
 
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
-      data: { ...liveView, isBetweenSets: true },
+      data: { ...liveView, sets: [{ gamesTeam1: 6, gamesTeam2: 4 }], isBetweenSets: true },
       isLoading: false,
     });
     renderPage();
@@ -1039,9 +1125,9 @@ describe("LiveScoringPage", () => {
     expect(screen.getByLabelText("Ana retires")).toBeEnabled();
     expect(screen.getByLabelText("Ana defaults")).toBeEnabled();
     expect(screen.getByLabelText("Bob retires")).toBeEnabled();
-    // While the scoring actions stay correctly inert.
-    expect(screen.getByLabelText("Point to Ana")).toBeDisabled();
-    expect(screen.getByLabelText("Game to Ana")).toBeDisabled();
+    // While the scoring actions stay correctly unavailable — now by absence (#1083).
+    expect(screen.queryByLabelText("Point to Ana")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Game to Ana")).not.toBeInTheDocument();
     // And the two the request named as needing to stay usable.
     expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Finalize" })).toBeEnabled();
@@ -1061,14 +1147,13 @@ describe("LiveScoringPage", () => {
     expect(
       screen.getByText("Set which side is serving to begin."),
     ).toBeInTheDocument();
-    // And Start match is gated on the server, which is the ordering that was never enforced: it used
-    // to be clickable with nobody serving, leaving the point buttons dead for a second silent reason.
-    const startMatch = screen.getByRole("button", { name: "Start match" });
-    expect(startMatch).toBeDisabled();
-    expect(startMatch).toHaveAttribute(
-      "title",
-      "Set which side is serving before starting the match",
-    );
+    // And Start match is not on screen AT ALL until a server is set (#1083). It used to render
+    // disabled with a `title` explaining why; a control that only exists once its precondition holds
+    // needs no explanation, and the prompt above already names the outstanding step. `startMatch`
+    // belongs to READY, and this is PRE_MATCH.
+    expect(
+      screen.queryByRole("button", { name: "Start match" }),
+    ).not.toBeInTheDocument();
   });
 
   it("advances the prompt once a server is set (#1070)", async () => {
@@ -1146,9 +1231,13 @@ describe("LiveScoringPage", () => {
     // The chip now identifies itself, so a bare score cannot be mistaken for the live one.
     expect(screen.getByText("S1")).toBeInTheDocument();
     expect(screen.getByText("6-4")).toBeInTheDocument();
-    // And the current set is announced separately, as a status region.
-    const label = screen.getByRole("status");
-    expect(label).toHaveTextContent("Set 2");
+    // And the current set is announced separately, as a status region. `getAllByRole` because there
+    // are two live regions whenever there is also a next step to name (#1070/#1075) — the label says
+    // WHICH set, the prompt says what to do.
+    const label = screen
+      .getAllByRole("status")
+      .find((node) => node.textContent?.includes("Set 2"));
+    expect(label).toBeDefined();
     // Floating over the header: it MUST NOT be hit-testable, or it could swallow a tap on the server
     // toggle or Start match at narrow widths, with no visible cause.
     expect(label).toHaveClass("pointer-events-none");
@@ -1198,7 +1287,9 @@ describe("LiveScoringPage", () => {
 
     expect(screen.getByText("S1")).toBeInTheDocument();
     expect(screen.getByText("S2")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Set 3");
+    expect(
+      screen.getAllByRole("status").map((node) => node.textContent?.trim()),
+    ).toContain("Set 3");
   });
 
   it("renders Retire, Default and Switch sides as buttons, not text (#1071)", async () => {
@@ -1221,11 +1312,15 @@ describe("LiveScoringPage", () => {
     );
   });
 
-  it("does not let disabled controls out-signal live ones between sets (#1071)", async () => {
-    // The inversion this fixes: `disabled:opacity-50` applies to every variant, so a disabled
+  it("leaves nothing disabled between sets to out-signal the live controls (#1071/#1083)", async () => {
+    // The inversion #1071 fixed: `disabled:opacity-50` applies to every variant, so a disabled
     // `outline` Game kept its border while a live `ghost` Retire had none — the control the umpire
-    // could NOT use looked more pressable than the one they could. Both now carry a border, so the
-    // difference between them is the disabled state alone rather than the presence of a button shape.
+    // could NOT use looked more pressable than the one they could.
+    //
+    // #1083 removes the category rather than balancing it: an unavailable control is not on screen, so
+    // there is no dimmed sibling to out-signal anything. That makes this the stronger assertion of the
+    // two, and the reason the hide-vs-disable note in `LiveScoringBoard` was reversed. What remains
+    // must genuinely be pressable.
     const user = userEvent.setup();
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
       data: { ...liveView, isBetweenSets: true },
@@ -1234,10 +1329,14 @@ describe("LiveScoringPage", () => {
     renderPage();
     await start(user);
 
-    expect(screen.getByLabelText("Game to Ana")).toBeDisabled();
+    expect(screen.queryByLabelText("Game to Ana")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Set to Ana")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Ana retires")).toBeEnabled();
-    expect(screen.getByLabelText("Game to Ana")).toHaveClass("border");
     expect(screen.getByLabelText("Ana retires")).toHaveClass("border");
+    // Nothing rendered in the action row is disabled, which is the invariant the table buys.
+    for (const button of screen.getAllByRole("button")) {
+      expect(button).toBeEnabled();
+    }
   });
 
   it("stays silent about full screen while it is actually held (#1076)", async () => {

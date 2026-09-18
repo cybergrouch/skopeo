@@ -83,12 +83,14 @@ class LiveMatchServiceTest {
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
 
     /**
-     * Rows [fixture] seeds before a test scores anything: MATCH_STARTED and SERVER_ASSIGNED.
+     * Rows [fixture] seeds before a test scores anything: MATCH_STARTED, SERVER_ASSIGNED, SET_STARTED
+     * and GAME_STARTED.
      *
      * Named rather than folded into each expected count, so a reader can see *why* a log of "two
-     * points" holds four rows, and so these assertions move together if the arrangement changes.
+     * points" holds six rows, and so these assertions move together if the arrangement changes — which
+     * is exactly what happened in #1083, when starting a set and a game became explicit steps.
      */
-    private val setupRows = 2
+    private val setupRows = 4
 
     private fun umpire(uid: String = "ump"): UUID = user(uid = uid, roles = setOf(Capability.PLAYER, Capability.SCORER))
 
@@ -146,6 +148,10 @@ class LiveMatchServiceTest {
         listOf(
             LiveMatchEventKinds.MATCH_STARTED to null,
             LiveMatchEventKinds.SERVER_ASSIGNED to server,
+            // Since #1083 a point also needs a set and a game under way: MATCH_STARTED lands between
+            // sets, and a set with no game open has nowhere to put a point.
+            LiveMatchEventKinds.SET_STARTED to null,
+            LiveMatchEventKinds.GAME_STARTED to null,
         ).forEach { (kind, playerId) ->
             live.append(
                 matchId = matchId,
@@ -308,8 +314,11 @@ class LiveMatchServiceTest {
         umpire()
         val matchId = fixture()
 
-        service.record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "MATCH_STARTED")).shouldBeRight()
-        service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
+        // No second MATCH_STARTED: `fixture` has already started this match, and starting again
+        // deliberately re-enters the between-sets decision point -- that is the documented restart
+        // path, since MatchStarted also clears a pause. Re-issuing it here would have refused the
+        // point that follows, and this test is about the pause, not the start gate.
+        service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1)).shouldBeRight()
         val paused =
             service
                 .record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "PAUSED"))
@@ -343,8 +352,10 @@ class LiveMatchServiceTest {
     fun `every recorded action is timestamped, so durations are derivable`() {
         umpire()
         val matchId = fixture()
-        service.record(token = token(uid = "ump"), matchId = matchId, request = bare(kind = "MATCH_STARTED"))
-        service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
+        // Two points rather than a start and a point: `fixture` has started the match already, and a
+        // second MATCH_STARTED would send it back between sets and refuse the point behind it.
+        service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1)).shouldBeRight()
+        service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1)).shouldBeRight()
 
         val rows = live.log(matchId = matchId)
         rows.shouldHaveSize(size = setupRows + 2)
@@ -433,9 +444,10 @@ class LiveMatchServiceTest {
 
         watched.claim(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
         watched.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1)).shouldBeRight()
-        // Three undos: the point, then the server and start rows `fixture` seeded. Only with the log
-        // empty is the next undo genuinely a no-op, which is the case under test.
-        repeat(times = 3) { watched.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight() }
+        // Five undos: the point, then the game, set, server and start rows `fixture` seeded (#1083
+        // added the middle two). Only with the log empty is the next undo genuinely a no-op, which is
+        // the case under test.
+        repeat(times = 5) { watched.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight() }
         watched.release(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
         val beforeNoOpUndo = sent.size
 
@@ -443,8 +455,8 @@ class LiveMatchServiceTest {
         watched.undo(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
 
         sent.size shouldBe beforeNoOpUndo
-        // claim, record, three undos, release.
-        beforeNoOpUndo shouldBe 6
+        // claim, record, five undos, release.
+        beforeNoOpUndo shouldBe 8
         // Keyed by the public code, never the internal id: the document is world-readable.
         sent.last().publicCode.isNotBlank() shouldBe true
     }

@@ -23,15 +23,18 @@ import org.skopeo.repository.persistence.LiveMatchEventEntity
  * hierarchy; [toLoggedAction]'s is a `when` over strings, `ScoreEventParser` holds its kinds in plain
  * sets, and the CHECK constraints are not Kotlin at all. A new kind therefore has to be added in four
  * places and the build only insists on two of them — which is how `SET_STARTED` shipped half-wired in
- * #988. `LiveMatchEventKindContractTest` (#989) is what closes that: it enumerates the sealed hierarchy
- * and drives every subtype request → event → row → event against a real database, so forgetting any one
- * of the four fails there.
+ * #988, and the checklist `GAME_STARTED` followed in #1083.
+ *
+ * `LiveMatchEventKindContractTest` (#989) is what closes that: it enumerates the sealed hierarchy and
+ * drives every subtype request → event → row → event against a real database, so forgetting any one of
+ * the four fails there.
  */
 object LiveMatchEventKinds {
     const val POINT_WON = "POINT_WON"
     const val GAME_AWARDED = "GAME_AWARDED"
     const val SET_AWARDED = "SET_AWARDED"
     const val SET_STARTED = "SET_STARTED"
+    const val GAME_STARTED = "GAME_STARTED"
     const val TIEBREAK_STARTED = "TIEBREAK_STARTED"
     const val SERVER_ASSIGNED = "SERVER_ASSIGNED"
     const val RETIRED = "RETIRED"
@@ -50,6 +53,7 @@ fun kindOf(event: ScoreEvent): String =
         is ScoreEvent.GameAwarded -> LiveMatchEventKinds.GAME_AWARDED
         is ScoreEvent.SetAwarded -> LiveMatchEventKinds.SET_AWARDED
         is ScoreEvent.SetStarted -> LiveMatchEventKinds.SET_STARTED
+        is ScoreEvent.GameStarted -> LiveMatchEventKinds.GAME_STARTED
         is ScoreEvent.TiebreakStarted -> LiveMatchEventKinds.TIEBREAK_STARTED
         is ScoreEvent.ServerAssigned -> LiveMatchEventKinds.SERVER_ASSIGNED
         is ScoreEvent.Retired -> LiveMatchEventKinds.RETIRED
@@ -70,6 +74,7 @@ fun sideOf(event: ScoreEvent): String? =
         is ScoreEvent.Defaulted -> event.side.name
         is ScoreEvent.MatchAwarded -> event.side.name
         is ScoreEvent.SetStarted,
+        is ScoreEvent.GameStarted,
         is ScoreEvent.TiebreakStarted,
         is ScoreEvent.ServerAssigned,
         is ScoreEvent.MatchStarted,
@@ -102,6 +107,7 @@ private fun LiveMatchEventEntity.toScoreEvent(): ScoreEvent =
         LiveMatchEventKinds.GAME_AWARDED -> ScoreEvent.GameAwarded(side = requiredSide())
         LiveMatchEventKinds.SET_AWARDED -> ScoreEvent.SetAwarded(side = requiredSide())
         LiveMatchEventKinds.SET_STARTED -> ScoreEvent.SetStarted
+        LiveMatchEventKinds.GAME_STARTED -> ScoreEvent.GameStarted
         LiveMatchEventKinds.TIEBREAK_STARTED -> ScoreEvent.TiebreakStarted
         LiveMatchEventKinds.MATCH_STARTED -> ScoreEvent.MatchStarted
         LiveMatchEventKinds.PAUSED -> ScoreEvent.Paused

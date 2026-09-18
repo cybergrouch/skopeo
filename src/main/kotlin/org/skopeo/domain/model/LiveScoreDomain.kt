@@ -81,6 +81,20 @@ sealed interface ScoreEvent {
      */
     data object SetStarted : ScoreEvent
 
+    /**
+     * A game begins (#1083).
+     *
+     * The same split as [SetStarted], one level down, and for the same reason: until this existed there
+     * was no state between "in a set" and "in a game", so the score boxes were live the instant a set
+     * started and stayed live after every game closed. That is the state the umpire view needs in order
+     * to know whether a tap on a score box means anything — and it is the moment at which starting a
+     * tiebreak is the alternative to starting a game, which is what makes the 6-6 decision a decision.
+     *
+     * Undo reverses it independently, exactly as with [SetStarted]: an umpire who starts a game by
+     * mistake takes it back without disturbing the set.
+     */
+    data object GameStarted : ScoreEvent
+
     /** Points become plain ordinals from here until the set is awarded. No target is assumed. */
     data object TiebreakStarted : ScoreEvent
 
@@ -203,6 +217,18 @@ data class ScoreState(
     // umpire either starts the next set or finalizes. This is the "is this over?" moment that did not
     // exist when awarding a set rolled straight into the next.
     val isBetweenSets: Boolean = false,
+    /**
+     * A game is under way (#1083) — the one level of the machine that had no state at all.
+     *
+     * Set by [ScoreEvent.GameStarted] and cleared the moment the game closes, however it closes: on the
+     * fourth point, on an umpire's [ScoreEvent.GameAwarded], or when the set is banked. So "in a set but
+     * between games" is now expressible, which is where starting a tiebreak is offered and where a tap
+     * on a score box means nothing.
+     *
+     * A tiebreak is **not** a game and leaves this false: [isTiebreak] is its own state, scored by
+     * points and ended by awarding the set.
+     */
+    val isInGame: Boolean = false,
     val outcome: LiveOutcome? = null,
 ) {
     /** Whether the match has ended, however it ended. */
@@ -218,6 +244,14 @@ data class ScoreState(
      * gating there would silently discard an umpire's tap. This property is what they gate on.
      */
     val isScorable: Boolean get() = hasStarted && !isBetweenSets && !isFinished
+
+    /**
+     * Whether a **point** applies right now (#1083).
+     *
+     * Narrower than [isScorable]: a point needs somewhere to go, and between games there is nowhere. A
+     * game or a set is an umpire declaration and is gated differently — see `scoringAllowed`.
+     */
+    val isPointable: Boolean get() = isScorable && (isInGame || isTiebreak)
 
     /** Games in the current (unbanked) set, for [side]. */
     fun games(side: TeamSide): Int = if (side == TeamSide.TEAM1) gamesTeam1 else gamesTeam2
@@ -268,4 +302,13 @@ data class LiveMatchView(
     val state: ScoreState,
     val sequence: Long,
     val scorerId: UUID? = null,
+    /**
+     * Whether anything in the log is still in force, and therefore whether Undo would do something
+     * (#1083).
+     *
+     * Carried on the view rather than derived from [sequence], because they answer different questions:
+     * a log of three actions all undone still has a sequence of six. Nor can the client tell -- undo
+     * markers are never sent to it -- so "is Undo worth showing" has to be answered here.
+     */
+    val canUndo: Boolean = false,
 )
