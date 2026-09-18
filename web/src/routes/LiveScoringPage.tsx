@@ -87,8 +87,20 @@ function setLabel(view: LiveMatchResponse): string {
   return `Set ${current}`
 }
 
-/** A side's players as one label, e.g. "Ana & Bea". Falls back so a placeholder still reads as someone. */
-function sideName(players: MatchPublicPlayer[] | undefined): string {
+/**
+ * A side's label: its own name when it has one, else its players joined — e.g. "Ana & Bea".
+ *
+ * [official] is set only for a standing event team (#1079/#720). An ad-hoc fixture team's stored name
+ * is its members' display names snapshotted at creation, so deriving from the current roster is
+ * strictly more accurate there — which is why the backend sends null rather than the snapshot.
+ *
+ * Falls back so a placeholder still reads as someone.
+ */
+function sideName(
+  players: MatchPublicPlayer[] | undefined,
+  official?: string | null,
+): string {
+  if (official) return official
   const names = (players ?? []).map((p) => p.displayName ?? p.publicCode ?? 'Unknown')
   return names.length > 0 ? names.join(' & ') : 'Unknown'
 }
@@ -247,9 +259,9 @@ export function LiveScoringPage() {
           {/* The part that actually confirms it: a glance tells you whether these are the players in
               front of you. Same helper as the in-view labels, so the two cannot disagree. */}
           <p className="text-lg">
-            {sideName(match.team1)}
+            {sideName(match.team1, match.team1Name)}
             <span className="px-2 text-muted-foreground">vs</span>
-            {sideName(match.team2)}
+            {sideName(match.team2, match.team2Name)}
           </p>
         </div>
         {/*
@@ -437,8 +449,8 @@ export function LiveScoringPage() {
         view={view}
         flipped={flipped}
         busy={busy}
-        team1Name={sideName(match.team1)}
-        team2Name={sideName(match.team2)}
+        team1Name={sideName(match.team1, match.team1Name)}
+        team2Name={sideName(match.team2, match.team2Name)}
         onPoint={(side) => send('POINT_WON', side)}
         onGame={(side) => send('GAME_AWARDED', side)}
         onEndSet={(side) => send('SET_AWARDED', side)}

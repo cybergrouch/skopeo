@@ -54,7 +54,34 @@ data class WinLossRecord(
 data class MatchSide(
     val teamId: UUID,
     val userIds: List<UUID>,
+    /**
+     * The team's own stored name (#1079). Always present; whether it is worth SHOWING depends on
+     * [isStanding], and the DTO mapper is what decides that.
+     */
+    val name: String = "",
+    /**
+     * True for a standing event team (#720), false for the ad-hoc team a fixture creates.
+     *
+     * The distinction matters because the two names are different kinds of thing. An ad-hoc team is
+     * named `teamName(users)` — the members' display names joined at creation — so it is a **snapshot**
+     * that goes stale the moment a player renames, while a client deriving the label from the current
+     * roster stays correct. A standing team's name is either a host's deliberate override or
+     * `autoName(members)`, and is the event's own label for that pairing.
+     *
+     * So: prefer the stored name for a standing team, derive it for an ad-hoc one. Same conclusion the
+     * issue reached via `is_temporary`, but for the better reason.
+     */
+    val isStanding: Boolean = false,
 )
+
+/**
+ * The team's name when it is worth showing, else null (#1079).
+ *
+ * Non-blank and standing, both: a standing team with a blank name should not surface an empty string,
+ * and an ad-hoc team's name is a creation-time snapshot the caller can derive more accurately from the
+ * current roster. One place, so no consumer re-decides it.
+ */
+fun MatchSide.officialName(): String? = name.takeIf { isStanding && it.isNotBlank() }
 
 /**
  * The placement a tournament "placement match" decides (#525/#552).

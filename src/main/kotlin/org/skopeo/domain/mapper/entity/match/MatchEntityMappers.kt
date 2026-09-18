@@ -26,6 +26,8 @@ import java.util.UUID
 // Convert a raw MatchSideEntity to the domain MatchSide (a straight field copy).
 fun MatchSideEntity.toDomain(): MatchSide =
     MatchSide(
+        name = name,
+        isStanding = isStanding,
         teamId = teamId,
         userIds = userIds,
     )

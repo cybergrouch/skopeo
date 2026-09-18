@@ -807,6 +807,53 @@ describe("LiveScoringPage", () => {
     );
   });
 
+  it("prefers a standing team's own name over the derived roster label (#1079)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        team1Name: "The Baseline Bandits",
+        players: [
+          { userId: "p-1", name: "Ana", side: "TEAM1" },
+          { userId: "p-1b", name: "Bea", side: "TEAM1" },
+          { userId: "p-2", name: "Bob", side: "TEAM2" },
+        ],
+      },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    // The host named this team, so that is what the side is called — not "Team Ana and Bea".
+    expect(
+      screen.getByRole("button", { name: /Serving: The Baseline Bandits/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("derives the label when the side has no name of its own (#1079)", async () => {
+    const user = userEvent.setup();
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: {
+        ...liveView,
+        // Null is what the backend sends for an ad-hoc fixture team: its stored name is a snapshot of
+        // display names taken at creation, so it goes stale on a rename and the roster is more correct.
+        team1Name: null,
+        players: [
+          { userId: "p-1", name: "Ana", side: "TEAM1" },
+          { userId: "p-1b", name: "Bea", side: "TEAM1" },
+          { userId: "p-2", name: "Bob", side: "TEAM2" },
+        ],
+      },
+      isLoading: false,
+    });
+    renderPage();
+    await start(user);
+
+    expect(
+      screen.getByRole("button", { name: /Serving: Team Ana and Bea/ }),
+    ).toBeInTheDocument();
+  });
+
   it("speaks a doubles side as a team, not a player (#1072)", async () => {
     const user = userEvent.setup();
     useGetApiV1MatchesMatchIdLive.mockReturnValue({

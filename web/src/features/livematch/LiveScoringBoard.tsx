@@ -248,11 +248,10 @@ function ServingBall() {
  * "and" rather than the "&" the visible label uses: a screen reader reads this as a sentence, and an
  * ampersand mid-phrase is read inconsistently across engines.
  *
- * **An official team name would be better and is not available — see #1079.** Hosts name teams when
- * they create a fixture and `teams.name` stores it, but the name is never read back: the domain
- * `MatchSide` carries only `teamId` and `userIds`, so no DTO can expose what the model does not hold.
- * #1079 tracks threading it through. Until then this derives from the roster, and should prefer the
- * official name once it exists.
+ * **Prefers the side's own name when there is one (#1079).** `view.team1Name`/`team2Name` are set only
+ * for a standing event team (#720); for an ad-hoc fixture team the backend sends null, because its
+ * stored name is a creation-time snapshot of display names that goes stale on a rename — so deriving
+ * from the current roster is more accurate there.
  */
 function teamLabel({
   view,
@@ -261,6 +260,8 @@ function teamLabel({
   view: LiveMatchResponse
   sideId: string
 }): string | null {
+  const official = sideId === 'TEAM1' ? view.team1Name : view.team2Name
+  if (official) return official
   const names = (view.players ?? [])
     .filter((player) => player.side === sideId)
     .map((player) => player.name)

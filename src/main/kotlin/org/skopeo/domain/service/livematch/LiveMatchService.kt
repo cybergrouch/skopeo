@@ -33,6 +33,7 @@ import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.model.ScoreEvent
 import org.skopeo.domain.model.ScoreState
 import org.skopeo.domain.model.TeamSide
+import org.skopeo.domain.model.officialName
 import org.skopeo.domain.service.match.MatchService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
@@ -186,7 +187,7 @@ class LiveMatchService(
             if (target == null) {
                 // Nothing changed, so nothing to broadcast: a courtside double-tap must not push a
                 // redundant document at every spectator.
-                live.responseFor(matchId = matchId, now = clock(), players = rosterOf(matches = matches, users = users, matchId = matchId))
+                live.responseFor(matchId = matchId, now = clock(), roster = rosterOf(matches = matches, users = users, matchId = matchId))
             } else {
                 appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
                     live.append(
@@ -260,7 +261,7 @@ class LiveMatchService(
 
     /** The current score and who is scoring it, for the wire. Readable by anyone who can see the match. */
     fun scoreboard(matchId: UUID): LiveMatchResponse =
-        live.responseFor(matchId = matchId, now = clock(), players = rosterOf(matches = matches, users = users, matchId = matchId))
+        live.responseFor(matchId = matchId, now = clock(), roster = rosterOf(matches = matches, users = users, matchId = matchId))
 
     /**
      * The score after a write, having told spectators about it.
@@ -273,7 +274,7 @@ class LiveMatchService(
      */
     private fun published(match: Match): LiveMatchResponse =
         live
-            .responseFor(matchId = match.id, now = clock(), players = rosterOf(matches = matches, users = users, matchId = match.id))
+            .responseFor(matchId = match.id, now = clock(), roster = rosterOf(matches = matches, users = users, matchId = match.id))
             .also { broadcast.publish(payload = it.toBroadcast(publicCode = match.publicCode)) }
 
     private fun appendWithRetry(
@@ -353,7 +354,7 @@ class LiveMatchService(
     ): Either<ServiceError, LiveMatchResponse> =
         either {
             val order =
-                rosterOf(matches = matches, users = users, matchId = matchId).mapNotNull {
+                rosterOf(matches = matches, users = users, matchId = matchId).players.mapNotNull {
                     runCatching { UUID.fromString(it.userId) }.getOrNull()
                 }
             val current = ScoreEngine.replay(log = live.loggedActions(matchId = matchId)).serverId
@@ -501,15 +502,40 @@ internal fun LiveMatchRepository.view(matchId: UUID): LiveMatchView {
     )
 }
 
+/**
+ * The roster and the sides' own names together (#1079).
+ *
+ * One holder rather than two lookups: both come from the same match, and fetching them separately
+ * would load it twice per response and leave room for the two to disagree.
+ *
+ * Not a `data class`, and with no default parameter values: it is assembled in one place and read in
+ * another, never compared, copied or printed. A `data class` generates `equals`/`hashCode`/`toString`/
+ * `copy`, and defaults generate a synthetic constructor overload per combination — all dead here, and
+ * all attributed by JaCoCo to the declaration line. One constructor and an [EMPTY] constant give the
+ * same ergonomics with nothing uncalled. "Add a test for a synthetic method" is the wrong fix.
+ */
+private class LiveRoster(
+    val players: List<LivePlayerResponse>,
+    val team1Name: String?,
+    val team2Name: String?,
+) {
+    companion object {
+        /** No match, or no roster resolved — the shape every early return wants. */
+        val EMPTY = LiveRoster(players = emptyList(), team1Name = null, team2Name = null)
+    }
+}
+
 /** The wire view plus its clock, in one place so the two cannot be assembled inconsistently. */
 private fun LiveMatchRepository.responseFor(
     matchId: UUID,
     now: LocalDateTime,
-    players: List<LivePlayerResponse> = emptyList(),
+    roster: LiveRoster = LiveRoster.EMPTY,
 ): LiveMatchResponse =
     view(matchId = matchId).toResponse(
         timing = matchTiming(rows = log(matchId = matchId), now = now),
-        players = players,
+        players = roster.players,
+        team1Name = roster.team1Name,
+        team2Name = roster.team2Name,
     )
 
 /**
@@ -522,8 +548,8 @@ private fun rosterOf(
     matches: MatchRepository,
     users: UserRepository,
     matchId: UUID,
-): List<LivePlayerResponse> {
-    val match = matches.findById(matchId = matchId).getOrNull()?.toDomain() ?: return emptyList()
+): LiveRoster {
+    val match = matches.findById(matchId = matchId).getOrNull()?.toDomain() ?: return LiveRoster.EMPTY
     val named = { ids: List<UUID>, side: TeamSide ->
         ids.map { id ->
             LivePlayerResponse(
@@ -533,5 +559,9 @@ private fun rosterOf(
             )
         }
     }
-    return named(match.team1.userIds, TeamSide.TEAM1) + named(match.team2.userIds, TeamSide.TEAM2)
+    return LiveRoster(
+        players = named(match.team1.userIds, TeamSide.TEAM1) + named(match.team2.userIds, TeamSide.TEAM2),
+        team1Name = match.team1.officialName(),
+        team2Name = match.team2.officialName(),
+    )
 }

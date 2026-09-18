@@ -86,6 +86,16 @@ data class LiveMatchResponse(
     val serverName: String? = null,
     /** Both sides' players, for the server picker. Static per match; small enough to ride along. */
     val players: List<LivePlayerResponse> = emptyList(),
+    /**
+     * The sides' own names (#1079), or null when there is nothing worth showing.
+     *
+     * Alongside [players] rather than repeated on each [LivePlayerResponse], because a name is a
+     * property of the side, not of the person. Same rule as the public match response: set for a
+     * standing event team (#720), null for the ad-hoc team a fixture creates, whose stored name is a
+     * creation-time snapshot of display names that the umpire view can derive more accurately itself.
+     */
+    val team1Name: String? = null,
+    val team2Name: String? = null,
     val pointsTeam1: String,
     val pointsTeam2: String,
     val gamesTeam1: Int,

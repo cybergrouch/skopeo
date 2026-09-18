@@ -22,6 +22,9 @@ import org.skopeo.domain.model.TeamSide
 fun LiveMatchView.toResponse(
     timing: MatchTiming,
     players: List<LivePlayerResponse> = emptyList(),
+    // The sides' own names (#1079) — null unless the team is a standing one; see the DTO's note.
+    team1Name: String? = null,
+    team2Name: String? = null,
 ): LiveMatchResponse =
     LiveMatchResponse(
         matchId = matchId.toString(),
@@ -34,6 +37,8 @@ fun LiveMatchView.toResponse(
         serverId = state.serverId?.toString(),
         serverName = state.serverId?.let { id -> players.firstOrNull { it.userId == id.toString() }?.name },
         players = players,
+        team1Name = team1Name,
+        team2Name = team2Name,
         pointsTeam1 = state.displayPoints(side = TeamSide.TEAM1),
         pointsTeam2 = state.displayPoints(side = TeamSide.TEAM2),
         gamesTeam1 = state.gamesTeam1,
