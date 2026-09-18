@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { NtrpLabel } from '@/components/NtrpLabel'
 import { Avatar } from '@/components/Avatar'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { AccountStatusChip } from '@/components/AccountStatusChip'
 import {
   Card,
@@ -13,16 +13,16 @@ import {
 import { PlayerSearchForm } from '@/components/PlayerSearchForm'
 import { NumberedPager } from '@/components/NumberedPager'
 import { useGetApiV1UsersSearch } from '@/api/generated/users/users'
-import type {
-  GetApiV1UsersParams,
-  GetApiV1UsersSearchParams,
-  UserSummaryResponse,
-} from '@/api/generated/model'
+import { plural } from '@/lib/plural'
+import {
+  readResearchSearch,
+  researchSearchParams,
+  type SortColumn,
+  type SortDirection,
+} from './researchSearchParams'
+import type { GetApiV1UsersParams, UserSummaryResponse } from '@/api/generated/model'
 
 const PAGE_SIZE = 25
-
-type SortColumn = NonNullable<GetApiV1UsersSearchParams['sort']>
-type SortDirection = NonNullable<GetApiV1UsersSearchParams['direction']>
 
 /**
  * The sortable columns, in the order they appear. Icon and code are deliberately absent: an avatar has
@@ -104,10 +104,14 @@ function CalibrationCell({ user }: { user: UserSummaryResponse }) {
 }
 
 export function ResearchTab() {
-  const [applied, setApplied] = useState<GetApiV1UsersParams | null>(null)
-  const [page, setPage] = useState(0)
-  const [sort, setSort] = useState<SortColumn | null>(null)
-  const [direction, setDirection] = useState<SortDirection>('ASC')
+  // The whole search — filters, page, sort, direction — lives in the URL (#1054), not in component
+  // state. Opening a result's public profile unmounts this tab, so state was lost and "← Back" landed
+  // on a blank form with no results; the URL survives because #1027 records the dashboard's path
+  // *with* its query string as the place Back returns to. `replace` (not push) keeps each filter tweak
+  // out of the history stack, matching how DashboardPage syncs `?tab=` (#323) — otherwise Back would
+  // walk the user's own edits one at a time instead of leaving the tab.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { applied, fields, page, sort, direction, ignored } = readResearchSearch(searchParams)
 
   // Paged search (#232): the endpoint returns { items, total } so we can show numbered pages. Research
   // includes soft-deleted accounts (#518) so they stay discoverable for history/lookup; the Status
@@ -128,21 +132,35 @@ export function ResearchTab() {
   const results = query.data?.items ?? []
   const total = query.data?.total ?? 0
 
-  function applySearch(params: GetApiV1UsersParams | null) {
-    setPage(0) // a new search restarts at the first page
-    setApplied(params)
+  function commit(next: {
+    filters: GetApiV1UsersParams | null
+    page: number
+    sort: SortColumn | null
+    direction: SortDirection
+  }) {
+    setSearchParams(researchSearchParams({ current: searchParams, ...next }), { replace: true })
+  }
+
+  function applySearch(filters: GetApiV1UsersParams | null) {
+    // A new search restarts at the first page; the chosen ordering is a view preference and stays.
+    commit({ filters, page: 0, sort, direction })
+  }
+
+  function onPage(nextPage: number) {
+    commit({ filters: applied, page: nextPage, sort, direction })
   }
 
   function onSort(column: SortColumn) {
     // Re-sorting resets to page 1: page 3 of the old order holds different players than page 3 of the
     // new one, so keeping the offset would silently move the user somewhere they never asked for.
-    setPage(0)
-    if (sort === column) {
-      setDirection(direction === 'ASC' ? 'DESC' : 'ASC')
-    } else {
-      setSort(column)
-      setDirection('ASC')
-    }
+    // Clicking the active column flips direction; another column starts ascending.
+    const flipping = sort === column
+    commit({
+      filters: applied,
+      page: 0,
+      sort: column,
+      direction: flipping && direction === 'ASC' ? 'DESC' : 'ASC',
+    })
   }
 
   return (
@@ -154,8 +172,20 @@ export function ResearchTab() {
             Find members by name, sex, age, status, and <NtrpLabel /> rating. Combine any filters.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <PlayerSearchForm onApply={applySearch} showStatus />
+        <CardContent className="space-y-3">
+          {/* No `key`: the form is seeded once per mount, and re-mounting it on every URL write
+              (which is every search, sort and page step) would discard whatever the user had typed
+              since. Restoring is a mount-time concern — see PlayerSearchForm's `initial`. */}
+          <PlayerSearchForm onApply={applySearch} showStatus initial={fields} />
+          {ignored.length > 0 ? (
+            // A hand-edited, stale or truncated link: say which filters were dropped and carry on with
+            // the rest, rather than sending a request the API would reject and showing an empty tab.
+            <p className="text-sm text-destructive" role="alert">
+              This link had {ignored.length} unreadable filter{plural(ignored.length)} (
+              {ignored.join(', ')}), so {ignored.length === 1 ? 'it was' : 'they were'} ignored. The
+              form shows the filters that were applied.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -255,7 +285,7 @@ export function ResearchTab() {
               <p className="text-sm text-muted-foreground">No matching players.</p>
             )}
             {!query.isLoading && !query.isError ? (
-              <NumberedPager page={page} total={total} pageSize={PAGE_SIZE} onPage={setPage} />
+              <NumberedPager page={page} total={total} pageSize={PAGE_SIZE} onPage={onPage} />
             ) : null}
           </CardContent>
         </Card>

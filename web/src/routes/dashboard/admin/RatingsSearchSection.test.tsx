@@ -52,6 +52,20 @@ describe('RatingsSearchSection', () => {
     useGetApiV1UsersSearch.mockReturnValue({ data: undefined, isLoading: false, isError: false })
   })
 
+  it('starts every filter blank, with nothing restored from a URL (#1054)', () => {
+    // The search form is shared with the Research tab, which now seeds its inputs from the query
+    // string. This surface passes no `initial` and syncs no URL — note there is no router here at
+    // all, so reaching for one would throw rather than quietly change this tab's behaviour.
+    renderSection()
+    expect(screen.getByLabelText('Name')).toHaveValue('')
+    expect(screen.getByLabelText('Sex')).toHaveValue('')
+    expect(screen.getByLabelText('Age from')).toHaveValue('')
+    expect(screen.getByLabelText('Rating from')).toHaveValue('')
+    // Status stays a Research-only filter (#1050): a Deleted/Merged result is not rateable.
+    expect(screen.queryByLabelText('Status')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled()
+  })
+
   it('only searches after a filter is applied (#205)', async () => {
     const user = setupUser()
     renderSection()

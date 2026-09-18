@@ -289,6 +289,35 @@ from existing profile data (no rating **and** no match history, mirroring the ba
 both the nav list and the rendered `activeSection.element`. The active tab lives in the URL
 (`?tab=…`); an unknown or unauthorized value falls back to `sections[0]` (Profile).
 
+### Search state in the URL (#1054)
+
+The Research tab keeps its **whole** search — filters, page, sort, direction — in the query string
+alongside `?tab=research`, not in `useState`. Opening a result's public profile unmounts the tab, so
+component state was lost and "← Back" landed on a blank form with no results; the URL survives
+because `NavOriginRecorder` records the dashboard path *with* its query string as the return point
+(#1027), which makes the restore free of any new storage. It also makes a search shareable,
+bookmarkable and reload-proof.
+
+Read and write are pure functions over `URLSearchParams` in
+`routes/dashboard/researchSearchParams.ts`:
+
+- Param names are the API's own (`name`, `sex`, `status`, `age`, `rating`, `sort`, `direction`); only
+  `page` differs, 1-based for humans where the API takes `offset`.
+- **Writes use `replace`**, like `?tab=` (#323), so a filter tweak never becomes its own Back step.
+- Anything at its default is omitted, so an untouched tab has a clean URL.
+- Values are **validated on read**. An unknown or unreproducible one (`status=RETIRED`, an exclusive
+  age bound the form's two number inputs cannot show) is dropped, named in `ignored`, and explained
+  on screen — never sent, because a 400 would read as "no results" for every filter the link got
+  right.
+- A mount carrying search params **runs the search immediately**: Back and a pasted link are the
+  same mount, and telling them apart would need the storage the URL replaced.
+
+Both halves are restored together. `PlayerSearchForm` — shared with the Ratings tab — takes an
+optional `initial: PlayerSearchFields`, seeded once per mount (not a controlled mirror, which would
+overwrite in-progress typing). The Ratings tab passes nothing and keeps its previous blank-form
+behaviour; it has no navigation out of its results, so it has nothing to lose. Scroll restoration is
+not part of this — a separate mechanism, deferred.
+
 ```mermaid
 classDiagram
     class Section {

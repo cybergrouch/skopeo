@@ -18,6 +18,31 @@ const STATUS_LABELS: Record<(typeof STATUSES)[number], string> = {
 }
 
 /**
+ * The values each input starts from. One per input rather than the wire's interval strings, because
+ * that is what the inputs actually hold — the age and rating ranges are two boxes each.
+ */
+export interface PlayerSearchFields {
+  name: string
+  sex: string
+  status: string
+  ageMin: string
+  ageMax: string
+  ratingMin: string
+  ratingMax: string
+}
+
+/** Every field blank: a form nobody has filled in yet, which is the default. */
+const BLANK: PlayerSearchFields = {
+  name: '',
+  sex: '',
+  status: '',
+  ageMin: '',
+  ageMax: '',
+  ratingMin: '',
+  ratingMax: '',
+}
+
+/**
  * The shared player-search filter form (name, sex, age range, NTRP rating range) used by the Research
  * tab (#107) and the Ratings tab's search-and-rate (#205). On submit it builds the filter params (or
  * null when no filter is set) and hands them to [onApply]; the parent owns pagination + results.
@@ -26,21 +51,33 @@ const STATUS_LABELS: Record<(typeof STATUSES)[number], string> = {
  * Ratings tab rates active players, and offering it a Deleted/Merged filter there would invite a
  * search whose every result is unratable. Research turns it on because Research is where account
  * history is the point.
+ *
+ * [initial] seeds the inputs for a search that already exists — the Research tab restoring one from
+ * the URL (#1054), where results are on screen and the form has to describe *them* rather than sit
+ * blank above them. It is optional and defaults to blank, so the Ratings tab, which passes nothing,
+ * behaves exactly as before.
+ *
+ * Note these are `useState` *initial* values, not a controlled mirror: re-seeding whenever [initial]
+ * changed would overwrite whatever the user is halfway through typing, and the Research tab rewrites
+ * its URL on every search and sort. The form is seeded once per mount, and a mount is precisely when
+ * there is nothing to lose — which is also the case this exists for (Back re-mounts the tab).
  */
 export function PlayerSearchForm({
   onApply,
   showStatus = false,
+  initial = BLANK,
 }: {
   onApply: (params: GetApiV1UsersParams | null) => void
   showStatus?: boolean
+  initial?: PlayerSearchFields
 }) {
-  const [name, setName] = useState('')
-  const [sex, setSex] = useState('')
-  const [status, setStatus] = useState('')
-  const [ageMin, setAgeMin] = useState('')
-  const [ageMax, setAgeMax] = useState('')
-  const [ratingMin, setRatingMin] = useState('')
-  const [ratingMax, setRatingMax] = useState('')
+  const [name, setName] = useState(initial.name)
+  const [sex, setSex] = useState(initial.sex)
+  const [status, setStatus] = useState(initial.status)
+  const [ageMin, setAgeMin] = useState(initial.ageMin)
+  const [ageMax, setAgeMax] = useState(initial.ageMax)
+  const [ratingMin, setRatingMin] = useState(initial.ratingMin)
+  const [ratingMax, setRatingMax] = useState(initial.ratingMax)
 
   function buildParams(): GetApiV1UsersParams | null {
     const params: GetApiV1UsersParams = {}
