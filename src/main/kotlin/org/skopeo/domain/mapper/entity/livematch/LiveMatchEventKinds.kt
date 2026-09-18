@@ -23,9 +23,11 @@ import org.skopeo.repository.persistence.LiveMatchEventEntity
  * hierarchy; [toLoggedAction]'s is a `when` over strings, `ScoreEventParser` holds its kinds in plain
  * sets, and the CHECK constraints are not Kotlin at all. A new kind therefore has to be added in four
  * places and the build only insists on two of them — which is how `SET_STARTED` shipped half-wired in
- * #988, and the checklist `GAME_STARTED` followed in #1083. `LiveMatchEventKindContractTest` (#989) is what closes that: it enumerates the sealed hierarchy
- * and drives every subtype request → event → row → event against a real database, so forgetting any one
- * of the four fails there.
+ * #988, and the checklist `GAME_STARTED` followed in #1083.
+ *
+ * `LiveMatchEventKindContractTest` (#989) is what closes that: it enumerates the sealed hierarchy and
+ * drives every subtype request → event → row → event against a real database, so forgetting any one of
+ * the four fails there.
  */
 object LiveMatchEventKinds {
     const val POINT_WON = "POINT_WON"
