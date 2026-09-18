@@ -371,8 +371,49 @@ class LiveMatchApiIntegrationTest {
             view.sets.single().tiebreakTeam1Points shouldBe 7
             view.sets.single().tiebreakTeam2Points shouldBe 5
             view.sets.single().winner shouldBe "TEAM1"
+            // Winning the tiebreak counts as winning a game (#1084), and this tiebreak began with the
+            // games at 0-0 — so 1-0, not 0-0. Banked level, the set carried no margin and the rating
+            // algorithm moved nobody for it.
+            view.sets.single().gamesTeam1 shouldBe 1
+            view.sets.single().gamesTeam2 shouldBe 0
             view.isTiebreak shouldBe false
             view.hasStarted shouldBe true
+        }
+
+    @Test
+    fun `banking a tiebreak hands the serve over, because a game completed (#1084)`() =
+        withApp { client ->
+            // A consequence of counting the tiebreak as a game rather than a separate rule: the serve
+            // rotates on a game COMPLETING (#985), and until #1084 no game completed when a tiebreak
+            // ended — so the next set opened with the same side serving.
+            //
+            // Rotating here is the real rule: whoever served the tiebreak's first point receives first
+            // in the set that follows.
+            val token = seedScorer()
+            val matchId = seedFixture()
+            val users = UserRepository()
+            val home = users.findByFirebaseUid(firebaseUid = "home")!!.toDomain().id
+            val away = users.findByFirebaseUid(firebaseUid = "away")!!.toDomain().id
+
+            // seedFixture serves `home`; confirm that, so a rotation to `away` cannot be read backwards.
+            client
+                .get(urlString = "/api/v1/matches/$matchId/live") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }.body<LiveMatchResponse>()
+                .serverId shouldBe home.toString()
+
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "TIEBREAK_STARTED"))
+            repeat(times = 7) {
+                client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"))
+            }
+            val banked =
+                client.postEvent(
+                    token = token,
+                    matchId = matchId,
+                    request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"),
+                )
+
+            banked.body<LiveMatchResponse>().serverId shouldBe away.toString()
         }
 
     @Test

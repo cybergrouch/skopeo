@@ -193,18 +193,37 @@ object ScoreEngine {
     /**
      * Bank the current set to [side] and start the next one.
      *
-     * A tiebreak's points ride onto the completed set rather than deciding it, which is both what #911
-     * asks for and what `MatchSetResult.tiebreakTeam1Points` already expects at finalize.
+     * A tiebreak's points ride onto the completed set **and its games record the win** (#1084): the
+     * winner's game count is incremented here, so a 7-5 tiebreak at 6-6 banks as `7-6` with
+     * `tiebreak: 7-5` — the standard convention, and what a hand-entered result already produces.
+     *
+     * Banking it level was not a smaller version of that; it erased the result. The rating algorithm
+     * reads dominance from the game margin, so a set banked 6-6 moved nobody's rating, making the
+     * closest possible win indistinguishable from a set the two sides shared — the very collapse #917's
+     * derived-vs-designated split exists to prevent.
+     *
+     * The increment is **relative, never 6→7**: a deciding-set match tiebreak can be played with the
+     * games at 0-0, and banks 1-0.
      */
     private fun setTo(
         state: ScoreState,
         side: TeamSide,
     ): ScoreState {
+        // A tiebreak is never ended by GameAwarded -- pointTo returns early on isTiebreak, so gameTo has
+        // never run for the game the tiebreak *is*. This is the only place that closes a tiebreak, so it
+        // is the only place that can count it. Reuse gameTo so "a game is worth one game" lives once.
+        //
+        // Note this also rotates the serve (#985): gamesPlayed now rises when a tiebreak is banked, so
+        // the next set opens with the other side serving -- which is the actual rule, since whoever
+        // served the tiebreak's first point receives first in the set that follows.
+        val decided = if (state.isTiebreak) gameTo(state = state, side = side) else state
         val banked =
             CompletedSet(
-                gamesTeam1 = state.gamesTeam1,
-                gamesTeam2 = state.gamesTeam2,
+                gamesTeam1 = decided.gamesTeam1,
+                gamesTeam2 = decided.gamesTeam2,
                 winner = side,
+                // From `state`, not `decided`: gameTo zeroes the points, and in a tiebreak those points
+                // ARE the tiebreak score.
                 tiebreakTeam1Points = state.pointsTeam1.takeIf { state.isTiebreak },
                 tiebreakTeam2Points = state.pointsTeam2.takeIf { state.isTiebreak },
             )
