@@ -2435,8 +2435,34 @@ paths:
     put:
       summary: Enable or disable a match (staff; an event's fixtures follow its club rule)
       description: |
-        Append-only corrections: disable the original and add a new match. Disabling is allowed
-        only while the match is unrated.
+        Append-only corrections: disable the original and add a new match.
+
+        When a fixture may be DISABLED (#1052):
+
+        - SCHEDULED or CANCELLED — allowed; nothing was taken away.
+        - IN_PROGRESS — REFUSED (#970). Someone is scoring it right now, and deleting it would take the
+          match out from under the umpire and the spectator scoreboard.
+        - COMPLETED, in an unfinalized event, unrated — ALLOWED. This is the state `DELETE /events/{id}`
+          tells the organizer to clear ("delete this event's recorded matches first"), so it has to be
+          reachable. Recording a result computes no rating and awards no ranking points — both happen at
+          event finalization — so there is nothing to reverse.
+        - Rated — REFUSED. Ratings and rating history derive from it; correct the score instead
+          (`POST /api/v1/matches/{id}/score-correction`), which reverses what this match applied.
+        - In a finalized event — REFUSED; finalize is terminal (#403). Reverse the finalization first.
+
+        Additionally, deleting a COMPLETED match on an event that has ENDED is reserved to an
+        ADMINISTRATOR or CLUB_OWNER (#310), the same rule that governs recording the result in the
+        first place. A leftover scheduled fixture stays deletable by a plain HOST.
+
+        The live-scoring log (`live_match_events`) and the umpire credit (`match_umpires`) are kept, not
+        discarded: a match deleted because it was mis-finalized is exactly the one worth inspecting, and
+        the retention sweep (#939) prunes the log on its normal schedule regardless.
+
+        Match numbers are never recycled (#898), so deleting a fixture leaves a permanent gap in the
+        event's numbering — "Match #3" simply stops existing.
+
+        RE-ENABLING is not gated: a soft-deleted fixture can be restored whatever its status, or
+        anything already deleted would be stranded.
       tags:
         - Matches
       security:
@@ -2462,7 +2488,10 @@ paths:
         '404':
           description: No such match
         '409':
-          description: Cannot disable a match that has already been rated
+          description: >-
+            Cannot disable this match: it is being scored right now, it has already been rated (correct
+            its score instead), or its event is finalized. Also returned when a plain HOST tries to
+            delete a recorded result on an event that has ended (#310).
 
   /api/v1/matches/{id}/players:
     parameters:
@@ -2857,6 +2886,10 @@ paths:
         Soft-deletes an event, gated by its matches. Any rated match blocks deletion outright; any
         recorded (but unrated) match is refused with advice to delete those matches first. Remaining
         scheduled fixtures are soft-disabled alongside the event. A HOST may delete only their own event.
+
+        That advice is actionable (#1052): `PUT /api/v1/matches/{id}/state` accepts `isActive: false` on a
+        recorded, unrated match in an unfinalized event. Until then it refused one outright (#970), so
+        following this error led nowhere.
       tags:
         - Events
       security:

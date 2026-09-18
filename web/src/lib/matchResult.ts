@@ -10,6 +10,8 @@
 export interface MatchLifecycle {
   status?: string | null;
   sets?: unknown[];
+  /** Set once the rating calculation has consumed this match; it is frozen from then on. */
+  ratedAt?: string | null;
 }
 
 /**
@@ -30,9 +32,27 @@ export function hasResult(match: MatchLifecycle): boolean {
 /**
  * Has play begun (#970)? `IN_PROGRESS` or `COMPLETED`.
  *
- * The question behind every control that must not change a contest already under way — who is
- * playing, and whether the fixture exists at all. Mirrors the server's `Match.playHasBegun()`.
+ * The question behind the control that must not change a contest already under way — who is playing.
+ * Mirrors the server's `Match.playHasBegun()`.
+ *
+ * **Not the question for deletion any more (#1052)** — use {@link isDeletable}.
  */
 export function playHasBegun(match: MatchLifecycle): boolean {
   return match.status === "IN_PROGRESS" || match.status === "COMPLETED";
+}
+
+/**
+ * May this fixture be deleted (#1052)? Mirrors the server's `ensureDeletable`.
+ *
+ * `playHasBegun` was the gate and answers wrongly for half of what it covers. A recorded result in an
+ * unfinalized, unrated event MUST be deletable, because `DELETE /events/{id}` refuses an event holding
+ * one and tells the organizer to delete those matches first — advice that led nowhere while this
+ * predicate said no. A match being scored right now must still refuse: that is the whole of #970.
+ *
+ * Two of the server's four conditions are deliberately absent here, because the call site already
+ * carries them: an event that is finalized (#403) or has ENDED for a plain HOST (#310) renders these
+ * rows `readOnly`, which suppresses every data-entry control including this one.
+ */
+export function isDeletable(match: MatchLifecycle): boolean {
+  return match.status !== "IN_PROGRESS" && match.ratedAt == null;
 }

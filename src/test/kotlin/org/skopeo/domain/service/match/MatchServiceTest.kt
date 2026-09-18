@@ -350,17 +350,26 @@ class MatchServiceTest {
             }
         }
 
-        service
-            .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false)
-            .shouldBeLeft()
-            .shouldBeInstanceOf<ServiceError.Conflict>()
+        val error =
+            service
+                .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false)
+                .shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Conflict>()
+
+        // The message points at the route that DOES exist for a rated match (#911/#776) rather than
+        // leaving the organizer with a refusal and nowhere to go (#1052).
+        error.message shouldContain "Correct its score"
     }
 
-    // ---- Lifecycle gates (#970) -----------------------------------------------------------------
+    // ---- Lifecycle gates (#970, split for deletion in #1052) ------------------------------------
     //
-    // Every one of these passed BEFORE the fix, because the gate was keyed on `ratedAt` — which is only
+    // Every one of these passed BEFORE #970, because the gate was keyed on `ratedAt` — which is only
     // set at event finalization, days after the match (#952). IN_PROGRESS in particular was not a
     // writable state until #930, so the original gate never had to consider it.
+    //
+    // #1052 then gave DELETION its own gate, because `playHasBegun()` merged two states needing
+    // opposite answers. The IN_PROGRESS test below is the one that must never stop passing: it is the
+    // whole of what #970 fixed on this path, and a rating-based gate would reintroduce the bug.
 
     @Test
     fun `a match being scored right now cannot be deleted (#970)`() {
@@ -382,7 +391,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `a match with a recorded result cannot be deleted, even before it is rated (#970)`() {
+    fun `a recorded but unrated match in an unfinalized event can be deleted (#1052)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
@@ -390,11 +399,86 @@ class MatchServiceTest {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
         service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
 
-        // Deliberately NOT rated: that is the window the old gate left open, and it is days long (#952).
+        // #970 refused this outright, while event delete told the organizer to clear exactly this state
+        // first — so the advice led nowhere. Nothing derives from a recorded result yet: rating and
+        // ranking points both happen at event finalization (#952), so there is nothing to reverse.
         service
             .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false)
+            .shouldBeRight()
+            .isActive
+            .shouldBeFalse()
+
+        matchRepo.findById(matchId = UUID.fromString(match.id)).shouldBeRight().toDomain().isActive.shouldBeFalse()
+        // The result itself is untouched — this is a soft delete, so the record survives for audit.
+        matchRepo.findById(matchId = UUID.fromString(match.id)).shouldBeRight().toDomain().status shouldBe MatchStatus.COMPLETED
+    }
+
+    @Test
+    fun `a recorded match cannot be deleted once its event is finalized (#1052)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
+        // Finalized but NOT yet rated: the two milestones are days apart (#952), and finalizing alone
+        // has to be enough to close the event's matches.
+        finalizeFixtureEvent()
+
+        val error =
+            service
+                .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false)
+                .shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Conflict>()
+
+        error.message shouldContain "finalized"
+    }
+
+    @Test
+    fun `only an admin or club owner may delete a recorded match on an event that has ended (#1052, #310)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provisionUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // The host is the event's creator, so the club rule (#789) is satisfied and expiry is the only
+        // axis under test. The host records nothing here — the expiry gate already stops them.
+        val event =
+            EventRepository().create(
+                command =
+                    CreateEventCommand(
+                        clubId = seedClub().id,
+                        name = "Ended",
+                        startDate = LocalDate.now().minusDays(3),
+                        endDate = LocalDate.now().minusDays(1),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = host.id,
+                    ),
+            ).toDomain()
+        val recorded =
+            service
+                .createFixture(token = token(uid = "admin"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+                .shouldBeRight()
+        service.uploadResult(token = token(uid = "admin"), matchId = UUID.fromString(recorded.id), request = straightSets())
+            .shouldBeRight()
+
+        // Erasing a recorded result after the event has ended is the same class of act as recording it.
+        service
+            .setActive(token = token(uid = "host"), matchId = UUID.fromString(recorded.id), active = false)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
+
+        // A leftover SCHEDULED fixture is not: tidying up something nobody played takes nothing away.
+        val scheduled =
+            service
+                .createFixture(token = token(uid = "admin"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+                .shouldBeRight()
+        service.setActive(token = token(uid = "host"), matchId = UUID.fromString(scheduled.id), active = false).shouldBeRight()
+
+        service
+            .setActive(token = token(uid = "admin"), matchId = UUID.fromString(recorded.id), active = false)
+            .shouldBeRight()
+            .isActive
+            .shouldBeFalse()
     }
 
     @Test

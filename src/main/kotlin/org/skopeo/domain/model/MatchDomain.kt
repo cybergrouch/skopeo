@@ -101,9 +101,12 @@ enum class MatchCompletionReason {
 /**
  * Has play begun on this match (#970) — `IN_PROGRESS` or `COMPLETED`.
  *
- * The lifecycle question behind every gate that must refuse to change a contest already under way:
- * who is playing, and whether the fixture exists at all. Both are settled the moment play starts, not
- * when the rating runs.
+ * The lifecycle question behind the gate that must refuse to change a contest already under way: who
+ * is playing. That is settled the moment play starts, not when the rating runs.
+ *
+ * **Deletion asked this too and no longer does (#1052).** It needs opposite answers for the two states
+ * this predicate merges — refuse `IN_PROGRESS`, allow `COMPLETED` while the event is unfinalized and
+ * the match unrated — so it has its own gate, `ensureDeletable`. Do not widen this one to cover it.
  *
  * **`ratedAt` is the wrong question and was the bug.** Rating happens at *event* finalization, days
  * later (#952), so a gate keyed on it leaves the whole match and its aftermath unprotected. `#960` and

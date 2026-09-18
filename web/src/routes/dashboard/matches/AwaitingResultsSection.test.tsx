@@ -523,8 +523,10 @@ describe('AwaitingResultsSection', () => {
     expect(screen.queryByRole('button', { name: 'Delete fixture' })).not.toBeInTheDocument()
   })
 
-  it('hides them on a finished match too, before it is rated (#970)', async () => {
-    // The window the old gate left open, and it is days long: rating happens at event finalization.
+  it('hides Change players on a finished match but still offers Delete fixture (#1052)', async () => {
+    // The two controls part company here. Changing the roster after the fact rewrites a contest that
+    // happened; deleting the fixture is what event delete tells the organizer to do first, so it has
+    // to be offered while the match is unrated and its event unfinalized.
     useGetApiV1Matches.mockReturnValue({
       data: [{ ...match, status: 'COMPLETED' }],
       isLoading: false,
@@ -532,6 +534,17 @@ describe('AwaitingResultsSection', () => {
     renderSection()
 
     expect(screen.queryByRole('button', { name: 'Change players' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete fixture' })).toBeInTheDocument()
+  })
+
+  it('hides Delete fixture once the match is rated (#1052)', async () => {
+    // Ratings and rating history derive from it; the route for a rated match is a score correction.
+    useGetApiV1Matches.mockReturnValue({
+      data: [{ ...match, status: 'COMPLETED', ratedAt: '2026-02-01T00:00:00Z' }],
+      isLoading: false,
+    })
+    renderSection()
+
     expect(screen.queryByRole('button', { name: 'Delete fixture' })).not.toBeInTheDocument()
   })
 
@@ -655,6 +668,14 @@ describe('RecordedResultsSection', () => {
       'href',
       '/matches/MPUB2',
     )
+  })
+
+  it('offers Delete fixture on a recorded, unrated row (#1052)', () => {
+    // The Recorded results card is where the organizer lands after event delete tells them to clear
+    // its recorded matches. Without this control that instruction has nowhere to be carried out.
+    useGetApiV1Matches.mockReturnValue({ data: [recordedMatch], isLoading: false })
+    renderRecorded()
+    expect(screen.getByRole('button', { name: 'Delete fixture' })).toBeInTheDocument()
   })
 
   it('shows loading and empty states', () => {
