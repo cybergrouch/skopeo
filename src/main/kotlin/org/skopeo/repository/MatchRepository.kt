@@ -12,6 +12,7 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.count
+import org.jetbrains.exposed.v1.core.countDistinct
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.greaterEq
@@ -887,6 +888,59 @@ class MatchRepository {
                 }.count()
                 .toInt()
         }
+
+    /**
+     * Rated-match counts for MANY users at once (#1050), each from that user's own threshold.
+     *
+     * One query for a whole page, where the overload above costs **two** — a `team_users` lookup plus
+     * a count — so a 25-row Research page went from ~50 queries to 1. That mattered once calibration
+     * became a table column rather than a per-profile question.
+     *
+     * Thresholds are supplied by the caller rather than joined from `user_ratings` here, deliberately:
+     * this repository stays about matches, and `CalibrationService` remains the only thing that knows
+     * where `calibration_started_at` comes from. It also keeps the same contract shape as the overload.
+     *
+     * **Shares [ratedSince] with that overload.** The definition of "a match that counts as rated" —
+     * active, inside an active event container, and rated after the threshold — must not exist twice;
+     * that is how the drift #882 records happened. Change it in one place or neither.
+     *
+     * Users with no rated matches are absent from the result, so read it with `?: 0`.
+     */
+    fun countRatedMatchesSince(sinceByUser: Map<UUID, LocalDateTime>): Map<UUID, Int> =
+        transaction {
+            if (sinceByUser.isEmpty()) {
+                return@transaction emptyMap()
+            }
+            // One OR-term per user, each pairing the user with THEIR OWN threshold. The alternative —
+            // one query per user — is what this method exists to remove.
+            val perUser =
+                sinceByUser
+                    .map { (userId, since) -> (TeamUsersTable.userId eq userId) and ratedSince(since = since) }
+                    .reduce { a, b -> a or b }
+            val matchCount = MatchesTable.id.countDistinct()
+            MatchesTable
+                .leftJoin(otherTable = EventsTable)
+                .join(
+                    otherTable = TeamUsersTable,
+                    joinType = JoinType.INNER,
+                    additionalConstraint = {
+                        (MatchesTable.team1Id eq TeamUsersTable.teamId) or (MatchesTable.team2Id eq TeamUsersTable.teamId)
+                    },
+                ).select(columns = listOf(TeamUsersTable.userId, matchCount))
+                .where { perUser }
+                .groupBy(TeamUsersTable.userId)
+                .associate { it[TeamUsersTable.userId].value to it[matchCount].toInt() }
+        }
+
+    /**
+     * "A match that counts as rated for calibration": active, its event container active, and rated
+     * after [since]. The single definition, shared by both `countRatedMatchesSince` overloads.
+     */
+    private fun ratedSince(since: LocalDateTime): Op<Boolean> =
+        MatchesTable.isActive and
+            eventContainerActive() and
+            MatchesTable.ratedAt.isNotNull() and
+            (MatchesTable.ratedAt greater since)
 
     /**
      * Active matches between exactly these two players (head-to-head, #188), newest match date first.

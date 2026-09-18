@@ -127,7 +127,7 @@ private fun Route.mergeRoutes(service: DuplicateService) {
     }
 }
 
-private val FILTER_PARAMS = listOf("name", "code", "q", "sex", "age", "rating", "capability")
+private val FILTER_PARAMS = listOf("name", "code", "q", "sex", "age", "rating", "capability", "status")
 
 // Page size used when a search request omits `limit` (preserves the pre-pagination behaviour).
 private const val DEFAULT_SEARCH_PAGE_SIZE = 20
@@ -156,6 +156,7 @@ private fun Route.searchUsers(service: UserService) {
                                 age = params["age"],
                                 rating = params["rating"],
                                 capability = params["capability"],
+                                status = params["status"],
                             ),
                         limit = params["limit"]?.toIntOrNull() ?: DEFAULT_SEARCH_PAGE_SIZE,
                         offset = params["offset"]?.toIntOrNull() ?: 0,
@@ -173,6 +174,9 @@ private fun Route.searchUsers(service: UserService) {
  * Paged player search for numbered pagination (#232): same filters as the list search but returns
  * `{ items, total }` so the UI can show the current page, page links, and the total. Separate from the
  * bare-list search above, which the typeahead/seeding/id-resolution callers keep using.
+ *
+ * It alone takes `sort`/`direction` (#1050) — the Research table is the only caller that offers column
+ * sorting, and every other caller depends on the default `id ASC` for stable paging.
  */
 private fun Route.searchUsersPaged(service: UserService) {
     get(path = "/search") {
@@ -190,11 +194,15 @@ private fun Route.searchUsersPaged(service: UserService) {
                             age = params["age"],
                             rating = params["rating"],
                             capability = params["capability"],
+                            status = params["status"],
                         ),
                     limit = params["limit"]?.toIntOrNull() ?: DEFAULT_SEARCH_PAGE_SIZE,
                     offset = params["offset"]?.toIntOrNull() ?: 0,
                     // Research opts in to include soft-deleted accounts (flagged), #518.
                     includeInactive = params["includeInactive"]?.toBoolean() ?: false,
+                    // Column ordering for the Research table (#1050); the service validates the names.
+                    sort = params["sort"],
+                    direction = params["direction"],
                 )
             respondEither(result = page) { result ->
                 call.respond(status = HttpStatusCode.OK, message = result)

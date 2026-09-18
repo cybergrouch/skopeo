@@ -10,7 +10,9 @@ package org.skopeo.repository
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.right
+import org.jetbrains.exposed.v1.core.Case
 import org.jetbrains.exposed.v1.core.CustomFunction
+import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.FloatColumnType
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -22,13 +24,16 @@ import org.jetbrains.exposed.v1.core.exists
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.intLiteral
 import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.lowerCase
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.stringParam
+import org.jetbrains.exposed.v1.core.wrapAsExpression
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -39,19 +44,23 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AccountMergeResult
+import org.skopeo.domain.model.AccountStatus
 import org.skopeo.domain.model.CreatePlaceholderCommand
 import org.skopeo.domain.model.LocalThemeValue
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.NumericRange
 import org.skopeo.domain.model.ProfilePatch
 import org.skopeo.domain.model.ProvisionUserCommand
+import org.skopeo.domain.model.SortDirection
 import org.skopeo.domain.model.ThemeSetting
 import org.skopeo.domain.model.UserSearchQuery
+import org.skopeo.domain.model.UserSearchSort
 import org.skopeo.repository.persistence.ContactEntity
 import org.skopeo.repository.persistence.IdentityEntity
 import org.skopeo.repository.persistence.NameEntity
 import org.skopeo.repository.persistence.UserAggregateEntity
 import org.skopeo.repository.persistence.UserEntity
+import java.math.BigDecimal
 import java.text.Normalizer
 import java.time.LocalDateTime
 import java.util.UUID
@@ -189,14 +198,24 @@ class UserRepository {
         // When true, include soft-deleted/inactive accounts (Research; #518). Default excludes them so
         // pickers and normal search remain active-only.
         includeInactive: Boolean = false,
+        // Ordering (#1050), applied in the DATABASE so it precedes paging. Null keeps the historical
+        // `id ASC`, which every existing caller (pickers, Ratings search) relies on for stable paging.
+        sort: UserSearchSort? = null,
+        direction: SortDirection = SortDirection.ASC,
     ): List<UserAggregateEntity> =
         transaction {
-            UsersTable
-                .selectAll()
-                .where { conditionsFor(query = query, includeInactive = includeInactive) }
-                .orderBy(UsersTable.id to SortOrder.ASC)
-                .limit(count = limit).offset(start = offset.toLong())
-                .map { loadAggregate(id = it[UsersTable.id].value)!! }
+            val order = if (direction == SortDirection.DESC) SortOrder.DESC else SortOrder.ASC
+            // `id ASC` is appended as a tie-break even when sorting, so a page boundary cannot duplicate
+            // or drop a row when many rows share a sort value — e.g. the thousands that share a sex or a
+            // status. Applied one term at a time because Exposed's vararg `orderBy` would need a spread.
+            val terms = orderingFor(sort = sort, order = order) + (UsersTable.id to SortOrder.ASC)
+            val rows =
+                UsersTable
+                    .selectAll()
+                    .where { conditionsFor(query = query, includeInactive = includeInactive) }
+                    .apply { terms.forEach { (expression, sortOrder) -> orderBy(column = expression, order = sortOrder) } }
+                    .limit(count = limit).offset(start = offset.toLong())
+            rows.map { loadAggregate(id = it[UsersTable.id].value)!! }
         }
 
     /** Total users matching [query] (#232) — the same predicate as [search], for paging totals. */
@@ -222,6 +241,8 @@ class UserRepository {
             query.code?.let { code -> add(element = UsersTable.publicCode like "$code%") }
             query.q?.let { term -> add(element = nameOrCodeMatches(term = term)) }
             query.rating?.let { range -> add(element = ratingMatches(range = range)) }
+            // Lifecycle state (#1050), expressed with the same precedence as `User.accountStatus()`.
+            query.status?.let { status -> add(element = statusMatches(status = status)) }
             // Correlated EXISTS: the user has an active grant of the requested capability (#317).
             query.capability?.let { capability ->
                 add(
@@ -850,7 +871,25 @@ private fun nameMatches(name: String): Op<Boolean> {
     )
 }
 
+/**
+ * Predicate for one [AccountStatus], matching `User.accountStatus()`'s precedence exactly.
+ *
+ * Each branch must EXCLUDE the higher-precedence states, or the filters overlap: a merged account is
+ * also inactive, so `DELETED` says "inactive AND not merged", and `UNCLAIMED`/`ACTIVE` say "active AND
+ * not merged" — otherwise a merged placeholder would match three filters at once.
+ */
+private fun statusMatches(status: AccountStatus): Op<Boolean> =
+    when (status) {
+        AccountStatus.MERGED -> UsersTable.canonicalUserId.isNotNull()
+        AccountStatus.DELETED -> (UsersTable.isActive eq false) and UsersTable.canonicalUserId.isNull()
+        AccountStatus.UNCLAIMED ->
+            (UsersTable.isActive eq true) and UsersTable.canonicalUserId.isNull() and (UsersTable.placeholder eq true)
+        AccountStatus.ACTIVE ->
+            (UsersTable.isActive eq true) and UsersTable.canonicalUserId.isNull() and (UsersTable.placeholder eq false)
+    }
+
 /** Correlated EXISTS: the user has a rating within [range] (inclusive/exclusive per bound). */
+
 private fun ratingMatches(range: NumericRange): Op<Boolean> =
     exists(
         query =
@@ -875,6 +914,69 @@ private fun ratingMatches(range: NumericRange): Op<Boolean> =
                 op
             },
     )
+
+/**
+ * The ORDER BY terms for [sort], or none for the default `id ASC`.
+ *
+ * The name and rating columns live in other tables, so they order by a **correlated subquery**
+ * rather than a join: a join against the append-only `user_names` would multiply rows per user and
+ * break both `limit` and `countSearch`'s total. The subquery mirrors the mapper's resolution rule
+ * (`firstOrNull { active }`) so the column sorts by the value it displays.
+ */
+private fun orderingFor(
+    sort: UserSearchSort?,
+    order: SortOrder,
+): List<Pair<Expression<*>, SortOrder>> =
+    when (sort) {
+        null -> emptyList()
+        UserSearchSort.DISPLAY_NAME -> listOf(element = activeNameValue(type = NameType.DISPLAY) to order)
+        UserSearchSort.LAST_NAME -> listOf(element = activeNameValue(type = NameType.LAST) to order)
+        UserSearchSort.FIRST_NAME -> listOf(element = activeNameValue(type = NameType.FIRST) to order)
+        UserSearchSort.SEX -> listOf(element = UsersTable.sex to order)
+        // Age is the INVERSE of date of birth: the oldest player has the earliest DOB. Ordering by
+        // the raw column would put "ascending age" in descending age order.
+        UserSearchSort.AGE ->
+            listOf(element = UsersTable.dateOfBirth to if (order == SortOrder.ASC) SortOrder.DESC else SortOrder.ASC)
+        UserSearchSort.RATING -> listOf(element = currentRatingValue() to order)
+        UserSearchSort.STATUS -> listOf(element = statusRank() to order)
+    }
+
+/** The user's active name of [type], as a scalar subquery — mirrors the mapper's `firstOrNull`. */
+private fun activeNameValue(type: NameType): Expression<String?> =
+    wrapAsExpression(
+        query =
+            UserNamesTable
+                .select(columns = listOf(element = UserNamesTable.value))
+                .where {
+                    (UserNamesTable.userId eq UsersTable.id) and
+                        (UserNamesTable.nameType eq type.name) and
+                        (UserNamesTable.isActive eq true)
+                }.limit(count = 1),
+    )
+
+/** The user's current rating, as a scalar subquery. Null-rated players sort together. */
+private fun currentRatingValue(): Expression<BigDecimal?> =
+    wrapAsExpression(
+        query =
+            UserRatingsTable
+                .select(columns = listOf(element = UserRatingsTable.currentRating))
+                .where { UserRatingsTable.userId eq UsersTable.id }
+                .limit(count = 1),
+    )
+
+/**
+ * `AccountStatus` as a sortable rank, in the SAME precedence the domain uses
+ * (`User.accountStatus()`): MERGED 0, DELETED 1, UNCLAIMED 2, ACTIVE 3.
+ *
+ * Kept in step with that function by hand — the enum's ordinal is deliberately NOT used, because
+ * reordering the enum for readability would then silently change every sorted page.
+ */
+private fun statusRank(): Expression<Int> =
+    Case()
+        .When(cond = UsersTable.canonicalUserId.isNotNull(), result = intLiteral(value = 0))
+        .When(cond = UsersTable.isActive eq false, result = intLiteral(value = 1))
+        .When(cond = UsersTable.placeholder eq true, result = intLiteral(value = 2))
+        .Else(e = intLiteral(value = 3))
 
 private fun namesOf(id: UUID): List<NameEntity> =
     UserNamesTable

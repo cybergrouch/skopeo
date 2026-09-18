@@ -11,6 +11,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -653,6 +654,126 @@ class UserServiceTest {
                 ).shouldBeRight()
         included.items.single().id shouldBe member.id
         included.total shouldBe 1
+    }
+
+    @Test
+    fun `an inactive-only status filter against an active-only search is a 400, not an empty page (#1050)`() {
+        provisionAdmin(uid = "staff-reach")
+
+        // Merging and deleting BOTH clear is_active, so either status against includeInactive=false is a
+        // predicate that cannot match a row. The caller is told which of the two fields to change rather
+        // than handed a blank page.
+        listOf("DELETED", "MERGED").forEach { status ->
+            val error =
+                service
+                    .searchPage(
+                        token = token(uid = "staff-reach"),
+                        filters = UserSearchFilters(status = status),
+                        limit = 20,
+                        offset = 0,
+                    ).shouldBeLeft()
+            error.shouldBeInstanceOf<ServiceError.Validation>()
+            error.message shouldContain "includeInactive=true"
+        }
+    }
+
+    @Test
+    fun `the same inactive status is accepted once includeInactive is on (#1050)`() {
+        provisionAdmin(uid = "staff-reach-ok")
+        val member = service.provision(token = token(uid = "gone1"), request = request).shouldBeRight().user
+        service.deactivate(token = token(uid = "staff-reach-ok"), id = UUID.fromString(member.id)).shouldBeRight()
+
+        val page =
+            service
+                .searchPage(
+                    token = token(uid = "staff-reach-ok"),
+                    filters = UserSearchFilters(status = "DELETED"),
+                    limit = 20,
+                    offset = 0,
+                    includeInactive = true,
+                ).shouldBeRight()
+        page.items.single().id shouldBe member.id
+        page.items.single().status shouldBe "DELETED"
+    }
+
+    @Test
+    fun `an active status filter needs no includeInactive, and stands alone as a filter (#1050)`() {
+        provisionAdmin(uid = "staff-active")
+        service.provision(token = token(uid = "live1"), request = request).shouldBeRight()
+
+        // Also asserts `status` satisfies the "at least one filter is required" rule on its own — it is a
+        // genuine narrowing facet, not a modifier of some other filter.
+        val page =
+            service
+                .searchPage(
+                    token = token(uid = "staff-active"),
+                    filters = UserSearchFilters(status = "ACTIVE"),
+                    limit = 20,
+                    offset = 0,
+                ).shouldBeRight()
+        page.items.map { it.status }.toSet() shouldBe setOf(element = "ACTIVE")
+    }
+
+    @Test
+    fun `an unknown status, sort or direction is a 400 that names the accepted values (#1050)`() {
+        provisionAdmin(uid = "staff-enum")
+        val staff = token(uid = "staff-enum")
+
+        fun failure(
+            filters: UserSearchFilters = UserSearchFilters(name = "a"),
+            sort: String? = null,
+            direction: String? = null,
+        ) = service
+            .searchPage(token = staff, filters = filters, limit = 20, offset = 0, sort = sort, direction = direction)
+            .shouldBeLeft()
+
+        // A typo must say what was expected. Silently ignoring it would return a correct-looking page in
+        // the wrong order, which is far harder to notice than an error.
+        failure(filters = UserSearchFilters(status = "ARCHIVED")).message shouldContain "expected one of"
+        failure(sort = "SURNAME").message shouldContain "LAST_NAME"
+        failure(direction = "DOWN").message shouldContain "DESC"
+    }
+
+    @Test
+    fun `searchPage carries the Research table's own columns - names, status and calibration (#1050)`() {
+        provisionAdmin(uid = "staff-cols")
+        val member = service.provision(token = token(uid = "cols1"), request = request).shouldBeRight().user
+
+        val row =
+            service
+                .searchPage(
+                    token = token(uid = "staff-cols"),
+                    filters = UserSearchFilters(code = member.publicCode),
+                    limit = 20,
+                    offset = 0,
+                ).shouldBeRight()
+                .items
+                .single()
+
+        row.status shouldBe "ACTIVE"
+        // Populated, not null: this is the endpoint that answers calibration. The sign-up above assigns
+        // no rating, so there is no designation and the answer is a definite "no".
+        row.inCalibration shouldBe false
+        // Sign-up writes a DISPLAY name only, so FIRST/LAST are legitimately absent rather than blank.
+        row.lastName.shouldBeNull()
+    }
+
+    @Test
+    fun `the bare list search leaves calibration unanswered rather than claiming false (#1050)`() {
+        provisionAdmin(uid = "staff-bare")
+        val member = service.provision(token = token(uid = "bare1"), request = request).shouldBeRight().user
+
+        val row =
+            service
+                .search(token = token(uid = "staff-bare"), filters = UserSearchFilters(code = member.publicCode))
+                .shouldBeRight()
+                .single()
+
+        // Null, not false. The pickers should not pay a query for a column they do not render, and
+        // `false` here would assert the player is settled rather than admit nobody asked.
+        row.inCalibration.shouldBeNull()
+        // Status is derived from columns already loaded, so it costs nothing and is always present.
+        row.status shouldBe "ACTIVE"
     }
 
     @Test

@@ -190,6 +190,21 @@ data class UserSummaryResponse(
     // Derived login/link status (#643): GOOGLE, FACEBOOK, PASSWORD, or NONE (a login-less placeholder).
     // Read-only, computed from firebase_uid + the primary identity; the merge UI shows it per account.
     val linkStatus: String = "NONE",
+    // First/last name from the append-only `user_names` rows (#1050), for the Research table's own
+    // columns. Null when the player has no active row of that type — many placeholders have only a
+    // DISPLAY name. Resolved with the same `firstOrNull { active }` rule `displayName` already uses.
+    val firstName: String? = null,
+    val lastName: String? = null,
+    // Lifecycle state (#1050): MERGED | DELETED | UNCLAIMED | ACTIVE, mutually exclusive. Supersedes
+    // reading `isPlaceholder`/`isDeleted` separately, and unlike those two it distinguishes a merged
+    // account from a plainly soft-deleted one.
+    val status: String = "ACTIVE",
+    // Whether the rating is still being calibrated (#881) — populated for the Research page (#1050),
+    // else null, following `record` above. NULL RATHER THAN FALSE on purpose: answering it costs a
+    // query the pickers should not pay, and `false` would be a claim that the player is NOT calibrating
+    // rather than an admission that nobody asked. Passed in by the service, never derived in the mapper:
+    // it depends on a rated-match count and the live global N, and `CalibrationService` owns that rule.
+    val inCalibration: Boolean? = null,
 )
 
 /** A player's decided win–loss record (#342): singles + doubles combined; [total] = wins + losses. */
