@@ -14,7 +14,6 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AccountStatus
 import org.skopeo.domain.model.AuthProvider
@@ -84,7 +83,7 @@ class UserSearchSortTest {
         repository.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = "firebase-${UUID.randomUUID()}".asRedactable(),
+                    firebaseUid = "firebase-${UUID.randomUUID()}",
                     identity =
                         UserIdentity(
                             provider = AuthProvider.GOOGLE,
@@ -100,7 +99,7 @@ class UserSearchSortTest {
                     photoUrl = null,
                     email = null,
                     sex = sex,
-                    dateOfBirth = dateOfBirth?.asRedactable(),
+                    dateOfBirth = dateOfBirth,
                 ),
         ).toDomain().id
 

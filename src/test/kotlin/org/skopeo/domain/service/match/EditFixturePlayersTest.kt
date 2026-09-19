@@ -17,7 +17,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.match.UpdateFixturePlayersRequest
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -72,7 +71,7 @@ class EditFixturePlayersTest {
             .provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = uid.asRedactable(),
+                        firebaseUid = uid,
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                         capabilities = roles,
@@ -80,7 +79,7 @@ class EditFixturePlayersTest {
             ).toDomain()
             .id
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     private lateinit var home: UUID
     private lateinit var away: UUID

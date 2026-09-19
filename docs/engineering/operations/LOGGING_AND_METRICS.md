@@ -231,7 +231,7 @@ duplicate key value violates unique constraint "uq_contact_verified_value"
   Detail: Key (contact_type, value)=(EMAIL, someone@example.com) already exists.
 ```
 
-`contact_information.value` **is** the email address or phone number. `Contact.value` is a `Redactable`,
+`contact_information.value` **is** the email address or phone number. `Contact.value` is `@Redacted`,
 and that is irrelevant here: no Kotlin call site formats this string, so there is nothing to wrap. It
 reached the log two ways — our own 500 handler logging the throwable, and Exposed logging the failed
 transaction attempt itself, at WARN, before our code saw the exception at all.
@@ -294,131 +294,110 @@ while re-pointing the retry test during that work.
 Deliberately still open: redacting value types in the domain model (**#801**), as defence in depth against
 rule 1 rather than a substitute for it.
 
-## `Redactable<T>`: keeping a value out of every `toString()` (#801)
+## `@Redacted`: keeping a value out of every `toString()` (#801, #822, #825)
 
 Some values must never reach a log line, and the realistic way they get there is not a deliberate
 `logger.info { user.email }` — it is interpolating a whole object: `logger.info { "provisioned $user" }`.
 Every model here is a `data class`, so Kotlin's generated `toString()` covers **every** field, and one such
 line publishes whatever the object holds, forever, with nothing in the build objecting.
 
+The [redacted compiler plugin](https://github.com/ZacSweers/redacted-compiler-plugin) rewrites that
+generated `toString()` at compile time:
+
 ```kotlin
-@JvmInline
-value class Redactable<out T : Any>(val revealed: T) {
-    override fun toString(): String = "***"
-}
+data class User(
+    @Redacted val dateOfBirth: LocalDate?,   // type unchanged
+    @Redacted val firebaseUid: String?,      // accessors unchanged
+    val publicCode: String,
+)
+
+// User(publicCode=K7Q2MX, firebaseUid=***, dateOfBirth=***, …)
 ```
 
-### Why the wrapper, and not a `toString()` override per model
-
-Kotlin generates a data class's `toString()` from its constructor properties, and that generated method
-calls `toString()` on each field. So **making the field's type redact protects every containing model
-automatically** — no per-model code, and nothing to forget when a model is added later.
-
-Overriding `toString()` on each of the ~29 PII-carrying classes would work too, but it is ongoing
-boilerplate that fails silently the moment someone adds a class without knowing the convention.
-
-**One trap:** a `value class` inherits a generated `toString()` that prints the wrapped value. The override
-is load-bearing, not decorative, and `RedactableTest` asserts exactly that.
+The mask is configured in `build.gradle.kts` as `***` rather than the plugin's default `██`, so the
+output is byte-identical to what the hand-rolled wrapper produced and every existing assertion and log
+sample still reads the same.
 
 ### Using it
 
-```kotlin
-// declare
-data class Invite(val email: Redactable<String>, /* … */)
+Annotate the property. That is the entire procedure — the field keeps its type, so **no call site
+changes**: no wrapping at the boundary, no unwrapping where the value is needed, no mapper changes at
+either #633 boundary.
 
-// wrap at the boundary where the value enters the domain
-email = row[InviteTable.email].asRedactable()
+`@Unredacted` opts a single property out when a whole class is annotated.
 
-// unwrap only where the value is genuinely needed
-apiKey = plaintext.revealed
-```
-
-`asRedactable()` is named `as…` (like `asSequence`) because **the value is not changed** — it is only
-tagged. At a call site whose purpose is handing the value to a caller, "redact this" would be exactly the
-wrong thing to suggest.
-
-The accessor is `revealed`, not `value`, for two reasons: `contact.value.value` is unreadable, and
-`\.revealed` greps out every place a protected value is deliberately exposed — which is the list a
-reviewer actually wants. There are currently 14, across 11 files.
-
-### What is wrapped
+### What is annotated
 
 | Target | Holds |
 | --- | --- |
-| `IssuedApiKey.plaintext` | a **working partner API key** — only its SHA-256 hash is persisted |
+| `IssuedApiKey.plaintext`, `GeneratedClaimCode.plaintext`, `ApiKeyCrypto.GeneratedKey.plaintext` | a **working credential** — only its hash is persisted |
 | `VerifiedFirebaseToken.email` / `.providerUid` | raw verified identity, built on every authenticated request |
 | `Contact.value` and `ContactInfo.value` | email/phone, stored and incoming forms |
 | `Invite.email` | invitee address |
+| `User.firebaseUid` / `.dateOfBirth`, and the same fields on `ProvisionUserCommand`, `ProfilePatch`, `CreatePlaceholderCommand`, `PendingAssessment` | personal data |
 
-Both contact forms are wrapped deliberately: covering one leaves the other leaking, and services handle
+Both contact forms are covered deliberately: covering one leaves the other leaking, and services handle
 `Contact` far more often than `ContactInfo`.
 
-### What is deliberately **not** wrapped
+**The cost/benefit arithmetic that used to exclude fields is gone.** `User.dateOfBirth` (~126 reads) and
+`User.firebaseUid` (~238) were once weighed field by field, because wrapping changed the declared type
+and every read had to be touched. An annotation costs one line, so the question "is this field worth
+protecting" no longer has a price attached to it.
 
-| Excluded | Occurrences | Why |
-| --- | --- | --- |
-| `User.dateOfBirth` | ~126 | Cost/benefit. The rules above and `PiiLeakTest` already cover it, and a date of birth in a log is a materially smaller problem than a live credential. |
-| `User.firebaseUid` | ~238 | Same, more so. |
-| `UserName.value` | — | Display names are shown publicly on player pages anyway. |
-| `UserIdentity.providerUid` | — | It is the join key the repository looks up by. |
+### What this replaced, and what that fixes
 
-### Four blind spots, all invisible to the compiler
+`Redactable<T>` (#801/#822) was a `value class` whose `toString()` was `***`. It worked, and it cost
+call-site churn: every construction needed `.asRedactable()`, every read `.revealed`. Removing it
+deleted **341 wrapping calls and 68 unwrapping calls across 136 files**.
 
-The type checker catches an **assignment** mismatch — passing a `String` where `Redactable<String>` is
-wanted. It catches nothing else. The first three below each cost a real bug; the fourth is one the type
-system cannot close even in principle:
+Two documented blind spots disappear with it, because the property now keeps its raw type and only the
+*enclosing* class's `toString()` is rewritten:
 
-**1. Interpolation.** `"$model"` redacts correctly, which is the point — but it also silently redacts a
-reader that legitimately needs the value. Wrapping `Contact.value` turned an audit-log summary into
-`"Enabled EMAIL ***"` with no compile error; only `ContactServiceTest` caught it. `ContactService` and
-`InviteService` both record the address in the audit table on purpose, so both are explicit `.revealed`
-unwraps.
+- **`.toString()` on the field no longer yields `"***"`.** This one had reached production code: two DTO
+  mappers did `dateOfBirth?.toString()`, so `UserResponse.dateOfBirth` and
+  `PendingAssessmentResponse.dateOfBirth` would have shipped a redacted placeholder to clients instead of
+  the date. It compiled cleanly, because `toString()` exists on everything. It cannot recur.
+- **A reader that legitimately needs the value gets it.** Wrapping `Contact.value` had turned an
+  audit-log summary into `"Enabled EMAIL ***"` with no compile error. `ContactService` and `InviteService`
+  record the address in the audit table on purpose, and now simply read the field.
 
-**2. `.toString()` on the wrapper — this one reached production.** Two DTO mappers did
-`dateOfBirth?.toString()`, which yields `"***"`, so `UserResponse.dateOfBirth` and
-`PendingAssessmentResponse.dateOfBirth` would have shipped a redacted placeholder to clients instead of
-the date. It compiled cleanly because `toString()` exists on everything.
+### The trade, stated plainly
 
-`RedactionConventionTest` now scans all of `src/main` for `<wrappedField>?.toString()` without a
-`.revealed`, so this specific mistake fails the build. Note the scan covers the whole main source, not
-just `domain/model` and `domain/service` — the bug was in `domain/mapper`.
+The wrapper covered one thing the annotation does not: **field-level interpolation**.
+`logger.info { "${user.dateOfBirth}" }` used to print `***`, because the wrapper's own `toString()`
+redacted. It now prints the date.
 
-**3. kotest `shouldBe` is `Any`-typed.** `wrapped shouldBe rawValue` compiles and fails only at runtime.
-Seven test assertions needed `?.revealed`. Nothing guards this one; the suite is the guard.
+That was never in scope — `Redactable`'s own KDoc said it stopped `"$user"` and not
+`"${user.dateOfBirth.revealed}"` — but the wrapper did cover it incidentally, and writing `.revealed`
+was a visible act a reviewer could grep for. Both are gone.
 
-**4. Values the application never formats at all (#992).** `Contact.value` is wrapped, and a Postgres
-unique violation still printed the address — because Postgres composed that sentence from the column,
-inside the driver, with no Kotlin call site in between. A wrapper can only protect a value the code
-passes through it. See "Driver-composed messages" above for the guard that covers this class of leak.
+What covers it instead is **behavioural rather than type-level**: `PiiLeakTest` (#806) drives real flows
+with canary values and asserts no encoded log line contains them, which is independent of how redaction
+is implemented, and the clean-sources rules above. That is the right layer for it — a type could never
+have stopped a deliberate read anyway.
 
-**It also stops `"$user"` but not `"${user.dateOfBirth.revealed}"`** — reading the value out and logging
-it is beyond anything a type can prevent. That is what #806's clean-sources rules and `PiiLeakTest` are
-for. This is layer 2: it removes the *accidental* leak, which is the one that happens.
+### What still enforces adoption
 
-### What this means if you wrap another field
+`RedactionConventionTest` (#822) fails the build when a sensitive-looking field in `domain/model` or
+`domain/service` is declared without `@Redacted` and without an allowlist entry giving the reason. It was
+retargeted rather than rewritten: the rule is unchanged, it just looks for the annotation instead of the
+wrapper type. It also now asserts the plugin is **wired and masking with `***`** — a compiler plugin that
+silently fails to run leaves code that compiles and tests that pass, with the protection simply absent.
 
-**Run the full suite. A clean compile is not evidence.** All three blind spots above compile without
-complaint, and two of them were found only by tests failing. The compiler makes wrapping look like a
-mechanical refactor; it isn't.
+### The gap none of this closes (#992)
 
-### Nothing enforces adoption yet
+`Contact.value` is protected and a Postgres unique violation still printed the address, because Postgres
+composed that sentence from the column, inside the driver, with no Kotlin call site in between. Neither a
+wrapper nor an annotation can protect a value the application never formats. See "Driver-composed
+messages" above for the guard that covers that class of leak.
 
-A new sensitive field added as a plain `String` will not fail the build. That guard is **#822**, which
-needs a decision between a source scan, a reflective test, and a logger-interpolation scan.
+### Upgrading Kotlin
 
-### The better end state
-
-The [Redacted compiler plugin](https://github.com/ZacSweers/redacted-compiler-plugin) does this with a
-property annotation and **zero** call-site churn. It did not work on Kotlin 2.2.21 — verified at the
-time: `1.13.0` (stable, targeted 2.1.20) failed `compileKotlin` with `AbstractMethodError` in the FIR
-checker, and `1.14.0-alpha01` compiled main but failed `compileTestKotlin` with `NoSuchMethodError`.
-
-**This project is now on Kotlin 2.4.20** (#1008), so the bar has moved: revisit when a stable release
-targets **2.4.x**, not 2.2.x — see #825. A compiler plugin binds to an exact compiler version, so this
-target will move again with every Kotlin bump, which is itself an argument for treating the hand-rolled
-`Redactable` as the long-term answer rather than a stopgap. Note the plugin would also not close the
-fourth gap found in #992: values composed inside the JDBC driver, which the application never formats.
-The swap, if it ever happens, is delete-the-wrapper, add-annotations.
+A compiler plugin binds to a compiler version. `1.18.0` integrates Metro's compiler-compat infra to
+support a range of them, and is verified here against Kotlin 2.4.20 on **both** `compileKotlin` and
+`compileTestKotlin` — check both, because `1.14.0-alpha01` passed the first and failed the second. Treat
+a Kotlin bump as also a plugin-compatibility question, the same way `detekt` is
+(`docs/engineering/operations/JVM_COMPATIBILITY.md`).
 
 ## References
 

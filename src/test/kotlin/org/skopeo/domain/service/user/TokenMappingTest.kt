@@ -8,7 +8,6 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.ProfileRequest
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.ContactSource
@@ -29,12 +28,12 @@ class TokenMappingTest {
         signInProvider: String? = "password",
     ) = VerifiedFirebaseToken(
         uid = uid,
-        email = email?.asRedactable(),
+        email = email,
         emailVerified = emailVerified,
         name = name,
         picture = "https://example.com/p.jpg",
         signInProvider = signInProvider,
-        providerUid = uid.asRedactable(),
+        providerUid = uid,
     )
 
     @Test
@@ -215,7 +214,7 @@ class TokenMappingTest {
     @Test
     fun `toProfilePatch parses and validates`() {
         val patch = ProfileRequest(dateOfBirth = "2000-01-01", sex = "Female", city = "Cebu").toProfilePatch()
-        patch.dateOfBirth?.revealed shouldBe LocalDate.of(2000, 1, 1)
+        patch.dateOfBirth shouldBe LocalDate.of(2000, 1, 1)
         patch.sex shouldBe "Female"
         shouldThrow<IllegalArgumentException> { ProfileRequest(sex = "Z").toProfilePatch() }
     }

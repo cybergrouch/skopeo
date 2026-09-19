@@ -6,7 +6,6 @@ package org.skopeo.domain.model
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
-import org.skopeo.common.redaction.asRedactable
 import java.time.LocalDate
 import java.util.UUID
 
@@ -26,9 +25,9 @@ class UserRedactionTest {
         User(
             id = UUID.randomUUID(),
             publicCode = "K7Q2MX",
-            firebaseUid = uid.asRedactable(),
+            firebaseUid = uid,
             photoUrl = null,
-            dateOfBirth = dob.asRedactable(),
+            dateOfBirth = dob,
             sex = "Male",
             city = "Cebu",
             country = "PH",
@@ -62,22 +61,26 @@ class UserRedactionTest {
 
     @Test
     fun `both values remain readable, so age computation and auth still work`() {
-        user().dateOfBirth?.revealed shouldBe dob
-        user().firebaseUid?.revealed shouldBe uid
+        user().dateOfBirth shouldBe dob
+        user().firebaseUid shouldBe uid
     }
 
     @Test
-    fun `stringifying the wrapper instead of revealing it would ship a placeholder to the client`() {
-        // The bug this pins down was real and reached production code: two DTO mappers did
-        // `dateOfBirth?.toString()`, which on a Redactable yields "***" — so the API would have
-        // returned a redacted placeholder instead of the date, and it compiled fine because
-        // toString() exists on everything.
+    fun `stringifying the field yields the value, not a placeholder (#825)`() {
+        // The inversion of a real bug. Under the old wrapper this assertion read `shouldBe "***"`,
+        // because `Redactable.toString()` redacted — and two DTO mappers did exactly
+        // `dateOfBirth?.toString()`, so the API would have returned a placeholder to a client as
+        // somebody's date of birth. It compiled fine, since toString() exists on everything.
         //
-        // This is the same blind spot as string interpolation, and it is why wrapping a field needs the
-        // full suite rather than a clean compile: neither the type checker nor detekt can see it.
-        val wrapped = dob.asRedactable()
+        // The compiler plugin cannot reproduce that. Only the ENCLOSING data class's generated
+        // toString() is rewritten; the property keeps its raw type, so reading it gives the value a
+        // mapper needs and a caller expects.
+        user().dateOfBirth.toString() shouldBe "1979-04-11"
+        user().firebaseUid.toString() shouldBe uid
 
-        wrapped.toString() shouldBe "***"
-        wrapped.revealed.toString() shouldBe "1979-04-11"
+        // While the object as a whole still refuses to say either out loud. (No `shouldBe` between two
+        // renderings: `user()` mints a fresh random id per call, so they are never equal.)
+        user().toString().contains(other = "1979-04-11") shouldBe false
+        user().toString().contains(other = uid) shouldBe false
     }
 }

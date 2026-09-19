@@ -26,7 +26,6 @@ import org.skopeo.common.dto.capability.CapabilityGrantRequest
 import org.skopeo.common.dto.capability.CapabilityResponse
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.UserResponse
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -70,7 +69,7 @@ class CapabilityApiIntegrationTest {
         UserRepository().provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = "Admin")),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),

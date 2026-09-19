@@ -15,7 +15,6 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -80,7 +79,7 @@ class AccountMergeServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = provider, providerUid = "$provider:$uid", isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     sex = "Male",
@@ -96,7 +95,7 @@ class AccountMergeServiceTest {
 
     private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     private fun fixture(
         u1: UUID,
@@ -201,7 +200,7 @@ class AccountMergeServiceTest {
 
         val survivorAfter = users.findById(id = survivor.id).shouldBeRight().toDomain()
         // The survivor now logs in with the retired account's Firebase uid + provider (uniqueness respected).
-        survivorAfter.firebaseUid?.revealed shouldBe "retired"
+        survivorAfter.firebaseUid shouldBe "retired"
         survivorAfter.linkStatus() shouldBe AccountLinkStatus.FACEBOOK
         // The retired account has been freed of its login.
         val retiredAfter = users.findById(id = retired.id).shouldBeRight().toDomain()
@@ -223,7 +222,7 @@ class AccountMergeServiceTest {
             .shouldBeRight()
 
         val survivorAfter = users.findById(id = survivor.id).shouldBeRight().toDomain()
-        survivorAfter.firebaseUid?.revealed shouldBe "retired"
+        survivorAfter.firebaseUid shouldBe "retired"
         survivorAfter.linkStatus() shouldBe AccountLinkStatus.GOOGLE
         survivorAfter.placeholder.shouldBeFalse()
         users.findByFirebaseUid(firebaseUid = "retired").shouldNotBeNull().user.id shouldBe survivor.id
@@ -256,7 +255,7 @@ class AccountMergeServiceTest {
             .shouldBeRight()
 
         val survivorAfter = users.findById(id = survivor.id).shouldBeRight().toDomain()
-        survivorAfter.firebaseUid?.revealed shouldBe "survivor"
+        survivorAfter.firebaseUid shouldBe "survivor"
         survivorAfter.linkStatus() shouldBe AccountLinkStatus.GOOGLE
     }
 

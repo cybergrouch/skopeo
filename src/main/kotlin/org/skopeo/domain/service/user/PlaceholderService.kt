@@ -13,7 +13,6 @@ import org.skopeo.common.dto.user.ClaimCodeResponse
 import org.skopeo.common.dto.user.UserResponse
 import org.skopeo.common.dto.user.UserSummaryResponse
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.common.security.MATCH_MANAGEMENT_ROLES
 import org.skopeo.domain.mapper.dto.user.toResponse
@@ -85,7 +84,7 @@ class PlaceholderService(
             val ratingValue = initialRating?.let { validatedRating(raw = it).bind() }
             val created =
                 users.createPlaceholder(
-                    command = CreatePlaceholderCommand(displayName = name, sex = sex, dateOfBirth = dateOfBirth?.asRedactable()),
+                    command = CreatePlaceholderCommand(displayName = name, sex = sex, dateOfBirth = dateOfBirth),
                 ).toDomain()
             audit.record(
                 write =
@@ -160,7 +159,7 @@ class PlaceholderService(
                     expiresAt = LocalDateTime.now().plusDays(CLAIM_CODE_TTL_DAYS),
                     createdBy = adminId,
                 )
-            GeneratedClaimCode(plaintext = plaintext.asRedactable(), code = stored.toDomain(), placeholderPublicCode = target.publicCode)
+            GeneratedClaimCode(plaintext = plaintext, code = stored.toDomain(), placeholderPublicCode = target.publicCode)
                 .toResponse()
         }
 

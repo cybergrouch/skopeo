@@ -30,7 +30,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.livematch.LiveMatchResponse
 import org.skopeo.common.dto.livematch.LiveScoreEventRequest
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.livematch.LiveMatchEventKinds
 import org.skopeo.domain.mapper.entity.match.toDomain
@@ -93,7 +92,7 @@ class LiveMatchApiIntegrationTest {
             .provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = uid.asRedactable(),
+                        firebaseUid = uid,
                         identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                         capabilities = roles,

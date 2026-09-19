@@ -112,7 +112,7 @@ class ContactService(
         contacts
             .activePhonesOfOtherActiveUsers(excludeUserId = newUserId)
             .map { it.toDomain() }
-            .filter { normalizePhone(raw = it.value.revealed) == normalized }
+            .filter { normalizePhone(raw = it.value) == normalized }
             .map { it.userId }
             .distinct()
             .forEach { otherUserId ->
@@ -159,7 +159,7 @@ class ContactService(
                         // was enabled/disabled, so the address is the content. Our own audit table,
                         // administrator-only — not a log sink (#801).
                         summary =
-                            "${if (active) "Enabled" else "Disabled"} ${contact.type.name} ${contact.value.revealed}",
+                            "${if (active) "Enabled" else "Disabled"} ${contact.type.name} ${contact.value}",
                         details = mapOf("contactId" to contactId.toString(), "active" to active.toString()),
                     ),
             )

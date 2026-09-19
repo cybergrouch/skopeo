@@ -15,7 +15,6 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.ranking.toDomain
@@ -78,7 +77,7 @@ class StandingsCalculationServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = org.skopeo.domain.model.UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = org.skopeo.domain.model.UserName(type = NameType.DISPLAY, value = uid)),
                     sex = sex,
@@ -91,7 +90,7 @@ class StandingsCalculationServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = org.skopeo.domain.model.UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = org.skopeo.domain.model.UserName(type = NameType.NICKNAME, value = uid)),
                     sex = "Male",
@@ -99,7 +98,7 @@ class StandingsCalculationServiceTest {
                 ),
         ).toDomain()
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     /**
      * Grant an award. Phase D (#403 #2) only counts an award while its band matches the player's

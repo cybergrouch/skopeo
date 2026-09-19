@@ -6,7 +6,6 @@ package org.skopeo.domain.model
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
-import org.skopeo.common.redaction.asRedactable
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -47,7 +46,7 @@ class IssuedApiKeyRedactionTest {
                     lastUsedAt = null,
                     revokedAt = null,
                 ),
-            plaintext = canary.asRedactable(),
+            plaintext = canary,
         )
     }
 
@@ -73,6 +72,6 @@ class IssuedApiKeyRedactionTest {
     @Test
     fun `the show-once delivery can still read the key`() {
         // Redaction must not break issuance: the caller has to receive the key exactly once.
-        issued().plaintext.revealed shouldBe canary
+        issued().plaintext shouldBe canary
     }
 }

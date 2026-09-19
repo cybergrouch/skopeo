@@ -5,7 +5,6 @@ package org.skopeo.testsupport
 
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.domain.mapper.entity.club.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -45,7 +44,7 @@ private fun anyUserId(): UUID =
             .provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "fixture-club-creator".asRedactable(),
+                        firebaseUid = "fixture-club-creator",
                         identity =
                             UserIdentity(
                                 provider = AuthProvider.PASSWORD,

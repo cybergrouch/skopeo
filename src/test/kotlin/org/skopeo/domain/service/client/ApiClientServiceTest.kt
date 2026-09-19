@@ -15,7 +15,6 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.common.security.ClientAuthResult
 import org.skopeo.common.security.ClientPrincipal
@@ -63,14 +62,14 @@ class ApiClientServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
         ).toDomain()
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     private fun admin(uid: String = "admin"): VerifiedFirebaseToken {
         provision(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
@@ -205,7 +204,7 @@ class ApiClientServiceTest {
         service.authenticate(rawKey = "not-a-key") shouldBe ClientAuthResult.Invalid
         // Well-formed but never issued → unknown → Invalid.
         val orphan = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE)
-        service.authenticate(rawKey = orphan.plaintext.revealed) shouldBe ClientAuthResult.Invalid
+        service.authenticate(rawKey = orphan.plaintext) shouldBe ClientAuthResult.Invalid
     }
 
     @Test
@@ -280,7 +279,7 @@ class ApiClientServiceTest {
         service.resolveClientId(rawKey = issued.apiKey) shouldBe UUID.fromString(client.id)
         service.resolveClientId(rawKey = "") shouldBe null
         service.resolveClientId(rawKey = "garbage") shouldBe null
-        service.resolveClientId(rawKey = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE).plaintext.revealed) shouldBe null
+        service.resolveClientId(rawKey = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE).plaintext) shouldBe null
     }
 
     @Test
@@ -333,7 +332,7 @@ class ApiClientServiceTest {
                     expiresAt = LocalDateTime.now().minusDays(1),
                 ),
         )
-        service.authenticate(rawKey = generated.plaintext.revealed) shouldBe ClientAuthResult.Forbidden
+        service.authenticate(rawKey = generated.plaintext) shouldBe ClientAuthResult.Forbidden
     }
 
     @Test

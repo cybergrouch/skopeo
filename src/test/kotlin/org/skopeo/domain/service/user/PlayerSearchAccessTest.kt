@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.ProvisionUserCommand
@@ -54,7 +53,7 @@ class PlayerSearchAccessTest {
         PostgresTestDatabase.truncate()
     }
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     /** Provision [uid] holding PLAYER plus exactly [roles] — the point being which roles it does NOT hold. */
     private fun provisionWith(
@@ -64,7 +63,7 @@ class PlayerSearchAccessTest {
         .provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity =
                         UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.DISPLAY, value = uid)),

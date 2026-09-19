@@ -3,8 +3,8 @@
 
 package org.skopeo.domain.model
 
+import dev.zacsweers.redacted.annotations.Redacted
 import kotlinx.serialization.Serializable
-import org.skopeo.common.redaction.Redactable
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -145,7 +145,8 @@ data class PendingAssessment(
     val displayName: String?,
     val photoUrl: String?,
     val sex: String?,
-    val dateOfBirth: Redactable<LocalDate>?,
+    @Redacted
+    val dateOfBirth: LocalDate?,
     val age: Int?,
     // The user's self-reported NTRP band at sign-up (issue #75), if any — admins approve or override it.
     val proposedRating: String?,

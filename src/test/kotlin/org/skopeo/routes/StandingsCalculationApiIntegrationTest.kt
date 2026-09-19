@@ -28,7 +28,6 @@ import org.skopeo.common.dto.client.IssueApiKeyRequest
 import org.skopeo.common.dto.client.IssuedApiKeyResponse
 import org.skopeo.common.dto.standings.StandingsCalculationRequest
 import org.skopeo.common.dto.standings.StandingsCalculationResponse
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.audit.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -83,7 +82,7 @@ class StandingsCalculationApiIntegrationTest {
         org.skopeo.repository.UserRepository().provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     sex = "Male",

@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditAction
@@ -62,7 +61,7 @@ class CapabilityServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
@@ -71,7 +70,7 @@ class CapabilityServiceTest {
 
     private fun admin(uid: String = "root"): User = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
-    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid.asRedactable())
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     @Test
     fun `only an administrator may use the API`() {
@@ -209,13 +208,13 @@ class CapabilityServiceTest {
         users.provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     email =
                         ContactInfo(
                             type = ContactType.EMAIL,
-                            value = email.asRedactable(),
+                            value = email,
                             source = ContactSource.GOOGLE,
                             status = status,
                             isPrimary = true,
@@ -273,13 +272,13 @@ class CapabilityServiceTest {
             users.provision(
                 command =
                     ProvisionUserCommand(
-                        firebaseUid = "phone".asRedactable(),
+                        firebaseUid = "phone",
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "phone", isPrimary = true),
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = "phone")),
                         phone =
                             ContactInfo(
                                 type = ContactType.PHONE,
-                                value = "+639170000000".asRedactable(),
+                                value = "+639170000000",
                                 source = ContactSource.MANUAL,
                                 status = VerificationStatus.VERIFIED,
                                 isPrimary = true,

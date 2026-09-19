@@ -3,7 +3,6 @@
 
 package org.skopeo.testsupport
 
-import org.skopeo.common.redaction.asRedactable
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -31,7 +30,7 @@ fun seedLiveMatchUser(uid: String): UUID =
         .provision(
             command =
                 ProvisionUserCommand(
-                    firebaseUid = uid.asRedactable(),
+                    firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                 ),

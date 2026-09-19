@@ -3,7 +3,7 @@
 
 package org.skopeo.domain.model
 
-import org.skopeo.common.redaction.Redactable
+import dev.zacsweers.redacted.annotations.Redacted
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -16,7 +16,8 @@ enum class InviteStatus { PENDING, ACCEPTED, REVOKED }
  */
 data class Invite(
     val id: UUID,
-    val email: Redactable<String>,
+    @Redacted
+    val email: String,
     val status: InviteStatus,
     val invitedBy: UUID?,
     val expiresAt: LocalDateTime,
