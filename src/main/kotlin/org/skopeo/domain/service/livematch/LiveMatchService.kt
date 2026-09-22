@@ -156,14 +156,14 @@ class LiveMatchService(
                         recordedAt = clock(),
                     )
                 }.bind()
-            // A completed game hands the serve on (#985). Keyed on a game actually COMPLETING, not on the
-            // event being GAME_AWARDED: most games end on the fourth point rather than an umpire
-            // declaring them, and keying on the event would have rotated for the rare case only.
+            // A completed game hands the serve on (#985), and so does a tiebreak point when the running
+            // total turns odd (#1097) -- see `rotatesServe`, which holds all three transitions and the
+            // reason they cannot be one comparison.
             //
             // Appended as its own event rather than derived, so the rotation lives in the log: undo
             // reverses it, and "who served game 4" stays answerable.
             val after = ScoreEngine.replay(log = live.loggedActions(matchId = matchId))
-            if (gamesPlayed(state = after) > gamesPlayed(state = before)) {
+            if (rotatesServe(before = before, after = after)) {
                 rotateServer(token = token, matchId = matchId).bind()
             } else {
                 response
