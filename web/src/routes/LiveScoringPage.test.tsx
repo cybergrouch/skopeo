@@ -67,7 +67,7 @@ const liveView = {
   // Three actions in, so Undo has something to take back. It is hidden when the log is empty (#1083),
   // which is a property of the log rather than of the state.
   canUndo: true,
-  serverId: "p-1",
+  servingSide: "TEAM1",
   serverName: "Ana",
   isTiebreak: false,
   pointsTeam1: "30",
@@ -652,7 +652,7 @@ describe("LiveScoringPage", () => {
     // No server yet: the base fixture has one, since #985 makes a point impossible without it, so this
     // test has to arrange the state it is actually about.
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
-      data: { ...liveView, serverId: null, serverName: null },
+      data: { ...liveView, servingSide: null, serverName: null },
       isLoading: false,
     });
     renderPage();
@@ -661,15 +661,15 @@ describe("LiveScoringPage", () => {
     await user.click(screen.getByRole("button", { name: "Set which side is serving" }));
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
-      data: { kind: "SERVER_ASSIGNED", playerId: "p-1" },
+      data: { kind: "SERVER_ASSIGNED", side: "TEAM1" },
     });
   });
 
-  it("cycles to the next player rather than opening a menu (#943)", async () => {
+  it("toggles to the other side rather than opening a menu (#943)", async () => {
     // One tap, because re-picking from a list every game is enough friction that the field stops
     // being maintained — and a serving indicator nobody updates is worse than none.
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
-      data: { ...liveView, serverId: "p-1", serverName: "Ana" },
+      data: { ...liveView, servingSide: "TEAM1", serverName: "Ana" },
       refetch: vi.fn(),
     });
     const user = userEvent.setup();
@@ -679,13 +679,13 @@ describe("LiveScoringPage", () => {
     await user.click(screen.getByRole("button", { name: /Serving: Ana/ }));
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
-      data: { kind: "SERVER_ASSIGNED", playerId: "p-2" },
+      data: { kind: "SERVER_ASSIGNED", side: "TEAM2" },
     });
   });
 
-  it("wraps around to the first player from the last (#943)", async () => {
+  it("toggles back from the second side to the first (#943)", async () => {
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
-      data: { ...liveView, serverId: "p-2", serverName: "Bob" },
+      data: { ...liveView, servingSide: "TEAM2", serverName: "Bob" },
       refetch: vi.fn(),
     });
     const user = userEvent.setup();
@@ -695,7 +695,7 @@ describe("LiveScoringPage", () => {
     await user.click(screen.getByRole("button", { name: /Serving: Bob/ }));
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
-      data: { kind: "SERVER_ASSIGNED", playerId: "p-1" },
+      data: { kind: "SERVER_ASSIGNED", side: "TEAM1" },
     });
   });
 
@@ -740,7 +740,7 @@ describe("LiveScoringPage", () => {
     // umpire declaration and needs no server, so gating those too would be over-applying the rule.
     const user = userEvent.setup();
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
-      data: { ...liveView, serverId: null, serverName: null },
+      data: { ...liveView, servingSide: null, serverName: null },
       isLoading: false,
     });
     renderPage();
@@ -986,14 +986,14 @@ describe("LiveScoringPage", () => {
     await user.click(screen.getByRole("button", { name: /Serving: Team Ana and Bea/ }));
     expect(recordMutate).toHaveBeenCalledWith({
       matchId: "m-1",
-      data: { kind: "SERVER_ASSIGNED", playerId: "p-2" },
+      data: { kind: "SERVER_ASSIGNED", side: "TEAM2" },
     });
   });
 
   it('says "Set server" while nothing is assigned, not "Change server" (#1072)', async () => {
     const user = userEvent.setup();
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
-      data: { ...liveView, hasStarted: false, serverId: null, serverName: null },
+      data: { ...liveView, hasStarted: false, servingSide: null, serverName: null },
       isLoading: false,
     });
     renderPage();
@@ -1137,7 +1137,7 @@ describe("LiveScoringPage", () => {
   it("prompts for the server before the match starts, then for Start match (#1070)", async () => {
     const user = userEvent.setup();
     useGetApiV1MatchesMatchIdLive.mockReturnValue({
-      data: { ...liveView, hasStarted: false, serverId: null, serverName: null },
+      data: { ...liveView, hasStarted: false, servingSide: null, serverName: null },
       isLoading: false,
     });
     renderPage();

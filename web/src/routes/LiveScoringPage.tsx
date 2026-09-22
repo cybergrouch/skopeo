@@ -364,9 +364,7 @@ export function LiveScoringPage() {
             <ServerControl
               view={view}
               busy={busy}
-              onAssign={(playerId) =>
-                record.mutate({ matchId, data: { kind: 'SERVER_ASSIGNED', playerId } })
-              }
+              onAssign={(side) => record.mutate({ matchId, data: { kind: 'SERVER_ASSIGNED', side } })}
             />
           )}
           <MatchClock

@@ -19,7 +19,6 @@ import org.skopeo.repository.LiveMatchRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.seedLiveMatchFixture
 import org.skopeo.testsupport.seedLiveMatchUser
-import java.util.UUID
 import kotlin.reflect.KClass
 
 /**
@@ -79,13 +78,15 @@ class LiveMatchEventKindContractTest {
     }
 
     /**
-     * One instance of every [ScoreEvent], with [server] naming a provisioned user because `player_id`
-     * is a real foreign key.
+     * One instance of every [ScoreEvent].
+     *
+     * Took a provisioned user id until #1098, when `SERVER_ASSIGNED` stopped naming a player and the
+     * foreign key it had to satisfy went with it.
      *
      * The sides alternate on purpose. Every sided event carrying `TEAM1` would let a branch that
      * hardcoded a side, or read `side` from the wrong column, pass unnoticed.
      */
-    private fun samples(server: UUID): List<ScoreEvent> =
+    private fun samples(): List<ScoreEvent> =
         listOf(
             ScoreEvent.PointWon(side = TeamSide.TEAM1),
             ScoreEvent.GameAwarded(side = TeamSide.TEAM2),
@@ -93,7 +94,7 @@ class LiveMatchEventKindContractTest {
             ScoreEvent.SetStarted,
             ScoreEvent.GameStarted,
             ScoreEvent.TiebreakStarted,
-            ScoreEvent.ServerAssigned(playerId = server),
+            ScoreEvent.ServerAssigned(side = TeamSide.TEAM1),
             ScoreEvent.Retired(side = TeamSide.TEAM2),
             ScoreEvent.Defaulted(side = TeamSide.TEAM1),
             ScoreEvent.MatchAwarded(side = TeamSide.TEAM2),
@@ -113,7 +114,6 @@ class LiveMatchEventKindContractTest {
         LiveScoreEventRequest(
             kind = kindOf(event = event),
             side = sideOf(event = event),
-            playerId = (event as? ScoreEvent.ServerAssigned)?.playerId?.toString(),
         )
 
     @Test
@@ -121,7 +121,7 @@ class LiveMatchEventKindContractTest {
         // The guard on the guard. Every other test here iterates `samples`, so a subtype missing from it
         // would be checked nowhere while the suite still went green — exactly the shape of reassurance
         // that #989 is about. This is the one assertion that asks the type system what the set really is.
-        val sampled = samples(server = UUID.randomUUID())
+        val sampled = samples()
         val leaves = leavesOf(type = ScoreEvent::class)
 
         sampled.map { it::class }.toSet() shouldBe leaves
@@ -134,7 +134,7 @@ class LiveMatchEventKindContractTest {
     fun `every ScoreEvent round-trips from request through the database and back`() {
         val matchId = seedLiveMatchFixture()
         val umpire = seedLiveMatchUser(uid = "umpire")
-        val events = samples(server = seedLiveMatchUser(uid = "server"))
+        val events = samples()
 
         events.forEachIndexed { index, event ->
             // Request → event. A kind absent from SIDED_KINDS/BARE_KINDS falls through the parser's
@@ -149,7 +149,6 @@ class LiveMatchEventKindContractTest {
                 sequence = index + 1L,
                 kind = kindOf(event = event),
                 side = sideOf(event = event),
-                playerId = (event as? ScoreEvent.ServerAssigned)?.playerId,
                 recordedBy = umpire,
             ) shouldBe true
         }
@@ -168,7 +167,7 @@ class LiveMatchEventKindContractTest {
         // has to satisfy the CHECK and still has to read back, which nothing above would notice.
         val matchId = seedLiveMatchFixture()
         val umpire = seedLiveMatchUser(uid = "umpire")
-        samples(server = umpire).map { kindOf(event = it) } shouldNotContain LiveMatchEventKinds.UNDONE
+        samples().map { kindOf(event = it) } shouldNotContain LiveMatchEventKinds.UNDONE
 
         repository.append(
             matchId = matchId,
@@ -209,7 +208,7 @@ class LiveMatchEventKindContractTest {
                 .mapNotNull { field -> field.get(null) as? String }
                 .toSet()
 
-        val produced = samples(server = UUID.randomUUID()).map { kindOf(event = it) }.toSet()
+        val produced = samples().map { kindOf(event = it) }.toSet()
         declared shouldBe produced + LiveMatchEventKinds.UNDONE
     }
 }

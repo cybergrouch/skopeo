@@ -11,7 +11,6 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.domain.model.ScoreEvent
 import org.skopeo.domain.model.ScoreState
 import org.skopeo.domain.model.TeamSide
-import java.util.UUID
 
 /**
  * The game-level rules (#1083): which of the scoring actions applies inside a game, and which between.
@@ -27,9 +26,9 @@ import java.util.UUID
  * are meant to catch.
  */
 class GameLevelRulesTest {
-    private val inGame = ScoreState(hasStarted = true, isInGame = true, serverId = UUID.randomUUID())
-    private val betweenGames = ScoreState(hasStarted = true, serverId = UUID.randomUUID())
-    private val inTiebreak = ScoreState(hasStarted = true, isTiebreak = true, serverId = UUID.randomUUID())
+    private val inGame = ScoreState(hasStarted = true, isInGame = true, servingSide = TeamSide.TEAM1)
+    private val betweenGames = ScoreState(hasStarted = true, servingSide = TeamSide.TEAM1)
+    private val inTiebreak = ScoreState(hasStarted = true, isTiebreak = true, servingSide = TeamSide.TEAM1)
 
     private fun refusal(
         state: ScoreState,

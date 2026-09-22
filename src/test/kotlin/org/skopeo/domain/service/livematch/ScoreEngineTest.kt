@@ -11,7 +11,6 @@ import org.skopeo.domain.model.LoggedAction
 import org.skopeo.domain.model.ScoreEvent
 import org.skopeo.domain.model.ScoreState
 import org.skopeo.domain.model.TeamSide
-import java.util.UUID
 
 /**
  * The scoring rules (#911 step 2). Pure functions, so none of this needs a database or a mock.
@@ -49,7 +48,7 @@ class ScoreEngineTest {
         fresh.gamesTeam1 shouldBe 0
         fresh.completedSets.shouldHaveSize(size = 0)
         fresh.isFinished shouldBe false
-        fresh.serverId shouldBe null
+        fresh.servingSide shouldBe null
     }
 
     @Test
@@ -387,33 +386,119 @@ class ScoreEngineTest {
     }
 
     @Test
-    fun `the server is a player id, so doubles rotation is expressible`() {
-        // The one place doubles differs: the serve rotates through four people, so an event naming a SIDE
-        // could not express it. The ENGINE still rotates nothing — it knows no roster; since #985 the
-        // service appends the rotation as an explicit event, which is what keeps undo able to reverse it.
-        val alice = UUID.randomUUID()
-        val bob = UUID.randomUUID()
-        val carol = UUID.randomUUID()
-        val dave = UUID.randomUUID()
-
-        var current = ScoreEngine.apply(state = ScoreState(), event = ScoreEvent.MatchStarted)
-        listOf(alice, carol, bob, dave).forEach { server ->
-            current = ScoreEngine.apply(state = current, event = ScoreEvent.ServerAssigned(playerId = server))
+    fun `a completed game hands the serve to the other side`() {
+        // Moved into the engine by #1098. It was the service's job until then, appended as its own
+        // SERVER_ASSIGNED row -- which cost two undos to take back one point, and recorded the umpire
+        // as having tapped a control they never touched.
+        var current =
+            ScoreEngine.apply(state = ScoreState(), event = ScoreEvent.ServerAssigned(side = TeamSide.TEAM1))
+        listOf(TeamSide.TEAM2, TeamSide.TEAM1, TeamSide.TEAM2, TeamSide.TEAM1).forEach { expected ->
             current = stateFrom(state = current, events = points(side = TeamSide.TEAM1, times = 4))
+            current.servingSide shouldBe expected
         }
-        current.serverId shouldBe dave
         current.gamesTeam1 shouldBe 4
     }
 
     @Test
-    fun `winning a game does not change the server on its own`() {
-        val alice = UUID.randomUUID()
+    fun `an umpire's designation overrides whatever the rotation produced`() {
         val afterGame =
             stateFrom(
-                state = ScoreEngine.apply(state = ScoreState(), event = ScoreEvent.ServerAssigned(playerId = alice)),
+                state = ScoreEngine.apply(state = ScoreState(), event = ScoreEvent.ServerAssigned(side = TeamSide.TEAM1)),
                 events = points(side = TeamSide.TEAM2, times = 4),
             )
-        afterGame.serverId shouldBe alice
+        afterGame.servingSide shouldBe TeamSide.TEAM2
+
+        ScoreEngine
+            .apply(state = afterGame, event = ScoreEvent.ServerAssigned(side = TeamSide.TEAM1))
+            .servingSide shouldBe TeamSide.TEAM1
+    }
+
+    /**
+     * The tiebreak serving sequence (#1097): one point to the opener, then two each.
+     *
+     * Asserted point by point rather than at the end, because an off-by-one in the handover rule still
+     * lands on the right side half the time — a final-state check would pass for the wrong reason.
+     */
+    @Test
+    fun `a tiebreak gives the opener one point, then two to each side in turn`() {
+        var current =
+            ScoreEngine.apply(
+                state = ScoreEngine.apply(state = ScoreState(), event = ScoreEvent.ServerAssigned(side = TeamSide.TEAM1)),
+                event = ScoreEvent.TiebreakStarted,
+            )
+        val expected =
+            listOf(
+                TeamSide.TEAM2,
+                TeamSide.TEAM2,
+                TeamSide.TEAM1,
+                TeamSide.TEAM1,
+                TeamSide.TEAM2,
+                TeamSide.TEAM2,
+                TeamSide.TEAM1,
+            )
+        expected.forEach { side ->
+            current = ScoreEngine.apply(state = current, event = ScoreEvent.PointWon(side = TeamSide.TEAM1))
+            current.servingSide shouldBe side
+        }
+    }
+
+    @Test
+    fun `a correction mid-tiebreak inverts the rest of the sequence rather than being overwritten`() {
+        var current =
+            ScoreEngine.apply(
+                state = ScoreEngine.apply(state = ScoreState(), event = ScoreEvent.ServerAssigned(side = TeamSide.TEAM1)),
+                event = ScoreEvent.TiebreakStarted,
+            )
+        repeat(times = 4) {
+            current = ScoreEngine.apply(state = current, event = ScoreEvent.PointWon(side = TeamSide.TEAM1))
+        }
+        current.servingSide shouldBe TeamSide.TEAM1
+
+        // The umpire says the board has had it the wrong way round. Handover TIMING comes from the
+        // score and cannot be wrong, so one flip is all it takes -- and it stays flipped.
+        current = ScoreEngine.apply(state = current, event = ScoreEvent.ServerAssigned(side = TeamSide.TEAM2))
+        listOf(TeamSide.TEAM1, TeamSide.TEAM1, TeamSide.TEAM2).forEach { side ->
+            current = ScoreEngine.apply(state = current, event = ScoreEvent.PointWon(side = TeamSide.TEAM1))
+            current.servingSide shouldBe side
+        }
+    }
+
+    /**
+     * Whoever served the tiebreak's first point receives first in the next set — for every length.
+     *
+     * The lengths matter. A tiebreak hands the serve over once per odd running total, so 7-0 and 7-5
+     * come out even and 7-3 and 8-6 odd; anything that toggles from the *current* server at the bank
+     * would be right for half of these and wrong for the other half.
+     */
+    @Test
+    fun `the next set opens opposite the tiebreak's first server, whatever its length`() {
+        listOf(7 to 0, 7 to 3, 7 to 5, 8 to 6).forEach { (won, lost) ->
+            var current =
+                ScoreEngine.apply(
+                    state = ScoreEngine.apply(state = ScoreState(), event = ScoreEvent.ServerAssigned(side = TeamSide.TEAM1)),
+                    event = ScoreEvent.TiebreakStarted,
+                )
+            current = stateFrom(state = current, events = points(side = TeamSide.TEAM1, times = won))
+            current = stateFrom(state = current, events = points(side = TeamSide.TEAM2, times = lost))
+            current = ScoreEngine.apply(state = current, event = ScoreEvent.SetAwarded(side = TeamSide.TEAM1))
+
+            current.servingSide shouldBe TeamSide.TEAM2
+            current.tiebreakFirstServer shouldBe null
+        }
+    }
+
+    @Test
+    fun `banking an ordinary set leaves the serve alone, since the last game already passed it`() {
+        val afterGame =
+            stateFrom(
+                state = ScoreEngine.apply(state = ScoreState(), event = ScoreEvent.ServerAssigned(side = TeamSide.TEAM1)),
+                events = points(side = TeamSide.TEAM1, times = 4),
+            )
+        afterGame.servingSide shouldBe TeamSide.TEAM2
+
+        ScoreEngine
+            .apply(state = afterGame, event = ScoreEvent.SetAwarded(side = TeamSide.TEAM1))
+            .servingSide shouldBe TeamSide.TEAM2
     }
 
     @Test
@@ -466,9 +551,10 @@ class ScoreEngineTest {
     @Test
     fun `the server can still be corrected after the match has ended`() {
         // Carved out of the ignore-everything rule: naming the server is a record correction, not scoring.
-        val alice = UUID.randomUUID()
         val ended = state(ScoreEvent.MatchAwarded(side = TeamSide.TEAM1))
-        ScoreEngine.apply(state = ended, event = ScoreEvent.ServerAssigned(playerId = alice)).serverId shouldBe alice
+        ScoreEngine
+            .apply(state = ended, event = ScoreEvent.ServerAssigned(side = TeamSide.TEAM2))
+            .servingSide shouldBe TeamSide.TEAM2
     }
 
     @Test

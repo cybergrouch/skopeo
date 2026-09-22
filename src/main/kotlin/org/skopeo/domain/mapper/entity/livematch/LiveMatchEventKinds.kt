@@ -73,10 +73,11 @@ fun sideOf(event: ScoreEvent): String? =
         is ScoreEvent.Retired -> event.side.name
         is ScoreEvent.Defaulted -> event.side.name
         is ScoreEvent.MatchAwarded -> event.side.name
+        // A side since #1098, so it stores like any other sided kind rather than in `player_id`.
+        is ScoreEvent.ServerAssigned -> event.side.name
         is ScoreEvent.SetStarted,
         is ScoreEvent.GameStarted,
         is ScoreEvent.TiebreakStarted,
-        is ScoreEvent.ServerAssigned,
         is ScoreEvent.MatchStarted,
         is ScoreEvent.Paused,
         is ScoreEvent.Resumed,
@@ -112,8 +113,7 @@ private fun LiveMatchEventEntity.toScoreEvent(): ScoreEvent =
         LiveMatchEventKinds.MATCH_STARTED -> ScoreEvent.MatchStarted
         LiveMatchEventKinds.PAUSED -> ScoreEvent.Paused
         LiveMatchEventKinds.RESUMED -> ScoreEvent.Resumed
-        LiveMatchEventKinds.SERVER_ASSIGNED ->
-            ScoreEvent.ServerAssigned(playerId = requireNotNull(value = playerId) { payloadError(field = "player_id") })
+        LiveMatchEventKinds.SERVER_ASSIGNED -> ScoreEvent.ServerAssigned(side = requiredSide())
         LiveMatchEventKinds.RETIRED -> ScoreEvent.Retired(side = requiredSide())
         LiveMatchEventKinds.DEFAULTED -> ScoreEvent.Defaulted(side = requiredSide())
         LiveMatchEventKinds.MATCH_AWARDED -> ScoreEvent.MatchAwarded(side = requiredSide())

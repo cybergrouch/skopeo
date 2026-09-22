@@ -62,7 +62,7 @@ export function LiveScoringBoard({
   // serving in any scoring state and in none of them, and the state machine is about which *moves*
   // exist, not whether their preconditions are met. So a point stays gated on someone serving, and
   // #1070's prompt is what says so.
-  const canScorePoints = controls.has('point') && view.serverId != null
+  const canScorePoints = controls.has('point') && view.servingSide != null
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-2 gap-[1dvh]">
@@ -108,7 +108,7 @@ export function LiveScoringBoard({
                 }`}
               >
                 {label}
-                {view.serverId != null && all.length === 1 && isServingSide({ view, sideId: side.id }) ? (
+                {view.servingSide != null && all.length === 1 && isServingSide({ view, sideId: side.id }) ? (
                   <ServingBall />
                 ) : null}
               </span>
@@ -262,7 +262,7 @@ function playersOn({
   return names.length > 0 ? names : [fallback]
 }
 
-/** Is this the side whose player is serving? Resolved through `players`, the only side↔player link. */
+/** Is this the serving side? A direct comparison since #1098 — the score carries the side itself. */
 function isServingSide({
   view,
   sideId,
@@ -270,10 +270,7 @@ function isServingSide({
   view: LiveMatchResponse
   sideId: 'TEAM1' | 'TEAM2'
 }): boolean {
-  if (view.serverId == null) return false
-  return (view.players ?? []).some(
-    (player) => player.userId === view.serverId && player.side === sideId,
-  )
+  return view.servingSide === sideId
 }
 
 /**
@@ -352,15 +349,15 @@ function teamLabel({
  * a menu, and a serving indicator nobody maintains is worse than none because the scoreboard then
  * shows something confidently wrong.
  *
- * Nothing auto-rotates. Whose turn it is is a format rule and the umpire is the authority (#928); this
- * only makes saying so cheap.
+ * **The serve rotates itself** (#1097/#1098): `ScoreEngine` hands it on when a game closes and, in a
+ * tiebreak, when the running total turns odd. This button is the umpire's designation and override,
+ * which is what its event has always been named for. A correction composes with the schedule rather
+ * than fighting it — handover timing comes from the score and cannot be wrong, so the only thing a tap
+ * fixes is which side is on, and it stays fixed.
  *
- * **The wire is still per-player** (`SERVER_ASSIGNED` carries a `playerId`, and `serverId` is a player),
- * so switching assigns the target side's first player as a stand-in. That is safe rather than sloppy:
- * `serverId` never reaches the finalized match — `MatchDomain` has no server field — so it is live
- * display state and the point gate, never a persisted claim about who served. Nothing in the UI shows
- * the stand-in either, which is what keeps the simplification honest: the app only ever asserts the
- * side.
+ * **The wire is a side** (#1098), so there is no stand-in player to pick. `servingSide` never reaches
+ * the finalized match — `MatchDomain` has no server field — so it is live display state and the point
+ * gate, never a persisted claim about who served.
  */
 export function ServerControl({
   view,
@@ -369,24 +366,19 @@ export function ServerControl({
 }: {
   view: LiveMatchResponse
   busy: boolean
-  onAssign: (playerId: string) => void
+  onAssign: (side: 'TEAM1' | 'TEAM2') => void
 }) {
   const players = view.players ?? []
   if (players.length === 0) return null
 
-  // The side currently serving, and therefore the one to switch TO. Derived through `players`, the
-  // only link between a side and its people.
-  const servingSide = players.find((p) => p.userId === view.serverId)?.side
+  const servingSide = view.servingSide === 'TEAM1' || view.servingSide === 'TEAM2' ? view.servingSide : undefined
   const targetSide = servingSide === 'TEAM1' ? 'TEAM2' : 'TEAM1'
-  // First player of the target side as the stand-in the wire needs. In singles this is simply that
-  // side's player, so the behaviour is unchanged for the common case.
-  const next = players.find((p) => p.side === targetSide) ?? players[0]
   const servingLabel = servingSide ? teamLabel({ view, sideId: servingSide }) : null
 
   return (
     <Button
       size="sm"
-      variant={view.serverId ? 'secondary' : 'outline'}
+      variant={servingSide ? 'secondary' : 'outline'}
       disabled={busy}
       // Names the SIDE, not a player (#1072). Naming one would be a claim the app does not make: the
       // umpire may have called the partner, and only the team is tracked. The visible label is static
@@ -394,12 +386,12 @@ export function ServerControl({
       aria-label={
         servingLabel ? `Serving: ${servingLabel}. Tap to switch sides.` : 'Set which side is serving'
       }
-      onClick={() => onAssign(next.userId)}
+      onClick={() => onAssign(targetSide)}
     >
       {/* "Toggle server" is accurate because this really is two-state — the serving TEAM. "Set server"
           while nothing is assigned, because that is an outstanding step rather than a switch, and
           #1070's prompt relies on it reading that way. */}
-      {view.serverId ? 'Toggle server' : 'Set server'}
+      {servingSide ? 'Toggle server' : 'Set server'}
     </Button>
   )
 }

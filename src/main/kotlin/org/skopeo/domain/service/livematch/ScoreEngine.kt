@@ -75,8 +75,13 @@ object ScoreEngine {
             // A tiebreak is its own state, not a flavour of game scoring (#1083), so it does not set
             // isInGame: it is scored by points and ended by awarding the set, and the control that ends
             // it is Set rather than Game.
-            is ScoreEvent.TiebreakStarted -> state.copy(isTiebreak = true, isInGame = false, pointsTeam1 = 0, pointsTeam2 = 0)
-            is ScoreEvent.ServerAssigned -> state.copy(serverId = event.playerId)
+            is ScoreEvent.TiebreakStarted ->
+                state.copy(isTiebreak = true, isInGame = false, pointsTeam1 = 0, pointsTeam2 = 0, tiebreakFirstServer = null)
+            // The umpire's own designation or correction (#1098). The engine no longer needs one of
+            // these to rotate, so it means exactly what its name says. A correction composes with the
+            // schedule rather than fighting it: handover *timing* comes from the score and cannot be
+            // wrong, so flipping the side here stays flipped for the rest of the tiebreak.
+            is ScoreEvent.ServerAssigned -> state.copy(servingSide = event.side)
             // The three ways a match ends share a branch: each sets an outcome and changes nothing else.
             is ScoreEvent.Ending -> state.copy(outcome = endingOf(event = event))
             // Starting also clears a pause, so a restart after a suspension needs no separate Resumed.
@@ -157,7 +162,7 @@ object ScoreEngine {
             } else {
                 state.copy(pointsTeam2 = state.pointsTeam2 + 1)
             }
-        if (scored.isTiebreak) return scored
+        if (scored.isTiebreak) return scored.withTiebreakServe(opener = state.tiebreakFirstServer)
         val own = scored.points(side = side)
         val other = scored.points(side = side.opponent())
         // Four points and two clear. Expressed as the general rule rather than as cases, so a game that
@@ -199,7 +204,34 @@ object ScoreEngine {
         // The game is over, so the in-game state ends with it (#1083) — whether it closed on the fourth
         // point or on an umpire's declaration. The next game is started explicitly, which is the moment
         // at which a tiebreak is the alternative.
-        return withGame.copy(pointsTeam1 = 0, pointsTeam2 = 0, isInGame = false)
+        // A completed game hands the serve on (#985), whichever way it ended. Since #1098 that happens
+        // here rather than in the service: it is a consequence of scoring, so it belongs in the step
+        // function, which also means one undo takes back the point AND the rotation it caused.
+        return withGame.copy(
+            pointsTeam1 = 0,
+            pointsTeam2 = 0,
+            isInGame = false,
+            servingSide = withGame.servingSide?.opponent(),
+        )
+    }
+
+    /**
+     * The serve, after a tiebreak point has been counted into [this].
+     *
+     * Two jobs, both of which need the count *including* the point just played:
+     *
+     * - remember the tiebreak's opener the first time through, since [opener] is null until then. It is
+     *   captured here rather than at [ScoreEvent.TiebreakStarted] so that an umpire correcting the
+     *   server before the first ball is struck is the one who gets recorded.
+     * - hand the serve on when the running total turns **odd** — the whole 1-2-2-2 sequence, since the
+     *   opener owes one point and everyone after owes two.
+     */
+    private fun ScoreState.withTiebreakServe(opener: TeamSide?): ScoreState {
+        val played = pointsTeam1 + pointsTeam2
+        return copy(
+            tiebreakFirstServer = opener ?: servingSide,
+            servingSide = if (played % 2 == 1) servingSide?.opponent() else servingSide,
+        )
     }
 
     /**
@@ -225,9 +257,9 @@ object ScoreEngine {
         // never run for the game the tiebreak *is*. This is the only place that closes a tiebreak, so it
         // is the only place that can count it. Reuse gameTo so "a game is worth one game" lives once.
         //
-        // Note this also rotates the serve (#985): gamesPlayed now rises when a tiebreak is banked, so
-        // the next set opens with the other side serving -- which is the actual rule, since whoever
-        // served the tiebreak's first point receives first in the set that follows.
+        // Only its game count is taken: the copy below is built from `state`, so the serve gameTo hands
+        // on is discarded and replaced by `nextSetServer`. A tiebreak does not follow the ordinary
+        // handover rule -- see below.
         val decided = if (state.isTiebreak) gameTo(state = state, side = side) else state
         val banked =
             CompletedSet(
@@ -253,8 +285,25 @@ object ScoreEngine {
             // Banking a set cannot leave a game open behind it (#1083). Ordinarily the game already
             // closed; a set awarded mid-game (daylight, a retirement's score) closes it here.
             isInGame = false,
+            servingSide = nextSetServer(state = state),
+            tiebreakFirstServer = null,
         )
     }
+
+    /**
+     * Who serves the first game of the next set.
+     *
+     * **After an ordinary set, nobody changes.** The serve already passed when the set's last game
+     * closed, so rotating again here would skip a turn.
+     *
+     * **After a tiebreak, it is the opposite side to whoever served the tiebreak's first point** —
+     * the actual rule, and deliberately not "toggle from whoever is serving now". Those differ: a
+     * tiebreak hands the serve over once per odd running total, so 7-3 yields five handovers and 7-5
+     * six, and toggling on top would be right only for the even ones. Reading it off the opener is
+     * correct for every length, with no arithmetic.
+     */
+    private fun nextSetServer(state: ScoreState): TeamSide? =
+        if (state.isTiebreak) state.tiebreakFirstServer?.opponent() ?: state.servingSide else state.servingSide
 
     private const val POINTS_TO_WIN_GAME = 4
     private const val CLEAR_BY = 2

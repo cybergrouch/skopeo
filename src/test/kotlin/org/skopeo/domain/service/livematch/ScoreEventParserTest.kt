@@ -13,7 +13,6 @@ import org.skopeo.common.dto.livematch.LiveScoreEventRequest
 import org.skopeo.common.error.ServiceError
 import org.skopeo.domain.model.ScoreEvent
 import org.skopeo.domain.model.TeamSide
-import java.util.UUID
 
 /**
  * The wire → [ScoreEvent] translation (#911 step 3c).
@@ -50,10 +49,9 @@ class ScoreEventParserTest {
     }
 
     @Test
-    fun `SERVER_ASSIGNED parses its player id`() {
-        val player = UUID.randomUUID()
-        parse(kind = "SERVER_ASSIGNED", playerId = player.toString())
-            .shouldBeRight() shouldBe ScoreEvent.ServerAssigned(playerId = player)
+    fun `SERVER_ASSIGNED parses its side`() {
+        parse(kind = "SERVER_ASSIGNED", side = "TEAM2")
+            .shouldBeRight() shouldBe ScoreEvent.ServerAssigned(side = TeamSide.TEAM2)
     }
 
     @Test
@@ -103,9 +101,9 @@ class ScoreEventParserTest {
     }
 
     @Test
-    fun `SERVER_ASSIGNED without a player id, or with a malformed one, is rejected`() {
+    fun `SERVER_ASSIGNED without a side, or with an unknown one, is rejected`() {
         parse(kind = "SERVER_ASSIGNED").shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        parse(kind = "SERVER_ASSIGNED", playerId = "not-a-uuid")
+        parse(kind = "SERVER_ASSIGNED", side = "TEAM3")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }

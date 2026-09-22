@@ -26,8 +26,8 @@ data class LiveScoreEventRequest(
  * A player in the match, for the umpire's server picker (#943).
  *
  * On the live response rather than looked up separately because the umpire view is addressed by match
- * and already holds this response — and `MatchPublicPlayer` carries no user id, so there is nothing to
- * map a `serverId` back to without it.
+ * and already holds this response, and `MatchPublicPlayer` carries no user id. Since #1098 the serving
+ * *side* is what the score carries; [side] is what maps it to a name here.
  */
 @Serializable
 data class LivePlayerResponse(
@@ -96,8 +96,14 @@ data class LiveMatchResponse(
      * client is never sent the undo markers, so this is the only answer available to it.
      */
     val canUndo: Boolean = false,
-    val serverId: String? = null,
-    /** The server's display name, so a client need not resolve the id itself. */
+    /** Which side is serving, TEAM1 or TEAM2 (#1098). A side, not a player — see `ScoreEvent`. */
+    val servingSide: String? = null,
+    /**
+     * A name for the serving side, so a client need not resolve one itself.
+     *
+     * In singles this is the server. In doubles it is the side's first player, standing in for a team
+     * the app tracks but whose partner order it does not — the same stand-in the umpire board shows.
+     */
     val serverName: String? = null,
     /** Both sides' players, for the server picker. Static per match; small enough to ride along. */
     val players: List<LivePlayerResponse> = emptyList(),

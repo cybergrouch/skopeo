@@ -142,32 +142,18 @@ class LiveMatchService(
             scorableMatchOf(matches = matches, matchId = matchId).bind()
             val before = ScoreEngine.replay(log = live.loggedActions(matchId = matchId))
             if (event.isScoringAction()) scoringAllowed(state = before, event = event).bind()
-            val response =
-                appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
-                    live.append(
-                        matchId = matchId,
-                        sequence = sequence,
-                        kind = kindOf(event = event),
-                        side = sideOf(event = event),
-                        playerId = (event as? ScoreEvent.ServerAssigned)?.playerId,
-                        recordedBy = callerId,
-                        // The SAME clock the elapsed time is folded with. Two notions of "now" — one
-                        // stamping rows, one measuring them — is how a match clock ends up reading zero.
-                        recordedAt = clock(),
-                    )
-                }.bind()
-            // A completed game hands the serve on (#985), and so does a tiebreak point when the running
-            // total turns odd (#1097) -- see `rotatesServe`, which holds all three transitions and the
-            // reason they cannot be one comparison.
-            //
-            // Appended as its own event rather than derived, so the rotation lives in the log: undo
-            // reverses it, and "who served game 4" stays answerable.
-            val after = ScoreEngine.replay(log = live.loggedActions(matchId = matchId))
-            if (rotatesServe(before = before, after = after)) {
-                rotateServer(token = token, matchId = matchId).bind()
-            } else {
-                response
-            }
+            appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
+                live.append(
+                    matchId = matchId,
+                    sequence = sequence,
+                    kind = kindOf(event = event),
+                    side = sideOf(event = event),
+                    recordedBy = callerId,
+                    // The SAME clock the elapsed time is folded with. Two notions of "now" — one
+                    // stamping rows, one measuring them — is how a match clock ends up reading zero.
+                    recordedAt = clock(),
+                )
+            }.bind()
         }
 
     /**
@@ -336,45 +322,6 @@ class LiveMatchService(
                 )
             }.bind()
             ScoreEngine.replay(log = live.loggedActions(matchId = matchId))
-        }
-
-    /**
-     * Hand the serve to the next player after a completed game (#985).
-     *
-     * Rotates through the roster in order, which is already correct for doubles' four-way turn — the
-     * reason `ServerAssigned` names a player rather than a side. Appended as an ordinary event so undo
-     * reverses it like any other, and an umpire correcting the order just assigns again.
-     *
-     * A no-op when nobody was serving: there is no "next" without a current, and the point guard above
-     * means a game can only have been played without a server if the umpire declared it outright.
-     */
-    private fun rotateServer(
-        token: VerifiedFirebaseToken,
-        matchId: UUID,
-    ): Either<ServiceError, LiveMatchResponse> =
-        either {
-            val order =
-                rosterOf(matches = matches, users = users, matchId = matchId).players.mapNotNull {
-                    runCatching { UUID.fromString(it.userId) }.getOrNull()
-                }
-            val current = ScoreEngine.replay(log = live.loggedActions(matchId = matchId)).serverId
-            // Wraps: the player after the last is the first again, which is the rotation in both formats.
-            val next = current?.let { order.getOrNull(index = order.indexOf(element = it) + 1) ?: order.firstOrNull() }
-            if (next == null) {
-                published(match = scorableMatchOf(matches = matches, matchId = matchId).bind())
-            } else {
-                appendWithRetry(token = token, matchId = matchId) { sequence, callerId ->
-                    live.append(
-                        matchId = matchId,
-                        sequence = sequence,
-                        kind = kindOf(event = ScoreEvent.ServerAssigned(playerId = next)),
-                        side = null,
-                        playerId = next,
-                        recordedBy = callerId,
-                        recordedAt = clock(),
-                    )
-                }.bind()
-            }
         }
 
     private companion object {
@@ -546,7 +493,8 @@ private fun LiveMatchRepository.responseFor(
  * Both sides' players, id and name, for the umpire's server picker (#943).
  *
  * Resolved here rather than carried in `ScoreState`: it is a property of the *match*, not of the
- * score, and the engine has no business knowing anyone's name.
+ * score, and the engine has no business knowing anyone's name. Still true after #1098 — the state
+ * holds a serving *side*, which is a fact about the score, and this is what turns it into a name.
  */
 private fun rosterOf(
     matches: MatchRepository,
