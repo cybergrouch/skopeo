@@ -12,6 +12,8 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.skopeo.common.dto.livematch.LiveScoreEventRequest
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
@@ -646,30 +648,33 @@ class LiveMatchServiceTest {
         live.log(matchId = matchId).shouldHaveSize(size = setupRows + 3)
     }
 
-    @Test
-    fun `whatever its length, a tiebreak leaves the next set to the side that did not open it`() {
-        // The trap in #1097: banking a tiebreak used to rotate unconditionally, which was right only
-        // while nothing rotated during one. 7-3 and 7-5 fall on opposite sides of that parity.
-        // 7-0 and 7-5 total an even number of handovers, 7-3 and 8-6 an odd one — both branches.
-        listOf(7 to 0, 7 to 3, 7 to 5, 8 to 6).forEach { (won, lost) ->
-            PostgresTestDatabase.truncate()
-            umpire()
-            val home = user(uid = "home")
-            val away = user(uid = "away")
-            val matchId = createFixture(home = home, away = away)
-            beginTiebreak(matchId = matchId, server = home)
+    /**
+     * The trap in #1097: banking a tiebreak used to rotate unconditionally, which was right only while
+     * nothing rotated *during* one. 7-0 and 7-5 total an even number of handovers, 7-3 and 8-6 an odd
+     * one, so the four cases cover both branches of the bank rule.
+     */
+    @ParameterizedTest(name = "{0}-{1}")
+    @CsvSource("7,0", "7,3", "7,5", "8,6")
+    fun `whatever its length, a tiebreak leaves the next set to the side that did not open it`(
+        won: Int,
+        lost: Int,
+    ) {
+        umpire()
+        val home = user(uid = "home")
+        val away = user(uid = "away")
+        val matchId = createFixture(home = home, away = away)
+        beginTiebreak(matchId = matchId, server = home)
 
-            points(matchId = matchId, side = TeamSide.TEAM1, count = won)
-            points(matchId = matchId, side = TeamSide.TEAM2, count = lost)
-            service.record(
-                token = token(uid = "ump"),
-                matchId = matchId,
-                request = LiveScoreEventRequest(kind = LiveMatchEventKinds.SET_AWARDED, side = TeamSide.TEAM1.name),
-            )
+        points(matchId = matchId, side = TeamSide.TEAM1, count = won)
+        points(matchId = matchId, side = TeamSide.TEAM2, count = lost)
+        service.record(
+            token = token(uid = "ump"),
+            matchId = matchId,
+            request = LiveScoreEventRequest(kind = LiveMatchEventKinds.SET_AWARDED, side = TeamSide.TEAM1.name),
+        )
 
-            // home served the tiebreak's first point, so home receives first in the next set.
-            serverOf(matchId = matchId) shouldBe away.toString()
-        }
+        // home served the tiebreak's first point, so home receives first in the next set.
+        serverOf(matchId = matchId) shouldBe away.toString()
     }
 
     @Test

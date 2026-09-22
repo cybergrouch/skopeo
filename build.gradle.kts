@@ -153,6 +153,9 @@ dependencies {
     // Mocking for the rare defensive path a real DB can't produce (e.g. a row deleted between an
     // existence check and its update); used sparingly — most service tests run against real Testcontainers.
     testImplementation("io.mockk:mockk:1.14.11")
+    // Data-driven cases via @ParameterizedTest (#1097). Not transitively present — testcontainers
+    // brings junit-jupiter api/engine but not params — and pinned to the version those resolve to.
+    testImplementation("org.junit.jupiter:junit-jupiter-params:5.10.1")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     // Integration tests against a real PostgreSQL (applies the Flyway migration)
