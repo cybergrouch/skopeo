@@ -99,15 +99,19 @@ sealed interface ScoreEvent {
     data object TiebreakStarted : ScoreEvent
 
     /**
-     * Who is serving. A **player**, not a side — the one place doubles differs, since the serve rotates
-     * through four people.
+     * Who is serving. A **side**, not a player (#1098) — the umpire's own designation or correction.
      *
-     * The service appends one of these automatically when a game is awarded (#985), advancing through
-     * the roster. It stays an explicit logged event rather than something the engine derives, for two
-     * reasons: the engine knows nothing about players, and an appended event means undo reverses a
-     * rotation for free. An umpire correcting the order just appends another.
+     * It named a player until #1098, so that doubles' four-way rotation could be expressed. Two things
+     * made that the wrong shape. The rotation has to be a consequence of scoring, and a reducer that
+     * advances a *player* needs a roster, which would have dragged match data into [ScoreState] purely
+     * to serve one field; advancing a *side* needs nothing but [TeamSide.opponent]. And nothing ever
+     * used the individual: `ServerControl` is a two-side toggle that assigns the target side's first
+     * player as a stand-in, so the per-player wire was asserting knowledge the app did not have.
+     *
+     * The engine no longer needs one of these to rotate — it toggles as part of scoring — so this is
+     * exactly what its name says: the opening designation, and an umpire's correction.
      */
-    data class ServerAssigned(val playerId: UUID) : ScoreEvent
+    data class ServerAssigned(val side: TeamSide) : ScoreEvent
 
     /** [side] retired. The opponent wins the match; the score reached stands as the record. */
     data class Retired(override val side: TeamSide) : ScoreEvent.Ending
@@ -209,7 +213,20 @@ data class ScoreState(
     val gamesTeam1: Int = 0,
     val gamesTeam2: Int = 0,
     val completedSets: List<CompletedSet> = emptyList(),
-    val serverId: UUID? = null,
+    /** Which side is serving (#1098). A side, not a player — see [ScoreEvent.ServerAssigned]. */
+    val servingSide: TeamSide? = null,
+    /**
+     * Who served the current tiebreak's **first point**, kept only for as long as the tiebreak runs.
+     *
+     * The next set opens on the opposite side to this, which is the actual rule and is *not* the same
+     * as toggling from whoever happens to be serving when the tiebreak ends: a 7-3 tiebreak hands the
+     * serve over five times and a 7-5 six, so toggling on top of that lands correctly only half the
+     * time. Remembering the opener is what makes [ScoreEngine] need no parity arithmetic.
+     *
+     * Captured at the tiebreak's first *point*, not at [ScoreEvent.TiebreakStarted], so that an umpire
+     * correcting the server before a ball is struck is honoured.
+     */
+    val tiebreakFirstServer: TeamSide? = null,
     val isTiebreak: Boolean = false,
     val hasStarted: Boolean = false,
     val isPaused: Boolean = false,

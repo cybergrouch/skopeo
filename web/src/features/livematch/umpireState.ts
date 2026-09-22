@@ -74,7 +74,7 @@ export type Control =
 export function umpireStateOf(view: LiveMatchResponse): UmpireState {
   if (view.outcome != null) return 'MATCH_CLOSED'
   if (view.isPaused) return 'PAUSED'
-  if (!view.hasStarted) return view.serverId == null ? 'PRE_MATCH' : 'READY'
+  if (!view.hasStarted) return view.servingSide == null ? 'PRE_MATCH' : 'READY'
   if (view.isBetweenSets) return 'MATCH_TRANSITION'
   if (view.isTiebreak) return 'SCORING_TIEBREAK'
   if (view.isInGame) return 'SCORING_GAME'

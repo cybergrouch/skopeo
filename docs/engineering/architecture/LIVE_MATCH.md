@@ -344,9 +344,19 @@ Decisions taken while building it, none of which the section above had settled:
   A marker aimed at a sequence that does not exist, or at one already cancelled, is inert.
 - **Undo is not last-in-first-out.** A marker names its target, so an earlier action can be struck out
   with everything after it still counting.
-- **Doubles is in the first cut.** The only thing that differs is the server, so `ServerAssigned` names a
-  **player** rather than a side. Nothing auto-rotates: whose turn it is is a format rule, and the umpire
-  is the authority. Points, games and sets are per *side* and need no doubles-specific handling.
+- **Doubles is in the first cut**, with the serve simplified. `ServerAssigned` named a **player** until
+  #1098 so that doubles' four-way order could be expressed, but nothing ever used the individual — the
+  umpire board is a two-side toggle — and a reducer that advances a *player* needs a roster in its
+  state. It now names a **side**: correct for singles, and honest for doubles, where the app tracks the
+  serving team and leaves which partner is up to the umpire's call. Points, games and sets are per
+  *side* and need no doubles-specific handling.
+- **The serve rotates itself** (#1097/#1098). `ScoreEngine` hands it on when a game closes and, in a
+  tiebreak, when the running total turns odd — the 1-2-2-2 sequence, since the opener owes one point and
+  everyone after owes two. Banking a tiebreak sets the next set's server to the *opposite of the
+  tiebreak's first server*, which is the actual rule and is deliberately not a toggle from whoever is
+  current: 7-3 yields five handovers and 7-5 six, so toggling would be right only half the time.
+  Handover *timing* comes from the score; the action at each one is a toggle, which is what lets an
+  umpire's correction stick for the rest of the tiebreak instead of being overwritten by the next point.
 - **A finished match ignores further scoring**, with `ServerAssigned` carved out as a record correction.
   Safe rather than a trap, because the concluding event is undoable like any other — undoing a
   mis-tapped retirement puts the match back in play.
@@ -460,7 +470,7 @@ the two ever disagreed.
 |---|---|---|
 | 1 | `MATCH_CLOSED` | `outcome != null` — a retired match is not "between sets" |
 | 2 | `PAUSED` | `isPaused` — a pause is what the screen is about while it lasts |
-| 3 | `PRE_MATCH` / `READY` | `!hasStarted`, split on `serverId == null` |
+| 3 | `PRE_MATCH` / `READY` | `!hasStarted`, split on `servingSide == null` |
 | 4 | `MATCH_TRANSITION` | `isBetweenSets` |
 | 5 | `SCORING_TIEBREAK` | `isTiebreak` |
 | 6 | `SCORING_GAME` | `isInGame` |

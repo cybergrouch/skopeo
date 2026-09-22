@@ -41,6 +41,7 @@ import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.model.MatchType
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.ProvisionUserCommand
+import org.skopeo.domain.model.TeamSide
 import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
@@ -139,31 +140,30 @@ class LiveMatchApiIntegrationTest {
     private fun seedInGame(upToGame: Boolean): UUID {
         val matchId = seedScheduledFixture()
         val users = UserRepository()
-        val server = users.findByFirebaseUid(firebaseUid = "home")!!.toDomain().id
         // Attribute the seeded rows to whichever umpire the test already created, not to a player.
         // `umpireCredit` folds "who recorded rows" into the match's umpires, so crediting `home` here
         // would invent a second umpire that the test never had.
         val by =
             listOf("ump", "boss")
                 .firstNotNullOfOrNull { uid -> users.findByFirebaseUid(firebaseUid = uid)?.toDomain()?.id }
-                ?: server
+                ?: users.findByFirebaseUid(firebaseUid = "home")!!.toDomain().id
         val live = LiveMatchRepository()
         val setup =
             listOf(
                 LiveMatchEventKinds.MATCH_STARTED to null,
-                LiveMatchEventKinds.SERVER_ASSIGNED to server,
+                // TEAM1 is `home`: SERVER_ASSIGNED names a side since #1098.
+                LiveMatchEventKinds.SERVER_ASSIGNED to TeamSide.TEAM1.name,
                 // MATCH_STARTED leaves the match between sets (#1083), so the first set is started
                 // explicitly like every other one.
                 LiveMatchEventKinds.SET_STARTED to null,
             ) + if (upToGame) listOf(element = LiveMatchEventKinds.GAME_STARTED to null) else emptyList()
         setup
-            .forEach { (kind, playerId) ->
+            .forEach { (kind, side) ->
                 live.append(
                     matchId = matchId,
                     sequence = live.lastSequence(matchId = matchId) + 1,
                     kind = kind,
-                    side = null,
-                    playerId = playerId,
+                    side = side,
                     recordedBy = by,
                     recordedAt = LocalDateTime.now(),
                 )
@@ -285,12 +285,10 @@ class LiveMatchApiIntegrationTest {
         }
 
     @Test
-    fun `SERVER_ASSIGNED needs a player id, and rejects a malformed one`() =
+    fun `SERVER_ASSIGNED needs a side, and rejects an unknown one`() =
         withApp { client ->
             val token = seedScorer()
             val matchId = seedFixture()
-            val player = seedUser(uid = "server")
-
             client
                 .postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SERVER_ASSIGNED"))
                 .status shouldBe HttpStatusCode.BadRequest
@@ -298,17 +296,17 @@ class LiveMatchApiIntegrationTest {
                 .postEvent(
                     token = token,
                     matchId = matchId,
-                    request = LiveScoreEventRequest(kind = "SERVER_ASSIGNED", playerId = "not-a-uuid"),
+                    request = LiveScoreEventRequest(kind = "SERVER_ASSIGNED", side = "TEAM3"),
                 ).status shouldBe HttpStatusCode.BadRequest
 
             val ok =
                 client.postEvent(
                     token = token,
                     matchId = matchId,
-                    request = LiveScoreEventRequest(kind = "SERVER_ASSIGNED", playerId = player.toString()),
+                    request = LiveScoreEventRequest(kind = "SERVER_ASSIGNED", side = "TEAM2"),
                 )
             ok.status shouldBe HttpStatusCode.Created
-            ok.body<LiveMatchResponse>().serverId shouldBe player.toString()
+            ok.body<LiveMatchResponse>().servingSide shouldBe "TEAM2"
         }
 
     @Test
@@ -410,16 +408,12 @@ class LiveMatchApiIntegrationTest {
             // in the set that follows.
             val token = seedScorer()
             val matchId = seedBetweenGames()
-            val users = UserRepository()
-            val home = users.findByFirebaseUid(firebaseUid = "home")!!.toDomain().id
-            val away = users.findByFirebaseUid(firebaseUid = "away")!!.toDomain().id
-
-            // seedFixture serves `home`; confirm that, so a rotation to `away` cannot be read backwards.
+            // seedFixture serves TEAM1; confirm that, so a handover to TEAM2 cannot be read backwards.
             client
                 .get(urlString = "/api/v1/matches/$matchId/live") {
                     header(key = HttpHeaders.Authorization, value = "Bearer $token")
                 }.body<LiveMatchResponse>()
-                .serverId shouldBe home.toString()
+                .servingSide shouldBe "TEAM1"
 
             client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "TIEBREAK_STARTED"))
             repeat(times = 7) {
@@ -432,7 +426,7 @@ class LiveMatchApiIntegrationTest {
                     request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"),
                 )
 
-            banked.body<LiveMatchResponse>().serverId shouldBe away.toString()
+            banked.body<LiveMatchResponse>().servingSide shouldBe "TEAM2"
         }
 
     @Test
@@ -673,7 +667,7 @@ class LiveMatchApiIntegrationTest {
                     header(key = HttpHeaders.Authorization, value = "Bearer $token")
                 }.body()
             view.gamesTeam1 shouldBe 1
-            view.serverId.shouldBeNull()
+            view.servingSide.shouldBeNull()
         }
 
     @Test

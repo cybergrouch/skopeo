@@ -24,7 +24,7 @@ const base: LiveMatchResponse = {
   isInGame: true,
   isTiebreak: false,
   canUndo: true,
-  serverId: 'p-1',
+  servingSide: 'TEAM1',
   pointsTeam1: '30',
   pointsTeam2: '15',
   gamesTeam1: 2,
@@ -37,7 +37,7 @@ const base: LiveMatchResponse = {
 
 /** The states, each expressed the way the server would send it. */
 const states: Record<UmpireState, LiveMatchResponse> = {
-  PRE_MATCH: { ...base, hasStarted: false, serverId: null, isInGame: false, canUndo: false },
+  PRE_MATCH: { ...base, hasStarted: false, servingSide: null, isInGame: false, canUndo: false },
   READY: { ...base, hasStarted: false, isInGame: false },
   MATCH_TRANSITION: { ...base, isBetweenSets: true, isInGame: false },
   SET_TRANSITION: { ...base, isInGame: false },
@@ -67,8 +67,8 @@ describe('umpireStateOf', () => {
   })
 
   it('splits the pre-match states on whether anyone is serving', () => {
-    expect(umpireStateOf({ ...base, hasStarted: false, serverId: null })).toBe('PRE_MATCH')
-    expect(umpireStateOf({ ...base, hasStarted: false, serverId: 'p-2' })).toBe('READY')
+    expect(umpireStateOf({ ...base, hasStarted: false, servingSide: null })).toBe('PRE_MATCH')
+    expect(umpireStateOf({ ...base, hasStarted: false, servingSide: 'TEAM2' })).toBe('READY')
   })
 })
 

@@ -31,7 +31,7 @@ class LiveScoreBroadcastTest {
         hasStarted = true,
         isPaused = false,
         isTiebreak = false,
-        serverId = "p-1",
+        servingSide = "TEAM1",
         serverName = "Ana",
         pointsTeam1 = "40",
         pointsTeam2 = "30",

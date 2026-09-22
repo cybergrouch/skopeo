@@ -7307,16 +7307,13 @@ components:
           type: string
           enum: [TEAM1, TEAM2]
           description: >-
-            Required for POINT_WON, GAME_AWARDED, SET_AWARDED, RETIRED, DEFAULTED and MATCH_AWARDED.
-            Never "left"/"right": switching ends in the umpire view is a display preference and is not
-            recorded, so a log in screen positions would be corrupted by a flip. For RETIRED/DEFAULTED
-            this is the side that CONCEDED; the opponent wins.
-        playerId:
-          type: string
-          format: uuid
-          description: >-
-            Required for SERVER_ASSIGNED, and only then. A player rather than a side, because in doubles
-            the serve rotates through four people. Nothing auto-rotates — the umpire is the authority.
+            Required for POINT_WON, GAME_AWARDED, SET_AWARDED, RETIRED, DEFAULTED, MATCH_AWARDED and
+            SERVER_ASSIGNED. Never "left"/"right": switching ends in the umpire view is a display
+            preference and is not recorded, so a log in screen positions would be corrupted by a flip.
+            For RETIRED/DEFAULTED this is the side that CONCEDED; the opponent wins. For SERVER_ASSIGNED
+            it is the side about to serve — a side rather than a player since #1098, because the serve
+            is advanced by the scoring engine and the app tracks the serving team, leaving which partner
+            is up to the umpire's call.
 
     LiveMatchSweepRequest:
       type: object
@@ -7454,20 +7451,25 @@ components:
             Whether an undo would do anything (#1083) — i.e. whether any action is still in force. Not
             derivable from `sequence`, which counts undone actions too, and the undo markers themselves
             are never sent to a client.
-        serverId:
+        servingSide:
           type: string
-          format: uuid
+          enum: [TEAM1, TEAM2]
           nullable: true
+          description: >-
+            Which side is serving (#943, #1098). A side rather than a player: the serve is advanced by
+            the scoring engine as part of scoring, and the app tracks the serving team only.
         serverName:
           type: string
           nullable: true
-          description: The server's display name, so a client need not resolve the id itself (#943).
+          description: >-
+            A name for the serving side, so a client need not resolve one itself (#943). In singles the
+            server; in doubles the side's first player, standing in for the team.
         players:
           type: array
           description: >-
             Both sides' players, for the umpire's server picker (#943). Here rather than looked up
-            separately because MatchPublicPlayer carries no user id, so there is nothing to map a
-            serverId back to without it. Static per match and small enough to ride along.
+            separately because MatchPublicPlayer carries no user id. Static per match and small enough
+            to ride along.
           items:
             $ref: '#/components/schemas/LivePlayerResponse'
         team1Name:

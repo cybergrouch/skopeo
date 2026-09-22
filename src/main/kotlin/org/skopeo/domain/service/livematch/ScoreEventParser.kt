@@ -13,7 +13,6 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.domain.mapper.entity.livematch.LiveMatchEventKinds
 import org.skopeo.domain.model.ScoreEvent
 import org.skopeo.domain.model.TeamSide
-import java.util.UUID
 
 /**
  * The wire's strings → a [ScoreEvent] (#911).
@@ -40,8 +39,6 @@ object ScoreEventParser {
             when (val kind = request.kind.uppercase()) {
                 in SIDED_KINDS -> sided(kind = kind, side = requireSide(side = side, kind = kind).bind())
                 in BARE_KINDS -> bare(kind = kind)
-                LiveMatchEventKinds.SERVER_ASSIGNED ->
-                    ScoreEvent.ServerAssigned(playerId = requirePlayer(raw = request.playerId).bind())
                 else ->
                     raise(
                         r =
@@ -62,6 +59,7 @@ object ScoreEventParser {
             LiveMatchEventKinds.SET_AWARDED -> ScoreEvent.SetAwarded(side = side)
             LiveMatchEventKinds.RETIRED -> ScoreEvent.Retired(side = side)
             LiveMatchEventKinds.DEFAULTED -> ScoreEvent.Defaulted(side = side)
+            LiveMatchEventKinds.SERVER_ASSIGNED -> ScoreEvent.ServerAssigned(side = side)
             else -> ScoreEvent.MatchAwarded(side = side)
         }
 
@@ -80,12 +78,6 @@ object ScoreEventParser {
         kind: String,
     ): Either<ServiceError, TeamSide> = side?.right() ?: ServiceError.Validation(message = "$kind requires a side (TEAM1 or TEAM2)").left()
 
-    private fun requirePlayer(raw: String?): Either<ServiceError, UUID> {
-        val id = raw ?: return ServiceError.Validation(message = "SERVER_ASSIGNED requires a playerId").left()
-        return runCatching { UUID.fromString(id) }.getOrNull()?.right()
-            ?: ServiceError.Validation(message = "playerId '$id' is not a valid id").left()
-    }
-
     /** Kinds that name a side. For RETIRED/DEFAULTED the side is the one that CONCEDED. */
     private val SIDED_KINDS =
         setOf(
@@ -95,6 +87,8 @@ object ScoreEventParser {
             LiveMatchEventKinds.RETIRED,
             LiveMatchEventKinds.DEFAULTED,
             LiveMatchEventKinds.MATCH_AWARDED,
+            // A side since #1098: the umpire designates or corrects the serving TEAM, never a player.
+            LiveMatchEventKinds.SERVER_ASSIGNED,
         )
 
     /** Kinds that carry no payload at all. */
@@ -112,5 +106,5 @@ object ScoreEventParser {
      * What a caller may POST. `UNDONE` is absent on purpose: undo has its own endpoint, because the
      * server picks the target (the last surviving action) rather than trusting a client to name it.
      */
-    private val RECORDABLE_KINDS = SIDED_KINDS + BARE_KINDS + LiveMatchEventKinds.SERVER_ASSIGNED
+    private val RECORDABLE_KINDS = SIDED_KINDS + BARE_KINDS
 }
