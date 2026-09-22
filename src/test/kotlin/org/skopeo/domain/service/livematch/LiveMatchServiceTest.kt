@@ -568,4 +568,140 @@ class LiveMatchServiceTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
+
+    /**
+     * Put [matchId] into a tiebreak, with [server] due to serve its first point (#1097).
+     *
+     * Appended straight to the log for the same reason as [beginPlay]: the arrangement must not depend
+     * on the gates under test. No GAME_STARTED — a tiebreak is not a game, and `isTiebreak` is what
+     * makes a point recordable here.
+     */
+    private fun beginTiebreak(
+        matchId: UUID,
+        server: UUID,
+    ) {
+        listOf(
+            LiveMatchEventKinds.MATCH_STARTED to null,
+            LiveMatchEventKinds.SERVER_ASSIGNED to server,
+            LiveMatchEventKinds.SET_STARTED to null,
+            LiveMatchEventKinds.TIEBREAK_STARTED to null,
+        ).forEach { (kind, playerId) ->
+            live.append(
+                matchId = matchId,
+                sequence = live.lastSequence(matchId = matchId) + 1,
+                kind = kind,
+                side = null,
+                playerId = playerId,
+                recordedBy = server,
+                recordedAt = LocalDateTime.now(),
+            )
+        }
+    }
+
+    /** Who the board says is serving [matchId] right now. */
+    private fun serverOf(matchId: UUID): String? = service.scoreboard(matchId = matchId).serverId
+
+    /** Score [count] tiebreak points to [side]. */
+    private fun points(
+        matchId: UUID,
+        side: TeamSide,
+        count: Int,
+    ) {
+        repeat(times = count) {
+            service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = side))
+        }
+    }
+
+    @Test
+    fun `a tiebreak hands the serve on after the first point, then after every second point`() {
+        umpire()
+        val home = user(uid = "home")
+        val away = user(uid = "away")
+        val matchId = createFixture(home = home, away = away)
+        beginTiebreak(matchId = matchId, server = home)
+
+        // One point at a time, so the assertion names the point that was just played.
+        val servers =
+            (1..7).map { _ ->
+                service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
+                serverOf(matchId = matchId)
+            }
+
+        val h = home.toString()
+        val a = away.toString()
+        // home serves point 1 alone; away takes 2-3; home 4-5; away 6-7.
+        servers shouldBe listOf(a, a, h, h, a, a, h)
+    }
+
+    @Test
+    fun `an even-numbered tiebreak point records no rotation`() {
+        umpire()
+        val home = user(uid = "home")
+        val matchId = createFixture(home = home, away = user(uid = "away"))
+        beginTiebreak(matchId = matchId, server = home)
+
+        points(matchId = matchId, side = TeamSide.TEAM1, count = 2)
+
+        // Two points, and exactly one rotation — the one the FIRST point triggered.
+        live.log(matchId = matchId).shouldHaveSize(size = setupRows + 3)
+    }
+
+    @Test
+    fun `whatever its length, a tiebreak leaves the next set to the side that did not open it`() {
+        // The trap in #1097: banking a tiebreak used to rotate unconditionally, which was right only
+        // while nothing rotated during one. 7-3 and 7-5 fall on opposite sides of that parity.
+        // 7-0 and 7-5 total an even number of handovers, 7-3 and 8-6 an odd one — both branches.
+        listOf(7 to 0, 7 to 3, 7 to 5, 8 to 6).forEach { (won, lost) ->
+            PostgresTestDatabase.truncate()
+            umpire()
+            val home = user(uid = "home")
+            val away = user(uid = "away")
+            val matchId = createFixture(home = home, away = away)
+            beginTiebreak(matchId = matchId, server = home)
+
+            points(matchId = matchId, side = TeamSide.TEAM1, count = won)
+            points(matchId = matchId, side = TeamSide.TEAM2, count = lost)
+            service.record(
+                token = token(uid = "ump"),
+                matchId = matchId,
+                request = LiveScoreEventRequest(kind = LiveMatchEventKinds.SET_AWARDED, side = TeamSide.TEAM1.name),
+            )
+
+            // home served the tiebreak's first point, so home receives first in the next set.
+            serverOf(matchId = matchId) shouldBe away.toString()
+        }
+    }
+
+    @Test
+    fun `an umpire's correction mid-tiebreak holds for the rest of it`() {
+        umpire()
+        val home = user(uid = "home")
+        val away = user(uid = "away")
+        val matchId = createFixture(home = home, away = away)
+        beginTiebreak(matchId = matchId, server = home)
+
+        // Four points in, the schedule has the serve back with home. The umpire says otherwise.
+        points(matchId = matchId, side = TeamSide.TEAM1, count = 4)
+        serverOf(matchId = matchId) shouldBe home.toString()
+        service.record(
+            token = token(uid = "ump"),
+            matchId = matchId,
+            request =
+                LiveScoreEventRequest(
+                    kind = LiveMatchEventKinds.SERVER_ASSIGNED,
+                    playerId = away.toString(),
+                ),
+        )
+
+        val servers =
+            (5..7).map { _ ->
+                service.record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))
+                serverOf(matchId = matchId)
+            }
+
+        val h = home.toString()
+        val a = away.toString()
+        // Inverted from here on, and it stays inverted: the correction is not overwritten by point 5.
+        servers shouldBe listOf(h, h, a)
+    }
 }

@@ -198,3 +198,53 @@ internal fun scorableMatchOf(
  */
 internal fun gamesPlayed(state: ScoreState): Int =
     state.completedSets.sumOf { it.gamesTeam1 + it.gamesTeam2 } + state.gamesTeam1 + state.gamesTeam2
+
+/**
+ * Whether the serve changes hands as a result of the action just recorded (#985, #1097).
+ *
+ * Three transitions, and they have to be told apart because [gamesPlayed] rises for two of them:
+ *
+ * - **a game completed** in ordinary play — always hands the serve on, however the game ended
+ * - **a point was scored in a tiebreak** — hands it on when the running total turns odd, which is the
+ *   whole 1-2-2-2 sequence: the first server owes one point, everyone after owes two
+ * - **a tiebreak was banked as a set** — hands it on only when the tiebreak's own handovers came out
+ *   even, because the next set must open on the opposite side to whoever served the tiebreak's first
+ *   point, and that needs the *total* number of handovers to be odd
+ *
+ * The third is why this can no longer be the single [gamesPlayed] comparison it was before #1097.
+ * Banking a tiebreak raises [gamesPlayed], so it used to rotate unconditionally — which was correct
+ * only because nothing rotated *during* a tiebreak. Add the second case and a 7-3 tiebreak (five
+ * handovers, already sitting on the right side) gets rotated once too often:
+ *
+ * ```
+ * 7-3  (10 points)  handovers after 1,3,5,7,9    = 5 (odd)   already correct -> do not rotate
+ * 7-5  (12 points)  handovers after 1,3,5,7,9,11 = 6 (even)  one short       -> rotate
+ * ```
+ *
+ * Handover *timing* comes from the score, but the action at each one is a plain **toggle**, and that is
+ * what lets an umpire's manual correction stick: the pairing boundaries are fixed by the point count
+ * and cannot be wrong, so the only thing a correction has to fix is which side is on.
+ *
+ * #1098 moves all of this into `ScoreEngine`, where the tiebreak's first server is simply remembered
+ * and the arithmetic below disappears.
+ */
+internal fun rotatesServe(
+    before: ScoreState,
+    after: ScoreState,
+): Boolean =
+    when {
+        // Only `setTo` clears the flag, so this is exactly "a tiebreak was just banked as a set".
+        before.isTiebreak && !after.isTiebreak -> handovers(points = tiebreakPoints(state = before)) % 2 == 0
+        // Still in the tiebreak. Requires the total to have RISEN, so a pause or a server correction
+        // mid-tiebreak is not mistaken for a point.
+        before.isTiebreak ->
+            tiebreakPoints(state = after) > tiebreakPoints(state = before) &&
+                tiebreakPoints(state = after) % 2 == 1
+        else -> gamesPlayed(state = after) > gamesPlayed(state = before)
+    }
+
+/** Points played in a tiebreak so far. Both sides, because the serving sequence counts the total. */
+private fun tiebreakPoints(state: ScoreState): Int = state.pointsTeam1 + state.pointsTeam2
+
+/** How often the serve changed hands over a tiebreak of [points] points: one per odd running total. */
+private fun handovers(points: Int): Int = (points + 1) / 2
