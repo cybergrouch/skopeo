@@ -12,7 +12,7 @@ plugins {
 }
 
 group = "org.skopeo"
-version = "3.2.0"
+version = "3.2.1-SNAPSHOT"
 description = "Skopeo - Performance-based tennis rating system"
 
 // The redaction mask (#825). `***` rather than the plugin's default `██` on purpose: it is the string
