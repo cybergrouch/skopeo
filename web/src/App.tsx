@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/auth/AuthProvider";
+import { RequireAuthLoaded } from "@/auth/RequireAuthLoaded";
 import { RequireAuth } from "@/auth/RequireAuth";
 import { RequireProfile } from "@/auth/RequireProfile";
 import { ThemeProvider, LocalThemeApplier } from "@/theme/ThemeProvider";
@@ -110,10 +111,31 @@ function App() {
             <ErrorBoundary>
               <Suspense fallback={<PageFallback />}>
               <Routes>
-                <Route path="/signup" element={<SignUpPage />} />
-                <Route path="/login" element={<LoginPage />} />
+                <Route
+                  path="/signup"
+                  element={
+                    <RequireAuthLoaded>
+                      <SignUpPage />
+                    </RequireAuthLoaded>
+                  }
+                />
+                <Route
+                  path="/login"
+                  element={
+                    <RequireAuthLoaded>
+                      <LoginPage />
+                    </RequireAuthLoaded>
+                  }
+                />
                 <Route path="/about" element={<AboutPage />} />
-                <Route path="/invite" element={<InviteAcceptPage />} />
+                <Route
+                  path="/invite"
+                  element={
+                    <RequireAuthLoaded>
+                      <InviteAcceptPage />
+                    </RequireAuthLoaded>
+                  }
+                />
                 <Route
                   path="/complete-profile"
                   element={

@@ -51,7 +51,12 @@ export default defineConfig({
         // React.lazy (see App.tsx) handles per-page splitting; this covers the heavy shared deps.
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('/firebase/') || id.includes('/@firebase/')) return 'firebase'
+            // No manual chunk for firebase (#1091). One 'firebase' bucket was indivisible, so no
+            // amount of dynamic importing could keep 162 kB of auth off a public page. Splitting it
+            // by hand into auth/firestore/core was worse than it looked: the shared runtime landed
+            // in whichever chunk claimed it first, so `firebase-firestore` statically imported
+            // `firebase-auth` and the match page paid for auth anyway. Rollup already knows where
+            // the dynamic boundary is — `authModule.loadAuth()` — so let it draw the line.
             if (id.includes('/@tanstack/')) return 'react-query'
             if (
               id.includes('/react/') ||
