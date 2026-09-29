@@ -20,6 +20,8 @@ export function useApiHealth() {
       const { data } = await axiosInstance.get<ApiHealth>('/health')
       return data
     },
+    // Kept rather than folded into the 30s default (#1093): a health banner is the one thing that
+    // should not add traffic to a struggling API, so this deliberately stays the slower of the two.
     staleTime: 60_000,
     retry: false,
   })
