@@ -327,6 +327,14 @@ jobs:
 
 Notes:
 - `--source .` builds via Cloud Build and respects the committed `.gcloudignore` (so `web/` and docs aren't uploaded).
+- **Cloud Build worker VMs default to the `regular` release channel from 2027-03-28.** Release channels
+  govern the *host* VM's software (its Docker and Debian versions), not what runs inside a build step,
+  and `--source .` makes us Cloud Build users whether or not we think of ourselves that way. No action
+  was taken, deliberately: the `Dockerfile` is a plain two-stage Temurin build with no `# syntax=`
+  directive, no `RUN --mount` cache mounts and no `--platform`, so nothing in it reaches for host Docker
+  behaviour. **If a deploy starts failing around that date, suspect this first and pin the build to the
+  `stable` channel** — that connection is the whole reason this note exists, because a host-side change
+  looks nothing like a code change from the workflow log.
 - The real workflow sets **all** runtime config explicitly on every deploy: non-secret env (`FIREBASE_PROJECT_ID`, `DATABASE_URL`, `DATABASE_USER`, `WEB_ORIGINS`) via `--set-env-vars` from repo *variables*, and `DATABASE_PASSWORD` + `ADMIN_EMAILS` via `--set-secrets` from Secret Manager (`skopeo-db-password`, `skopeo-admin-emails`). Repo variables/secrets are therefore the source of truth — see [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md).
 - `DATABASE_URL` is the **private-IP** form (`jdbc:postgresql://<PRIVATE_IP>:5432/SkopeoDb`) over direct VPC egress — the build has no Cloud SQL socket factory. `--add-cloudsql-instances` is passed (harmless) but is not how the JDBC connection is made.
 - Migrations still run on app startup (Flyway in `DatabaseConfig.init`), so no separate migration step. Flyway is forward-only — see the rollback note in [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md).
