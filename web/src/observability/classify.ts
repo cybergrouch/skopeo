@@ -1,4 +1,4 @@
-import { FirebaseError } from "firebase/app";
+import { isFirebaseError } from "@/lib/isFirebaseError";
 
 /**
  * Firebase auth codes that mean *our configuration or the provider is broken*, not that the user typed
@@ -55,7 +55,7 @@ function httpStatus(error: unknown): number | undefined {
  *   case we have not thought about.
  */
 export function isUnexpected(error: unknown): boolean {
-  if (error instanceof FirebaseError) {
+  if (isFirebaseError(error)) {
     return FIREBASE_FAULT_CODES.has(error.code);
   }
 

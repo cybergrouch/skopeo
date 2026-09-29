@@ -1,4 +1,4 @@
-import { FirebaseError } from 'firebase/app'
+import { isFirebaseError } from '@/lib/isFirebaseError'
 
 const MESSAGES: Record<string, string> = {
   'auth/email-already-in-use': 'This email is already registered. Try signing in instead.',
@@ -16,7 +16,7 @@ const MESSAGES: Record<string, string> = {
 
 /** Turns any thrown auth/API error into a short, user-facing sentence. */
 export function authErrorMessage(error: unknown): string {
-  if (error instanceof FirebaseError) {
+  if (isFirebaseError(error)) {
     return MESSAGES[error.code] ?? 'Something went wrong. Please try again.'
   }
   if (error instanceof Error) {

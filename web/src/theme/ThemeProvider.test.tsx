@@ -69,14 +69,18 @@ describe('ThemeProvider', () => {
     expect(document.documentElement.dataset.theme).toBe('clay')
   })
 
+  /**
+   * Only what this call site still decides for itself. `staleTime` and `refetchOnWindowFocus` were
+   * dropped in #1093 once they became app-wide defaults — this provider is where 30s was first
+   * chosen, and `createQueryClient` now pins it for everyone. Re-asserting them here would just be
+   * two tests failing together for one change.
+   */
   it('passes polling query options to the generated hook', () => {
     useGetApiV1Theme.mockReturnValue({ data: { theme: 'AUTO' } })
     renderProvider()
     expect(useGetApiV1Theme).toHaveBeenCalledWith({
       query: {
         refetchInterval: 60_000,
-        refetchOnWindowFocus: true,
-        staleTime: 30_000,
         retry: false,
       },
     })

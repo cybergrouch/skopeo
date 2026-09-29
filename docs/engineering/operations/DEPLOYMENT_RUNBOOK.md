@@ -225,6 +225,16 @@ cd ..
 firebase deploy --only hosting --project <FIREBASE_PROJECT_ID>
 ```
 
+> **Rebuilding the project from scratch after 2026-10-15?** Create the Hosting site first. New Firebase
+> projects no longer get a default site at creation — it is provisioned on demand — so the first
+> `firebase deploy` against a freshly created project fails with **404 Site Not Found**:
+> ```bash
+> firebase hosting:sites:create <FIREBASE_PROJECT_ID> --project <FIREBASE_PROJECT_ID>
+> ```
+> `skopeo-prod` already has its site, so neither `deploy-web.yml` nor the command above needs changing
+> for the live project. This bites exactly once, in disaster recovery or when standing up a staging
+> project — the moment you are least inclined to debug a 404.
+
 Then run the **First-deploy verification** block above (Flyway log + `/health`). To roll back, redeploy
 the previous tag, or `gcloud run services update-traffic skopeo --region asia-southeast1 --to-revisions <PREV>=100`.
 

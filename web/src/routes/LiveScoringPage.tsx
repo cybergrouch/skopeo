@@ -118,7 +118,11 @@ export function LiveScoringPage() {
 
   const matchId = match?.id ?? ''
   const { data: view, refetch } = useGetApiV1MatchesMatchIdLive(matchId, {
-    query: { enabled: Boolean(matchId) && started },
+    // Never cached (#1093). The app-wide 30s window is wrong here: `refetch()` after each write
+    // covers THIS umpire's own actions, but the claim is soft and takeover is the expected path
+    // (#911) — so a remount inside the window could show a board another scorer has already moved
+    // on from. A stale score is the one failure this view cannot have.
+    query: { enabled: Boolean(matchId) && started, staleTime: 0 },
   })
 
   /**

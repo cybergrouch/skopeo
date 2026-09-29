@@ -1,5 +1,4 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider, FacebookAuthProvider } from 'firebase/auth'
 
 // All values are public client config (safe to ship to the browser); the
 // sensitive Firebase secret stays server-side in Firebase itself. Supplied via
@@ -11,7 +10,15 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
+/**
+ * The Firebase app handle — and **nothing auth-related** (#1091).
+ *
+ * `auth` and the sign-in providers used to live here too, which quietly made this module a back door
+ * into the 162 kB auth SDK: `useLiveScore` imports `firebaseApp` for Firestore, so the public match
+ * page pulled auth it has no use for. They now live in `./firebaseAuth`, reachable only through
+ * `authModule.loadAuth()`.
+ *
+ * Keep this file free of `firebase/auth` imports. There is no lint rule guarding it — the cost of
+ * breaking the rule is a silent 44 kB gzip regression on every public page, visible only in a build diff.
+ */
 export const firebaseApp = initializeApp(firebaseConfig)
-export const auth = getAuth(firebaseApp)
-export const googleProvider = new GoogleAuthProvider()
-export const facebookProvider = new FacebookAuthProvider()

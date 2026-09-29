@@ -1,8 +1,10 @@
 import { lazy, Suspense } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/auth/AuthProvider";
+import { RequireAuthLoaded } from "@/auth/RequireAuthLoaded";
+import { createQueryClient } from "@/lib/queryClient";
 import { RequireAuth } from "@/auth/RequireAuth";
 import { RequireProfile } from "@/auth/RequireProfile";
 import { ThemeProvider, LocalThemeApplier } from "@/theme/ThemeProvider";
@@ -60,11 +62,7 @@ const ClubPage = lazy(() =>
   import("@/routes/ClubPage").then((m) => ({ default: m.ClubPage })),
 );
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: 1, refetchOnWindowFocus: false },
-  },
-});
+const queryClient = createQueryClient();
 
 /** Lightweight fallback shown while a route's chunk is being fetched. */
 function PageFallback() {
@@ -110,10 +108,31 @@ function App() {
             <ErrorBoundary>
               <Suspense fallback={<PageFallback />}>
               <Routes>
-                <Route path="/signup" element={<SignUpPage />} />
-                <Route path="/login" element={<LoginPage />} />
+                <Route
+                  path="/signup"
+                  element={
+                    <RequireAuthLoaded>
+                      <SignUpPage />
+                    </RequireAuthLoaded>
+                  }
+                />
+                <Route
+                  path="/login"
+                  element={
+                    <RequireAuthLoaded>
+                      <LoginPage />
+                    </RequireAuthLoaded>
+                  }
+                />
                 <Route path="/about" element={<AboutPage />} />
-                <Route path="/invite" element={<InviteAcceptPage />} />
+                <Route
+                  path="/invite"
+                  element={
+                    <RequireAuthLoaded>
+                      <InviteAcceptPage />
+                    </RequireAuthLoaded>
+                  }
+                />
                 <Route
                   path="/complete-profile"
                   element={

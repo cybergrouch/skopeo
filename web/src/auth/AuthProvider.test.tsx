@@ -1,8 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider } from './AuthProvider'
+import { requestAuth, resetAuthModuleForTests } from './authModule'
 import { useAuth } from './useAuth'
+
+/**
+ * The key Firebase persists a session under. Seeding it is what makes the provider decide a returning
+ * user is likely and load the SDK (#1091) — without it the provider is *correct* to do nothing, which
+ * is the behaviour the anonymous-visitor tests below assert.
+ */
+const SESSION_KEY = 'firebase:authUser:test-api-key:[DEFAULT]'
 
 const fb = vi.hoisted(() => ({
   authObj: { name: 'auth', currentUser: null as unknown },
@@ -19,7 +27,7 @@ const fb = vi.hoisted(() => ({
   updatePassword: vi.fn(),
 }))
 
-vi.mock('@/lib/firebase', () => ({
+vi.mock('@/lib/firebaseAuth', () => ({
   auth: fb.authObj,
   googleProvider: fb.googleObj,
   facebookProvider: fb.facebookObj,
@@ -73,6 +81,11 @@ function renderProvider() {
 describe('AuthProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetAuthModuleForTests()
+    window.localStorage.clear()
+    // Most tests here are about a returning user, so seed the session Firebase would have persisted.
+    // The SDK is loaded through a dynamic import since #1091, so these assertions are all async now.
+    window.localStorage.setItem(SESSION_KEY, '{}')
     // Default: subscribe and immediately emit a signed-in user.
     fb.onAuthStateChanged.mockImplementation((_auth, cb) => {
       cb({ email: 'roger@example.com' })
@@ -80,22 +93,52 @@ describe('AuthProvider', () => {
     })
   })
 
-  it('subscribes to auth state and exposes the current user', () => {
+  it('subscribes to auth state and exposes the current user', async () => {
     renderProvider()
-    expect(fb.onAuthStateChanged).toHaveBeenCalledWith(
-      fb.authObj,
-      expect.any(Function),
+    await waitFor(() =>
+      expect(fb.onAuthStateChanged).toHaveBeenCalledWith(fb.authObj, expect.any(Function)),
     )
-    expect(screen.getByTestId('state')).toHaveTextContent('roger@example.com')
+    expect(await screen.findByText('roger@example.com')).toBeInTheDocument()
   })
 
-  it('reports signed-out when no user is emitted', () => {
+  it('reports signed-out when no user is emitted', async () => {
     fb.onAuthStateChanged.mockImplementation((_auth, cb) => {
       cb(null)
       return () => {}
     })
     renderProvider()
-    expect(screen.getByTestId('state')).toHaveTextContent('signed-out')
+    await waitFor(() => expect(fb.onAuthStateChanged).toHaveBeenCalled())
+    expect(await screen.findByText('signed-out')).toBeInTheDocument()
+  })
+
+  /**
+   * The point of #1091: an anonymous visitor on a public page must never fetch the SDK.
+   *
+   * Asserted through `onAuthStateChanged` never being called, which is the first thing the provider
+   * does once the module is in hand — so a call here means the import happened.
+   */
+  it('never loads the SDK for a visitor with no persisted session', async () => {
+    window.localStorage.clear()
+    renderProvider()
+
+    // Signed-out immediately rather than stuck on 'initializing': with nothing requested there is
+    // nothing to wait for, and PublicPageNav renders its real state on first paint (#1027).
+    expect(await screen.findByText('signed-out')).toBeInTheDocument()
+    expect(fb.onAuthStateChanged).not.toHaveBeenCalled()
+  })
+
+  /**
+   * ...but a demand loads it anyway, session or not. This is what `RequireAuth` relies on, and it is
+   * why a stale `hasPersistedSession` heuristic cannot lock a signed-in user out of the dashboard.
+   */
+  it('loads the SDK when a route demands auth, even with no persisted session', async () => {
+    window.localStorage.clear()
+    renderProvider()
+    expect(fb.onAuthStateChanged).not.toHaveBeenCalled()
+
+    requestAuth()
+
+    await waitFor(() => expect(fb.onAuthStateChanged).toHaveBeenCalled())
   })
 
   it('wires each action to its Firebase call with the app auth instance', async () => {
@@ -155,11 +198,16 @@ describe('AuthProvider', () => {
     expect(fb.updatePassword).toHaveBeenCalledWith(fb.authObj.currentUser, 'newpass')
   })
 
-  it('unsubscribes on unmount', () => {
+  it('unsubscribes on unmount', async () => {
     const unsubscribe = vi.fn()
     fb.onAuthStateChanged.mockReturnValue(unsubscribe)
     const { unmount } = renderProvider()
+    // Wait for the dynamic import to land before unmounting: unmounting first would prove only that
+    // a subscription that never happened was not torn down.
+    await waitFor(() => expect(fb.onAuthStateChanged).toHaveBeenCalled())
+
     unmount()
+
     expect(unsubscribe).toHaveBeenCalled()
   })
 })

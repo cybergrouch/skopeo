@@ -50,8 +50,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { data } = useGetApiV1Theme({
     query: {
       refetchInterval: 60_000,
-      refetchOnWindowFocus: true,
-      staleTime: 30_000,
+      // staleTime/refetchOnWindowFocus dropped in #1093: both are the app-wide default now, and
+      // this call site is where 30s was first chosen.
       retry: false,
     },
   });
@@ -94,8 +94,7 @@ export function LocalThemeApplier() {
   const { data } = useGetApiV1UsersMeTheme({
     query: {
       enabled: Boolean(user),
-      refetchOnWindowFocus: true,
-      staleTime: 30_000,
+      // As above (#1093): both settings are the default now.
       retry: false,
     },
   });
