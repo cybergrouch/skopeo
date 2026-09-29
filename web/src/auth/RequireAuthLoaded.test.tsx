@@ -32,7 +32,7 @@ describe('RequireAuthLoaded', () => {
     expect(await screen.findByText('protected')).toBeInTheDocument()
   })
 
-  it('demands the SDK rather than waiting for the session probe to guess', () => {
+  it('demands the SDK rather than waiting for the session probe to guess', async () => {
     m.loadAuth.mockResolvedValue({})
     render(
       <RequireAuthLoaded>
@@ -43,6 +43,9 @@ describe('RequireAuthLoaded', () => {
     // The whole reason this guard exists: a stale `hasPersistedSession` must never be what decides
     // whether a signed-in user reaches the dashboard.
     expect(m.requestAuth).toHaveBeenCalled()
+    // Settle the load before the test ends: the resolution lands a state update, and leaving it in
+    // flight is what produces an `act(...)` warning and, eventually, a flaky neighbour.
+    expect(await screen.findByText('protected')).toBeInTheDocument()
   })
 
   /**

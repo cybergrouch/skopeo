@@ -109,6 +109,9 @@ export default defineConfig({
         'src/main.tsx',
         'src/App.tsx', // router/provider composition
         'src/lib/firebase.ts', // Firebase SDK initialization
+        // Same reason, split out in #1091: `getAuth` + provider construction, no logic to test.
+        // Excluding it keeps the split from looking like a coverage regression.
+        'src/lib/firebaseAuth.ts',
         'src/vite-env.d.ts',
         '**/*.d.ts',
       ],
