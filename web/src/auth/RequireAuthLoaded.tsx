@@ -25,9 +25,16 @@ export function RequireAuthLoaded({ children }: { children: ReactNode }) {
     if (ready) return
     let live = true
     requestAuth()
-    void loadAuth().then(() => {
-      if (live) setReady(true)
-    })
+    loadAuth()
+      .then(() => {
+        if (live) setReady(true)
+      })
+      .catch(() => {
+        // Render anyway. The gate exists so auth *can* be asked, not to guarantee an answer — and
+        // holding a permanent spinner in front of a protected route strands the user with no way
+        // out. `RequireAuth` will send them to the login page, which is the honest outcome.
+        if (live) setReady(true)
+      })
     return () => {
       live = false
     }

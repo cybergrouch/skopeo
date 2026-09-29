@@ -63,9 +63,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!requested) return
     let live = true
-    void loadAuth().then((module) => {
-      if (live) setSdk(module)
-    })
+    loadAuth()
+      .then((module) => {
+        if (live) setSdk(module)
+      })
+      .catch((error: unknown) => {
+        // Auth is unreachable — offline, or a stale chunk hash after a deploy. Stop waiting and
+        // present the app as signed-out rather than leaving every consumer on `initializing`
+        // forever; a spinner nobody can clear is worse than a visible signed-out state.
+        console.error('Firebase Auth failed to load', error)
+        if (live) setResolved(true)
+      })
     return () => {
       live = false
     }

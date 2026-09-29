@@ -42,7 +42,13 @@ export function loadAuth(): Promise<AuthModule> {
       import('@/lib/firebaseAuth'),
     ])
     return { ...firebaseAuth, ...config }
-  })()
+  })().catch((error: unknown) => {
+    // Forget the failure so a later attempt can retry. Caching a *rejected* promise would fail
+    // every caller for the rest of the page's life, and the usual causes are transient: offline,
+    // or a hashed chunk 404ing because a deploy landed mid-session.
+    pending = null
+    throw error
+  })
   return pending
 }
 
@@ -95,7 +101,10 @@ const listeners = new Set<() => void>()
  * cannot loop a `useSyncExternalStore` subscriber.
  */
 export function requestAuth(): void {
-  void loadAuth()
+  // Swallowed here on purpose: this only *starts* the load. Whoever awaits `loadAuth()` — the
+  // provider, the route guard, the request interceptor — decides what a failure means for them, and
+  // a floating promise would otherwise surface as an unhandled rejection with no owner.
+  loadAuth().catch(() => undefined)
   if (requested) return
   requested = true
   listeners.forEach((notify) => notify())

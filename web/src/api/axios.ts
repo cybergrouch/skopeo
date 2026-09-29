@@ -26,8 +26,17 @@ export const axiosInstance = Axios.create({
  */
 async function currentIdToken(): Promise<string | undefined> {
   if (!authLoaded() && !hasPersistedSession()) return undefined
-  const { auth } = await loadAuth()
-  return auth.currentUser?.getIdToken()
+  try {
+    const { auth } = await loadAuth()
+    return await auth.currentUser?.getIdToken()
+  } catch (error) {
+    // The SDK could not load (offline, or a stale chunk hash after a deploy). Send the request
+    // unauthenticated rather than failing it here: the server answers 401 and the app handles that,
+    // whereas rejecting inside the interceptor turns one missing token into a broken request with
+    // no useful message.
+    console.error('Could not resolve a Firebase ID token', error)
+    return undefined
+  }
 }
 
 axiosInstance.interceptors.request.use(async (config) => {
