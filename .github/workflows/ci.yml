@@ -1,8 +1,9 @@
 name: CI
 
 on:
+  # Every PR base, not just main: stacked PRs (base = the branch below) otherwise get no CI and no
+  # coverage comments until they are retargeted onto main. Pushes stay main-only.
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
@@ -22,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         # Full history (not the default shallow depth-1) so diff-cover can walk the
-        # commit ancestry to origin/main and compute patch (changed-lines) coverage.
+        # commit ancestry to the PR base and compute patch (changed-lines) coverage.
         with:
           fetch-depth: 0
 
@@ -130,7 +131,8 @@ jobs:
           path: build/test-results/test/TEST-*.xml
           retention-days: 14
 
-      # Patch (changed-lines) coverage against origin/main via diff-cover. JaCoCo package
+      # Patch (changed-lines) coverage against the PR's base via diff-cover — main for an ordinary PR,
+      # the branch below for a stacked one, so a stacked PR reports only its own lines. JaCoCo package
       # names + sourcefile names resolve under src/main/kotlin, so diff-cover maps the
       # changed Kotlin lines to their coverage. Non-blocking: the gate is `./gradlew check`.
       - name: Backend patch coverage (diff-cover)
@@ -139,7 +141,7 @@ jobs:
         run: |
           pip install --quiet diff-cover
           diff-cover build/reports/jacoco/test/jacocoTestReport.xml \
-            --compare-branch=origin/main \
+            --compare-branch="origin/${{ github.base_ref }}" \
             --src-roots src/main/kotlin \
             --format markdown:backend-patch.md || echo "_diff-cover produced no patch report._" > backend-patch.md
 
@@ -158,7 +160,7 @@ jobs:
               echo "_No coverage report found._"
             fi
             echo
-            echo "### Patch coverage (changed lines vs \`main\`)"
+            echo "### Patch coverage (changed lines vs \`${{ github.base_ref }}\`)"
             echo
             if [ -f backend-patch.md ]; then
               cat backend-patch.md
@@ -322,7 +324,9 @@ jobs:
 
       # Overall coverage from the vitest v8 lcov, plus patch (changed-lines) coverage
       # via diff-cover. The lcov's SF paths are relative to web/, so they are prefixed
-      # with web/ to become repo-relative before diff-cover diffs against origin/main.
+      # with web/ to become repo-relative before diff-cover diffs against the PR's base.
+      # Checkout fetches full history but only as origin/* remote refs; the base branch
+      # is among them, stacked or not.
       # Non-blocking: the coverage gate stays in `./gradlew check` (backend) / vitest.
       - name: Web patch coverage (diff-cover)
         if: github.event_name == 'pull_request' && always()
@@ -352,7 +356,7 @@ jobs:
           # Repo-relative lcov paths (web/src/...) so diff-cover matches git diff paths.
           sed 's|^SF:src/|SF:web/src/|' web/coverage/lcov.info > web/coverage/lcov-rooted.info
           diff-cover web/coverage/lcov-rooted.info \
-            --compare-branch=origin/main \
+            --compare-branch="origin/${{ github.base_ref }}" \
             --format markdown:web-patch.md || echo "_diff-cover produced no patch report._" > web-patch.md
 
       - name: Assemble web coverage comment
@@ -369,7 +373,7 @@ jobs:
               echo "_No coverage report found._"
             fi
             echo
-            echo "### Patch coverage (changed lines vs \`main\`)"
+            echo "### Patch coverage (changed lines vs \`${{ github.base_ref }}\`)"
             echo
             if [ -f web-patch.md ]; then
               cat web-patch.md

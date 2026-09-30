@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Suspense, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/useAuth";
 import {
   canManageMatches,
@@ -22,26 +21,70 @@ import {
   isResearcher,
 } from "@/auth/capabilities";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
+import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
+import { ownedClubs } from "@/auth/clubAccess";
 import { ProfileTab } from "./dashboard/ProfileTab";
-import { SettingsTab } from "./dashboard/SettingsTab";
-import { AdminTab } from "./dashboard/AdminTab";
-import { AccountManagementTab } from "./dashboard/AccountManagementTab";
-import { ClubManagementTab } from "./dashboard/ClubManagementTab";
-import { PointsManagementSection } from "./dashboard/admin/PointsManagementSection";
-import { PlaceholderPlayersTab } from "./dashboard/PlaceholderPlayersTab";
-import { SeedingTab } from "./dashboard/SeedingTab";
-import { RatingsTab } from "./dashboard/RatingsTab";
-import { ResearchTab } from "./dashboard/ResearchTab";
-import { StandingsTab } from "./dashboard/StandingsTab";
-import { ActivityTab } from "./dashboard/ActivityTab";
-import { ReportTab } from "./dashboard/ReportTab";
-import { AboutTab } from "./dashboard/AboutTab";
 import { PageContainer } from "@/components/PageContainer";
+import { DESKTOP_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
+import { SectionNav } from "./dashboard/SectionNav";
+import { lazyWithPreload } from "@/lib/lazyWithPreload";
+
+// Every section but Profile is its own chunk (#1092), so a signed-in user downloads only the sections
+// they open — a PLAYER no longer carries the admin surface they can never see. Profile stays in this
+// chunk: it is where everyone lands, and lazy-loading it would put a second round trip in front of the
+// first screen. `sections[]` below still decides who gets which; this only decides when bytes arrive.
+// Not a security boundary — every operation keeps its server-side rule.
+const SettingsTab = lazyWithPreload(() =>
+  import("./dashboard/SettingsTab").then((m) => m.SettingsTab),
+);
+const AdminTab = lazyWithPreload(() =>
+  import("./dashboard/AdminTab").then((m) => m.AdminTab),
+);
+const AccountManagementTab = lazyWithPreload(() =>
+  import("./dashboard/AccountManagementTab").then((m) => m.AccountManagementTab),
+);
+const ClubManagementTab = lazyWithPreload(() =>
+  import("./dashboard/ClubManagementTab").then((m) => m.ClubManagementTab),
+);
+const PlaceholderPlayersTab = lazyWithPreload(() =>
+  import("./dashboard/PlaceholderPlayersTab").then((m) => m.PlaceholderPlayersTab),
+);
+const SeedingTab = lazyWithPreload(() =>
+  import("./dashboard/SeedingTab").then((m) => m.SeedingTab),
+);
+const RatingsTab = lazyWithPreload(() =>
+  import("./dashboard/RatingsTab").then((m) => m.RatingsTab),
+);
+const ResearchTab = lazyWithPreload(() =>
+  import("./dashboard/ResearchTab").then((m) => m.ResearchTab),
+);
+const StandingsTab = lazyWithPreload(() =>
+  import("./dashboard/StandingsTab").then((m) => m.StandingsTab),
+);
+const ActivityTab = lazyWithPreload(() =>
+  import("./dashboard/ActivityTab").then((m) => m.ActivityTab),
+);
+const ReportTab = lazyWithPreload(() =>
+  import("./dashboard/ReportTab").then((m) => m.ReportTab),
+);
+const AboutTab = lazyWithPreload(() =>
+  import("./dashboard/AboutTab").then((m) => m.AboutTab),
+);
+const PointsManagementSection = lazyWithPreload(() =>
+  import("./dashboard/admin/PointsManagementSection").then((m) => m.PointsManagementSection),
+);
 
 interface Section {
   value: string;
   label: string;
   element: ReactNode;
+  /** Starts fetching a lazy section's chunk; absent for Profile, which is always loaded. */
+  preload?: () => unknown;
+}
+
+/** Shown only on a cold load of a lazy section (a deep link); a tab switch keeps the old one instead. */
+function SectionFallback() {
+  return <p className="text-sm text-muted-foreground">Loading…</p>;
 }
 
 export function DashboardPage() {
@@ -71,14 +114,28 @@ export function DashboardPage() {
   // Points Management is always a standalone tab for anyone who can manage points budgets
   // (POINTS_MANAGER or ADMINISTRATOR); it's no longer embedded in the Admin tab.
   const showPointsManagement = canManagePointsBudget(capabilities);
+  // "My clubs" (#1096): the clubs the viewer OWNS, as menu shortcuts to their public pages. The clubs
+  // list is staff-readable and carries each club's owners, so ownership needs no new endpoint — and the
+  // fetch is gated like ClubPage's, so a plain PLAYER sends no request and takes no 403. An
+  // administrator owns nothing and so gets no entries, by decision: they reach every club through Club
+  // Management. The entries are shortcuts, not permissions; the club page decides what the viewer may do.
+  const showMyClubs = canManageMatches(capabilities);
+  const clubsQuery = useGetApiV1Clubs({ query: { enabled: showMyClubs } });
+  const myClubs = showMyClubs ? ownedClubs(clubsQuery.data ?? [], me?.id) : [];
+  const [clubsOpen, setClubsOpen] = useState(true);
 
   // The selected section lives in the URL (?tab=…, #323) so it survives leaving and returning to the
   // dashboard — e.g. Back from a public page lands on the tab the user was on, not a reset to Profile.
-  // The menu's open state stays local. One menu drives navigation at every breakpoint — a hamburger
-  // drawer on mobile and desktop alike (#187) — so there's a single nav to reason about.
+  // The menu's open state stays local. There is one menu (#187) — one `sections[]`, one `SectionNav` —
+  // rendered two ways (#1095): a persistent rail from `md:` up, so a section is one click away, and the
+  // hamburger drawer below it, where a rail would eat the screen.
   const [searchParams, setSearchParams] = useSearchParams();
   const active = searchParams.get("tab") ?? "profile";
   const [navOpen, setNavOpen] = useState(false);
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  // Widening past `md:` with the drawer open swaps it for the rail; close it here, or narrowing again
+  // would bring back a drawer nobody just opened.
+  if (isDesktop && navOpen) setNavOpen(false);
 
   // One capability-gated list of sections: the single source of truth for the menu items and the
   // rendered content, so gating stays identical across both.
@@ -102,18 +159,19 @@ export function DashboardPage() {
           {
             value: "settings",
             label: "Settings",
+            preload: SettingsTab.preload,
             element: <SettingsTab userId={me?.id ?? ""} />,
           },
         ]
       : []),
     ...(showResearch
-      ? [{ value: "research", label: "Research", element: <ResearchTab /> }]
+      ? [{ value: "research", label: "Research", preload: ResearchTab.preload, element: <ResearchTab /> }]
       : []),
-    { value: "standings", label: "Standings", element: <StandingsTab /> },
+    { value: "standings", label: "Standings", preload: StandingsTab.preload, element: <StandingsTab /> },
     // Claiming a placeholder account (#496) now lives conditionally on the Profile tab (#727), shown
     // only while the owner's account is still claim-eligible — no standalone Claim tab.
     ...(showSeeding
-      ? [{ value: "seeding", label: "Seeding", element: <SeedingTab /> }]
+      ? [{ value: "seeding", label: "Seeding", preload: SeedingTab.preload, element: <SeedingTab /> }]
       : []),
     // Placeholder Players (#578): create + manage login-less players; HOST/CLUB_OWNER/ADMIN, like
     // the other match-management tabs. Promoted out of the Event Organizer tab.
@@ -122,24 +180,26 @@ export function DashboardPage() {
           {
             value: "placeholders",
             label: "Placeholder Players",
+            preload: PlaceholderPlayersTab.preload,
             element: <PlaceholderPlayersTab capabilities={capabilities} />,
           },
         ]
       : []),
     ...(showRatings
-      ? [{ value: "ratings", label: "Ratings", element: <RatingsTab /> }]
+      ? [{ value: "ratings", label: "Ratings", preload: RatingsTab.preload, element: <RatingsTab /> }]
       : []),
     ...(showActivity
-      ? [{ value: "activity", label: "Activity Log", element: <ActivityTab /> }]
+      ? [{ value: "activity", label: "Activity Log", preload: ActivityTab.preload, element: <ActivityTab /> }]
       : []),
     ...(showReport
-      ? [{ value: "reports", label: "Reports", element: <ReportTab /> }]
+      ? [{ value: "reports", label: "Reports", preload: ReportTab.preload, element: <ReportTab /> }]
       : []),
     ...(showPointsManagement
       ? [
           {
             value: "points",
             label: "Points Management",
+            preload: PointsManagementSection.preload,
             element: <PointsManagementSection capabilities={capabilities} />,
           },
         ]
@@ -151,6 +211,7 @@ export function DashboardPage() {
           {
             value: "accounts",
             label: "Account Management",
+            preload: AccountManagementTab.preload,
             element: <AccountManagementTab />,
           },
         ]
@@ -162,22 +223,29 @@ export function DashboardPage() {
           {
             value: "club-management",
             label: "Club Management",
+            preload: ClubManagementTab.preload,
             element: <ClubManagementTab />,
           },
         ]
       : []),
     ...(showAdmin
-      ? [{ value: "admin", label: "Admin", element: <AdminTab /> }]
+      ? [{ value: "admin", label: "Admin", preload: AdminTab.preload, element: <AdminTab /> }]
       : []),
     // About (#573): general info, available to every signed-in user; last so it never displaces the
     // working tabs. Same content as the public /about page, minus the sign-up / log-in call to action.
-    { value: "about", label: "About", element: <AboutTab /> },
+    { value: "about", label: "About", preload: AboutTab.preload, element: <AboutTab /> },
   ];
 
   // `active` comes from the URL, so it may name a section the viewer can't access (a hand-edited or
   // stale ?tab=…); sections[0] (Profile) is the fallback in that case.
   const activeSection: Section =
     sections.find((s) => s.value === active) ?? sections[0];
+
+  const clubsGroup = {
+    clubs: myClubs,
+    open: clubsOpen,
+    onOpenChange: setClubsOpen,
+  };
 
   async function onSignOut() {
     await signOut();
@@ -190,9 +258,23 @@ export function DashboardPage() {
     const next = new URLSearchParams(searchParams);
     if (value === "profile") next.delete("tab");
     else next.set("tab", value);
+    // React Router applies this in a transition, so switching to a section whose chunk is still loading
+    // keeps the current one on screen instead of flashing the Suspense fallback (#1092) — pinned by
+    // DashboardPage.lazy.test.tsx, so a router change that dropped it would fail there.
     setSearchParams(next, { replace: true });
     setNavOpen(false);
   }
+
+  // Menu intent (pointer over, or focus on, an item) starts that section's download, so the click that
+  // usually follows finds the chunk already loaded.
+  function preloadSection(value: string) {
+    sections.find((section) => section.value === value)?.preload?.();
+  }
+
+  // Scoped to the section, so the header and the menu stay on screen while a section loads.
+  const content = (
+    <Suspense fallback={<SectionFallback />}>{activeSection.element}</Suspense>
+  );
 
   return (
     <div className="min-h-svh bg-muted/40">
@@ -222,51 +304,67 @@ export function DashboardPage() {
             </p>
           ) : (
             <>
-              {/* A single hamburger menu drives navigation everywhere; the current section's name is
-                the page header in place of a tab strip. */}
-              <div className="mb-4 flex items-center gap-3">
-                <Sheet open={navOpen} onOpenChange={setNavOpen}>
-                  <SheetTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      aria-label="Open navigation menu"
-                    >
-                      <Menu />
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent
-                    side="left"
-                    className="w-72"
-                    aria-describedby={undefined}
-                  >
-                    <SheetHeader>
-                      <SheetTitle>Menu</SheetTitle>
-                    </SheetHeader>
-                    <nav className="mt-4 flex flex-col gap-1">
-                      {sections.map((section) => (
-                        <button
-                          key={section.value}
-                          type="button"
-                          onClick={() => selectSection(section.value)}
-                          aria-current={
-                            section.value === active ? "page" : undefined
-                          }
-                          className={cn(
-                            "rounded-md px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-muted",
-                            section.value === active && "bg-muted",
-                          )}
+              {isDesktop ? (
+                // The rail (#1095): always visible, so it neither traps focus nor needs a trigger. The
+                // heading stays — it is the page's only <h1>, however obvious the rail makes location.
+                <div className="flex items-start gap-6">
+                  <aside className="sticky top-4 w-60 shrink-0">
+                    <SectionNav
+                      sections={sections}
+                      active={activeSection.value}
+                      onSelect={selectSection}
+                      onIntent={preloadSection}
+                      clubs={clubsGroup}
+                    />
+                  </aside>
+                  <div className="min-w-0 flex-1">
+                    <h1 className="mb-4 text-lg font-semibold">
+                      {activeSection.label}
+                    </h1>
+                    {content}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Below `md:` the menu is a drawer, and the current section's name is the page
+                    header beside its trigger. */}
+                  <div className="mb-4 flex items-center gap-3">
+                    <Sheet open={navOpen} onOpenChange={setNavOpen}>
+                      <SheetTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Open navigation menu"
                         >
-                          {section.label}
-                        </button>
-                      ))}
-                    </nav>
-                  </SheetContent>
-                </Sheet>
-                <h1 className="text-lg font-semibold">{activeSection.label}</h1>
-              </div>
+                          <Menu />
+                        </Button>
+                      </SheetTrigger>
+                      <SheetContent
+                        side="left"
+                        className="w-72"
+                        aria-describedby={undefined}
+                      >
+                        <SheetHeader>
+                          <SheetTitle>Menu</SheetTitle>
+                        </SheetHeader>
+                        <SectionNav
+                          sections={sections}
+                          active={activeSection.value}
+                          onSelect={selectSection}
+                          onIntent={preloadSection}
+                          clubs={clubsGroup}
+                          className="mt-4"
+                        />
+                      </SheetContent>
+                    </Sheet>
+                    <h1 className="text-lg font-semibold">
+                      {activeSection.label}
+                    </h1>
+                  </div>
 
-              {activeSection.element}
+                  {content}
+                </>
+              )}
             </>
           )}
         </PageContainer>

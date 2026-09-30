@@ -312,8 +312,46 @@ Facebook / X / LinkedIn / WhatsApp / iMessage / Slack. Two layers provide this:
 
 ## Dashboard structure
 
-`DashboardPage.tsx` renders a Radix `Tabs` layout. Tabs are conditionally shown by the capability
-gates above:
+`DashboardPage.tsx` builds one capability-gated `sections[]` array. It drives both the menu and the
+rendered content, and it is the only place a section's gate lives (#187). The menu is one
+`SectionNav` component rendered two ways (#1095):
+- **From `md:` up**, a persistent left rail. It is not a dialog and does not trap focus, and a section
+  is one click away.
+- **Below `md:`**, a hamburger drawer (a Radix `Sheet`), which does trap focus while open.
+
+Which one renders is decided in JS by `useMediaQuery(DESKTOP_QUERY)`, not by CSS-hiding one of the
+two. Hiding would leave both in the DOM, so every control would exist twice for anything that ignores
+CSS, and in tests every `getByRole` would match both copies. jsdom has no `matchMedia`, so tests get
+the drawer unless they call `stubMatchMedia` (`src/test/matchMedia.ts`). Selection lives in `?tab=`
+at both widths, and the active item carries `aria-current="page"`.
+
+Below the sections, `SectionNav` renders a **"My clubs"** group (#1096): the clubs the viewer *owns*,
+derived with `ownedClubs(clubs, meId)` from the staff clubs list. That list is fetched only when
+`canManageMatches`, like `ClubPage`'s, so a plain PLAYER sends no request.
+- Each entry links to the club's public page, where every club is organized (#794), so following it
+  leaves the dashboard. The public page's "← Back" (#1027) returns to it.
+- The heading is an in-place disclosure (`aria-expanded`/`aria-controls`, expanded by default) that
+  navigates nowhere. Its state is held by `DashboardPage`, so the rail and the drawer agree.
+- Owning no club renders no group. An administrator owns none and so gets no entries, by decision:
+  they reach every club through Club Management.
+- The entries are **shortcuts, never gates**: `ClubPage` re-derives ownership of *that* club on its
+  own, and a test pins that owning a different club grants nothing there.
+
+**Every section but Profile is code-split (#1092)**, through `lazyWithPreload` (`src/lib`), so a
+signed-in user downloads only the sections they open. A PLAYER no longer carries the admin surface: the
+`DashboardPage` chunk went from 36.9 kB to 7.5 kB gzip, and a player's dashboard download from 241 kB to
+192 kB gzip, with no `routes/dashboard/admin/` module in it.
+- Profile stays in the page's own chunk: everyone lands on it, and lazy-loading it would add a round
+  trip before the first screen.
+- `sections[]` still decides who gets which section; code splitting only decides when the bytes arrive.
+  It is **not a security boundary**, and every operation keeps its server-side rule.
+- The `<Suspense>` boundary wraps only the section, so the header and menu stay up while one loads.
+- A tab switch doesn't flash the fallback. React Router applies `?tab=` changes in a transition, so the
+  current section stays until the next is ready (pinned by `DashboardPage.lazy.test.tsx`), and menu
+  intent (pointer over or focus on an item) starts the chunk before the click.
+- Only a cold deep link shows "Loading…".
+
+The sections are shown by these gates:
 
 | Tab | Component | Gate |
 |---|---|---|
@@ -563,6 +601,20 @@ The web client uses Vitest + Testing Library (jsdom). `npm run test` watches; `n
 runs once with v8 coverage. Coverage excludes generated code (`src/api/generated/**`), test files,
 and pure composition/SDK-init glue (`main.tsx`, `App.tsx`, `lib/firebase.ts`) — mirroring the
 backend's coverage exclusions. CI emits JUnit XML for a drillable test report.
+
+### Click budgets (#1094)
+
+`src/test/navigation/clickBudgets.test.ts` asserts how many clicks key flows take from the post-login
+landing — any dashboard section, scoring a live match, creating and managing an event — per breakpoint
+and per persona. The graph behind it (`navGraph.ts`) is read from source: the `App.tsx` route table,
+the dashboard's `sections[]` with their real capability predicates, and every `to=` / `navigate(…)`
+target, attributed to a page by following its imports. Budgets are exact, so a flow that gets shorter
+fails too, asking for its number to be lowered.
+
+It measures **reachability, not behaviour**, and stops at the page a flow happens on: steps inside a
+page (expanding a card, opening a form, entering a result in `EventManagerView`) are not counted, and a
+link behind a runtime condition counts as present. The full list of what it cannot see is at the top
+of `navGraph.ts`. Read it before trusting a number.
 
 ## References
 

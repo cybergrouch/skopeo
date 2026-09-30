@@ -157,6 +157,31 @@ describe("ClubPage", () => {
     expect(screen.queryByText(/new-event-form/)).not.toBeInTheDocument();
   });
 
+  // The dashboard's "My clubs" (#1096) lists the clubs a viewer owns, from this same clubs list. Its
+  // entries are shortcuts, never gates: owning ANOTHER club — which is what puts a club in that menu —
+  // grants nothing here, because this page re-derives ownership of THIS club on its own.
+  it("grants nothing to the owner of a different club, whatever their dashboard shortcuts show (#1096)", () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: ME, capabilities: ["PLAYER", "CLUB_OWNER"] },
+    });
+    useGetApiV1Clubs.mockReturnValue({
+      data: [
+        ...clubsListOwnedBy("someone-else"),
+        {
+          id: "club-2",
+          name: "Riverside",
+          publicCode: "CLB002",
+          isActive: true,
+          owners: [{ userId: ME, publicCode: "OWN002" }],
+        },
+      ],
+    });
+    useGetApiV1ClubsCodeCode.mockReturnValue({ data: club, isLoading: false });
+    renderAt("CLB001");
+
+    expect(screen.queryByText(/new-event-form/)).not.toBeInTheDocument();
+  });
+
   it("offers the New Event form to an administrator who owns no club (#789)", () => {
     useGetApiV1UsersMe.mockReturnValue({
       data: { id: ME, capabilities: ["PLAYER", "ADMINISTRATOR"] },
