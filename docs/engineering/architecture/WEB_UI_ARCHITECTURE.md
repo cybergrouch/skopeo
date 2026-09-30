@@ -323,8 +323,21 @@ Which one renders is decided in JS by `useMediaQuery(DESKTOP_QUERY)`, not by CSS
 two. Hiding would leave both in the DOM, so every control would exist twice for anything that ignores
 CSS, and in tests every `getByRole` would match both copies. jsdom has no `matchMedia`, so tests get
 the drawer unless they call `stubMatchMedia` (`src/test/matchMedia.ts`). Selection lives in `?tab=`
-at both widths, and the active item carries `aria-current="page"`. The sections are shown by these
-gates:
+at both widths, and the active item carries `aria-current="page"`.
+
+Below the sections, `SectionNav` renders a **"My clubs"** group (#1096): the clubs the viewer *owns*,
+derived with `ownedClubs(clubs, meId)` from the staff clubs list. That list is fetched only when
+`canManageMatches`, like `ClubPage`'s, so a plain PLAYER sends no request.
+- Each entry links to the club's public page, where every club is organized (#794), so following it
+  leaves the dashboard. The public page's "← Back" (#1027) returns to it.
+- The heading is an in-place disclosure (`aria-expanded`/`aria-controls`, expanded by default) that
+  navigates nowhere. Its state is held by `DashboardPage`, so the rail and the drawer agree.
+- Owning no club renders no group. An administrator owns none and so gets no entries, by decision:
+  they reach every club through Club Management.
+- The entries are **shortcuts, never gates**: `ClubPage` re-derives ownership of *that* club on its
+  own, and a test pins that owning a different club grants nothing there.
+
+The sections are shown by these gates:
 
 | Tab | Component | Gate |
 |---|---|---|

@@ -54,6 +54,14 @@ const SOURCES: Record<string, string> = import.meta.glob<string>(
 
 const APP_FILE = "/src/App.tsx";
 const DASHBOARD_FILE = "/src/routes/DashboardPage.tsx";
+/** The dashboard menu. Links written in it sit behind the drawer below `md:`, like its sections do. */
+const MENU_FILE = "/src/routes/dashboard/SectionNav.tsx";
+/**
+ * The DashboardPage flag gating the menu's own links — the "My clubs" shortcuts (#1096). The model
+ * cannot see ownership, so a persona passing this gate is assumed to own a club: true of `CLUB_OWNER`
+ * in the budgets, and an over-approximation for an ADMINISTRATOR, who owns none and sees no entries.
+ */
+const MENU_LINKS_FLAG = "showMyClubs";
 const DASHBOARD_ROUTE = "/dashboard";
 const LANDING_TAB = "profile";
 
@@ -158,10 +166,7 @@ export interface SectionNode {
  */
 export function sections(): SectionNode[] {
   const page = source(DASHBOARD_FILE);
-  const predicates = new Map<string, string>();
-  for (const match of page.matchAll(/const\s+(show\w+)\s*=\s*(\w+)\(\s*capabilities\s*\)/g)) {
-    predicates.set(match[1], match[2]);
-  }
+  const predicates = dashboardFlags();
   const components = namedImportsOf(DASHBOARD_FILE);
   const start = page.indexOf("const sections: Section[] = [");
   const end = page.indexOf("\n  ];", start);
@@ -191,14 +196,36 @@ export function sections(): SectionNode[] {
   return found;
 }
 
-/** Whether a persona holding [capabilities] is shown [section], by the dashboard's own predicate. */
-export function isVisible(section: SectionNode, capabilities: readonly Capability[]): boolean {
-  if (!section.gate) return true;
-  const predicate = (capabilityRules as Record<string, unknown>)[section.gate];
+/** DashboardPage's `const showX = predicate(capabilities)` flags, as flag → predicate name. */
+function dashboardFlags(): Map<string, string> {
+  const flags = new Map<string, string>();
+  for (const match of source(DASHBOARD_FILE).matchAll(
+    /const\s+(show\w+)\s*=\s*(\w+)\(\s*capabilities\s*\)/g,
+  )) {
+    flags.set(match[1], match[2]);
+  }
+  return flags;
+}
+
+/** Evaluates an `auth/capabilities` predicate, by name, for a persona. */
+function passes(predicateName: string, capabilities: readonly Capability[]): boolean {
+  const predicate = (capabilityRules as Record<string, unknown>)[predicateName];
   if (typeof predicate !== "function") {
-    throw new Error(`navGraph: ${section.gate} is not exported from auth/capabilities`);
+    throw new Error(`navGraph: ${predicateName} is not exported from auth/capabilities`);
   }
   return Boolean((predicate as (caps: readonly Capability[]) => unknown)(capabilities));
+}
+
+/** Whether a persona holding [capabilities] is shown [section], by the dashboard's own predicate. */
+export function isVisible(section: SectionNode, capabilities: readonly Capability[]): boolean {
+  return !section.gate || passes(section.gate, capabilities);
+}
+
+/** Whether the menu's own links (the "My clubs" shortcuts) exist for a persona. */
+function menuLinksVisible(capabilities: readonly Capability[]): boolean {
+  const predicate = dashboardFlags().get(MENU_LINKS_FLAG);
+  if (!predicate) throw new Error(`navGraph: DashboardPage has no ${MENU_LINKS_FLAG} flag`);
+  return passes(predicate, capabilities);
 }
 
 /**
@@ -310,7 +337,12 @@ function buildEdges(query: ClickQuery): Map<NodeId, Edge[]> {
   const pages = routes();
   const allSections = sections();
   const visible = allSections.filter((section) => isVisible(section, query.as));
-  const roots = new Set<string>([...pages.map((p) => p.file), ...allSections.map((s) => s.file)]);
+  // The menu is a root too: its links are not the page chrome's, since they sit behind the drawer.
+  const roots = new Set<string>([
+    ...pages.map((p) => p.file),
+    ...allSections.map((s) => s.file),
+    MENU_FILE,
+  ]);
   const excluded = new Set(query.excluding ?? []);
   for (const file of excluded) {
     if (!(file in SOURCES)) throw new Error(`navGraph: excluded file ${file} does not exist`);
@@ -336,6 +368,11 @@ function buildEdges(query: ClickQuery): Map<NodeId, Edge[]> {
 
   const edges = new Map<NodeId, Edge[]>();
   const dashboardChrome = subtree(DASHBOARD_FILE, roots, excluded);
+  const menuClicks = NAV_DRAWER_CLICKS[query.breakpoint] + 1;
+  const menuLinks =
+    !excluded.has(MENU_FILE) && menuLinksVisible(query.as)
+      ? linkEdges(subtree(MENU_FILE, roots, excluded)).map((edge) => ({ ...edge, cost: menuClicks }))
+      : [];
   for (const page of pages) {
     if (page.path === DASHBOARD_ROUTE) continue;
     edges.set(page.path, linkEdges(subtree(page.file, roots, excluded)));
@@ -343,12 +380,10 @@ function buildEdges(query: ClickQuery): Map<NodeId, Edge[]> {
   for (const section of visible) {
     const menu = visible
       .filter((other) => other.value !== section.value)
-      .map((other) => ({
-        to: tabNode(other.value),
-        cost: NAV_DRAWER_CLICKS[query.breakpoint] + 1,
-      }));
+      .map((other) => ({ to: tabNode(other.value), cost: menuClicks }));
     edges.set(tabNode(section.value), [
       ...menu,
+      ...menuLinks,
       ...linkEdges([...subtree(section.file, roots, excluded), ...dashboardChrome]),
     ]);
   }

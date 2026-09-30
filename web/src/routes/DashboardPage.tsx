@@ -21,6 +21,8 @@ import {
   isResearcher,
 } from "@/auth/capabilities";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
+import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
+import { ownedClubs } from "@/auth/clubAccess";
 import { ProfileTab } from "./dashboard/ProfileTab";
 import { SettingsTab } from "./dashboard/SettingsTab";
 import { AdminTab } from "./dashboard/AdminTab";
@@ -72,6 +74,15 @@ export function DashboardPage() {
   // Points Management is always a standalone tab for anyone who can manage points budgets
   // (POINTS_MANAGER or ADMINISTRATOR); it's no longer embedded in the Admin tab.
   const showPointsManagement = canManagePointsBudget(capabilities);
+  // "My clubs" (#1096): the clubs the viewer OWNS, as menu shortcuts to their public pages. The clubs
+  // list is staff-readable and carries each club's owners, so ownership needs no new endpoint — and the
+  // fetch is gated like ClubPage's, so a plain PLAYER sends no request and takes no 403. An
+  // administrator owns nothing and so gets no entries, by decision: they reach every club through Club
+  // Management. The entries are shortcuts, not permissions; the club page decides what the viewer may do.
+  const showMyClubs = canManageMatches(capabilities);
+  const clubsQuery = useGetApiV1Clubs({ query: { enabled: showMyClubs } });
+  const myClubs = showMyClubs ? ownedClubs(clubsQuery.data ?? [], me?.id) : [];
+  const [clubsOpen, setClubsOpen] = useState(true);
 
   // The selected section lives in the URL (?tab=…, #323) so it survives leaving and returning to the
   // dashboard — e.g. Back from a public page lands on the tab the user was on, not a reset to Profile.
@@ -185,6 +196,12 @@ export function DashboardPage() {
   const activeSection: Section =
     sections.find((s) => s.value === active) ?? sections[0];
 
+  const clubsGroup = {
+    clubs: myClubs,
+    open: clubsOpen,
+    onOpenChange: setClubsOpen,
+  };
+
   async function onSignOut() {
     await signOut();
     navigate("/login", { replace: true });
@@ -237,6 +254,7 @@ export function DashboardPage() {
                       sections={sections}
                       active={activeSection.value}
                       onSelect={selectSection}
+                      clubs={clubsGroup}
                     />
                   </aside>
                   <div className="min-w-0 flex-1">
@@ -273,6 +291,7 @@ export function DashboardPage() {
                           sections={sections}
                           active={activeSection.value}
                           onSelect={selectSection}
+                          clubs={clubsGroup}
                           className="mt-4"
                         />
                       </SheetContent>

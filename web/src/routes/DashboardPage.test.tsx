@@ -5,13 +5,17 @@ import { setupUser } from "@/test/user";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { DashboardPage } from "./DashboardPage";
 
-const { useGetApiV1UsersMe, signOut, navigateMock } = vi.hoisted(() => ({
-  useGetApiV1UsersMe: vi.fn(),
-  signOut: vi.fn(),
-  navigateMock: vi.fn(),
-}));
+const { useGetApiV1UsersMe, useGetApiV1Clubs, signOut, navigateMock } =
+  vi.hoisted(() => ({
+    useGetApiV1UsersMe: vi.fn(),
+    useGetApiV1Clubs: vi.fn(),
+    signOut: vi.fn(),
+    navigateMock: vi.fn(),
+  }));
 
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
+// The staff clubs list behind "My clubs" (#1096); empty unless a test says otherwise.
+vi.mock("@/api/generated/clubs/clubs", () => ({ useGetApiV1Clubs }));
 vi.mock("@/auth/useAuth", () => ({ useAuth: () => ({ signOut }) }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -80,9 +84,21 @@ async function openMenu(user: ReturnType<typeof setupUser>) {
   );
 }
 
+/** A club in the staff clubs list, owned by [ownerIds] (#789). */
+function clubOwnedBy(name: string, publicCode: string, ...ownerIds: string[]) {
+  return {
+    id: `id-${publicCode}`,
+    name,
+    publicCode,
+    isActive: true,
+    owners: ownerIds.map((userId) => ({ userId, publicCode: `P-${userId}` })),
+  };
+}
+
 describe("DashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useGetApiV1Clubs.mockReturnValue({ data: undefined });
   });
 
   it("shows a loading state while the profile resolves", () => {
@@ -558,6 +574,145 @@ describe("DashboardPage", () => {
       expect(
         screen.getByRole("button", { name: "Open navigation menu" }),
       ).toBeInTheDocument();
+    });
+  });
+
+  // "My clubs" (#1096): the clubs the viewer owns, as menu shortcuts to their public pages.
+  describe("My clubs", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function asOwner(capabilities: string[] = ["PLAYER", "CLUB_OWNER"]) {
+      useGetApiV1UsersMe.mockReturnValue({
+        data: { id: "u1", capabilities },
+        isLoading: false,
+      });
+      useGetApiV1Clubs.mockReturnValue({
+        data: [
+          clubOwnedBy("Downtown TC", "CLB001", "u1"),
+          clubOwnedBy("Riverside", "CLB002", "someone-else"),
+          clubOwnedBy("Hilltop", "CLB003", "someone-else", "u1"),
+        ],
+      });
+    }
+
+    it("lists only the clubs the viewer owns, expanded, linking to each club page", async () => {
+      asOwner();
+      const user = setupUser();
+      renderDashboard();
+      await openMenu(user);
+
+      expect(screen.getByRole("button", { name: "My clubs" })).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      );
+      expect(screen.getByRole("link", { name: "Downtown TC" })).toHaveAttribute(
+        "href",
+        "/clubs/CLB001",
+      );
+      expect(screen.getByRole("link", { name: "Hilltop" })).toHaveAttribute(
+        "href",
+        "/clubs/CLB003",
+      );
+      expect(
+        screen.queryByRole("link", { name: "Riverside" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("collapses and expands in place, navigating nowhere", async () => {
+      asOwner();
+      stubMatchMedia(true);
+      const user = setupUser();
+      renderDashboard(["/?tab=standings"]);
+      const heading = screen.getByRole("button", { name: "My clubs" });
+      const list = document.getElementById(
+        heading.getAttribute("aria-controls") ?? "",
+      );
+      expect(list).toContainElement(
+        screen.getByRole("link", { name: "Downtown TC" }),
+      );
+
+      await user.click(heading);
+      expect(heading).toHaveAttribute("aria-expanded", "false");
+      expect(list).not.toBeVisible();
+      expect(
+        screen.queryByRole("link", { name: "Downtown TC" }),
+      ).not.toBeInTheDocument();
+      // Still on the same section: the heading is a disclosure, not a destination.
+      expect(screen.getByTestId("search")).toHaveTextContent("?tab=standings");
+      expect(navigateMock).not.toHaveBeenCalled();
+
+      await user.click(heading);
+      expect(heading).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByRole("link", { name: "Downtown TC" })).toBeVisible();
+    });
+
+    it("keeps its open state across the drawer closing and reopening", async () => {
+      asOwner();
+      const user = setupUser();
+      renderDashboard();
+      await openMenu(user);
+      await user.click(screen.getByRole("button", { name: "My clubs" }));
+      // Picking a section closes the drawer, unmounting its content.
+      await user.click(screen.getByRole("button", { name: "Standings" }));
+      await openMenu(user);
+      expect(screen.getByRole("button", { name: "My clubs" })).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
+    });
+
+    it("renders no group at all for a manager who owns no club", async () => {
+      useGetApiV1UsersMe.mockReturnValue({
+        data: { id: "u1", capabilities: ["PLAYER", "HOST"] },
+        isLoading: false,
+      });
+      useGetApiV1Clubs.mockReturnValue({
+        data: [clubOwnedBy("Riverside", "CLB002", "someone-else")],
+      });
+      const user = setupUser();
+      renderDashboard();
+      await openMenu(user);
+      expect(screen.getByRole("button", { name: "Club Management" })).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "My clubs" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("gives an administrator who owns no club no entries — they use Club Management", async () => {
+      useGetApiV1UsersMe.mockReturnValue({
+        data: { id: "u1", capabilities: ["PLAYER", "ADMINISTRATOR"] },
+        isLoading: false,
+      });
+      useGetApiV1Clubs.mockReturnValue({
+        data: [clubOwnedBy("Riverside", "CLB002", "someone-else")],
+      });
+      const user = setupUser();
+      renderDashboard();
+      await openMenu(user);
+      expect(
+        screen.queryByRole("button", { name: "My clubs" }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Club Management" })).toBeInTheDocument();
+    });
+
+    it("sends a plain PLAYER no clubs request, and shows no group", async () => {
+      useGetApiV1UsersMe.mockReturnValue({
+        data: { id: "u1", capabilities: ["PLAYER"] },
+        isLoading: false,
+      });
+      // Even if a cached list somehow named them an owner, the gate — not the data — decides.
+      useGetApiV1Clubs.mockReturnValue({
+        data: [clubOwnedBy("Downtown TC", "CLB001", "u1")],
+      });
+      const user = setupUser();
+      renderDashboard();
+      await openMenu(user);
+      expect(useGetApiV1Clubs).toHaveBeenCalledWith({ query: { enabled: false } });
+      expect(
+        screen.queryByRole("button", { name: "My clubs" }),
+      ).not.toBeInTheDocument();
     });
   });
 });

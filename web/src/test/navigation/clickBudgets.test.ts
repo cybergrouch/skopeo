@@ -23,6 +23,7 @@ import {
 
 const PLAYER = [Capability.PLAYER];
 const SCORER = [Capability.PLAYER, Capability.SCORER];
+// Assumed to own at least one club, so its "My clubs" menu group (#1096) is not empty.
 const CLUB_OWNER = [Capability.PLAYER, Capability.CLUB_OWNER];
 const ADMINISTRATOR = [Capability.PLAYER, Capability.ADMINISTRATOR];
 
@@ -37,6 +38,9 @@ const OWN_HISTORY = [
   "/src/components/MatchHistoryCard.tsx",
   "/src/components/PointsAuditCard.tsx",
 ];
+
+// The menu, whose only links are the "My clubs" shortcuts — which an administrator never has.
+const MY_CLUBS = "/src/routes/dashboard/SectionNav.tsx";
 
 interface Budget {
   flow: string;
@@ -54,20 +58,29 @@ const BUDGETS: Budget[] = [
     to: "/matches/:code/score",
     clicks: { mobile: 2, desktop: 2 },
   },
-  // (Menu →) Club Management → the club. The New Event form is on the club page (#794), in-page.
+  // (Menu →) My clubs → the club (#1096). The New Event form is on the club page (#794), in-page.
   {
     flow: "Create an event",
     as: CLUB_OWNER,
     to: "/clubs/:code",
-    clicks: { mobile: 3, desktop: 2 },
+    clicks: { mobile: 2, desktop: 1 },
   },
-  // (Menu →) Club Management → the club → the event, where EventManagerView renders in place.
+  // (Menu →) My clubs → the club → the event, where EventManagerView renders in place.
   {
     flow: "Manage an event",
     as: CLUB_OWNER,
     to: "/events/:code",
     excluding: OWN_HISTORY,
-    clicks: { mobile: 4, desktop: 3 },
+    clicks: { mobile: 3, desktop: 2 },
+  },
+  // An administrator owns no club, so has no "My clubs" entries (#1096, by decision) and reaches a
+  // club the way everyone did before: (Menu →) Club Management → the club.
+  {
+    flow: "Reach a club as an administrator",
+    as: ADMINISTRATOR,
+    to: "/clubs/:code",
+    excluding: [MY_CLUBS],
+    clicks: { mobile: 3, desktop: 2 },
   },
 ];
 
