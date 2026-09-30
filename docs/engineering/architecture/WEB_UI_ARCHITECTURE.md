@@ -337,6 +337,20 @@ derived with `ownedClubs(clubs, meId)` from the staff clubs list. That list is f
 - The entries are **shortcuts, never gates**: `ClubPage` re-derives ownership of *that* club on its
   own, and a test pins that owning a different club grants nothing there.
 
+**Every section but Profile is code-split (#1092)**, through `lazyWithPreload` (`src/lib`), so a
+signed-in user downloads only the sections they open. A PLAYER no longer carries the admin surface: the
+`DashboardPage` chunk went from 36.9 kB to 7.5 kB gzip, and a player's dashboard download from 241 kB to
+192 kB gzip, with no `routes/dashboard/admin/` module in it.
+- Profile stays in the page's own chunk: everyone lands on it, and lazy-loading it would add a round
+  trip before the first screen.
+- `sections[]` still decides who gets which section; code splitting only decides when the bytes arrive.
+  It is **not a security boundary**, and every operation keeps its server-side rule.
+- The `<Suspense>` boundary wraps only the section, so the header and menu stay up while one loads.
+- A tab switch doesn't flash the fallback. React Router applies `?tab=` changes in a transition, so the
+  current section stays until the next is ready (pinned by `DashboardPage.lazy.test.tsx`), and menu
+  intent (pointer over or focus on an item) starts the chunk before the click.
+- Only a cold deep link shows "Loading…".
+
 The sections are shown by these gates:
 
 | Tab | Component | Gate |

@@ -35,12 +35,15 @@ export function SectionNav({
   sections,
   active,
   onSelect,
+  onIntent,
   clubs,
   className,
 }: {
   sections: readonly NavSection[];
   active: string;
   onSelect: (value: string) => void;
+  /** The viewer is about to pick [value] — pointer over, or focus on, its item (#1092). */
+  onIntent?: (value: string) => void;
   clubs?: NavClubsGroup;
   className?: string;
 }) {
@@ -52,6 +55,8 @@ export function SectionNav({
           key={section.value}
           type="button"
           onClick={() => onSelect(section.value)}
+          onPointerEnter={() => onIntent?.(section.value)}
+          onFocus={() => onIntent?.(section.value)}
           aria-current={section.value === active ? "page" : undefined}
           className={cn(
             "rounded-md px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-muted",

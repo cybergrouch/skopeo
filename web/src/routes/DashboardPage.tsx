@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Suspense, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,27 +24,67 @@ import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
 import { ownedClubs } from "@/auth/clubAccess";
 import { ProfileTab } from "./dashboard/ProfileTab";
-import { SettingsTab } from "./dashboard/SettingsTab";
-import { AdminTab } from "./dashboard/AdminTab";
-import { AccountManagementTab } from "./dashboard/AccountManagementTab";
-import { ClubManagementTab } from "./dashboard/ClubManagementTab";
-import { PointsManagementSection } from "./dashboard/admin/PointsManagementSection";
-import { PlaceholderPlayersTab } from "./dashboard/PlaceholderPlayersTab";
-import { SeedingTab } from "./dashboard/SeedingTab";
-import { RatingsTab } from "./dashboard/RatingsTab";
-import { ResearchTab } from "./dashboard/ResearchTab";
-import { StandingsTab } from "./dashboard/StandingsTab";
-import { ActivityTab } from "./dashboard/ActivityTab";
-import { ReportTab } from "./dashboard/ReportTab";
-import { AboutTab } from "./dashboard/AboutTab";
 import { PageContainer } from "@/components/PageContainer";
 import { DESKTOP_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import { SectionNav } from "./dashboard/SectionNav";
+import { lazyWithPreload } from "@/lib/lazyWithPreload";
+
+// Every section but Profile is its own chunk (#1092), so a signed-in user downloads only the sections
+// they open — a PLAYER no longer carries the admin surface they can never see. Profile stays in this
+// chunk: it is where everyone lands, and lazy-loading it would put a second round trip in front of the
+// first screen. `sections[]` below still decides who gets which; this only decides when bytes arrive.
+// Not a security boundary — every operation keeps its server-side rule.
+const SettingsTab = lazyWithPreload(() =>
+  import("./dashboard/SettingsTab").then((m) => m.SettingsTab),
+);
+const AdminTab = lazyWithPreload(() =>
+  import("./dashboard/AdminTab").then((m) => m.AdminTab),
+);
+const AccountManagementTab = lazyWithPreload(() =>
+  import("./dashboard/AccountManagementTab").then((m) => m.AccountManagementTab),
+);
+const ClubManagementTab = lazyWithPreload(() =>
+  import("./dashboard/ClubManagementTab").then((m) => m.ClubManagementTab),
+);
+const PlaceholderPlayersTab = lazyWithPreload(() =>
+  import("./dashboard/PlaceholderPlayersTab").then((m) => m.PlaceholderPlayersTab),
+);
+const SeedingTab = lazyWithPreload(() =>
+  import("./dashboard/SeedingTab").then((m) => m.SeedingTab),
+);
+const RatingsTab = lazyWithPreload(() =>
+  import("./dashboard/RatingsTab").then((m) => m.RatingsTab),
+);
+const ResearchTab = lazyWithPreload(() =>
+  import("./dashboard/ResearchTab").then((m) => m.ResearchTab),
+);
+const StandingsTab = lazyWithPreload(() =>
+  import("./dashboard/StandingsTab").then((m) => m.StandingsTab),
+);
+const ActivityTab = lazyWithPreload(() =>
+  import("./dashboard/ActivityTab").then((m) => m.ActivityTab),
+);
+const ReportTab = lazyWithPreload(() =>
+  import("./dashboard/ReportTab").then((m) => m.ReportTab),
+);
+const AboutTab = lazyWithPreload(() =>
+  import("./dashboard/AboutTab").then((m) => m.AboutTab),
+);
+const PointsManagementSection = lazyWithPreload(() =>
+  import("./dashboard/admin/PointsManagementSection").then((m) => m.PointsManagementSection),
+);
 
 interface Section {
   value: string;
   label: string;
   element: ReactNode;
+  /** Starts fetching a lazy section's chunk; absent for Profile, which is always loaded. */
+  preload?: () => unknown;
+}
+
+/** Shown only on a cold load of a lazy section (a deep link); a tab switch keeps the old one instead. */
+function SectionFallback() {
+  return <p className="text-sm text-muted-foreground">Loading…</p>;
 }
 
 export function DashboardPage() {
@@ -119,18 +159,19 @@ export function DashboardPage() {
           {
             value: "settings",
             label: "Settings",
+            preload: SettingsTab.preload,
             element: <SettingsTab userId={me?.id ?? ""} />,
           },
         ]
       : []),
     ...(showResearch
-      ? [{ value: "research", label: "Research", element: <ResearchTab /> }]
+      ? [{ value: "research", label: "Research", preload: ResearchTab.preload, element: <ResearchTab /> }]
       : []),
-    { value: "standings", label: "Standings", element: <StandingsTab /> },
+    { value: "standings", label: "Standings", preload: StandingsTab.preload, element: <StandingsTab /> },
     // Claiming a placeholder account (#496) now lives conditionally on the Profile tab (#727), shown
     // only while the owner's account is still claim-eligible — no standalone Claim tab.
     ...(showSeeding
-      ? [{ value: "seeding", label: "Seeding", element: <SeedingTab /> }]
+      ? [{ value: "seeding", label: "Seeding", preload: SeedingTab.preload, element: <SeedingTab /> }]
       : []),
     // Placeholder Players (#578): create + manage login-less players; HOST/CLUB_OWNER/ADMIN, like
     // the other match-management tabs. Promoted out of the Event Organizer tab.
@@ -139,24 +180,26 @@ export function DashboardPage() {
           {
             value: "placeholders",
             label: "Placeholder Players",
+            preload: PlaceholderPlayersTab.preload,
             element: <PlaceholderPlayersTab capabilities={capabilities} />,
           },
         ]
       : []),
     ...(showRatings
-      ? [{ value: "ratings", label: "Ratings", element: <RatingsTab /> }]
+      ? [{ value: "ratings", label: "Ratings", preload: RatingsTab.preload, element: <RatingsTab /> }]
       : []),
     ...(showActivity
-      ? [{ value: "activity", label: "Activity Log", element: <ActivityTab /> }]
+      ? [{ value: "activity", label: "Activity Log", preload: ActivityTab.preload, element: <ActivityTab /> }]
       : []),
     ...(showReport
-      ? [{ value: "reports", label: "Reports", element: <ReportTab /> }]
+      ? [{ value: "reports", label: "Reports", preload: ReportTab.preload, element: <ReportTab /> }]
       : []),
     ...(showPointsManagement
       ? [
           {
             value: "points",
             label: "Points Management",
+            preload: PointsManagementSection.preload,
             element: <PointsManagementSection capabilities={capabilities} />,
           },
         ]
@@ -168,6 +211,7 @@ export function DashboardPage() {
           {
             value: "accounts",
             label: "Account Management",
+            preload: AccountManagementTab.preload,
             element: <AccountManagementTab />,
           },
         ]
@@ -179,16 +223,17 @@ export function DashboardPage() {
           {
             value: "club-management",
             label: "Club Management",
+            preload: ClubManagementTab.preload,
             element: <ClubManagementTab />,
           },
         ]
       : []),
     ...(showAdmin
-      ? [{ value: "admin", label: "Admin", element: <AdminTab /> }]
+      ? [{ value: "admin", label: "Admin", preload: AdminTab.preload, element: <AdminTab /> }]
       : []),
     // About (#573): general info, available to every signed-in user; last so it never displaces the
     // working tabs. Same content as the public /about page, minus the sign-up / log-in call to action.
-    { value: "about", label: "About", element: <AboutTab /> },
+    { value: "about", label: "About", preload: AboutTab.preload, element: <AboutTab /> },
   ];
 
   // `active` comes from the URL, so it may name a section the viewer can't access (a hand-edited or
@@ -213,9 +258,23 @@ export function DashboardPage() {
     const next = new URLSearchParams(searchParams);
     if (value === "profile") next.delete("tab");
     else next.set("tab", value);
+    // React Router applies this in a transition, so switching to a section whose chunk is still loading
+    // keeps the current one on screen instead of flashing the Suspense fallback (#1092) — pinned by
+    // DashboardPage.lazy.test.tsx, so a router change that dropped it would fail there.
     setSearchParams(next, { replace: true });
     setNavOpen(false);
   }
+
+  // Menu intent (pointer over, or focus on, an item) starts that section's download, so the click that
+  // usually follows finds the chunk already loaded.
+  function preloadSection(value: string) {
+    sections.find((section) => section.value === value)?.preload?.();
+  }
+
+  // Scoped to the section, so the header and the menu stay on screen while a section loads.
+  const content = (
+    <Suspense fallback={<SectionFallback />}>{activeSection.element}</Suspense>
+  );
 
   return (
     <div className="min-h-svh bg-muted/40">
@@ -254,6 +313,7 @@ export function DashboardPage() {
                       sections={sections}
                       active={activeSection.value}
                       onSelect={selectSection}
+                      onIntent={preloadSection}
                       clubs={clubsGroup}
                     />
                   </aside>
@@ -261,7 +321,7 @@ export function DashboardPage() {
                     <h1 className="mb-4 text-lg font-semibold">
                       {activeSection.label}
                     </h1>
-                    {activeSection.element}
+                    {content}
                   </div>
                 </div>
               ) : (
@@ -291,6 +351,7 @@ export function DashboardPage() {
                           sections={sections}
                           active={activeSection.value}
                           onSelect={selectSection}
+                          onIntent={preloadSection}
                           clubs={clubsGroup}
                           className="mt-4"
                         />
@@ -301,7 +362,7 @@ export function DashboardPage() {
                     </h1>
                   </div>
 
-                  {activeSection.element}
+                  {content}
                 </>
               )}
             </>

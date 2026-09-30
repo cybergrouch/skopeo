@@ -119,6 +119,22 @@ function namedImportsOf(file: string): Map<string, string> {
   return names;
 }
 
+/**
+ * Maps each code-split component in [file] — `const X = lazy(() => import("…"))`, or any wrapper of
+ * that shape such as `lazyWithPreload` — to the file it loads.
+ */
+function lazyImportsOf(file: string): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const match of source(file).matchAll(
+    /const\s+(\w+)\s*=\s*\w+\(\s*\(\)\s*=>\s*import\(\s*["']([^"']+)["']\s*\)/g,
+  )) {
+    const resolved = resolveImport(file, match[2]);
+    if (!resolved) throw new Error(`navGraph: cannot resolve lazy import ${match[2]} in ${file}`);
+    names.set(match[1], resolved);
+  }
+  return names;
+}
+
 /** A route in the router: its path pattern and the page component file it renders. */
 export interface RouteNode {
   path: string;
@@ -131,14 +147,7 @@ export interface RouteNode {
  */
 export function routes(): RouteNode[] {
   const app = source(APP_FILE);
-  const lazyPages = new Map<string, string>();
-  for (const match of app.matchAll(
-    /const\s+(\w+)\s*=\s*lazy\(\s*\(\)\s*=>\s*import\(\s*["']([^"']+)["']\s*\)/g,
-  )) {
-    const file = resolveImport(APP_FILE, match[2]);
-    if (!file) throw new Error(`navGraph: cannot resolve lazy page ${match[2]}`);
-    lazyPages.set(match[1], file);
-  }
+  const lazyPages = lazyImportsOf(APP_FILE);
   const found: RouteNode[] = [];
   for (const chunk of app.split("<Route").slice(1)) {
     const path = /\bpath=["']([^"']+)["']/.exec(chunk)?.[1];
@@ -167,7 +176,11 @@ export interface SectionNode {
 export function sections(): SectionNode[] {
   const page = source(DASHBOARD_FILE);
   const predicates = dashboardFlags();
-  const components = namedImportsOf(DASHBOARD_FILE);
+  // A section component is either imported (Profile, the landing) or code-split (the rest, #1092).
+  const components = new Map([
+    ...namedImportsOf(DASHBOARD_FILE),
+    ...lazyImportsOf(DASHBOARD_FILE),
+  ]);
   const start = page.indexOf("const sections: Section[] = [");
   const end = page.indexOf("\n  ];", start);
   if (start < 0 || end < 0) throw new Error("navGraph: sections[] not found in DashboardPage");

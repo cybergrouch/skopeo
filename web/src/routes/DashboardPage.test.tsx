@@ -173,7 +173,7 @@ describe("DashboardPage", () => {
     renderDashboard();
     await openMenu(user);
     await user.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.getByText("settings content")).toBeInTheDocument();
+    expect(await screen.findByText("settings content")).toBeInTheDocument();
   });
 
   it("hides the Research item from a player without RESEARCHER (#107)", async () => {
@@ -211,7 +211,7 @@ describe("DashboardPage", () => {
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Ratings" }));
-    expect(screen.getByText("ratings content")).toBeInTheDocument();
+    expect(await screen.findByText("ratings content")).toBeInTheDocument();
   });
 
   it("shows Account Management for an account manager, and nothing else staff-only (#1002)", async () => {
@@ -276,14 +276,14 @@ describe("DashboardPage", () => {
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Seeding" }));
-    expect(screen.getByText("seeding content")).toBeInTheDocument();
+    expect(await screen.findByText("seeding content")).toBeInTheDocument();
 
     // Selecting a tab closes the menu, so re-open it before switching tabs again.
     await openMenu(user);
     await user.click(
       screen.getByRole("button", { name: "Placeholder Players" }),
     );
-    expect(screen.getByText("placeholder players content")).toBeInTheDocument();
+    expect(await screen.findByText("placeholder players content")).toBeInTheDocument();
   });
 
   it("shows the Matches items for a club owner (same as a host, no Admin)", async () => {
@@ -350,20 +350,20 @@ describe("DashboardPage", () => {
     await user.click(
       screen.getByRole("button", { name: "Account Management" }),
     );
-    expect(screen.getByText("account management content")).toBeInTheDocument();
+    expect(await screen.findByText("account management content")).toBeInTheDocument();
 
     await openMenu(user);
     await user.click(screen.getByRole("button", { name: "Club Management" }));
-    expect(screen.getByText("club management content")).toBeInTheDocument();
+    expect(await screen.findByText("club management content")).toBeInTheDocument();
 
     // The menu closes on select, so re-open it to navigate again.
     await openMenu(user);
     await user.click(screen.getByRole("button", { name: "Points Management" }));
-    expect(screen.getByText("points management content")).toBeInTheDocument();
+    expect(await screen.findByText("points management content")).toBeInTheDocument();
 
     await openMenu(user);
     await user.click(screen.getByRole("button", { name: "Admin" }));
-    expect(screen.getByText("admin content")).toBeInTheDocument();
+    expect(await screen.findByText("admin content")).toBeInTheDocument();
   });
 
   it("shows a standalone Points Management tab for a non-admin points manager (#444)", async () => {
@@ -382,7 +382,7 @@ describe("DashboardPage", () => {
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Points Management" }));
-    expect(screen.getByText("points management content")).toBeInTheDocument();
+    expect(await screen.findByText("points management content")).toBeInTheDocument();
   });
 
   it("reflects the selected section as the page header, closing the menu on select (#187)", async () => {
@@ -400,16 +400,16 @@ describe("DashboardPage", () => {
     await openMenu(user);
     await user.click(screen.getByRole("button", { name: "Standings" }));
     expect(
-      screen.getByRole("heading", { name: "Standings" }),
+      await screen.findByRole("heading", { name: "Standings" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("standings content")).toBeInTheDocument();
+    expect(await screen.findByText("standings content")).toBeInTheDocument();
     // Selecting closed the drawer — its items are no longer rendered.
     expect(
       screen.queryByRole("button", { name: "Profile" }),
     ).not.toBeInTheDocument();
   });
 
-  it("restores the active tab from the URL so returning to the dashboard keeps it (#323)", () => {
+  it("restores the active tab from the URL so returning to the dashboard keeps it (#323)", async () => {
     useGetApiV1UsersMe.mockReturnValue({
       data: { id: "u1", capabilities: ["PLAYER"] },
       isLoading: false,
@@ -417,9 +417,9 @@ describe("DashboardPage", () => {
     renderDashboard(["/?tab=standings"]);
     // No menu interaction: the tab is read straight from the URL on mount.
     expect(
-      screen.getByRole("heading", { name: "Standings" }),
+      await screen.findByRole("heading", { name: "Standings" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("standings content")).toBeInTheDocument();
+    expect(await screen.findByText("standings content")).toBeInTheDocument();
   });
 
   it("syncs the selected tab into the URL (#323)", async () => {
@@ -510,9 +510,9 @@ describe("DashboardPage", () => {
       // One click, straight from the landing — no menu to open first.
       await user.click(within(rail).getByRole("button", { name: "Standings" }));
       expect(
-        screen.getByRole("heading", { name: "Standings" }),
+        await screen.findByRole("heading", { name: "Standings" }),
       ).toBeInTheDocument();
-      expect(screen.getByText("standings content")).toBeInTheDocument();
+      expect(await screen.findByText("standings content")).toBeInTheDocument();
       expect(screen.getByTestId("search")).toHaveTextContent("?tab=standings");
       expect(within(rail).getByRole("button", { name: "Standings" })).toHaveAttribute(
         "aria-current",
