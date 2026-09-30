@@ -54,25 +54,26 @@ const BUDGETS: Budget[] = [
     to: "/matches/:code/score",
     clicks: { mobile: 2, desktop: 2 },
   },
-  // Menu → Club Management → the club. The New Event form is on the club page (#794), in-page.
+  // (Menu →) Club Management → the club. The New Event form is on the club page (#794), in-page.
   {
     flow: "Create an event",
     as: CLUB_OWNER,
     to: "/clubs/:code",
-    clicks: { mobile: 3, desktop: 3 },
+    clicks: { mobile: 3, desktop: 2 },
   },
-  // Menu → Club Management → the club → the event, where EventManagerView renders in place.
+  // (Menu →) Club Management → the club → the event, where EventManagerView renders in place.
   {
     flow: "Manage an event",
     as: CLUB_OWNER,
     to: "/events/:code",
     excluding: OWN_HISTORY,
-    clicks: { mobile: 4, desktop: 4 },
+    clicks: { mobile: 4, desktop: 3 },
   },
 ];
 
-// Menu → the section. Every section a persona has costs the same, so one number covers them all.
-const SECTION_CLICKS: Record<Breakpoint, number> = { mobile: 2, desktop: 2 };
+// Menu → the section; from `md:` up the rail is always open, so just the section (#1095). Every section
+// a persona has costs the same, so one number covers them all.
+const SECTION_CLICKS: Record<Breakpoint, number> = { mobile: 2, desktop: 1 };
 
 /** Asserts the flow's click count, naming its route in the failure message. */
 function expectClicks(flow: string, target: ClickTarget, query: ClickQuery, budget: number) {

@@ -10,7 +10,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/useAuth";
 import {
   canManageMatches,
@@ -37,6 +36,8 @@ import { ActivityTab } from "./dashboard/ActivityTab";
 import { ReportTab } from "./dashboard/ReportTab";
 import { AboutTab } from "./dashboard/AboutTab";
 import { PageContainer } from "@/components/PageContainer";
+import { DESKTOP_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
+import { SectionNav } from "./dashboard/SectionNav";
 
 interface Section {
   value: string;
@@ -74,11 +75,16 @@ export function DashboardPage() {
 
   // The selected section lives in the URL (?tab=…, #323) so it survives leaving and returning to the
   // dashboard — e.g. Back from a public page lands on the tab the user was on, not a reset to Profile.
-  // The menu's open state stays local. One menu drives navigation at every breakpoint — a hamburger
-  // drawer on mobile and desktop alike (#187) — so there's a single nav to reason about.
+  // The menu's open state stays local. There is one menu (#187) — one `sections[]`, one `SectionNav` —
+  // rendered two ways (#1095): a persistent rail from `md:` up, so a section is one click away, and the
+  // hamburger drawer below it, where a rail would eat the screen.
   const [searchParams, setSearchParams] = useSearchParams();
   const active = searchParams.get("tab") ?? "profile";
   const [navOpen, setNavOpen] = useState(false);
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  // Widening past `md:` with the drawer open swaps it for the rail; close it here, or narrowing again
+  // would bring back a drawer nobody just opened.
+  if (isDesktop && navOpen) setNavOpen(false);
 
   // One capability-gated list of sections: the single source of truth for the menu items and the
   // rendered content, so gating stays identical across both.
@@ -222,51 +228,63 @@ export function DashboardPage() {
             </p>
           ) : (
             <>
-              {/* A single hamburger menu drives navigation everywhere; the current section's name is
-                the page header in place of a tab strip. */}
-              <div className="mb-4 flex items-center gap-3">
-                <Sheet open={navOpen} onOpenChange={setNavOpen}>
-                  <SheetTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      aria-label="Open navigation menu"
-                    >
-                      <Menu />
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent
-                    side="left"
-                    className="w-72"
-                    aria-describedby={undefined}
-                  >
-                    <SheetHeader>
-                      <SheetTitle>Menu</SheetTitle>
-                    </SheetHeader>
-                    <nav className="mt-4 flex flex-col gap-1">
-                      {sections.map((section) => (
-                        <button
-                          key={section.value}
-                          type="button"
-                          onClick={() => selectSection(section.value)}
-                          aria-current={
-                            section.value === active ? "page" : undefined
-                          }
-                          className={cn(
-                            "rounded-md px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-muted",
-                            section.value === active && "bg-muted",
-                          )}
+              {isDesktop ? (
+                // The rail (#1095): always visible, so it neither traps focus nor needs a trigger. The
+                // heading stays — it is the page's only <h1>, however obvious the rail makes location.
+                <div className="flex items-start gap-6">
+                  <aside className="sticky top-4 w-60 shrink-0">
+                    <SectionNav
+                      sections={sections}
+                      active={activeSection.value}
+                      onSelect={selectSection}
+                    />
+                  </aside>
+                  <div className="min-w-0 flex-1">
+                    <h1 className="mb-4 text-lg font-semibold">
+                      {activeSection.label}
+                    </h1>
+                    {activeSection.element}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Below `md:` the menu is a drawer, and the current section's name is the page
+                    header beside its trigger. */}
+                  <div className="mb-4 flex items-center gap-3">
+                    <Sheet open={navOpen} onOpenChange={setNavOpen}>
+                      <SheetTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Open navigation menu"
                         >
-                          {section.label}
-                        </button>
-                      ))}
-                    </nav>
-                  </SheetContent>
-                </Sheet>
-                <h1 className="text-lg font-semibold">{activeSection.label}</h1>
-              </div>
+                          <Menu />
+                        </Button>
+                      </SheetTrigger>
+                      <SheetContent
+                        side="left"
+                        className="w-72"
+                        aria-describedby={undefined}
+                      >
+                        <SheetHeader>
+                          <SheetTitle>Menu</SheetTitle>
+                        </SheetHeader>
+                        <SectionNav
+                          sections={sections}
+                          active={activeSection.value}
+                          onSelect={selectSection}
+                          className="mt-4"
+                        />
+                      </SheetContent>
+                    </Sheet>
+                    <h1 className="text-lg font-semibold">
+                      {activeSection.label}
+                    </h1>
+                  </div>
 
-              {activeSection.element}
+                  {activeSection.element}
+                </>
+              )}
             </>
           )}
         </PageContainer>

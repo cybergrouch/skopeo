@@ -312,8 +312,19 @@ Facebook / X / LinkedIn / WhatsApp / iMessage / Slack. Two layers provide this:
 
 ## Dashboard structure
 
-`DashboardPage.tsx` renders a Radix `Tabs` layout. Tabs are conditionally shown by the capability
-gates above:
+`DashboardPage.tsx` builds one capability-gated `sections[]` array. It drives both the menu and the
+rendered content, and it is the only place a section's gate lives (#187). The menu is one
+`SectionNav` component rendered two ways (#1095):
+- **From `md:` up**, a persistent left rail. It is not a dialog and does not trap focus, and a section
+  is one click away.
+- **Below `md:`**, a hamburger drawer (a Radix `Sheet`), which does trap focus while open.
+
+Which one renders is decided in JS by `useMediaQuery(DESKTOP_QUERY)`, not by CSS-hiding one of the
+two. Hiding would leave both in the DOM, so every control would exist twice for anything that ignores
+CSS, and in tests every `getByRole` would match both copies. jsdom has no `matchMedia`, so tests get
+the drawer unless they call `stubMatchMedia` (`src/test/matchMedia.ts`). Selection lives in `?tab=`
+at both widths, and the active item carries `aria-current="page"`. The sections are shown by these
+gates:
 
 | Tab | Component | Gate |
 |---|---|---|

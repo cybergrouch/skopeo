@@ -32,12 +32,13 @@ import type { Capability } from "@/auth/capabilities";
 export type Breakpoint = "mobile" | "desktop";
 
 /**
- * Clicks spent opening the dashboard menu before a section can be picked. The drawer is the only menu
- * at every breakpoint today; #1095's persistent rail makes `desktop` 0.
+ * Clicks spent opening the dashboard menu before a section can be picked: the drawer below `md:`, and
+ * nothing from `md:` up, where the menu is a persistent rail (#1095). This is the one hand-set input to
+ * the model; DashboardPage's "at desktop width" tests are what hold the rail to it.
  */
 export const NAV_DRAWER_CLICKS: Record<Breakpoint, number> = {
   mobile: 1,
-  desktop: 1,
+  desktop: 0,
 };
 
 /** Every non-test source file, as text, keyed by `/src/…` path. */

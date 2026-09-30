@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { stubMatchMedia } from "@/test/matchMedia";
 import { setupUser } from "@/test/user";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { DashboardPage } from "./DashboardPage";
@@ -458,5 +459,105 @@ describe("DashboardPage", () => {
 
     await waitFor(() => expect(signOut).toHaveBeenCalled());
     expect(navigateMock).toHaveBeenCalledWith("/login", { replace: true });
+  });
+
+  // From `md:` up the menu is a persistent rail (#1095). jsdom has no matchMedia, so every test above
+  // runs the small-screen drawer; these stub a wide viewport.
+  describe("at desktop width", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("shows the sections in a rail, one click away, with no drawer trigger", async () => {
+      stubMatchMedia(true);
+      useGetApiV1UsersMe.mockReturnValue({
+        data: { id: "u1", capabilities: ["PLAYER"] },
+        isLoading: false,
+      });
+      const user = setupUser();
+      renderDashboard();
+
+      expect(
+        screen.queryByRole("button", { name: "Open navigation menu" }),
+      ).not.toBeInTheDocument();
+      const rail = screen.getByRole("navigation", { name: "Dashboard" });
+      expect(
+        within(rail)
+          .getAllByRole("button")
+          .map((item) => item.textContent),
+      ).toEqual(["Profile", "Settings", "Standings", "About"]);
+      expect(within(rail).getByRole("button", { name: "Profile" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+
+      // One click, straight from the landing — no menu to open first.
+      await user.click(within(rail).getByRole("button", { name: "Standings" }));
+      expect(
+        screen.getByRole("heading", { name: "Standings" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("standings content")).toBeInTheDocument();
+      expect(screen.getByTestId("search")).toHaveTextContent("?tab=standings");
+      expect(within(rail).getByRole("button", { name: "Standings" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      // The rail stays put: it is not a dialog, so nothing traps focus or closes it.
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("keeps the rail gated like the drawer", () => {
+      stubMatchMedia(true);
+      useGetApiV1UsersMe.mockReturnValue({
+        data: { id: "u1", capabilities: ["PLAYER", "HOST"] },
+        isLoading: false,
+      });
+      renderDashboard();
+      const rail = screen.getByRole("navigation", { name: "Dashboard" });
+      expect(
+        within(rail).getByRole("button", { name: "Club Management" }),
+      ).toBeInTheDocument();
+      expect(
+        within(rail).queryByRole("button", { name: "Admin" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("marks Profile current when the URL names a tab the viewer cannot access", () => {
+      stubMatchMedia(true);
+      useGetApiV1UsersMe.mockReturnValue({
+        data: { id: "u1", capabilities: ["PLAYER"] },
+        isLoading: false,
+      });
+      renderDashboard(["/?tab=admin"]);
+      expect(screen.getByRole("heading", { name: "Profile" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Profile" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+    });
+
+    it("swaps an open drawer for the rail on widening, and does not reopen it on narrowing", async () => {
+      const viewport = stubMatchMedia(false);
+      useGetApiV1UsersMe.mockReturnValue({
+        data: { id: "u1", capabilities: ["PLAYER"] },
+        isLoading: false,
+      });
+      const user = setupUser();
+      renderDashboard();
+      await openMenu(user);
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+      act(() => viewport.set(true));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("navigation", { name: "Dashboard" }),
+      ).toBeInTheDocument();
+
+      act(() => viewport.set(false));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Open navigation menu" }),
+      ).toBeInTheDocument();
+    });
   });
 });
