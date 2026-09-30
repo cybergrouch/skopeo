@@ -564,6 +564,20 @@ runs once with v8 coverage. Coverage excludes generated code (`src/api/generated
 and pure composition/SDK-init glue (`main.tsx`, `App.tsx`, `lib/firebase.ts`) — mirroring the
 backend's coverage exclusions. CI emits JUnit XML for a drillable test report.
 
+### Click budgets (#1094)
+
+`src/test/navigation/clickBudgets.test.ts` asserts how many clicks key flows take from the post-login
+landing — any dashboard section, scoring a live match, creating and managing an event — per breakpoint
+and per persona. The graph behind it (`navGraph.ts`) is read from source: the `App.tsx` route table,
+the dashboard's `sections[]` with their real capability predicates, and every `to=` / `navigate(…)`
+target, attributed to a page by following its imports. Budgets are exact, so a flow that gets shorter
+fails too, asking for its number to be lowered.
+
+It measures **reachability, not behaviour**, and stops at the page a flow happens on: steps inside a
+page (expanding a card, opening a form, entering a result in `EventManagerView`) are not counted, and a
+link behind a runtime condition counts as present. The full list of what it cannot see is at the top
+of `navGraph.ts`. Read it before trusting a number.
+
 ## References
 
 - [AUTHENTICATION.md](./AUTHENTICATION.md) — Firebase token verification at the API.
