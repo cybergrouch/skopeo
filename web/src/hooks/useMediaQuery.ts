@@ -26,9 +26,6 @@ export function useMediaQuery(query: string): boolean {
     },
     [query],
   )
-  return useSyncExternalStore(
-    subscribe,
-    () => supported() && window.matchMedia(query).matches,
-    () => false,
-  )
+  // No server snapshot: this app renders only in the browser, so there is no server render to match.
+  return useSyncExternalStore(subscribe, () => supported() && window.matchMedia(query).matches)
 }
