@@ -366,6 +366,37 @@ describe("DashboardPage", () => {
     expect(await screen.findByText("admin content")).toBeInTheDocument();
   });
 
+  // Every section but Profile is a lazy chunk (#1092); a loader that is never exercised could point at
+  // the wrong module or export and only fail in production. Open each one and wait for it to render.
+  it("loads and renders every section's chunk for an administrator (#1092)", async () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "u1", capabilities: ["PLAYER", "ADMINISTRATOR"] },
+      isLoading: false,
+    });
+    const user = setupUser();
+    renderDashboard();
+    const sections: [label: string, content: string][] = [
+      ["Settings", "settings content"],
+      ["Research", "research content"],
+      ["Standings", "standings content"],
+      ["Seeding", "seeding content"],
+      ["Placeholder Players", "placeholder players content"],
+      ["Ratings", "ratings content"],
+      ["Activity Log", "activity content"],
+      ["Reports", "report content"],
+      ["Points Management", "points management content"],
+      ["Account Management", "account management content"],
+      ["Club Management", "club management content"],
+      ["Admin", "admin content"],
+      ["About", "What Skopeo is"],
+    ];
+    for (const [label, content] of sections) {
+      await openMenu(user);
+      await user.click(screen.getByRole("button", { name: label }));
+      expect(await screen.findByText(content)).toBeInTheDocument();
+    }
+  });
+
   it("shows a standalone Points Management tab for a non-admin points manager (#444)", async () => {
     useGetApiV1UsersMe.mockReturnValue({
       data: { id: "u1", capabilities: ["PLAYER", "POINTS_MANAGER"] },
