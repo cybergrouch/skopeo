@@ -270,6 +270,48 @@ class RatingCalculationServiceTest {
         result.matches.single().changes.size shouldBe 2
     }
 
+    /**
+     * The production failure behind #1117: a match retired at 5-5 stores one level set, which the rating
+     * input drops (#968). Queued, it reached `MatchScore` with no sets and failed the whole preview — not
+     * just its own event, but every run reaching it. It now stays out of the queue, unrated, while the
+     * rest of the run goes ahead.
+     */
+    @Test
+    fun `a preview runs past a match retired in a level set, which stays unrated (#1117)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val played = playedMatch(admin = "root", winner = p1.id, loser = p2.id)
+        val retired =
+            matchService.createFixture(
+                token = token(uid = "root"),
+                request =
+                    FixtureInput(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.parse("2026-01-02"),
+                        team1 = listOf(element = p1.id),
+                        team2 = listOf(element = p2.id),
+                        eventId = fixtureEventFor(team1 = listOf(element = p1.id), team2 = listOf(element = p2.id)),
+                    ),
+            ).shouldBeRight()
+        matchService.uploadResult(
+            token = token(uid = "root"),
+            matchId = UUID.fromString(retired.id),
+            request =
+                MatchResultRequest(
+                    sets = listOf(element = SetScoreRequest(team1Games = 5, team2Games = 5)),
+                    winnerTeamId = retired.team1.teamId,
+                    completionReason = "RETIRED",
+                ),
+        ).shouldBeRight()
+
+        val dry = calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "root"), dryRun = true).shouldBeRight()
+
+        dry.matches.map { it.matchId } shouldBe listOf(element = played.toString())
+        matchRepo.findById(matchId = UUID.fromString(retired.id)).shouldBeRight().toDomain().ratedAt.shouldBeNull()
+    }
+
     @Test
     fun `dry-run previews changes without writing`() {
         provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))

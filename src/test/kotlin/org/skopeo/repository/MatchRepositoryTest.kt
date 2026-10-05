@@ -474,6 +474,58 @@ class MatchRepositoryTest {
         pending.contains(element = setLess) shouldBe false
     }
 
+    /**
+     * It is a set somebody WON that makes a match rateable, not any set row (#1117). A retirement at 5-5
+     * stores one level set; the rating input drops it (#968), so queueing the match reached `MatchScore`
+     * with no sets and failed the whole calculation run — in production, every preview reaching it.
+     * Level on games but decided by a finished tiebreak still counts, which pins the tiebreak branch.
+     */
+    @Test
+    fun `a match whose only sets nobody won is not pending calculation (#1117)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 2, 1), members = listOf(u1, u2))
+        val retiredAtFiveAll =
+            setLessMatch(u1 = u1, u2 = u2, eventId = eventId, reason = MatchCompletionReason.RETIRED) { _, _ ->
+                listOf(element = MatchSetResult(setNumber = 1, team1Games = 5, team2Games = 5, winnerTeamId = null))
+            }
+        val retiredInLevelTiebreak =
+            setLessMatch(u1 = u1, u2 = u2, eventId = eventId, reason = MatchCompletionReason.RETIRED) { _, _ ->
+                listOf(
+                    element =
+                        MatchSetResult(
+                            setNumber = 1,
+                            team1Games = 6,
+                            team2Games = 6,
+                            winnerTeamId = null,
+                            tiebreakTeam1Points = 4,
+                            tiebreakTeam2Points = 4,
+                        ),
+                )
+            }
+        val decidedByTiebreak =
+            setLessMatch(u1 = u1, u2 = u2, eventId = eventId, reason = MatchCompletionReason.COMPLETED) { _, team2 ->
+                listOf(
+                    element =
+                        MatchSetResult(
+                            setNumber = 1,
+                            team1Games = 6,
+                            team2Games = 6,
+                            winnerTeamId = team2,
+                            tiebreakTeam1Points = 5,
+                            tiebreakTeam2Points = 7,
+                        ),
+                )
+            }
+        events.finalize(id = eventId, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
+
+        val pending = matches.listPendingCalculation().map { it.toDomain().id }
+
+        pending shouldBe listOf(element = decidedByTiebreak)
+        pending.contains(element = retiredAtFiveAll) shouldBe false
+        pending.contains(element = retiredInLevelTiebreak) shouldBe false
+    }
+
     @Test
     fun `a defaulted match is not pending calculation (#911)`() {
         val u1 = newUser(uid = "u1")
@@ -494,12 +546,16 @@ class MatchRepositoryTest {
         matches.listPendingCalculation().map { it.toDomain().id }.contains(element = defaulted) shouldBe false
     }
 
-    /** A completed match carrying a designated winner and no sets — a walkover or an instant retirement. */
+    /**
+     * A completed match carrying a designated winner (team 2) and, by default, no sets — a walkover or an
+     * instant retirement. [sets] builds the recorded sets from the two team ids, for the #1117 cases.
+     */
     private fun setLessMatch(
         u1: UUID,
         u2: UUID,
         eventId: UUID,
         reason: MatchCompletionReason,
+        sets: (team1: UUID, team2: UUID) -> List<MatchSetResult> = { _, _ -> emptyList() },
     ): UUID {
         val match =
             matches
@@ -519,7 +575,7 @@ class MatchRepositoryTest {
                 ).toDomain()
         matches.addResult(
             matchId = match.id,
-            sets = emptyList(),
+            sets = sets(match.team1.teamId, match.team2.teamId),
             winnerTeamId = match.team2.teamId,
             recordedBy = u1,
             completedAt = LocalDateTime.of(2026, 1, 11, 12, 0),
