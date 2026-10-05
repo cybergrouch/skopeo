@@ -539,7 +539,10 @@ class MatchRepository {
                                 // here either. Left in the queue it does not merely fail to rate: it
                                 // reaches `MatchScore`, whose `init` requires at least one set, and
                                 // throws inside the calculation run, taking the whole batch with it.
-                                hasAnySet()
+                                // It is a set somebody WON that counts, not any set row (#1117): a
+                                // retirement at 5-5 stores one level set, which the rating input drops
+                                // (#968), leaving the same empty scoreline one step later.
+                                hasDecidedSet()
                         // The rating-queue eligibility (#403): a completed, unrated match queues only if
                         // it is event-less (queues immediately, as before) OR its event is finalized. An
                         // explicit event scope is a pre-finalize organizer preview, so it lists the event's
@@ -554,13 +557,31 @@ class MatchRepository {
         }
 
     /**
-     * "This match has at least one recorded set" (#972) — a scoreline to rate.
+     * "This match has at least one set somebody won" (#972, #1117) — a scoreline to rate.
+     *
+     * The SQL form of `derivedSetWinner` in the entity mapper: a set is decided by its games, or, when
+     * those are level, by a tiebreak that is not. A level set nobody won carries no dominance (#925)
+     * and is dropped from the rating input (#968), so a match holding only such sets has nothing to
+     * rate, exactly like one with no sets at all. Keep the two in step: a set this admits but the mapper
+     * calls undecided would reach `MatchScore` empty again.
      *
      * Phrased as a membership test rather than a count so it reads the same way as [queueEligible]
      * directly below, and so the database can answer it from the `match_sets` foreign-key index.
      */
-    private fun hasAnySet(): Op<Boolean> =
-        MatchesTable.id inSubQuery MatchSetsTable.select(columns = listOf(element = MatchSetsTable.matchId))
+    private fun hasDecidedSet(): Op<Boolean> {
+        val decidedByTiebreak =
+            MatchSetTiebreaksTable
+                .select(columns = listOf(element = MatchSetTiebreaksTable.matchSetId))
+                .where { MatchSetTiebreaksTable.team1Points neq MatchSetTiebreaksTable.team2Points }
+        val decidedSets =
+            MatchSetsTable
+                .select(columns = listOf(element = MatchSetsTable.matchId))
+                .where {
+                    (MatchSetsTable.team1Games neq MatchSetsTable.team2Games) or
+                        (MatchSetsTable.id inSubQuery decidedByTiebreak)
+                }
+        return MatchesTable.id inSubQuery decidedSets
+    }
 
     /**
      * The rating-queue eligibility clause (#403): a match qualifies once its event is finalized

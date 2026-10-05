@@ -266,7 +266,7 @@ class RatingCalculationService(
             val groupsByUser =
                 groupsFor(users = users, classifier = classifier, userIds = players, format = match.matchFormat)
 
-            val request = buildRequest(match = match, ratingsByUser = ratingsByUser, groupsByUser = groupsByUser)
+            val request = buildRequest(match = match, ratingsByUser = ratingsByUser, groupsByUser = groupsByUser).bind()
             val result = calculator.calculate(request = request)
             val breakdowns = breakdownsByPlayer(audit = result.audit)
 
@@ -463,12 +463,17 @@ internal fun groupsFor(
  * score-correction path (#776) can recompute a delta through the identical request shape — it passes the
  * ratings recorded on the match's own history rows, so the recomputation is faithful to the original
  * calculation rather than to the players' present-day ratings.
+ *
+ * Refuses, as a [ServiceError.Conflict] naming the match, a match with no set anybody won (#1117): there
+ * is no scoreline to rate, and handing `MatchScore` an empty list throws from inside the calculation run,
+ * failing every match in it rather than this one. The rating queue already keeps such matches out
+ * (`MatchRepository.hasDecidedSet`); this is the backstop that turns any future gap into a named error.
  */
 internal fun buildRequest(
     match: Match,
     ratingsByUser: Map<UUID, BigDecimal>,
     groupsByUser: Map<UUID, String?>,
-): RankingCalculationRequest {
+): Either<ServiceError, RankingCalculationRequest> {
     val t1 = match.team1.teamId.toString()
     val t2 = match.team2.teamId.toString()
     val teams =
@@ -514,6 +519,11 @@ internal fun buildRequest(
                 tiebreak = tiebreak,
             )
         }
+    if (sets.isEmpty()) {
+        return ServiceError
+            .Conflict(message = "Match ${match.publicCode} has no set with a winner, so there is no score to rate")
+            .left()
+    }
     return RankingCalculationRequest(
         teams = teams,
         matchScore =
@@ -531,7 +541,7 @@ internal fun buildRequest(
         matchDate = match.matchDate.toString(),
         // The match-type factor (#108) is folded into the rating change via the calculator's scale term.
         options = RatingCalculationOptions(matchTypeFactor = match.matchType.factor),
-    )
+    ).right()
 }
 
 /**

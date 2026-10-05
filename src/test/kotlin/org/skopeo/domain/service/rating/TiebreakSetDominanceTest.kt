@@ -3,6 +3,7 @@
 
 package org.skopeo.domain.service.rating
 
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -65,7 +66,7 @@ class TiebreakSetDominanceTest {
                 match = matchWithSet(set = set),
                 ratingsByUser = mapOf(player1 to BigDecimal("3.5"), player2 to BigDecimal("3.5")),
                 groupsByUser = mapOf(player1 to null, player2 to null),
-            )
+            ).shouldBeRight()
         return PerformanceBasedRankingCalculatorImpl()
             .calculate(request = request)
             .response

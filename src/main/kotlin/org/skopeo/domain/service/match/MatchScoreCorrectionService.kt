@@ -260,7 +260,7 @@ class MatchScoreCorrectionService(
             val corrected = match.copy(sets = correctedSets, winnerTeamId = newWinner)
             val result =
                 calculator.calculate(
-                    request = buildRequest(match = corrected, ratingsByUser = historicalRatings, groupsByUser = groups),
+                    request = buildRequest(match = corrected, ratingsByUser = historicalRatings, groupsByUser = groups).bind(),
                 )
             val breakdowns = breakdownsFromAudit(audit = result.audit)
 

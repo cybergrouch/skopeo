@@ -3,9 +3,14 @@
 
 package org.skopeo.domain.service.rating
 
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.Test
+import org.skopeo.common.error.ServiceError
 import org.skopeo.domain.model.Match
 import org.skopeo.domain.model.MatchCompletionReason
 import org.skopeo.domain.model.MatchSetResult
@@ -55,7 +60,9 @@ class AbandonedTiebreakRatingInputTest {
             matchNumber = 1,
         )
 
-    private fun requestFor(set: MatchSetResult) =
+    private fun requestFor(set: MatchSetResult) = requestOrError(set = set).shouldBeRight()
+
+    private fun requestOrError(set: MatchSetResult) =
         buildRequest(
             match = matchWithSet(set = set),
             ratingsByUser =
@@ -194,5 +201,20 @@ class AbandonedTiebreakRatingInputTest {
             )
 
         request.matchScore.sets.single().tiebreak shouldBe null
+    }
+
+    /**
+     * A match whose only set nobody won (#1117) — a retirement at 5-5 — has no scoreline once the level set
+     * is dropped (#968). The queue keeps such matches out; this pins the backstop, so a future gap fails
+     * as an error naming the match instead of `MatchScore.init` throwing through the whole run.
+     */
+    @Test
+    fun `a match whose only set nobody won is refused as a named conflict, not thrown (#1117)`() {
+        val error =
+            requestOrError(set = MatchSetResult(setNumber = 1, team1Games = 5, team2Games = 5, winnerTeamId = null))
+                .shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Conflict>()
+
+        error.message shouldContain "TB0001"
     }
 }
