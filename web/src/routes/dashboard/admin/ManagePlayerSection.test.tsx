@@ -285,6 +285,7 @@ describe("ManagePlayerSection", () => {
       // ACCOUNT_MANAGER appeared here with no change to this component (#1002) — the derived list is
       // doing its job, which is the property #926 introduced it for.
       "Grant ACCOUNT_MANAGER",
+      // ACCOUNT_SWEEPER is absent on purpose: a machine role for the sweep's API key, not a person (#1122).
       "Grant ADMINISTRATOR", // last on purpose: high-impact, behind a confirm step (#194)
     ]);
   });

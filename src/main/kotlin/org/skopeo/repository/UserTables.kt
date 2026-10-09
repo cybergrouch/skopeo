@@ -63,6 +63,11 @@ internal object UsersTable : UUIDTable(name = "users") {
     val placeholder = bool(name = "placeholder").default(defaultValue = false)
     val claimedAt = datetime(name = "claimed_at").nullable()
     val claimedBy = reference(name = "claimed_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
+
+    // When the account was created (V1, DB default CURRENT_TIMESTAMP). Read-only here: `databaseGenerated`
+    // keeps it out of every insert, so the database default still applies, as the header above intends.
+    // Read by the stale-account rule (#1122), which goes by sign-up time, and to order the pending list.
+    val createdAt = datetime(name = "created_at").nullable().databaseGenerated()
 }
 
 internal object UserNamesTable : UUIDTable(name = "user_names") {

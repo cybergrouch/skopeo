@@ -79,3 +79,21 @@ data class CalibrationMatchesResponse(
 data class SetCalibrationMatchesRequest(
     val matches: Int,
 )
+
+/**
+ * `GET /api/v1/settings/stale-account-days` (#1122) — how many days after sign-up an account the
+ * stale-account rule matches is swept. Public read, like the calibration window: it is policy, and the
+ * pending list's countdown is derived from it.
+ */
+@Serializable
+data class StaleAccountDaysResponse(
+    val days: Int,
+    val updatedAt: String? = null,
+    val updatedBy: String? = null,
+)
+
+/** Body for `PUT /api/v1/settings/stale-account-days` (#1122). ADMINISTRATOR only; 7..365. */
+@Serializable
+data class SetStaleAccountDaysRequest(
+    val days: Int,
+)

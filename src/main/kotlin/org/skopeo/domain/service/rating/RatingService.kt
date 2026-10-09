@@ -28,6 +28,7 @@ import org.skopeo.domain.model.UserRating
 import org.skopeo.domain.model.ageInYears
 import org.skopeo.domain.model.canSeeRawRating
 import org.skopeo.domain.service.audit.AuditService
+import org.skopeo.domain.service.user.StaleAccountService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.repository.UserRepository
@@ -50,6 +51,7 @@ class RatingService(
     private val ratings: RatingAssembler = RatingAssembler(),
     private val users: UserRepository = UserRepository(),
     private val audit: AuditService = AuditService(),
+    private val staleAccounts: StaleAccountService = StaleAccountService(),
 ) {
     /**
      * A user's ratings plus whether the caller may see the exact value (#114). Players get the band +
@@ -200,8 +202,15 @@ class RatingService(
                     offset = offset.coerceAtLeast(minimumValue = 0),
                 )
             val today = LocalDate.now()
+            // The sweep's own rule decides who gets a removal date (#1122), so the countdown and the sweep
+            // cannot disagree about who is going.
+            val removals = staleAccounts.removalDates(userIds = ids)
             // findAllByIds preserves the id order, so the page order is the repository's stable order.
-            val items = users.findAllByIds(ids = ids).map { it.toDomain().toPendingAssessment(today = today) }
+            val items =
+                users.findAllByIds(ids = ids).map { entity ->
+                    val user = entity.toDomain()
+                    user.toPendingAssessment(today = today).copy(scheduledRemovalOn = removals[user.id])
+                }
             PendingAssessmentPage(items = items, total = total.toInt()).toResponse()
         }
 

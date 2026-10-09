@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Capability } from "@/auth/capabilities";
+import { Capability, MACHINE_ROLES } from "@/auth/capabilities";
 import { NtrpDisclaimerInfo } from '@/components/NtrpLabel'
 import { toast } from 'sonner'
 import { toastError } from '@/observability/toastError'
@@ -46,12 +46,13 @@ const ADMIN_ROLE = Capability.ADMINISTRATOR
  * Two deliberate departures from the raw enum order:
  *
  * - **PLAYER is excluded.** It is the baseline every user keeps, so it is not a grant.
+ * - **Machine roles are excluded** (#1122). `ACCOUNT_SWEEPER` is an API key's scope, not a person's job.
  * - **ADMINISTRATOR is forced last.** It is the high-impact one and sits behind a confirm step (#194);
  *   putting it in the middle of the list on enum ordering alone would make it easy to hit by accident.
  */
 const GRANTABLE: Capability[] = [
   ...Object.values(Capability).filter(
-    (role) => role !== Capability.PLAYER && role !== ADMIN_ROLE,
+    (role) => role !== Capability.PLAYER && role !== ADMIN_ROLE && !MACHINE_ROLES.includes(role),
   ),
   ADMIN_ROLE,
 ]

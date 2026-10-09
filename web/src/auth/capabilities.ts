@@ -4,6 +4,13 @@ import { UserResponseCapabilitiesItem } from "@/api/generated/model";
 export const Capability = UserResponseCapabilitiesItem;
 export type Capability = UserResponseCapabilitiesItem;
 
+/**
+ * Capabilities meant for API keys, not people (#1122) — the client mirror of the backend's `MACHINE_ROLES`.
+ * `ACCOUNT_SWEEPER` is the narrow scope for the scheduled stale-account sweep's key. It stays selectable as
+ * a key scope (API Clients) but is not offered as a grant to a person.
+ */
+export const MACHINE_ROLES: readonly Capability[] = [Capability.ACCOUNT_SWEEPER];
+
 export function hasCapability(
   capabilities: readonly Capability[] | undefined,
   capability: Capability,

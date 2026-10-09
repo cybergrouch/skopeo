@@ -66,6 +66,7 @@ import org.skopeo.routes.configureRankingRoutes
 import org.skopeo.routes.configureRatingRequestRoutes
 import org.skopeo.routes.configureRatingRoutes
 import org.skopeo.routes.configureReportRoutes
+import org.skopeo.routes.configureStaleAccountRoutes
 import org.skopeo.routes.configureStandingsCalculationRoutes
 import org.skopeo.routes.configureStandingsRoutes
 import org.skopeo.routes.configureStandingsSourceRoutes
@@ -159,6 +160,7 @@ fun Application.module(
     configurePlayerListRoutes()
     configureStandingsRoutes()
     configureStandingsCalculationRoutes()
+    configureStaleAccountRoutes()
     configureRankingPointRoutes()
     configureAuditRoutes()
     configureReportRoutes()

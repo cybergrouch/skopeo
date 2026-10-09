@@ -102,7 +102,30 @@ class CapabilityRolesTest {
         // holds PLAYER, so a derived set that loses the subtraction names EVERYBODY. Asserted directly so
         // a later "simplification" to `Capability.entries.toSet()` fails here rather than in production.
         STAFF_ROLES.contains(element = Capability.PLAYER) shouldBe false
-        STAFF_ROLES shouldContainExactlyInAnyOrder (Capability.entries - Capability.PLAYER)
+        // ...and minus the machine roles held by API keys rather than people (#1122).
+        STAFF_ROLES shouldContainExactlyInAnyOrder (Capability.entries - Capability.PLAYER - MACHINE_ROLES)
+    }
+
+    @Test
+    fun `a machine role is in no set but the sweep's own (#1122)`() {
+        // ACCOUNT_SWEEPER exists so the scheduler's key can soft-delete stale sign-ups WITHOUT being an
+        // administrator. If it slipped into a staff or view set it would quietly gain player search, emails
+        // or points — the reverse of why it was made narrow. Every role set in CapabilityRoles is listed,
+        // so a new set has to be added here (and decided) rather than inheriting the role by default.
+        MACHINE_ROLES shouldContainExactlyInAnyOrder listOf(element = Capability.ACCOUNT_SWEEPER)
+        ACCOUNT_SWEEP_ROLES shouldContainExactlyInAnyOrder listOf(Capability.ACCOUNT_SWEEPER, Capability.ADMINISTRATOR)
+        listOf(
+            STAFF_ROLES,
+            MATCH_MANAGEMENT_ROLES,
+            CLUB_OWNER_OR_ADMIN,
+            RATING_ROLES,
+            EMAIL_VIEW_ROLES,
+            PLAYER_POINTS_VIEW_ROLES,
+            PLAYER_SEARCH_ROLES,
+            POINTS_MANAGEMENT_ROLES,
+            ACCOUNT_MANAGEMENT_ROLES,
+            SCORING_ROLES,
+        ).forEach { set -> MACHINE_ROLES.forEach { set.contains(element = it) shouldBe false } }
     }
 
     @Test

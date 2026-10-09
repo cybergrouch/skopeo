@@ -13,6 +13,7 @@ import org.skopeo.common.dto.settings.AwardRankingPointsResponse
 import org.skopeo.common.dto.settings.CalibrationMatchesResponse
 import org.skopeo.common.dto.settings.FacebookLoginResponse
 import org.skopeo.common.dto.settings.HideRankingPointsResponse
+import org.skopeo.common.dto.settings.StaleAccountDaysResponse
 import org.skopeo.common.dto.settings.StandingsSourceResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
@@ -27,6 +28,7 @@ import org.skopeo.domain.model.CalibrationMatchesValue
 import org.skopeo.domain.model.FacebookLoginValue
 import org.skopeo.domain.model.HideRankingPointsValue
 import org.skopeo.domain.model.SnapshotSource
+import org.skopeo.domain.model.StaleAccountDaysValue
 import org.skopeo.domain.model.StandingsSourceValue
 import org.skopeo.domain.model.User
 import org.skopeo.domain.service.audit.AuditService
@@ -65,6 +67,22 @@ private const val DEFAULT_CALIBRATION_MATCHES = 10
  */
 private const val MIN_CALIBRATION_MATCHES = 1
 private const val MAX_CALIBRATION_MATCHES = 100
+
+/**
+ * The app_settings key holding the stale-account threshold (#1122): how many days after sign-up an account
+ * the stale-account rule matches is swept. Absent ⇒ [DEFAULT_STALE_ACCOUNT_DAYS].
+ */
+private const val STALE_ACCOUNT_DAYS_KEY = "stale_account_days"
+
+/** The agreed default (#1122): a month from sign-up. */
+private const val DEFAULT_STALE_ACCOUNT_DAYS = 30
+
+/**
+ * Bounds on the threshold. Under a week would sweep someone before a rater could reasonably get to them;
+ * over a year makes the sweep pointless.
+ */
+private const val MIN_STALE_ACCOUNT_DAYS = 7
+private const val MAX_STALE_ACCOUNT_DAYS = 365
 
 /**
  * Operational app_settings that steer serving behaviour without a redeploy (#146). Mirrors the
@@ -293,6 +311,53 @@ class SettingsService(
                     ),
             )
             CalibrationMatchesValue(matches = matches, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
+        }
+
+    /**
+     * The stale-account threshold (#1122) — how many days after sign-up the stale-account sweep may remove
+     * an account its rule matches. Defaults to [DEFAULT_STALE_ACCOUNT_DAYS] when unseeded or unparseable.
+     * Read at sweep time and by the pending list's countdown, so a change applies to both at once.
+     */
+    fun getStaleAccountDays(): StaleAccountDaysValue {
+        val row = settings.get(key = STALE_ACCOUNT_DAYS_KEY)
+        val days =
+            row?.value?.toIntOrNull()?.takeIf { it in MIN_STALE_ACCOUNT_DAYS..MAX_STALE_ACCOUNT_DAYS }
+                ?: DEFAULT_STALE_ACCOUNT_DAYS
+        return StaleAccountDaysValue(days = days, updatedBy = row?.updatedBy, updatedAt = row?.updatedAt)
+    }
+
+    /** The threshold as its response DTO — the route-facing form of [getStaleAccountDays]. */
+    fun getStaleAccountDaysResponse(): StaleAccountDaysResponse = getStaleAccountDays().toResponse()
+
+    /**
+     * Set the stale-account threshold (ADMINISTRATOR only, #1122), audited. Bounded for the same reason as
+     * the calibration window: a bad value would not fail loudly, it would quietly sweep too early or never.
+     */
+    fun setStaleAccountDays(
+        token: VerifiedFirebaseToken,
+        days: Int,
+    ): Either<ServiceError, StaleAccountDaysResponse> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            ensure(condition = days in MIN_STALE_ACCOUNT_DAYS..MAX_STALE_ACCOUNT_DAYS) {
+                ServiceError.Validation(
+                    message = "Stale-account days must be between $MIN_STALE_ACCOUNT_DAYS and $MAX_STALE_ACCOUNT_DAYS",
+                )
+            }
+            val previous = getStaleAccountDays().days
+            val row = settings.upsert(key = STALE_ACCOUNT_DAYS_KEY, value = days.toString(), updatedBy = adminId)
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = adminId,
+                        action = AuditAction.SETTINGS_STALE_ACCOUNT_DAYS_CHANGED,
+                        entityType = AuditEntityType.SETTING,
+                        entityId = null,
+                        summary = "Changed the stale-account threshold from $previous to $days days",
+                        details = mapOf("previous" to previous.toString(), "days" to days.toString()),
+                    ),
+            )
+            StaleAccountDaysValue(days = days, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
         }
 
     /**

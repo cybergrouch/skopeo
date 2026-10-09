@@ -342,8 +342,8 @@ class RatingRepository {
 
     /**
      * One page of active users with no rating on record yet — pending an administrator's initial
-     * assessment — paired with the total count of all such users (for pagination). Ordered by id
-     * for a stable page boundary.
+     * assessment — paired with the total count of all such users (for pagination). Ordered oldest
+     * sign-up first, then by id for a stable page boundary (#1122).
      */
     fun userIdsPendingAssessment(
         limit: Int,
@@ -355,7 +355,10 @@ class RatingRepository {
             val total = pending().count()
             val ids =
                 pending()
-                    .orderBy(UsersTable.id to SortOrder.ASC)
+                    // Oldest sign-up first (#1122), so the accounts nearest the stale-account sweep sit at the
+                    // top instead of wherever a random UUID put them. Id breaks ties for a stable page boundary;
+                    // Postgres sorts a missing created_at last.
+                    .orderBy(UsersTable.createdAt to SortOrder.ASC, UsersTable.id to SortOrder.ASC)
                     .limit(count = limit).offset(start = offset.toLong())
                     .map { it[UsersTable.id].value }
             ids to total

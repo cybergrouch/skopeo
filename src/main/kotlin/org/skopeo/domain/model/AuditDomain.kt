@@ -63,6 +63,7 @@ enum class AuditAction {
     SETTINGS_AWARD_RANKING_POINTS_CHANGED,
     SETTINGS_HIDE_RANKING_POINTS_CHANGED,
     SETTINGS_CALIBRATION_MATCHES_CHANGED,
+    SETTINGS_STALE_ACCOUNT_DAYS_CHANGED,
     SETTINGS_POINTS_CONFIG_CHANGED,
     SETTINGS_RATING_PREVIEW_CHANGED,
     RANKING_POINTS_AWARDED,
@@ -73,6 +74,11 @@ enum class AuditAction {
     PLACEHOLDER_CLAIMED,
     ACCOUNT_DELETED,
     ACCOUNT_REACTIVATED,
+
+    // The stale-account sweep (#1122): one per account it soft-deletes, plus one summary per run.
+    ACCOUNT_AUTO_DELETED,
+    STALE_ACCOUNT_SWEEP_PREVIEWED,
+    STALE_ACCOUNT_SWEEP_COMMITTED,
     API_CLIENT_CREATED,
     API_KEY_ISSUED,
     API_KEY_REVOKED,
@@ -130,6 +136,10 @@ val AuditAction.category: AuditCategory
             // Admin soft-delete / re-allow-login (#518) roll up with the rest of the user lifecycle.
             AuditAction.ACCOUNT_DELETED,
             AuditAction.ACCOUNT_REACTIVATED,
+            // The stale-account sweep (#1122) is the same lifecycle step, taken by a schedule.
+            AuditAction.ACCOUNT_AUTO_DELETED,
+            AuditAction.STALE_ACCOUNT_SWEEP_PREVIEWED,
+            AuditAction.STALE_ACCOUNT_SWEEP_COMMITTED,
             -> AuditCategory.USER_CREATION
             AuditAction.NAME_ADDED, AuditAction.NAME_UPDATED -> AuditCategory.NAME_CHANGE
             AuditAction.CONTACT_ADDED, AuditAction.CONTACT_UPDATED -> AuditCategory.CONTACT_CHANGE
@@ -193,6 +203,7 @@ val AuditAction.category: AuditCategory
             AuditAction.SETTINGS_AWARD_RANKING_POINTS_CHANGED,
             AuditAction.SETTINGS_HIDE_RANKING_POINTS_CHANGED,
             AuditAction.SETTINGS_CALIBRATION_MATCHES_CHANGED,
+            AuditAction.SETTINGS_STALE_ACCOUNT_DAYS_CHANGED,
             AuditAction.SETTINGS_POINTS_CONFIG_CHANGED,
             AuditAction.SETTINGS_RATING_PREVIEW_CHANGED,
             -> AuditCategory.SETTINGS_MANAGEMENT

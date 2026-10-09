@@ -19,6 +19,7 @@ import org.skopeo.common.dto.settings.SetAwardRankingPointsRequest
 import org.skopeo.common.dto.settings.SetCalibrationMatchesRequest
 import org.skopeo.common.dto.settings.SetFacebookLoginRequest
 import org.skopeo.common.dto.settings.SetHideRankingPointsRequest
+import org.skopeo.common.dto.settings.SetStaleAccountDaysRequest
 import org.skopeo.domain.service.settings.SettingsService
 
 /**
@@ -32,6 +33,7 @@ fun Application.configureFeatureFlagRoutes(service: SettingsService = SettingsSe
         awardRankingPointsFlag(service = service)
         hideRankingPointsFlag(service = service)
         calibrationMatchesSetting(service = service)
+        staleAccountDaysSetting(service = service)
     }
 }
 
@@ -147,6 +149,34 @@ private fun Route.calibrationMatchesSetting(service: SettingsService) {
                     val request = call.receive<SetCalibrationMatchesRequest>()
                     respondEither(
                         result = service.setCalibrationMatches(token = verifiedToken(), matches = request.matches),
+                    ) { value ->
+                        call.respond(status = HttpStatusCode.OK, message = value)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The stale-account threshold (#1122): public read, ADMINISTRATOR write, mirroring the calibration window.
+ * Public because it is policy rather than a secret, and the pending list's countdown is derived from it.
+ */
+private fun Route.staleAccountDaysSetting(service: SettingsService) {
+    route(path = "/api/v1/settings/stale-account-days") {
+        authenticate(FIREBASE_AUTH, optional = true) {
+            get {
+                respondMappingErrors {
+                    call.respond(status = HttpStatusCode.OK, message = service.getStaleAccountDaysResponse())
+                }
+            }
+        }
+        authenticate(FIREBASE_AUTH) {
+            put {
+                respondMappingErrors {
+                    val request = call.receive<SetStaleAccountDaysRequest>()
+                    respondEither(
+                        result = service.setStaleAccountDays(token = verifiedToken(), days = request.days),
                     ) { value ->
                         call.respond(status = HttpStatusCode.OK, message = value)
                     }

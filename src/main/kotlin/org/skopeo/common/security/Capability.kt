@@ -7,8 +7,8 @@ package org.skopeo.common.security
  * Authorization roles granted to a user (broad for now; devolvable to fine-grained capabilities later).
  * RATER may set initial ratings and triage rating work (#106); RESEARCHER gates the player-research
  * feature (#107); SCORER may umpire a live match (#911); ACCOUNT_MANAGER runs the Account Management
- * surfaces — invites, restoring deleted accounts, duplicate rectification (#1002); ADMINISTRATOR
- * implicitly has all of them.
+ * surfaces — invites, restoring deleted accounts, duplicate rectification (#1002); ACCOUNT_SWEEPER runs
+ * the stale-account sweep (#1122); ADMINISTRATOR implicitly has all of them.
  *
  * A cross-cutting value type in `common` so every layer — including `model`'s `User` aggregate and API
  * key scopes — can reference it without depending on `model`.
@@ -22,4 +22,24 @@ package org.skopeo.common.security
  * it from these entries. Every signed-in user holds PLAYER, so anything derived from this enum that
  * forgets the subtraction grants the whole product to everybody.
  */
-enum class Capability { PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER }
+enum class Capability {
+    PLAYER,
+    HOST,
+    CLUB_OWNER,
+    ADMINISTRATOR,
+    RATER,
+    RESEARCHER,
+    POINTS_MANAGER,
+    SCORER,
+    ACCOUNT_MANAGER,
+
+    /**
+     * May run the stale-account sweep (#1122) and nothing else. Meant for the scheduler's API key, so the
+     * key that soft-deletes abandoned sign-ups is not a full ADMINISTRATOR key.
+     *
+     * **A machine role, not a staff role**: it is listed in [org.skopeo.common.security.MACHINE_ROLES]
+     * and subtracted from `STAFF_ROLES`, so it gains none of the staff view sets (player search, emails,
+     * points) that "every capability but PLAYER" would otherwise hand it.
+     */
+    ACCOUNT_SWEEPER,
+}

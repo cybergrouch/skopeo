@@ -4,6 +4,7 @@ import { CalibrationWindowSection } from "./admin/CalibrationWindowSection";
 import { CircuitsSection } from "./admin/CircuitsSection";
 import { FeatureFlagsSection } from "./admin/FeatureFlagsSection";
 import { PendingCalculationSection } from "./admin/PendingCalculationSection";
+import { StaleAccountDaysSection } from "./admin/StaleAccountDaysSection";
 import { StandingsSourceSection } from "./admin/StandingsSourceSection";
 import { ThemeSection } from "./admin/ThemeSection";
 
@@ -17,6 +18,7 @@ export function AdminTab() {
       <StandingsSourceSection />
       <FeatureFlagsSection />
       <CalibrationWindowSection />
+      <StaleAccountDaysSection />
       <ThemeSection />
       <ApiClientsSection />
       <BuildInfoSection />

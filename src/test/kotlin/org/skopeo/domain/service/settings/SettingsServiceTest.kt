@@ -418,4 +418,69 @@ class SettingsServiceTest {
 
         service.getCalibrationMatches().matches shouldBe 10
     }
+
+    @Test
+    fun `the stale-account threshold defaults to 30 days when unseeded (#1122)`() {
+        transaction { AppSettingsTable.deleteAll() }
+
+        service.getStaleAccountDays().days shouldBe 30
+        service.getStaleAccountDays().updatedBy.shouldBeNull()
+        service.getStaleAccountDaysResponse().days shouldBe 30
+        service.getStaleAccountDaysResponse().updatedBy.shouldBeNull()
+    }
+
+    @Test
+    fun `an administrator sets the stale-account threshold, and the audit records both values (#1122)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        service.setStaleAccountDays(token = token(uid = "admin"), days = 45).shouldBeRight().days shouldBe 45
+        service.getStaleAccountDays().days shouldBe 45
+        service.getStaleAccountDaysResponse().let {
+            it.days shouldBe 45
+            it.updatedBy shouldBe admin.id.toString()
+            it.updatedAt.shouldNotBeNull()
+        }
+        val entry =
+            AuditRepository()
+                .list(actions = listOf(element = AuditAction.SETTINGS_STALE_ACCOUNT_DAYS_CHANGED), limit = 10, offset = 0)
+                .first
+                .single()
+        entry.actorUserId shouldBe admin.id
+        entry.summary shouldContain "from 30 to 45"
+    }
+
+    @Test
+    fun `a stale-account threshold outside 7 to 365 is rejected (#1122)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        listOf(0, 6, 366).forEach { bad ->
+            withClue(clue = "$bad should be rejected") {
+                service
+                    .setStaleAccountDays(token = token(uid = "admin"), days = bad)
+                    .shouldBeLeft()
+                    .shouldBeInstanceOf<ServiceError.Validation>()
+            }
+        }
+        service.setStaleAccountDays(token = token(uid = "admin"), days = 7).shouldBeRight()
+        service.setStaleAccountDays(token = token(uid = "admin"), days = 365).shouldBeRight()
+    }
+
+    @Test
+    fun `only an administrator sets the stale-account threshold, not the sweeper (#1122)`() {
+        provision(uid = "sweeper", roles = setOf(Capability.PLAYER, Capability.ACCOUNT_SWEEPER))
+
+        // The sweeper runs the policy; it does not get to decide how aggressive the policy is.
+        service
+            .setStaleAccountDays(token = token(uid = "sweeper"), days = 7)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `a stored stale-account threshold outside the bounds falls back to the default (#1122)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        settings.upsert(key = "stale_account_days", value = "1", updatedBy = admin.id)
+
+        service.getStaleAccountDays().days shouldBe 30
+    }
 }
