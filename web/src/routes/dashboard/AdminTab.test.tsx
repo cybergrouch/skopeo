@@ -31,6 +31,9 @@ vi.mock("./admin/CalibrationWindowSection", () => ({
 vi.mock("./admin/StaleAccountDaysSection", () => ({
   StaleAccountDaysSection: () => <div>stale account days section</div>,
 }));
+vi.mock("./admin/StaleAccountSweepSection", () => ({
+  StaleAccountSweepSection: () => <div>stale account sweep section</div>,
+}));
 
 describe("AdminTab", () => {
   it("renders the admin sections (invites #135 and activity log #134 now live in their own tabs)", () => {
@@ -42,6 +45,7 @@ describe("AdminTab", () => {
     expect(screen.getByText("feature flags section")).toBeInTheDocument();
     expect(screen.getByText("calibration window section")).toBeInTheDocument();
     expect(screen.getByText("stale account days section")).toBeInTheDocument();
+    expect(screen.getByText("stale account sweep section")).toBeInTheDocument();
     expect(screen.getByText("api clients section")).toBeInTheDocument();
     expect(screen.getByText("build info section")).toBeInTheDocument();
     expect(screen.queryByText("invites section")).not.toBeInTheDocument();

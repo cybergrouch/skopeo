@@ -5,6 +5,7 @@ import { CircuitsSection } from "./admin/CircuitsSection";
 import { FeatureFlagsSection } from "./admin/FeatureFlagsSection";
 import { PendingCalculationSection } from "./admin/PendingCalculationSection";
 import { StaleAccountDaysSection } from "./admin/StaleAccountDaysSection";
+import { StaleAccountSweepSection } from "./admin/StaleAccountSweepSection";
 import { StandingsSourceSection } from "./admin/StandingsSourceSection";
 import { ThemeSection } from "./admin/ThemeSection";
 
@@ -19,6 +20,7 @@ export function AdminTab() {
       <FeatureFlagsSection />
       <CalibrationWindowSection />
       <StaleAccountDaysSection />
+      <StaleAccountSweepSection />
       <ThemeSection />
       <ApiClientsSection />
       <BuildInfoSection />
