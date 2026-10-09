@@ -354,6 +354,23 @@ Config: `DB_URL` (default connection), `ARCHIVE_CLUB_CODE` (destination club's `
 
 ---
 
+### 🔢 Versioning
+
+#### `next-version.sh`
+The one home of the app's version arithmetic (#1128), used by `bump-version.yml` and `tag-and-ship.yml`.
+The version lives only in `build.gradle.kts`.
+
+```bash
+./scripts/next-version.sh current               # 3.2.3-SNAPSHOT
+./scripts/next-version.sh next minor            # 3.3.0-SNAPSHOT, counted from the last vX.Y.Z tag
+./scripts/next-version.sh next patch 3.2.3      # 3.2.4-SNAPSHOT, from an explicit base
+./scripts/next-version.sh compare 3.10.0 3.9.9  # 1   (-1 / 0 / 1; -SNAPSHOT ignored)
+```
+
+It counts from the last **release**, not the current dev version, because `3.2.3-SNAPSHOT` already means
+"3.2.3 is coming". Exit codes: 1 usage, 2 unparseable version, 3 no release tag. Tests:
+`bash scripts/next-version.test.sh` (run in CI).
+
 ### 📚 Reference
 
 #### `rating-delta-table.py`

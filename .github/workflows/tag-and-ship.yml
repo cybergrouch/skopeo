@@ -44,9 +44,9 @@ jobs:
             echo "ship=false" >> "$GITHUB_OUTPUT"
             echo "v$VERSION is already tagged — nothing to ship"; exit 0
           fi
-          BASE="${VERSION%-SNAPSHOT}"
-          IFS=. read -r MAJ MIN PAT <<< "$BASE"
-          echo "next=${MAJ}.${MIN}.$((PAT + 1))-SNAPSHOT" >> "$GITHUB_OUTPUT"
+          # The post-release patch bump, from the version being shipped. scripts/next-version.sh is the one
+          # home of this arithmetic, shared with bump-version.yml (#1128).
+          echo "next=$(scripts/next-version.sh next patch "$VERSION")" >> "$GITHUB_OUTPUT"
           echo "ship=true" >> "$GITHUB_OUTPUT"
           echo "Shipping v$VERSION"
 

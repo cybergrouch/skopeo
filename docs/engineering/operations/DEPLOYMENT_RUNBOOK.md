@@ -45,6 +45,7 @@ Deploys are **release-driven, not on-merge**: a release tag is deployed (the dep
 |---|---|---|---|
 | `.github/workflows/release.yml` | `workflow_dispatch` — **step 1**: opens the `release: vX.Y.Z` PR | none | none |
 | `.github/workflows/tag-and-ship.yml` | `push` to `main` — **step 2**: fires when `main` holds an untagged non-SNAPSHOT version | none | none |
+| `.github/workflows/bump-version.yml` | `workflow_dispatch` — opens a PR moving `main` to the next **major / minor / patch** `-SNAPSHOT` (#1128) | none | none |
 | `.github/workflows/deploy-api.yml` | `workflow_dispatch` (dispatched by tag-and-ship, or manual) | `vars.WIF_PROVIDER` | `production` environment approval |
 | `.github/workflows/deploy-web.yml` | `workflow_dispatch` (dispatched by tag-and-ship, or manual) | `vars.VITE_FIREBASE_PROJECT_ID` | `production` environment approval |
 
@@ -62,6 +63,23 @@ The version is single-sourced from `build.gradle.kts` → generated `version.pro
 the tag's version is what `/health` reports. (To ship the current `-SNAPSHOT` as-is — e.g. an initial
 marker — pass the version explicitly to the Release workflow's `version` input.) `tag-and-ship` is
 idempotent: a normal `-SNAPSHOT` push or an already-tagged version is a no-op.
+
+**Starting a new minor or major series** (#1128): Actions → **Bump version → Run workflow** → choose
+`major`, `minor` or `patch`. It opens a **`chore: bump dev version to X.Y.Z-SNAPSHOT`** PR that changes
+only the version line in `build.gradle.kts`.
+- **Counted from the last release.** The base is the highest `vX.Y.Z` tag, not `main`'s dev version: with
+  `v3.2.2` released and `main` on `3.2.3-SNAPSHOT`, `minor` gives `3.3.0-SNAPSHOT` and `major` gives
+  `4.0.0-SNAPSHOT`. So no version is ever skipped.
+- **No-ops and refusals.** A choice that lands on `main`'s current version (here `patch`) does nothing
+  and says so. One that would move the version backwards, or onto an already-tagged version, is refused.
+  Re-running for the same target reports the open PR.
+- **Supersedes the post-release bump.** If tag-and-ship's patch bump PR is still open, it is closed with
+  a comment linking the new PR, so two competing bump PRs never sit open. Use this *instead of* merging
+  that PR when the next release is a minor or major.
+- **One copy of the arithmetic.** Both workflows compute the next version with
+  `scripts/next-version.sh`, tested in CI by `scripts/next-version.test.sh`.
+- **No CI on the bump PR.** Like tag-and-ship's bump PR, it is opened with the workflow's own token,
+  and GitHub starts no CI for PRs created that way. The diff is one line.
 
 ### API pipeline — required repo **Variables**
 

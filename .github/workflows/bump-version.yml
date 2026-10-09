@@ -1,0 +1,100 @@
+name: Bump version
+
+# Open a PR moving main's dev version to the next major, minor or patch -SNAPSHOT (#1128).
+#
+# Counted from the last RELEASED version (the highest vX.Y.Z tag), not from main's current dev version:
+# 3.2.3-SNAPSHOT already means "3.2.3 is coming", so bumping it would skip 3.2.3. The arithmetic lives in
+# scripts/next-version.sh, shared with tag-and-ship.yml. Consequences:
+#   - a choice that lands on main's current version is a no-op, reported as such;
+#   - a choice that would move the version backwards is refused;
+#   - running it twice for the same target reports the existing PR instead of opening a second.
+#
+# It changes only `version = "..."` in build.gradle.kts, the app's single version (web/package.json has
+# none). Cutting a release is still release.yml's job; this never tags, releases or deploys.
+#
+# A still-open bump PR for a DIFFERENT version (typically tag-and-ship's automatic post-release patch
+# bump) is closed with a comment linking the new one, so two competing bump PRs never sit open at once.
+#
+# Like tag-and-ship's bump PR, the PR is opened with the workflow's own token, and GitHub does not start
+# CI for PRs created that way. The change is one line of build.gradle.kts.
+
+on:
+  workflow_dispatch:
+    inputs:
+      part:
+        description: "Which part of the version to increment"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write # push the bump branch
+  pull-requests: write # open the PR, close a superseded one
+
+concurrency:
+  group: bump-version
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history and tags: the next version is counted from the last vX.Y.Z tag.
+          fetch-depth: 0
+
+      - name: Open the bump PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PART: ${{ inputs.part }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          CURRENT=$(scripts/next-version.sh current)
+          NEXT=$(scripts/next-version.sh next "$PART")
+          echo "main is on $CURRENT; a $PART bump from the last release gives $NEXT"
+
+          case "$(scripts/next-version.sh compare "$NEXT" "$CURRENT")" in
+            0)
+              echo "::notice::main is already on $NEXT, so a $PART bump has nothing to do."
+              exit 0 ;;
+            -1)
+              echo "::error::A $PART bump gives $NEXT, which is lower than main's $CURRENT. Pick a larger part."
+              exit 1 ;;
+          esac
+          if git ls-remote --exit-code --tags origin "refs/tags/v${NEXT%-SNAPSHOT}" >/dev/null 2>&1; then
+            echo "::error::v${NEXT%-SNAPSHOT} is already tagged, so it has shipped. Pick a larger part."
+            exit 1
+          fi
+
+          BRANCH="chore/bump-$NEXT"
+          EXISTING=$(gh pr list --state open --head "$BRANCH" --json url --jq '.[0].url // empty')
+          if [[ -n "$EXISTING" ]]; then
+            echo "::notice::A PR for $NEXT is already open: $EXISTING"
+            exit 0
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH" origin/main
+          sed -i -E "s/^version = \".*\"/version = \"$NEXT\"/" build.gradle.kts
+          [[ "$(scripts/next-version.sh current)" == "$NEXT" ]] || { echo "::error::build.gradle.kts was not updated"; exit 1; }
+          git commit -am "chore: bump dev version to $NEXT"
+          git push -u origin "$BRANCH" --force-with-lease
+          URL=$(gh pr create --base main --head "$BRANCH" \
+            --title "chore: bump dev version to $NEXT" \
+            --body "A **$PART** bump requested by @$ACTOR via the Bump version workflow (#1128): \`$CURRENT\` → \`$NEXT\`, counted from the last release. Changes only the version in \`build.gradle.kts\`.")
+          echo "Opened $URL"
+
+          # Close any other open bump PR, typically tag-and-ship's post-release patch bump: it is now
+          # superseded, and merging both would leave main on whichever landed last.
+          gh pr list --state open --limit 100 --json number,headRefName \
+            --jq ".[] | select(.headRefName != \"$BRANCH\" and (.headRefName | startswith(\"chore/bump-\"))) | .number" |
+            while read -r OTHER; do
+              gh pr close "$OTHER" --comment "Superseded by $URL (a $PART bump to \`$NEXT\`, #1128)." --delete-branch
+              echo "Closed superseded bump PR #$OTHER"
+            done
