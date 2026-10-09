@@ -74,6 +74,11 @@ data class PendingAssessmentResponse(
     val dateOfBirth: String? = null,
     val age: Int? = null,
     val proposedRating: String? = null,
+    /**
+     * ISO date the stale-account sweep removes this account unless it is rated (#1122); null when the
+     * sweep's rule does not match it (it has history, is staff, a placeholder, or a merge target).
+     */
+    val scheduledRemovalOn: String? = null,
 )
 
 /** A page of pending assessments with the total count, so the admin UI can paginate. */

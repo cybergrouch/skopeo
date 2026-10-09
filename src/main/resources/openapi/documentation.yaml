@@ -214,7 +214,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER, ACCOUNT_SWEEPER]
           description: Restrict to users holding this capability (#317), e.g. CLUB_OWNER.
         - name: status
           in: query
@@ -372,7 +372,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER, ACCOUNT_SWEEPER]
           description: Restrict to users holding this capability (#317), e.g. CLUB_OWNER.
         - name: status
           in: query
@@ -1686,7 +1686,7 @@ paths:
         required: true
         schema:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER, ACCOUNT_SWEEPER]
     delete:
       summary: Revoke a capability (ADMINISTRATOR only)
       description: |
@@ -4227,6 +4227,94 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/users/stale-sweeps:
+    post:
+      summary: Sweep stale unrated accounts (ACCOUNT_SWEEPER or ADMINISTRATOR, #1122)
+      description: >-
+        Soft-deletes every account the stale-account rule matches: active, unrated, not a placeholder,
+        no capability besides PLAYER, no match or event history, nothing merged into it, and created
+        more than stale-account-days ago (GET /api/v1/settings/stale-account-days, default 30). Sign-up
+        time alone decides; last sign-in is deliberately not used.
+
+        dryRun defaults to true -- an empty or unparseable body is a dry run that lists who would be
+        swept and changes nothing. Only an explicit false soft-deletes (is_active = false), writing one
+        ACCOUNT_AUTO_DELETED audit entry per account plus a summary; every account stays restorable from
+        Deleted Accounts. Re-running finds nothing new, since a swept account is no longer active.
+
+        Reachable with a Firebase token (an administrator, from the dashboard) or an X-Api-Key (the Cloud
+        Scheduler job, scripts/schedule-stale-account-sweep.sh). A token takes precedence. A key needs
+        the ACCOUNT_SWEEPER (or ADMINISTRATOR) scope; ACCOUNT_SWEEPER grants nothing else.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+        - apiKey: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaleAccountSweepRequest'
+      responses:
+        '200':
+          description: The accounts swept, or that would be in a dry run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaleAccountSweepResponse'
+        '401':
+          description: Neither a Firebase token nor a valid X-Api-Key
+        '403':
+          description: The caller or key lacks ACCOUNT_SWEEPER / ADMINISTRATOR
+
+  /api/v1/settings/stale-account-days:
+    get:
+      summary: Get the stale-account threshold, in days (#1122)
+      description: >-
+        How many days after sign-up the stale-account sweep may remove an account its rule matches.
+        Defaults to 30 when unseeded. Public read, like the calibration window: it is policy, and the
+        pending-assessment countdown (scheduledRemovalOn) is derived from it. Read at sweep time, so a
+        change applies from the next run.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+        - {}
+      responses:
+        '200':
+          description: The current threshold
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaleAccountDaysResponse'
+    put:
+      summary: Set the stale-account threshold, in days (#1122)
+      description: >-
+        ADMINISTRATOR only; audit-logged with the previous and new value. Must be between 7 and 365:
+        under a week would sweep someone before a rater could reasonably reach them, and over a year
+        makes the sweep pointless.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetStaleAccountDaysRequest'
+      responses:
+        '200':
+          description: The updated threshold
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaleAccountDaysResponse'
+        '400':
+          description: Value outside 7..365
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/settings/calibration-matches:
     get:
       summary: Get the calibration window length, N (#881)
@@ -6650,7 +6738,7 @@ components:
           type: array
           items:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER, ACCOUNT_SWEEPER]
         record:
           nullable: true
           type: object
@@ -6786,7 +6874,7 @@ components:
           type: array
           items:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER, ACCOUNT_SWEEPER]
 
     ContactCreateRequest:
       type: object
@@ -6930,7 +7018,7 @@ components:
       properties:
         capability:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER, ACCOUNT_SWEEPER]
 
     CapabilityResponse:
       type: object
@@ -6940,7 +7028,7 @@ components:
       properties:
         capability:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER, SCORER, ACCOUNT_MANAGER, ACCOUNT_SWEEPER]
         isActive:
           type: boolean
         grantedBy:
@@ -7110,6 +7198,15 @@ components:
           type: string
           nullable: true
           description: The player's self-reported NTRP band at sign-up, if any (admins approve/override).
+        scheduledRemovalOn:
+          type: string
+          format: date
+          nullable: true
+          description: >-
+            When the stale-account sweep removes this account unless it is rated (#1122). Null when the
+            sweep's rule does not match it (it has match or event history, is staff, a placeholder, or a
+            merge target). A date already passed means the next run removes it. The list is ordered
+            oldest sign-up first.
 
     PendingAssessmentPageResponse:
       type: object
@@ -9048,6 +9145,77 @@ components:
         matches:
           type: integer
           description: The new N. Must be between 1 and 100.
+
+    StaleAccountDaysResponse:
+      type: object
+      required:
+        - days
+      properties:
+        days:
+          type: integer
+          description: 7..365; defaults to 30 when the setting has never been written.
+        updatedAt:
+          type: string
+          nullable: true
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+
+    SetStaleAccountDaysRequest:
+      type: object
+      required:
+        - days
+      properties:
+        days:
+          type: integer
+          description: The new threshold. Must be between 7 and 365.
+
+    StaleAccountSweepRequest:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+          default: true
+          description: True (the default) previews; only an explicit false soft-deletes.
+
+    StaleAccountSweepResponse:
+      type: object
+      required:
+        - dryRun
+        - thresholdDays
+        - cutoff
+        - accounts
+      properties:
+        dryRun:
+          type: boolean
+        thresholdDays:
+          type: integer
+          description: The stale-account threshold the run used.
+        cutoff:
+          type: string
+          description: ISO date-time an account had to be created before to be swept.
+        accounts:
+          type: array
+          description: Every account swept, or that would be in a dry run, oldest sign-up first.
+          items:
+            $ref: '#/components/schemas/StaleAccountResponse'
+
+    StaleAccountResponse:
+      type: object
+      required:
+        - userId
+        - publicCode
+        - createdAt
+      properties:
+        userId:
+          type: string
+          format: uuid
+        publicCode:
+          type: string
+        createdAt:
+          type: string
+          description: ISO date-time the account was created (signed up).
 
     HideRankingPointsResponse:
       type: object

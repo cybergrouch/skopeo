@@ -150,6 +150,9 @@ data class PendingAssessment(
     val age: Int?,
     // The user's self-reported NTRP band at sign-up (issue #75), if any — admins approve or override it.
     val proposedRating: String?,
+    // When the stale-account sweep will remove this account unless it is rated (#1122); null when the rule
+    // does not match it at all. A date already passed means the next run removes it.
+    val scheduledRemovalOn: LocalDate? = null,
 )
 
 /** A page of pending assessments plus the total count of all pending users (for pagination). */

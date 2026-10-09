@@ -65,6 +65,7 @@ fun PendingAssessment.toResponse(): PendingAssessmentResponse =
         dateOfBirth = dateOfBirth?.toString(),
         age = age,
         proposedRating = proposedRating,
+        scheduledRemovalOn = scheduledRemovalOn?.toString(),
     )
 
 fun PendingAssessmentPage.toResponse(): PendingAssessmentPageResponse =

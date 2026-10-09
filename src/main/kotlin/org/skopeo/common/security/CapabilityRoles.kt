@@ -28,7 +28,22 @@ package org.skopeo.common.security
  */
 
 /**
- * Every **staff** capability — the enum minus [Capability.PLAYER] (#1002).
+ * Capabilities meant for **API keys**, not people (#1122) — subtracted from [STAFF_ROLES].
+ *
+ * [STAFF_ROLES] makes every new capability staff by default, which is right for a person and wrong for a
+ * scheduler's key: [Capability.ACCOUNT_SWEEPER] exists so that key can soft-delete stale sign-ups
+ * *without* being an administrator, and inheriting player search (which reads names and contact-adjacent
+ * data) would undo the point of making it narrow. `CapabilityRolesTest` pins that a machine role is in no
+ * set but its own.
+ *
+ * Declared above [STAFF_ROLES] on purpose: top-level properties initialize in file order, and reading
+ * this before it exists would subtract nothing.
+ */
+val MACHINE_ROLES: Set<Capability> = setOf(Capability.ACCOUNT_SWEEPER)
+
+/**
+ * Every **staff** capability — the enum minus [Capability.PLAYER] (#1002) and minus the [MACHINE_ROLES]
+ * held by API keys rather than people (#1122).
  *
  * ⚠️ **The subtraction is the security boundary, not tidying.** Every signed-in user holds PLAYER, so
  * `Capability.entries.toSet()` on its own names *everybody*. A "simplification" that drops the `-` turns
@@ -41,10 +56,17 @@ package org.skopeo.common.security
  *
  * The name has history. This file exists partly because `STAFF_ROLES` once named two *different* sets in
  * two files, and the header calls that name false as it was then used. It is honest here because there is
- * exactly one definition and it means precisely what it says: not a plain player. `CapabilityRolesTest`
+ * exactly one definition and it means precisely what it says: a person who is not a plain player. `CapabilityRolesTest`
  * fails if two sets ever share a name while differing.
  */
-val STAFF_ROLES: Set<Capability> = Capability.entries.toSet() - Capability.PLAYER
+val STAFF_ROLES: Set<Capability> = Capability.entries.toSet() - Capability.PLAYER - MACHINE_ROLES
+
+/**
+ * Who may run the stale-account sweep (#1122): the sweeper capability, and administrators. The sweep
+ * soft-deletes, so no other staff role is included — restoring an account is ACCOUNT_MANAGER's job
+ * (#1002), deleting one is not.
+ */
+val ACCOUNT_SWEEP_ROLES: Set<Capability> = setOf(Capability.ACCOUNT_SWEEPER, Capability.ADMINISTRATOR)
 
 /**
  * Match management: run fixtures, organize events, manage rosters, seed (#789).

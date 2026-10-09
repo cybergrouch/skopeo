@@ -107,3 +107,13 @@ data class CalibrationMatchesValue(
     val updatedBy: UUID?,
     val updatedAt: LocalDateTime?,
 )
+
+/**
+ * The stale-account threshold (#1122): how many days after sign-up an account the stale-account rule
+ * matches becomes eligible for the sweep. Read at sweep time, so a change applies from the next run.
+ */
+data class StaleAccountDaysValue(
+    val days: Int,
+    val updatedBy: UUID?,
+    val updatedAt: LocalDateTime?,
+)

@@ -7,10 +7,12 @@ import org.skopeo.common.dto.settings.AwardRankingPointsResponse
 import org.skopeo.common.dto.settings.CalibrationMatchesResponse
 import org.skopeo.common.dto.settings.FacebookLoginResponse
 import org.skopeo.common.dto.settings.HideRankingPointsResponse
+import org.skopeo.common.dto.settings.StaleAccountDaysResponse
 import org.skopeo.domain.model.AwardRankingPointsValue
 import org.skopeo.domain.model.CalibrationMatchesValue
 import org.skopeo.domain.model.FacebookLoginValue
 import org.skopeo.domain.model.HideRankingPointsValue
+import org.skopeo.domain.model.StaleAccountDaysValue
 
 fun FacebookLoginValue.toResponse(): FacebookLoginResponse =
     FacebookLoginResponse(
@@ -38,6 +40,14 @@ fun HideRankingPointsValue.toResponse(): HideRankingPointsResponse =
 fun CalibrationMatchesValue.toResponse(): CalibrationMatchesResponse =
     CalibrationMatchesResponse(
         matches = matches,
+        updatedAt = updatedAt?.toString(),
+        updatedBy = updatedBy?.toString(),
+    )
+
+/** [StaleAccountDaysValue] → its wire form (#1122). */
+fun StaleAccountDaysValue.toResponse(): StaleAccountDaysResponse =
+    StaleAccountDaysResponse(
+        days = days,
         updatedAt = updatedAt?.toString(),
         updatedBy = updatedBy?.toString(),
     )
