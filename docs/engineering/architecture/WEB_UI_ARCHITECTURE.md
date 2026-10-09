@@ -513,6 +513,11 @@ split out of the Admin tab (#698):
   scheduled sweep (`POST /api/v1/users/stale-sweeps`) soft-deletes an unrated self-sign-up with no
   history. Saving it also refreshes the Ratings tab's pending list, whose per-player removal dates
   (`scheduledRemovalOn`, phrased by `lib/staleAccount.ts`) are derived from it.
+- **Run the stale-account sweep now** (`StaleAccountSweepSection`, #1122) — the on-demand twin of the
+  nightly Cloud Scheduler job, shaped like the standings calculation card. **Preview** (`dryRun: true`)
+  lists who would be removed and changes nothing; **Remove N accounts now** appears only after a
+  preview and commits once, re-applying the rule at that moment, so anyone rated in the meantime is kept.
+  Both are audited under the administrator's name. It does not change the scheduled job's own mode.
 - **API Clients** / **Build Info**. An API key for the stale-account sweep should carry only the
   `ACCOUNT_SWEEPER` scope (a machine role; see `CapabilityRoles.kt`).
 
