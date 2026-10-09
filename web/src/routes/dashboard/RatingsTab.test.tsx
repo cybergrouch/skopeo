@@ -11,6 +11,9 @@ vi.mock('./admin/RatingRequestSection', () => ({
 vi.mock('./admin/RatingsSearchSection', () => ({
   RatingsSearchSection: () => <div>search and rate section</div>,
 }))
+vi.mock('./admin/CalibrationListSection', () => ({
+  CalibrationListSection: () => <div>calibration list section</div>,
+}))
 
 describe('RatingsTab', () => {
   it('renders the pending queue, re-rate requests, and search-and-rate (#140, #205)', () => {
@@ -18,5 +21,7 @@ describe('RatingsTab', () => {
     expect(screen.getByText('pending assessment section')).toBeInTheDocument()
     expect(screen.getByText('re-rate request section')).toBeInTheDocument()
     expect(screen.getByText('search and rate section')).toBeInTheDocument()
+    // Players in calibration, with their per-player overrides (#1126).
+    expect(screen.getByText('calibration list section')).toBeInTheDocument()
   })
 })
