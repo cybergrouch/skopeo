@@ -17,6 +17,8 @@ import {
 } from '@/api/generated/ratings/ratings'
 import type { PendingAssessmentResponse } from '@/api/generated/model'
 import { NTRP_SELF_RATING_GUIDE_URL } from '@/lib/ntrp'
+import { removalNotice } from '@/lib/staleAccount'
+import { cn } from '@/lib/utils'
 
 const PAGE_SIZE = 20
 
@@ -35,6 +37,7 @@ function metaLine(user: PendingAssessmentResponse): string {
 function PendingRow({ user }: { user: PendingAssessmentResponse }) {
   const queryClient = useQueryClient()
   const meta = metaLine(user)
+  const removal = removalNotice(user.scheduledRemovalOn)
 
   return (
     <li className="rounded-lg border p-3">
@@ -56,6 +59,18 @@ function PendingRow({ user }: { user: PendingAssessmentResponse }) {
               <span className="font-medium text-foreground">
                 {user.proposedRating}
               </span>
+            </div>
+          ) : null}
+          {/* The stale-account sweep's countdown (#1122): an unrated sign-up with no history is soft-deleted
+              this long after joining. Shown so a real player waiting on us gets rated first. */}
+          {removal ? (
+            <div
+              className={cn(
+                'text-xs',
+                removal.urgent ? 'font-medium text-destructive' : 'text-muted-foreground',
+              )}
+            >
+              {removal.text}
             </div>
           ) : null}
         </div>
@@ -87,8 +102,10 @@ export function PendingAssessmentSection() {
       <CardHeader>
         <CardTitle>Pending assessment</CardTitle>
         <CardDescription>
-          Players awaiting an initial rating. Assigning one makes them eligible
-          to be scheduled in matches.{' '}
+          Players awaiting an initial rating, oldest sign-up first. Assigning
+          one makes them eligible to be scheduled in matches. A sign-up nobody
+          rates, with no match or event history, is removed automatically after
+          a set number of days; each one shows when.{' '}
           <a
             href={NTRP_SELF_RATING_GUIDE_URL}
             target="_blank"

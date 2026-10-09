@@ -57,6 +57,30 @@ describe('PendingAssessmentSection', () => {
     mutateAsync.mockResolvedValue({})
   })
 
+  // The stale-account sweep's countdown (#1122). The date comes from the server; this checks it is shown,
+  // and shown loudly once it is close.
+  it('shows when an unrated sign-up will be removed, and nothing for one the sweep never removes', () => {
+    const inAMonth = new Date()
+    inAMonth.setDate(inAMonth.getDate() + 30)
+    const dueSoon = new Date()
+    dueSoon.setDate(dueSoon.getDate() + 3)
+    const isoDate = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    useGetApiV1UsersPendingAssessment.mockReturnValue(
+      page([
+        { userId: 'u1', publicCode: 'AAA111', displayName: 'Later', scheduledRemovalOn: isoDate(inAMonth) },
+        { userId: 'u2', publicCode: 'BBB222', displayName: 'Soon', scheduledRemovalOn: isoDate(dueSoon) },
+        { userId: 'u3', publicCode: 'CCC333', displayName: 'Kept', scheduledRemovalOn: null },
+      ]),
+    )
+    renderSection()
+
+    expect(screen.getByText('Removed in 30 days unless rated')).not.toHaveClass('text-destructive')
+    expect(screen.getByText('Removed in 3 days unless rated')).toHaveClass('text-destructive')
+    // Staff, history or a merge behind them: the sweep never touches this one, so no countdown at all.
+    expect(screen.getAllByText(/unless rated/)).toHaveLength(2)
+  })
+
   it('shows a loading state', () => {
     useGetApiV1UsersPendingAssessment.mockReturnValue({
       data: undefined,

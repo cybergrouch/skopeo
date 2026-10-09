@@ -491,7 +491,13 @@ split out of the Admin tab (#698):
 - **Pending Calculation** (`PendingCalculationSection`) — matches awaiting a rating calculation;
   triggers the dry-run/commit calculation.
 - **Standings Source** / **Feature Flags** / **Theme** — app-wide settings.
-- **API Clients** / **Build Info**.
+- **Calibration window** (`CalibrationWindowSection`, #881) and **Stale-account cleanup**
+  (`StaleAccountDaysSection`, #1122) — policy numbers. The second sets how many days after sign-up the
+  scheduled sweep (`POST /api/v1/users/stale-sweeps`) soft-deletes an unrated self-sign-up with no
+  history. Saving it also refreshes the Ratings tab's pending list, whose per-player removal dates
+  (`scheduledRemovalOn`, phrased by `lib/staleAccount.ts`) are derived from it.
+- **API Clients** / **Build Info**. An API key for the stale-account sweep should carry only the
+  `ACCOUNT_SWEEPER` scope (a machine role; see `CapabilityRoles.kt`).
 
 ## Error handling and observability
 
