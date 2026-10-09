@@ -42,6 +42,11 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # The version arithmetic shared by bump-version.yml and tag-and-ship.yml (#1128). Seconds to run,
+      # and those workflows only execute on main, so this is where a regression in it gets caught.
+      - name: Version script tests
+        run: bash scripts/next-version.test.sh
+
       - name: Build, lint, detekt, test, verify coverage
         # SKOPEO_TEST_FORKS parallelises the test task (#978). The suite serialises on one database
         # rather than on slow tests — 547s sequential, slowest single suite 52s — so forking is close
