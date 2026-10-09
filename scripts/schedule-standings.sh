@@ -21,7 +21,7 @@
 #   PROJECT    GCP project                        (default: skopeo-prod)
 #   REGION     scheduler location                 (default: asia-southeast1)
 #   BASE_URL   API origin, no trailing slash       (default: the prod Cloud Run URL below)
-#   API_KEY    an API client key with POINTS_MANAGER scope    (required)
+#   API_KEY    an API client key with POINTS_MANAGER scope    (prompted for, hidden, if unset)
 #   CRON       schedule, read in TIME_ZONE        (default: "0 1 * * 2" = Tuesdays, 01:00)
 #   TIME_ZONE  IANA zone the cron is read in      (default: Asia/Manila)
 #   DRY_RUN    "true" to schedule a preview that writes nothing   (default: false)
@@ -48,6 +48,11 @@ CRON="${CRON:-0 1 * * 2}"
 TIME_ZONE="${TIME_ZONE:-Asia/Manila}"
 DRY_RUN="${DRY_RUN:-false}"
 
+if [[ -z "$API_KEY" ]] && [[ -t 0 ]]; then
+  # Prompted, not typed on the command line, so the key stays out of shell history.
+  read -r -s -p "API key (POINTS_MANAGER scope, input hidden): " API_KEY
+  echo
+fi
 if [[ -z "$API_KEY" ]]; then
   echo "❌ Set API_KEY to an API client key with the POINTS_MANAGER scope." >&2
   echo "   Issue one under Admin → API clients; the plaintext is shown once." >&2
@@ -60,19 +65,28 @@ JOB="standings-recompute"
 URI="${BASE_URL%/}/api/v1/standings/calculations"
 BODY="{\"dryRun\":${DRY_RUN}}"
 
-if gcloud scheduler jobs describe "$JOB" --project "$PROJECT" --location "$REGION" >/dev/null 2>&1; then
-  ACTION=update
-else
-  ACTION=create
-fi
+HEADERS="Content-Type=application/json,X-Api-Key=${API_KEY}"
 
-echo "${ACTION^}ing Cloud Scheduler job '${JOB}' (cron: '${CRON}' ${TIME_ZONE}, dryRun=${DRY_RUN})…"
-gcloud scheduler jobs "$ACTION" http "$JOB" \
-  --project "$PROJECT" --location "$REGION" \
-  --schedule "$CRON" --time-zone "$TIME_ZONE" \
-  --uri "$URI" --http-method POST \
-  --headers "Content-Type=application/json,X-Api-Key=${API_KEY}" \
-  --message-body "$BODY"
+# `create` and `update` name the headers flag differently (--headers vs --update-headers), and the old
+# `${ACTION^}` needed bash 4, which macOS's /bin/bash (3.2) is not (#1122) — so re-running this to rotate
+# the key failed on a Mac. Two explicit branches instead.
+if gcloud scheduler jobs describe "$JOB" --project "$PROJECT" --location "$REGION" >/dev/null 2>&1; then
+  echo "Updating Cloud Scheduler job '${JOB}' (cron: '${CRON}' ${TIME_ZONE}, dryRun=${DRY_RUN})…"
+  gcloud scheduler jobs update http "$JOB" \
+    --project "$PROJECT" --location "$REGION" \
+    --schedule "$CRON" --time-zone "$TIME_ZONE" \
+    --uri "$URI" --http-method POST \
+    --update-headers "$HEADERS" \
+    --message-body "$BODY" >/dev/null
+else
+  echo "Creating Cloud Scheduler job '${JOB}' (cron: '${CRON}' ${TIME_ZONE}, dryRun=${DRY_RUN})…"
+  gcloud scheduler jobs create http "$JOB" \
+    --project "$PROJECT" --location "$REGION" \
+    --schedule "$CRON" --time-zone "$TIME_ZONE" \
+    --uri "$URI" --http-method POST \
+    --headers "$HEADERS" \
+    --message-body "$BODY" >/dev/null
+fi
 
 echo "✅ Standings recompute scheduled: ${CRON} (${TIME_ZONE})"
 echo "   Trigger once now to verify: gcloud scheduler jobs run ${JOB} --project ${PROJECT} --location ${REGION}"
