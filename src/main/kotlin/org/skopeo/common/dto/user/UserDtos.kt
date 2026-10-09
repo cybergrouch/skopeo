@@ -205,6 +205,11 @@ data class UserSummaryResponse(
     // rather than an admission that nobody asked. Passed in by the service, never derived in the mapper:
     // it depends on a rated-match count and the live global N, and `CalibrationService` owns that rule.
     val inCalibration: Boolean? = null,
+    // Progress and override behind [inCalibration] (#1126), for the Ratings tab's search rows ("3 of 10",
+    // "Forced off"). Null whenever [inCalibration] is null — not asked, not "no".
+    val calibrationMatchesRated: Int? = null,
+    val calibrationMatchesRequired: Int? = null,
+    val calibrationOverride: String? = null,
 )
 
 /** A player's decided win–loss record (#342): singles + doubles combined; [total] = wins + losses. */

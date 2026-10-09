@@ -10,6 +10,7 @@ import org.skopeo.common.dto.user.PublicRatingDto
 import org.skopeo.common.dto.user.UserResponse
 import org.skopeo.common.dto.user.UserSummaryResponse
 import org.skopeo.common.dto.user.WinLossDto
+import org.skopeo.domain.model.CalibrationStatus
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserRating
@@ -79,6 +80,8 @@ fun User.toSummary(
     // Calibration (#881) needs a rated-match count and the live global N, so only the service can answer
     // it; `CalibrationService` is the single source of that rule (#882). Null = not asked, not "no".
     inCalibration: Boolean? = null,
+    // Its progress and override (#1126); null whenever [inCalibration] is.
+    calibration: CalibrationStatus? = null,
 ): UserSummaryResponse =
     UserSummaryResponse(
         id = id.toString(),
@@ -107,4 +110,7 @@ fun User.toSummary(
         lastName = names.firstOrNull { it.type == NameType.LAST && it.isActive }?.value,
         status = accountStatus().name,
         inCalibration = inCalibration,
+        calibrationMatchesRated = calibration?.matchesRated,
+        calibrationMatchesRequired = calibration?.matchesRequired,
+        calibrationOverride = calibration?.override?.name,
     )

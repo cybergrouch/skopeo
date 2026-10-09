@@ -15,6 +15,7 @@ private const val RATING_SCALE = 6
 private const val CONFIDENCE_PRECISION = 3
 private const val CONFIDENCE_SCALE = 2
 private const val LEVEL_MAX = 10
+private const val CALIBRATION_OVERRIDE_MAX = 16 // mirrors user_ratings.calibration_override VARCHAR(16) (V65)
 
 /** Current rating per user (NTRP-only). Flyway owns the DDL; this maps only what the repository touches. */
 internal object UserRatingsTable : UUIDTable(name = "user_ratings") {
@@ -50,6 +51,19 @@ internal object UserRatingsTable : UUIDTable(name = "user_ratings") {
     // a stored boolean. Maintained by [refreshCalibrationCounts] at the write paths that change which
     // matches are rated, and set to 0 by `setRating` because a fresh designation restarts the window.
     val calibrationMatchesRated = integer(name = "calibration_matches_rated").default(defaultValue = 0)
+
+    // A person's override of the derived verdict (#1126): AUTOMATIC (the rule above), FORCED_OFF or
+    // FORCED_ON. Only the override is stored, never the verdict, so N still moves every AUTOMATIC player at
+    // once. The reason, setter and time sit beside it for the Ratings tab; `setRating` resets all four.
+    val calibrationOverride = varchar(name = "calibration_override", length = CALIBRATION_OVERRIDE_MAX).default(defaultValue = "AUTOMATIC")
+    val calibrationOverrideReason = text(name = "calibration_override_reason").nullable()
+    val calibrationOverrideBy =
+        reference(
+            name = "calibration_override_by",
+            foreign = UsersTable,
+            onDelete = ReferenceOption.SET_NULL,
+        ).nullable()
+    val calibrationOverrideAt = datetime(name = "calibration_override_at").nullable()
 }
 
 /** Append-only rating-change history (match-driven, or initial assessment when match_id is null). */

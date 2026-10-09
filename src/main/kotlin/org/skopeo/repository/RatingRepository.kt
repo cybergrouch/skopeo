@@ -16,7 +16,9 @@ import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.core.intLiteral
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.notInList
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.plus
+import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -144,6 +146,7 @@ class RatingRepository {
                     it[matchesSinceReset] = 0
                     it[calibrationStartedAt] = LocalDateTime.now()
                     it[calibrationMatchesRated] = 0
+                    clearCalibrationOverride(row = it)
                 }
             } else {
                 UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
@@ -153,9 +156,85 @@ class RatingRepository {
                     it[matchesSinceReset] = 0
                     it[calibrationStartedAt] = LocalDateTime.now()
                     it[calibrationMatchesRated] = 0
+                    clearCalibrationOverride(row = it)
                 }
             }
             UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single().toUserRatingEntity()
+        }
+
+    // A fresh designation is a fresh judgement (#1126): any override belonged to the rating it replaces.
+    private fun clearCalibrationOverride(row: UpdateBuilder<*>) {
+        row[UserRatingsTable.calibrationOverride] = OVERRIDE_AUTOMATIC
+        row[UserRatingsTable.calibrationOverrideReason] = null
+        row[UserRatingsTable.calibrationOverrideBy] = null
+        row[UserRatingsTable.calibrationOverrideAt] = null
+    }
+
+    /**
+     * Store a person's calibration override (#1126) — [override] is AUTOMATIC, FORCED_OFF or FORCED_ON —
+     * with who set it, when and why. Returns false when the user has no rating row: there is nothing to
+     * calibrate, and the caller reports that rather than this inventing a row.
+     *
+     * Only the override is written. The verdict stays derived in `CalibrationService`, and the stored
+     * count is untouched: it is a fact about matches, and AUTOMATIC must resume from the true count.
+     */
+    fun setCalibrationOverride(
+        userId: UUID,
+        override: String,
+        reason: String,
+        setBy: UUID,
+        setAt: LocalDateTime,
+    ): Boolean =
+        transaction {
+            UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
+                it[calibrationOverride] = override
+                it[calibrationOverrideReason] = reason
+                it[calibrationOverrideBy] = setBy
+                it[calibrationOverrideAt] = setAt
+            } > 0
+        }
+
+    /**
+     * One page of the Ratings tab's "Players in calibration" list (#1126): active players whose verdict is
+     * *calibrating* ([calibratingRow] against [required], the live N), plus — when [includeForcedOff] —
+     * those forced out, so an early exit stays visible and reversible. Fewest rated matches first (the
+     * newest guesses), then the most recent designation, then id for a stable page boundary.
+     */
+    fun listCalibrations(
+        required: Int,
+        includeForcedOff: Boolean,
+        limit: Int,
+        offset: Int,
+    ): Pair<List<UserRatingEntity>, Long> =
+        transaction {
+            val listed =
+                if (includeForcedOff) {
+                    calibratingRow(required = required) or (UserRatingsTable.calibrationOverride eq OVERRIDE_FORCED_OFF)
+                } else {
+                    calibratingRow(required = required)
+                }
+            val query = {
+                UserRatingsTable
+                    .join(
+                        otherTable = UsersTable,
+                        joinType = JoinType.INNER,
+                        onColumn = UserRatingsTable.userId,
+                        otherColumn = UsersTable.id,
+                    )
+                    .selectAll()
+                    .where { (UsersTable.isActive eq true) and listed }
+            }
+            val total = query().count()
+            val page =
+                query()
+                    .orderBy(
+                        UserRatingsTable.calibrationMatchesRated to SortOrder.ASC,
+                        UserRatingsTable.calibrationStartedAt to SortOrder.DESC_NULLS_LAST,
+                        UserRatingsTable.userId to SortOrder.ASC,
+                    ).limit(count = limit)
+                    .offset(start = offset.toLong())
+                    .map { it.toUserRatingEntity() }
+            page to total
         }
 
     /**
@@ -482,6 +561,10 @@ internal fun ResultRow.toUserRatingEntity(): UserRatingEntity =
         matchRatedAt = this[UserRatingsTable.matchRatedAt],
         calibrationStartedAt = this[UserRatingsTable.calibrationStartedAt],
         calibrationMatchesRated = this[UserRatingsTable.calibrationMatchesRated],
+        calibrationOverride = this[UserRatingsTable.calibrationOverride],
+        calibrationOverrideReason = this[UserRatingsTable.calibrationOverrideReason],
+        calibrationOverrideBy = this[UserRatingsTable.calibrationOverrideBy]?.value,
+        calibrationOverrideAt = this[UserRatingsTable.calibrationOverrideAt],
     )
 
 /** Map a `user_rating_history` row to the raw persistence entity (#633) — `setBreakdown` stays raw JSON. */

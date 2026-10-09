@@ -18,7 +18,9 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.common.dto.rating.CalculationRequest
+import org.skopeo.common.dto.rating.SetCalibrationOverrideRequest
 import org.skopeo.common.dto.rating.SetRatingRequest
+import org.skopeo.domain.service.rating.CalibrationOverrideService
 import org.skopeo.domain.service.rating.RatingCalculationService
 import org.skopeo.domain.service.rating.RatingService
 
@@ -31,6 +33,7 @@ private const val DEFAULT_PENDING_PAGE_SIZE = 20
 fun Application.configureRatingRoutes(
     service: RatingService = RatingService(),
     calculation: RatingCalculationService = RatingCalculationService(),
+    calibrationOverrides: CalibrationOverrideService = CalibrationOverrideService(),
 ) {
     routing {
         authenticate(FIREBASE_AUTH) {
@@ -63,8 +66,38 @@ fun Application.configureRatingRoutes(
                     }
                 }
             }
+            // The Ratings tab's "Players in calibration" card (#1126) — RATING_ROLES, paged.
+            get(path = "/api/v1/ratings/calibrations") {
+                respondMappingErrors {
+                    val params = call.request.queryParameters
+                    respondEither(
+                        result =
+                            calibrationOverrides.listCalibrations(
+                                token = verifiedToken(),
+                                includeForcedOff = params["includeForcedOff"]?.toBooleanStrictOrNull() ?: false,
+                                limit = params["limit"]?.toIntOrNull() ?: DEFAULT_PENDING_PAGE_SIZE,
+                                offset = params["offset"]?.toIntOrNull() ?: 0,
+                            ),
+                    ) { page -> call.respond(status = HttpStatusCode.OK, message = page) }
+                }
+            }
             route(path = "/api/v1/users/{userId}") {
                 ratings(service = service)
+                // A per-player calibration override (#1126) — RATING_ROLES, reason required.
+                put(path = "/calibration-override") {
+                    respondMappingErrors {
+                        val request = call.receive<SetCalibrationOverrideRequest>()
+                        respondEither(
+                            result =
+                                calibrationOverrides.setOverride(
+                                    token = verifiedToken(),
+                                    userId = uuidParam(name = "userId"),
+                                    override = request.override,
+                                    reason = request.reason,
+                                ),
+                        ) { calibration -> call.respond(status = HttpStatusCode.OK, message = calibration) }
+                    }
+                }
             }
         }
     }

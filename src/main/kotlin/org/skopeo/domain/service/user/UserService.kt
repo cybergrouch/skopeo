@@ -236,6 +236,7 @@ class UserService(
                             showRawRating = showRaw,
                             isDeleted = it.isDeleted(),
                             inCalibration = calibrating[it.id]?.inCalibration,
+                            calibration = calibrating[it.id],
                         )
                     },
                 total = total.toInt(),

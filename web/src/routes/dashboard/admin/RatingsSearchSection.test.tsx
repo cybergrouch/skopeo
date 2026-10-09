@@ -4,9 +4,10 @@ import { setupUser } from '@/test/user'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RatingsSearchSection } from './RatingsSearchSection'
 
-const { useGetApiV1UsersSearch, setRatingFormProps } = vi.hoisted(() => ({
+const { useGetApiV1UsersSearch, setRatingFormProps, calibrationFormProps } = vi.hoisted(() => ({
   useGetApiV1UsersSearch: vi.fn(),
   setRatingFormProps: vi.fn(),
+  calibrationFormProps: vi.fn(),
 }))
 
 vi.mock('@/api/generated/users/users', () => ({
@@ -21,6 +22,14 @@ vi.mock('@/components/SetRatingForm', () => ({
   SetRatingForm: (props: { userId: string; initialValue?: string; onSaved?: () => void }) => {
     setRatingFormProps(props)
     return <span data-testid={`rate-${props.userId}`} />
+  },
+}))
+
+// Stubbed for the same reason as SetRatingForm: its own behaviour is CalibrationOverrideForm.test.tsx's.
+vi.mock('@/components/CalibrationOverrideForm', () => ({
+  CalibrationOverrideForm: (props: { userId: string; current: string }) => {
+    calibrationFormProps(props)
+    return <span data-testid={`calibration-${props.userId}`} />
   },
 }))
 
@@ -177,5 +186,27 @@ describe('RatingsSearchSection', () => {
     await user.type(screen.getByLabelText('Name'), 'zzz')
     await user.click(screen.getByRole('button', { name: 'Search' }))
     expect(screen.getByText('No matching players.')).toBeInTheDocument()
+  })
+
+  // Calibration (#1126): a rated result shows where it stands and offers the override.
+  it('shows a rated player\'s calibration and offers the override, but not for an unrated one', async () => {
+    const user = setupUser()
+    renderSection()
+    useGetApiV1UsersSearch.mockReturnValue(
+      page([
+        // No override on the wire reads as Automatic.
+        { ...row, inCalibration: true, calibrationMatchesRated: 3, calibrationMatchesRequired: 10 },
+        { ...row, id: 'u2', publicCode: 'BBB222', inCalibration: false, calibrationOverride: 'FORCED_OFF' },
+        { ...row, id: 'u3', publicCode: 'CCC333', rating: null, inCalibration: false },
+      ]),
+    )
+    await user.type(screen.getByLabelText('Name'), 'a')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    expect(screen.getByText('Calibrating · 3 of 10')).toBeInTheDocument()
+    expect(screen.getByText('Out of calibration (forced off)')).toBeInTheDocument()
+    expect(calibrationFormProps).toHaveBeenCalledWith({ userId: 'u1', current: 'AUTOMATIC' })
+    expect(calibrationFormProps).toHaveBeenCalledWith({ userId: 'u2', current: 'FORCED_OFF' })
+    expect(screen.queryByTestId('calibration-u3')).not.toBeInTheDocument()
   })
 })
