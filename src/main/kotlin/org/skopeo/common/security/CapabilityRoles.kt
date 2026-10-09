@@ -39,7 +39,7 @@ package org.skopeo.common.security
  * Declared above [STAFF_ROLES] on purpose: top-level properties initialize in file order, and reading
  * this before it exists would subtract nothing.
  */
-val MACHINE_ROLES: Set<Capability> = setOf(Capability.ACCOUNT_SWEEPER)
+val MACHINE_ROLES: Set<Capability> = setOf(element = Capability.ACCOUNT_SWEEPER)
 
 /**
  * Every **staff** capability — the enum minus [Capability.PLAYER] (#1002) and minus the [MACHINE_ROLES]
