@@ -114,6 +114,7 @@ class PlayerService(
                                 inCalibration = calibrationStatus.inCalibration,
                                 calibrationMatchesRated = calibrationStatus.matchesRated,
                                 calibrationMatchesRequired = calibrationStatus.matchesRequired,
+                                calibrationOverride = calibrationStatus.override.name,
                             )
                         },
                     // A login-less, unclaimed placeholder renders an "unclaimed" indicator + claim entry (#496).

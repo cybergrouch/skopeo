@@ -22,6 +22,9 @@ enum class AuditAction {
     RATING_OVERRIDDEN,
     RATING_REREQUESTED,
     RATING_REQUEST_DENIED,
+
+    // A person's calibration override for a player (#1126): AUTOMATIC / FORCED_OFF / FORCED_ON, with a reason.
+    CALIBRATION_OVERRIDE_CHANGED,
     INVITE_CREATED,
     INVITE_REVOKED,
     MATCH_FIXTURE_CREATED,
@@ -148,6 +151,8 @@ val AuditAction.category: AuditCategory
             AuditAction.RATING_OVERRIDDEN,
             AuditAction.RATING_REREQUESTED,
             AuditAction.RATING_REQUEST_DENIED,
+            // Beside the rating it qualifies, so the category filter shows both decisions together (#1126).
+            AuditAction.CALIBRATION_OVERRIDE_CHANGED,
             -> AuditCategory.RATING_CHANGE
             AuditAction.INVITE_CREATED, AuditAction.INVITE_REVOKED -> AuditCategory.INVITE
             AuditAction.MATCH_FIXTURE_CREATED,

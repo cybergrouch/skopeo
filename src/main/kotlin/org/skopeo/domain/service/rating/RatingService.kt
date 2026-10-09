@@ -17,6 +17,7 @@ import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditAction
 import org.skopeo.domain.model.AuditEntityType
 import org.skopeo.domain.model.AuditWrite
+import org.skopeo.domain.model.CalibrationOverride
 import org.skopeo.domain.model.Level
 import org.skopeo.domain.model.PendingAssessment
 import org.skopeo.domain.model.PendingAssessmentPage
@@ -52,6 +53,7 @@ class RatingService(
     private val users: UserRepository = UserRepository(),
     private val audit: AuditService = AuditService(),
     private val staleAccounts: StaleAccountService = StaleAccountService(),
+    private val calibration: CalibrationService = CalibrationService(),
 ) {
     /**
      * A user's ratings plus whether the caller may see the exact value (#114). Players get the band +
@@ -123,6 +125,9 @@ class RatingService(
             val resolved = resolveRating(band = band, value = value)
             val level = Rating.fromValue(value = resolved.toPlainString()).publishedLevel.value
             val previous = ratings.findCurrentRating(userId = userId)
+            // A manual rating resets any calibration override to AUTOMATIC (#1126); read it first so the
+            // audit can say so, rather than letting an override disappear without a trace.
+            val previousOverride = calibration.statusFor(userId = userId).override
             // A manual assessment/override is not match-derived, so confidence computes to 0% (#343).
             val updated =
                 ratings.setRating(
@@ -154,7 +159,16 @@ class RatingService(
                         ),
                 )
             }
-            audit.record(write = ratingAudit(actorId = adminId, userId = userId, previous = previous, updated = updated))
+            audit.record(
+                write =
+                    ratingAudit(
+                        actorId = adminId,
+                        userId = userId,
+                        previous = previous,
+                        updated = updated,
+                        previousOverride = previousOverride,
+                    ),
+            )
             // The RATING standings are computed live from current ratings (#146), so a set/override needs
             // no snapshot rebuild — the change is reflected on the next read.
             updated.toResponse(revealRawValue = true)
@@ -165,6 +179,7 @@ class RatingService(
         userId: UUID,
         previous: UserRating?,
         updated: UserRating,
+        previousOverride: CalibrationOverride,
     ): AuditWrite {
         // Bands derived from the (non-null) rating value — same labels, without a dead null fallback.
         val newBand = Level.fromValue(value = updated.currentRating.toPlainString()).value
@@ -185,7 +200,13 @@ class RatingService(
                     "userId" to userId.toString(),
                     "previousRating" to previous?.let { it.currentRating.toPlainString() },
                     "newRating" to updated.currentRating.toPlainString(),
-                ),
+                ) +
+                    // Present only when there was a forced override to reset (#1126).
+                    if (previousOverride == CalibrationOverride.AUTOMATIC) {
+                        emptyMap()
+                    } else {
+                        mapOf(pair = "calibrationOverrideReset" to previousOverride.name)
+                    },
         )
     }
 

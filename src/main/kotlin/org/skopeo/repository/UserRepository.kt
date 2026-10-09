@@ -1033,10 +1033,8 @@ private fun calibrationMatchesRatedValue(): Expression<Int?> =
 /**
  * Whether the player is (or is not) calibrating (#1065) — the filter counterpart of [calibrationRank].
  *
- * **BOTH conditions, not just the count.** `CalibrationService` answers "not calibrating" from a null
- * `calibration_started_at` alone, and the stored count is 0-and-unread there (see `V61`'s column
- * comment). So a predicate of `count < N` on its own would match every player who was never designated,
- * since 0 < N — which is the whole population, not the calibrating subset.
+ * The row condition is [calibratingRow], shared with the Ratings tab's calibration list (#1126): the
+ * per-player override first, then the count against N only for an AUTOMATIC row that has a designation.
  *
  * `inCalibration = false` is the negation of the same expression, so a player with no rating row at all
  * correctly lands there rather than being dropped from both sides of the filter.
@@ -1049,9 +1047,7 @@ private fun calibrationMatches(
         exists(
             query =
                 UserRatingsTable.selectAll().where {
-                    (UserRatingsTable.userId eq UsersTable.id) and
-                        UserRatingsTable.calibrationStartedAt.isNotNull() and
-                        (UserRatingsTable.calibrationMatchesRated less required)
+                    (UserRatingsTable.userId eq UsersTable.id) and calibratingRow(required = required)
                 },
         )
     return if (inCalibration) calibrating else not(op = calibrating)

@@ -55,6 +55,12 @@ data class PublicRatingDto(
     /** Rated matches played so far in the window, and the N they are measured against (#881). */
     val calibrationMatchesRated: Int? = null,
     val calibrationMatchesRequired: Int? = null,
+    /**
+     * The per-player override behind [inCalibration] (#1126): AUTOMATIC, FORCED_OFF or FORCED_ON. Public
+     * like the flag it explains, so the band indicator can say "calibration extended" rather than
+     * "match 12 of 10". The reason stays staff-only.
+     */
+    val calibrationOverride: String? = null,
 )
 
 /**

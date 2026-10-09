@@ -33,4 +33,13 @@ data class UserRatingEntity(
      * only place that comparison is made.
      */
     val calibrationMatchesRated: Int = 0,
+    /**
+     * The stored calibration override (#1126), as the raw string: AUTOMATIC, FORCED_OFF or FORCED_ON. Raw
+     * because `persistence` stays model-free; `CalibrationService` parses it and is the only place it is
+     * interpreted. The reason, setter and time are null until someone sets an override.
+     */
+    val calibrationOverride: String = "AUTOMATIC",
+    val calibrationOverrideReason: String? = null,
+    val calibrationOverrideBy: UUID? = null,
+    val calibrationOverrideAt: LocalDateTime? = null,
 )
