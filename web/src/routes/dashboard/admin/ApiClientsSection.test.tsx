@@ -107,6 +107,22 @@ describe("ApiClientsSection", () => {
     expect(createMutate).not.toHaveBeenCalled();
   });
 
+  // ACCOUNT_SWEEPER is hidden from person grants (#1122) but must stay a key scope: it exists for exactly
+  // one key, the scheduled stale-account sweep's.
+  it("offers the ACCOUNT_SWEEPER machine role as a key scope (#1122)", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(screen.getByLabelText("Scope ACCOUNT_SWEEPER"));
+    await user.click(screen.getByRole("button", { name: "Issue key" }));
+
+    await waitFor(() =>
+      expect(issueMutate).toHaveBeenCalledWith({
+        id: "c1",
+        data: { scopes: ["ACCOUNT_SWEEPER"], environment: "LIVE" },
+      }),
+    );
+  });
+
   it("issues a key with the chosen scope and reveals the secret once", async () => {
     const user = userEvent.setup();
     renderSection();
