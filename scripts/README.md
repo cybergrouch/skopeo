@@ -279,7 +279,21 @@ One-time setup to automate the **Standings recompute + publish** via Cloud Sched
 API_KEY=skopeo_live_… ./scripts/schedule-standings.sh
 ```
 
-Defaults to Tuesdays 01:00 Asia/Manila, publishing (not a dry run). Re-run with a new `API_KEY` to rotate; the job is updated in place.
+Defaults to Tuesdays 01:00 Asia/Manila, publishing (not a dry run). Re-run with a new `API_KEY` to rotate; the job is updated in place. Run without `API_KEY` and it prompts for the key with input hidden, keeping it out of shell history.
+
+#### `schedule-stale-account-sweep.sh`
+One-time setup to run the **stale-account sweep** daily via Cloud Scheduler (#1122). The sweep soft-deletes self-sign-ups that are still unrated, with no match or event history, more than *N* days after joining (Admin → Stale-account cleanup, default 30). Every removal is restorable from Deleted Accounts, and the Ratings tab shows each pending player's removal date first.
+
+**The key must carry only the `ACCOUNT_SWEEPER` scope** (Admin → API Clients, environment LIVE, no expiry). Never paste it anywhere; run the script yourself and let it prompt.
+
+**Usage:**
+```bash
+./scripts/schedule-stale-account-sweep.sh                  # daily 02:00 Asia/Manila, PREVIEW only; prompts for the key (hidden)
+gcloud scheduler jobs run stale-account-sweep --project skopeo-prod --location asia-southeast1   # trigger once to verify
+DRY_RUN=false ./scripts/schedule-stale-account-sweep.sh    # switch on, once the previews look right
+```
+
+**`DRY_RUN` defaults to `true`**: each run records *"Previewed the stale-account sweep: N accounts would be deleted"* in the Activity Log under the client's name, and deletes nothing. Re-running updates the job in place (including to rotate the key).
 
 #### `backup-firebase-auth.sh`
 Portable backup of Firebase Auth users to GCS (users are keyed by `firebase_uid`, so a DB dump alone isn't a complete restore). Automated weekly by `.github/workflows/firebase-auth-backup.yml`. ⚠️ Contains password hashes + PII.
