@@ -1,3 +1,5 @@
+import { CalibrationOverrideForm } from '@/components/CalibrationOverrideForm'
+import { calibrationLabel } from '@/lib/calibration'
 import { useState } from 'react'
 import { NtrpLabel } from '@/components/NtrpLabel'
 import { useQueryClient } from '@tanstack/react-query'
@@ -100,6 +102,20 @@ export function RatingsSearchSection() {
                         )}
                       </div>
                       <SetRatingForm userId={user.id} initialValue={user.rating?.level ?? ''} onSaved={invalidate} />
+                      {/* Calibration (#1126): only a rated player has one to show or override. */}
+                      {user.rating && user.inCalibration != null ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {calibrationLabel({
+                              inCalibration: user.inCalibration,
+                              matchesRated: user.calibrationMatchesRated,
+                              matchesRequired: user.calibrationMatchesRequired,
+                              override: user.calibrationOverride,
+                            })}
+                          </span>
+                          <CalibrationOverrideForm userId={user.id} current={user.calibrationOverride ?? 'AUTOMATIC'} />
+                        </div>
+                      ) : null}
                     </li>
                   )
                 })}

@@ -452,6 +452,23 @@ flowchart TD
     Adm --> Sec
 ```
 
+### Ratings tab sections
+
+`RatingsTab.tsx` is gated by `canRate`, which is exactly the server's `RATING_ROLES` (RATER, HOST,
+CLUB_OWNER, ADMINISTRATOR), so everything here is offered only to people the API will accept:
+- **Pending assessment**: unrated players, oldest first, with the stale-account countdown (#1122).
+- **Re-rate requests** (#140).
+- **Search & rate** (#205). Each rated result also shows its calibration ("Calibrating · 3 of 10",
+  "Out of calibration (forced off)") and the override control.
+- **Players in calibration** (`CalibrationListSection`, #1126): everyone calibrating, fewest rated
+  matches first, optionally those forced out, each with the override and the reason, setter and date
+  behind it.
+
+The override control (`CalibrationOverrideForm`) sets **Automatic / Forced off / Forced on** with a
+**required reason**, and says before saving that it is not retroactive. Only the override is stored;
+whether someone is calibrating is always the server's verdict (`CalibrationService`), and
+`lib/calibration.ts` only phrases it. Each change is in the Activity Log as `CALIBRATION_OVERRIDE_CHANGED`.
+
 ### Account Management tab sections
 
 `AccountManagementTab.tsx` composes the player/account administration sections (`src/routes/dashboard/admin/`),

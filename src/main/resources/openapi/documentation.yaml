@@ -1742,6 +1742,96 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/users/{userId}/calibration-override:
+    put:
+      summary: Override a player's calibration (RATING_ROLES, #1126)
+      description: >-
+        Sets the player's calibration override: AUTOMATIC (the derived rule: calibrating while rated
+        matches since the last manual rating are below N), FORCED_OFF (out of calibration whatever the
+        count) or FORCED_ON (in calibration whatever the count). Only the override is stored; the verdict
+        stays derived, so changing N still applies instantly to every AUTOMATIC player.
+
+        A non-blank reason (at most 500 characters) is required and is recorded, with the old and new
+        values and the actor, as a CALIBRATION_OVERRIDE_CHANGED entry in the Activity Log (Rating change
+        category). Takes effect from the next rating run and the next points award; nothing already rated
+        or awarded changes. A manual re-rating resets the override to AUTOMATIC.
+
+        Allowed for ADMINISTRATOR, RATER, HOST and CLUB_OWNER -- the roles that may set a rating (#907).
+      tags:
+        - Ratings
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetCalibrationOverrideRequest'
+      responses:
+        '200':
+          description: The player's calibration after the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerCalibrationResponse'
+        '400':
+          description: Unknown override value, or a blank or over-long reason
+        '403':
+          description: Caller is not in RATING_ROLES
+        '404':
+          description: No such user
+        '409':
+          description: The player has no rating, so there is no calibration to override
+
+  /api/v1/ratings/calibrations:
+    get:
+      summary: List players in calibration, paged (RATING_ROLES, #1126)
+      description: >-
+        The Ratings tab's "Players in calibration" card: every active player whose verdict is calibrating
+        (AUTOMATIC and under N, or FORCED_ON), plus those forced out when includeForcedOff is true. Ordered
+        fewest rated matches first, then the most recent manual rating. Uses the same rule as the Research
+        tab's calibration filter.
+      tags:
+        - Ratings
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: includeForcedOff
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Page size (clamped to 1..100).
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: One page of players and the total
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerCalibrationPageResponse'
+        '403':
+          description: Caller is not in RATING_ROLES
+
   /api/v1/users/pending-assessment:
     get:
       summary: List users pending an initial rating, paged (RATER or ADMINISTRATOR)
@@ -6256,6 +6346,14 @@ components:
               type: integer
               nullable: true
               description: The N those are measured against (#881); the global admin setting.
+            calibrationOverride:
+              type: string
+              nullable: true
+              enum: [AUTOMATIC, FORCED_OFF, FORCED_ON]
+              description: >-
+                The per-player override behind inCalibration (#1126). AUTOMATIC means the derived rule
+                decided; a forced value lets the band indicator say "calibration extended" instead of
+                "match 12 of 10". The reason for an override is staff-only and not included here.
         isDisabled:
           type: boolean
           description: True when this profile was marked a duplicate and disabled (#124); the card is a "merged" notice.
@@ -6796,6 +6894,19 @@ components:
           description: >-
             Whether the rating is still being calibrated (#881). Populated by `GET /api/v1/users/search`
             and absent elsewhere — null means nobody asked, NOT that the player is settled.
+        calibrationMatchesRated:
+          type: integer
+          nullable: true
+          description: Rated matches in the current window (#1126), for "3 of 10". Null whenever inCalibration is.
+        calibrationMatchesRequired:
+          type: integer
+          nullable: true
+          description: The global N those are measured against (#1126). Null whenever inCalibration is.
+        calibrationOverride:
+          type: string
+          nullable: true
+          enum: [AUTOMATIC, FORCED_OFF, FORCED_ON]
+          description: The per-player calibration override (#1126). Null whenever inCalibration is.
     UserResponse:
       type: object
       required:
@@ -7207,6 +7318,79 @@ components:
             sweep's rule does not match it (it has match or event history, is staff, a placeholder, or a
             merge target). A date already passed means the next run removes it. The list is ordered
             oldest sign-up first.
+
+    SetCalibrationOverrideRequest:
+      type: object
+      required:
+        - override
+        - reason
+      properties:
+        override:
+          type: string
+          enum: [AUTOMATIC, FORCED_OFF, FORCED_ON]
+        reason:
+          type: string
+          description: Required, non-blank, at most 500 characters. Recorded in the Activity Log.
+
+    PlayerCalibrationResponse:
+      type: object
+      required:
+        - userId
+        - publicCode
+        - inCalibration
+        - matchesRated
+        - matchesRequired
+        - override
+      properties:
+        userId:
+          type: string
+          format: uuid
+        publicCode:
+          type: string
+        displayName:
+          type: string
+          nullable: true
+        level:
+          type: string
+          nullable: true
+          description: The player's current NTRP band.
+        inCalibration:
+          type: boolean
+          description: The live verdict, override included.
+        matchesRated:
+          type: integer
+        matchesRequired:
+          type: integer
+          description: The global N.
+        override:
+          type: string
+          enum: [AUTOMATIC, FORCED_OFF, FORCED_ON]
+        overrideReason:
+          type: string
+          nullable: true
+        overrideByName:
+          type: string
+          nullable: true
+        overrideByPublicCode:
+          type: string
+          nullable: true
+        overrideAt:
+          type: string
+          nullable: true
+          description: ISO date-time the override was last set.
+
+    PlayerCalibrationPageResponse:
+      type: object
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerCalibrationResponse'
+        total:
+          type: integer
 
     PendingAssessmentPageResponse:
       type: object

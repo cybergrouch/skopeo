@@ -714,6 +714,29 @@ class RatingCalculationServiceTest {
         historyRowCount(userId = veteran.id, matchId = matchId) shouldBe 0
     }
 
+    /**
+     * The override doing its job end to end (#1126): the same rookie-versus-veteran match as above, but a
+     * rater has ended the rookie's calibration. Nobody is calibrating any more, so the veteran's rating
+     * moves too — the whole reason to end it early.
+     */
+    @Test
+    fun `ending a player's calibration by override lets their opponent's rating move (#1126)`() {
+        provisionUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val rookie = provisionUser(uid = "rookie", rated = true)
+        val veteran = provisionUser(uid = "veteran", rated = true)
+        makeSettled(userId = veteran.id)
+        CalibrationOverrideService()
+            .setOverride(token = token(uid = "admin"), userId = rookie.id, override = "FORCED_OFF", reason = "Rated elsewhere for years")
+            .shouldBeRight()
+        val matchId = playedMatch(admin = "admin", winner = rookie.id, loser = veteran.id)
+
+        val outcome = calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
+
+        outcome.matches.single().changes.forEach { it.suppressed shouldBe false }
+        storedRating(userId = veteran.id) shouldNotBe BigDecimal("4.000000")
+        historyRowCount(userId = veteran.id, matchId = matchId) shouldBe 1
+    }
+
     @Test
     fun `when both players are calibrating both ratings move (#881)`() {
         provisionUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))

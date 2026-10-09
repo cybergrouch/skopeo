@@ -3,9 +3,12 @@
 
 package org.skopeo.domain.service.rating
 
+import org.skopeo.domain.model.CalibrationOverride
 import org.skopeo.domain.model.CalibrationStatus
 import org.skopeo.domain.service.settings.SettingsService
 import org.skopeo.repository.RatingRepository
+import org.skopeo.repository.persistence.UserRatingEntity
+import java.time.LocalDateTime
 import java.util.UUID
 
 /**
@@ -71,24 +74,8 @@ class CalibrationService(
      * who has completed the window. Both are the same answer to a caller; the counts differ, which is
      * what the band indicator needs to say "match 3 of 10".
      */
-    fun statusFor(userId: UUID): CalibrationStatus {
-        val required = requiredMatches()
-        val current = ratings.findCurrentRating(userId = userId)
-        // A null stamp is the whole answer: no window, so the stored count is not even read. That is what
-        // keeps the rollout prospective for every row that predates #881.
-        if (current?.calibrationStartedAt == null) {
-            return CalibrationStatus(inCalibration = false, matchesRated = 0, matchesRequired = required)
-        }
-        val rated = current.calibrationMatchesRated
-        return CalibrationStatus(
-            // Strictly less than N: the window covers the 1st through the Nth rated match, so a player
-            // whose Nth match has been rated has completed it. Off by one here would either rate an
-            // opponent's match that should have been suppressed, or suppress one that should have counted.
-            inCalibration = rated < required,
-            matchesRated = rated,
-            matchesRequired = required,
-        )
-    }
+    fun statusFor(userId: UUID): CalibrationStatus =
+        statusOf(row = ratings.findCurrentRating(userId = userId), required = requiredMatches())
 
     /** Shorthand for the common case — the rating and points paths only need the boolean. */
     fun isCalibrating(userId: UUID): Boolean = statusFor(userId = userId).inCalibration
@@ -108,14 +95,51 @@ class CalibrationService(
         // aggregate; reading a stored column removes even that, so a 25-row search page costs one query
         // instead of two, and calibration stops being the reason the page cannot be sorted on it.
         val current = ratings.findCurrentRatings(userIds = distinct)
-        return distinct.associateWith { userId ->
-            val row = current[userId]
-            if (row?.calibrationStartedAt == null) {
-                CalibrationStatus(inCalibration = false, matchesRated = 0, matchesRequired = required)
-            } else {
-                val rated = row.calibrationMatchesRated
-                CalibrationStatus(inCalibration = rated < required, matchesRated = rated, matchesRequired = required)
-            }
+        return distinct.associateWith { userId -> statusOf(row = current[userId], required = required) }
+    }
+
+    // Unpacks the stored row for [verdict]. Private, so no service signature exposes a persistence entity.
+    private fun statusOf(
+        row: UserRatingEntity?,
+        required: Int,
+    ): CalibrationStatus =
+        if (row == null) {
+            // No rating row: nothing to calibrate, and no override can exist without one.
+            CalibrationStatus(inCalibration = false, matchesRated = 0, matchesRequired = required)
+        } else {
+            verdict(
+                override = CalibrationOverride.valueOf(value = row.calibrationOverride),
+                calibrationStartedAt = row.calibrationStartedAt,
+                matchesRated = row.calibrationMatchesRated,
+                required = required,
+            )
         }
+
+    /**
+     * The rule itself, in one place for both entry points above.
+     *
+     * The per-player override (#1126) is read first: FORCED_OFF and FORCED_ON decide outright, and only
+     * AUTOMATIC falls through to the derived rule. Its SQL twin is `calibratingRow`, used where calibration
+     * is filtered or sorted in the database; a test holds the two together.
+     */
+    fun verdict(
+        override: CalibrationOverride,
+        calibrationStartedAt: LocalDateTime?,
+        matchesRated: Int,
+        required: Int,
+    ): CalibrationStatus {
+        // A null stamp means no window ever opened, so the stored count is not even read. That is what keeps
+        // the rollout prospective for every row that predates #881.
+        val rated = if (calibrationStartedAt == null) 0 else matchesRated
+        val inCalibration =
+            when (override) {
+                CalibrationOverride.FORCED_OFF -> false
+                CalibrationOverride.FORCED_ON -> true
+                // Strictly less than N: the window covers the 1st through the Nth rated match, so a player
+                // whose Nth match has been rated has completed it. Off by one here would either rate an
+                // opponent's match that should have been suppressed, or suppress one that should have counted.
+                CalibrationOverride.AUTOMATIC -> calibrationStartedAt != null && rated < required
+            }
+        return CalibrationStatus(inCalibration = inCalibration, matchesRated = rated, matchesRequired = required, override = override)
     }
 }

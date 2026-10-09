@@ -226,4 +226,22 @@ data class CalibrationStatus(
     val inCalibration: Boolean,
     val matchesRated: Int,
     val matchesRequired: Int,
+    /** The per-player override behind [inCalibration] (#1126); AUTOMATIC means the derived rule decided. */
+    val override: CalibrationOverride = CalibrationOverride.AUTOMATIC,
 )
+
+/**
+ * A person's override of the derived calibration verdict (#1126). Only this is stored, never the verdict:
+ * AUTOMATIC defers to the rule (rated matches since the last manual designation, against the live global
+ * N), so changing N still moves every AUTOMATIC player at once. A manual re-rating resets it to AUTOMATIC.
+ */
+enum class CalibrationOverride {
+    /** The derived rule decides. */
+    AUTOMATIC,
+
+    /** Out of calibration whatever the count: staff judged the rating sound. */
+    FORCED_OFF,
+
+    /** In calibration whatever the count: staff still doubt the rating. */
+    FORCED_ON,
+}
