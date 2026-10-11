@@ -84,30 +84,18 @@ class MatchReplayService(
     ): Either<ServiceError, MatchReplayBackfillResponse> =
         either {
             administrator(token = token).bind()
-            var recorded = 0
-            var skipped = 0
-            replays.unrecordedWithLog().forEach { matchId ->
-                val document = fromLog(matchId = matchId)
-                when {
-                    document == null -> skipped += 1
-                    else -> {
-                        if (!request.dryRun) save(matchId = matchId, document = document)
-                        recorded += 1
-                    }
+            val recording =
+                replays.unrecordedWithLog().associateWith { matchId -> fromLog(matchId = matchId) }
+            val upgrading =
+                replays.outdated(currentVersion = currentVersion).associateWith { matchId ->
+                    replays.find(matchId = matchId)?.let { ReplayBuilder.rebuild(document = decode(json = it.replay)) }
                 }
+            if (!request.dryRun) {
+                (recording + upgrading).forEach { (matchId, document) -> document?.let { save(matchId = matchId, document = it) } }
             }
-            var upgraded = 0
-            replays.outdated(currentVersion = currentVersion).forEach { matchId ->
-                val stored = replays.find(matchId = matchId) ?: return@forEach
-                val document = ReplayBuilder.rebuild(document = decode(json = stored.replay))
-                when {
-                    document == null -> skipped += 1
-                    else -> {
-                        if (!request.dryRun) save(matchId = matchId, document = document)
-                        upgraded += 1
-                    }
-                }
-            }
+            val recorded = recording.values.count { it != null }
+            val upgraded = upgrading.values.count { it != null }
+            val skipped = recording.size - recorded + upgrading.size - upgraded
             if (!request.dryRun) logger.info { "Replay backfill recorded $recorded, upgraded $upgraded, skipped $skipped" }
             MatchReplayBackfillResponse(dryRun = request.dryRun, recorded = recorded, upgraded = upgraded, skipped = skipped)
         }
@@ -169,11 +157,10 @@ class MatchReplayService(
 internal fun recordedResultOf(match: Match): ReplayResult? {
     val winner =
         when (match.winnerTeamId) {
-            null -> return null
             match.team1.teamId -> TeamSide.TEAM1
             match.team2.teamId -> TeamSide.TEAM2
-            else -> return null
-        }
+            else -> null
+        } ?: return null
     return ReplayResult(
         sets =
             match.sets.sortedBy { it.setNumber }.map {

@@ -114,9 +114,7 @@ fun scoreEventOf(
     side: String?,
     sequence: Long,
 ): ScoreEvent {
-    fun requiredSide(): TeamSide =
-        TeamSide.entries.firstOrNull { it.name == side }
-            ?: error(message = "Live-match event '$kind' at sequence $sequence has side '$side'. ${CHECK_HINT}")
+    fun requiredSide(): TeamSide = sideNamed(kind = kind, side = side, sequence = sequence)
     return when (kind) {
         LiveMatchEventKinds.POINT_WON -> ScoreEvent.PointWon(side = requiredSide())
         LiveMatchEventKinds.GAME_AWARDED -> ScoreEvent.GameAwarded(side = requiredSide())
@@ -134,6 +132,14 @@ fun scoreEventOf(
         else -> error(message = "Unknown live-match event kind '$kind' at sequence $sequence. ${CHECK_HINT}")
     }
 }
+
+private fun sideNamed(
+    kind: String,
+    side: String?,
+    sequence: Long,
+): TeamSide =
+    TeamSide.entries.firstOrNull { it.name == side }
+        ?: error(message = "Live-match event '$kind' at sequence $sequence has side '$side'. $CHECK_HINT")
 
 private fun LiveMatchEventEntity.payloadError(field: String): String =
     "Live-match event '$kind' at sequence $sequence has no $field. $CHECK_HINT"
