@@ -58,7 +58,7 @@ At finalize, the awarder reads the result of each placement match and awards the
 - **Resolved — circuit is required for tournaments (no legacy to migrate).** A tournament event **must** reference a circuit (`circuit_id` NOT NULL for `EventType.TOURNAMENT`). There are **no tournaments in the system yet**, so this can be introduced cleanly with no back-compat/data-fix step.
 - **Resolved — one entity, one UI.** A tournament is an **`EventType.TOURNAMENT` event**, not a separate entity. The **Circuit** is a conditional field in the existing **Event Organizer** flow when the type is TOURNAMENT; **sanction is inherited from the event's Club** (see below), not entered per event. Rationale: an event already provides everything a tournament needs operationally (participants, fixtures, result upload, finalize); the genuinely new work — placement matches + placement-based awarding — exists regardless of entity shape, so a separate entity buys nothing there. If a single tournament ever needs to span **multiple events** (multi-day, multiple sub-draws) under one standing, a parent Tournament entity can be added later without redoing the event work — but given small local draw sizes, one-event-per-tournament fits now.
 - **Resolved — sanction is a Club flag, inherited by the tournament.** Sanction status lives on the **Club** (a new boolean, e.g. `tournaments_sanctioned`), and a tournament event inherits it via its existing **event↔club** association. This reuses the current club-scoping of events and keeps sanctioning a club-governance decision rather than a per-event choice by the organizing host. The flag is toggled by **CLUB_OWNER or ADMINISTRATOR**. A tournament event with **no club** is implicitly **unsanctioned**.
-- **Resolved — placement source is designated placement matches.** Placement is derived from the results of **placement matches** the organizer flags at match creation (Super Finals → 1st/2nd, Plate Finals → 3rd/4th), not a host-entered final-standings step and not a full bracket ([#390](https://github.com/cybergrouch/skopeo/issues/390) stays deferred). This needs a new per-match input: an `isPlacementMatch` flag + a placement-bracket selector (e.g. `SUPER_FINALS` \| `PLATE_FINALS`). Regular (non-placement) matches award no points.
+- **Resolved — placement source is designated placement matches.** Placement is derived from the results of **placement matches** the organizer flags at match creation (Super Finals → 1st/2nd, Plate Finals → 3rd/4th), not a host-entered final-standings step and not a full bracket ([#390](https://github.com/cybergrouch/skopeo/issues/390) stays deferred). This needs a new per-match input: an `isPlacementMatch` flag + a placement-bracket selector (e.g. `SUPER_FINALS` \| `PLATE_FINALS`). ~~Regular (non-placement) matches award no points.~~ *Superseded by [#836](https://github.com/cybergrouch/skopeo/issues/836): every other completed tournament fixture pays the open-play per-set schedule — see [Non-placement fixtures also pay](#non-placement-fixtures-also-pay-836).*
 
 ---
 
@@ -382,6 +382,26 @@ design: next to a sanctioned title at 1000 the whole open-play range is small, a
 mattered — a favourite being paid for a predictable blowout — is handled by the flat favourite rate above.
 
 ---
+
+## Who earns points — eligibility across every event type
+
+Every rule above decides an *amount*. These decide whether a player is paid at all, and they apply the
+same way to open play, full matches and tournaments (placement **and** per-set), all in
+`EventFinalizeAwarder`:
+
+| Situation | Outcome | Why |
+|---|---|---|
+| **No current rating** | Skipped: no award row | An award is tagged with the recipient's band at award time, and an unrated player has none. |
+| **In calibration** ([#881](https://github.com/cybergrouch/skopeo/issues/881)), i.e. within the first N rated matches after a manual rating (global admin setting, default 10) | Skipped: earns nothing, placement included | A rating set by hand is a guess, and points earned off it would be as provisional as the rating. |
+| **Opponent or partner of a calibrating player** (per-set payouts) | Paid normally, except a **negative amount resolves to 0**, recorded on the row (`reason`) | A favourite can be docked for losing (`UPSET_LOSS`), and nobody should lose points to a rating that may simply be set too low. The calculator stays pure and zero-sum; the clamp is applied at award time. |
+| Calibration **overridden** ([#1126](https://github.com/cybergrouch/skopeo/issues/1126)) | Follows the override: FORCED_OFF earns normally, FORCED_ON earns nothing | `CalibrationService` is the one evaluator, override included. |
+
+Two switches gate the whole payout, both checked **at finalize time**:
+
+- **The event's own "Award Ranking Points" flag** ([#559](https://github.com/cybergrouch/skopeo/issues/559), default on): the organizer's opt-out for a purely social session.
+- **The global `award_ranking_points_enabled` setting** ([#641](https://github.com/cybergrouch/skopeo/issues/641)): an administrator's kill switch. Because it's re-checked at payout ([#752](https://github.com/cybergrouch/skopeo/issues/752)), an event created while it was on pays nothing if it's off when the event finalizes, and the host is told so rather than reading "finalized" as "paid". A post-rating score correction ([#776](https://github.com/cybergrouch/skopeo/issues/776)) re-awards through the same path, so both switches are re-checked there too.
+
+The partner-facing summary of these rules is the reward-points guide (`presentations/skopeo-reward-points`, untracked): it states them in the section *Who earns points*.
 
 ## Award creation, audit & trigger — unchanged (awarded at finalize)
 
