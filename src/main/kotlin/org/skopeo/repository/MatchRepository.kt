@@ -123,9 +123,12 @@ class MatchRepository {
         completionReason: String = MatchCompletionReason.COMPLETED.name,
     ): Either<ServiceError, MatchAggregateEntity> =
         transaction {
-            if (loadMatch(id = matchId) == null) {
-                return@transaction ServiceError.NotFound(message = "Match $matchId not found").left()
-            }
+            val existing =
+                loadMatch(id = matchId) ?: return@transaction ServiceError.NotFound(message = "Match $matchId not found").left()
+            // A result already on record means this write EDITS it (#1145): re-recorded while unrated, or
+            // corrected after rating (#776). Stamped here because every result path goes through this method,
+            // so no caller can edit a score without the match page being able to say so.
+            val editingRecordedResult = existing.match.status == MatchStatus.COMPLETED.name
             // Replace any existing sets so re-recording (an edit while unrated) overwrites rather than
             // appends; tiebreak rows cascade-delete with their set.
             MatchSetsTable.deleteWhere { MatchSetsTable.matchId eq matchId }
@@ -160,6 +163,7 @@ class MatchRepository {
                 // Re-recording an edit must restate this, not leave the previous ending in place: a
                 // correction from "retired" back to a played-out result would otherwise keep the (ret).
                 it[MatchesTable.completionReason] = completionReason
+                if (editingRecordedResult) it[MatchesTable.resultEditedAt] = LocalDateTime.now()
             }
             loadMatchOrThrow(id = matchId).right()
         }
@@ -1131,6 +1135,7 @@ private fun ResultRow.toMatchEntity(): MatchEntity =
         team2Handicap = this[MatchesTable.team2Handicap],
         reRatedAt = this[MatchesTable.reRatedAt],
         reRatedCount = this[MatchesTable.reRatedCount],
+        resultEditedAt = this[MatchesTable.resultEditedAt],
         isPlacementMatch = this[MatchesTable.isPlacementMatch],
         placementBracket = this[MatchesTable.placementBracket],
     )

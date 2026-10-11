@@ -116,4 +116,5 @@ fun MatchAggregateEntity.toDomain(): Match =
         placementBracket = match.placementBracket?.let { PlacementBracket.valueOf(value = it) },
         reRatedAt = match.reRatedAt,
         reRatedCount = match.reRatedCount,
+        resultEditedAt = match.resultEditedAt,
     )

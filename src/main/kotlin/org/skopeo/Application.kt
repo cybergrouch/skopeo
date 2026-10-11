@@ -54,6 +54,7 @@ import org.skopeo.routes.configureEventTeamRoutes
 import org.skopeo.routes.configureFeatureFlagRoutes
 import org.skopeo.routes.configureInviteRoutes
 import org.skopeo.routes.configureLiveMatchRoutes
+import org.skopeo.routes.configureMatchReplayRoutes
 import org.skopeo.routes.configureMatchRoutes
 import org.skopeo.routes.configureNameRoutes
 import org.skopeo.routes.configureOpenGraphRoutes
@@ -134,6 +135,7 @@ fun Application.module(
     configureRatingRoutes()
     configureRatingRequestRoutes()
     configureMatchRoutes()
+    configureMatchReplayRoutes()
     // The spectator broadcast is resolved once at startup and handed in. Absent Firestore credentials
     // is a supported state — local development and CI have none — so this yields a no-op rather than
     // failing the boot (#911).
