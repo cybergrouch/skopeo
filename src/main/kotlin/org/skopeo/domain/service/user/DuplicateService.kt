@@ -141,8 +141,9 @@ class DuplicateService(
     /**
      * Generalized admin account-merge (#643) — the "Merge accounts" operation. Consolidate the [retiredAccountId]
      * into the admin-chosen [survivorId], moving **all participation/membership records** (matches, event
-     * participants, player-list members, club owners, seeding entries) onto the survivor while the survivor **keeps
-     * its own rating + ranking points, with no recompute**. The survivor keeps the best available login: when the
+     * participants, player-list members, club owners, seeding entries) onto the survivor, with the ranking-point
+     * awards those matches and events produced (#1121). A rated survivor **keeps its own rating, with no
+     * recompute**; an unrated one takes on the retired account's rating and history (#1121). The survivor keeps the best available login: when the
      * retired account has one it is transferred to the survivor (freeing the retired account's login first so the
      * UNIQUE anchors don't collide). The retired account is then retired as a "merged → survivor" card. A required,
      * non-blank [verificationNote] records how the admin confirmed the two accounts are the same person and is kept
@@ -175,9 +176,10 @@ class DuplicateService(
                 )
             // Calibration is inherited, taking the EARLIER designation (#881) — the safer side.
             //
-            // The survivor keeps its own rating and points, but a merge moves the retired account's
-            // matches onto it, so the survivor's rating is now answerable for play it did not previously
-            // own. Inheriting the longer remaining window is the conservative outcome: suppression can
+            // A rated survivor keeps its own rating, but a merge moves the retired account's matches onto
+            // it, so the survivor's rating is now answerable for play it did not previously own. (An unrated
+            // survivor took the retired account's whole rating row above, window included, so there is no
+            // retired row left and this is a no-op — #1121.) Inheriting the longer remaining window is the conservative outcome: suppression can
             // only ever withhold a change, never damage a settled rating, whereas dropping a window would
             // start moving opponents' ratings off a rating that is still a guess.
             //
@@ -194,7 +196,11 @@ class DuplicateService(
                         entityId = survivorId,
                         summary =
                             "Merged ${retired.publicCode} into ${survivor.publicCode} " +
-                                "(moved participation/memberships; kept the survivor's rating + points)",
+                                if (moved.ratingCarriedOver) {
+                                    "(moved participation/memberships and earned points; carried over the retired account's rating)"
+                                } else {
+                                    "(moved participation/memberships and earned points; kept the survivor's rating)"
+                                },
                         details =
                             mapOf(
                                 "survivorUserId" to survivorId.toString(),
@@ -207,6 +213,8 @@ class DuplicateService(
                                 "movedPlayerListMemberships" to moved.playerListMemberships.toString(),
                                 "movedClubOwnerships" to moved.clubOwnerships.toString(),
                                 "movedSeedingEntries" to moved.seedingEntries.toString(),
+                                "movedRankingPointAwards" to moved.rankingPointAwards.toString(),
+                                "ratingCarriedOver" to moved.ratingCarriedOver.toString(),
                                 "verificationNote" to verificationNote,
                             ),
                     ),
