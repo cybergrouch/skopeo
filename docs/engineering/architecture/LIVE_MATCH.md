@@ -712,6 +712,7 @@ input to fold into a displayable score, and it is **disposable once the match is
 | **Postgres** | the event log (append-only, one row per umpire action) | the server folds it, it needs the per-match sequence + unique constraint from §2, and finalize is transactional with it |
 | **Firestore** | the *current derived score* only — one document per live match | spectators need the latest state, not the history; keeping the log out of Firestore also keeps the public surface small |
 | **`match_sets`** | the final result | the permanent record, written through the existing `uploadResult` (§8) |
+| **`match_replays`** | the point-by-point replay, one JSON document per match (#1145) | kept permanently, so the swept log's one lasting use — showing how the match was played — survives it |
 
 The log is never the answer to "what was the score of match X" once the match is over — `match_sets`
 is. That is what keeps this a front end rather than a parallel store.
@@ -729,6 +730,10 @@ hundred per-point rows per match forever.
 
 If per-point forensics later turn out to be genuinely needed, that is a retention decision to revisit
 deliberately, not something to keep by default.
+
+**Revisited in #1145** — see *Revised — the replay is kept permanently* below. The raw log is still
+working state and is still swept; what is kept is a derived, undo-resolved replay, for display rather
+than forensics.
 
 ### When it is disposed
 
@@ -800,6 +805,32 @@ keystrokes, never the attribution.**
 **It must never be pointed at `audit_log`.** That table is the record itself rather than working state;
 deleting from it is not tidying up but deciding to stop being able to answer "who did what". #939 has
 the reasoning and the measurements showing there is nothing to solve there anyway.
+
+### Revised — the replay is kept permanently (#1145)
+
+The sweep deleted the only record of *how* a match was played, which turned out to be worth showing:
+the match page draws each set point by point (#1146/#1147). So a replay is now derived from the log and
+kept for good in `match_replays`, one JSONB document per match — the log is still swept.
+
+- **What it holds.** `events` is the log with every undone action removed (undone points are mistakes,
+  not play); `points` is the per-point timeline derived from them with the score after each step and the
+  break-point / game / break-of-serve / set flags; `result` is the result the replay ends at.
+  `ReplayBuilder` derives it with `ScoreEngine.apply`, so it cannot disagree with the umpire's score.
+- **When it is written.** At finalize, best-effort like the broadcast; and by the sweep, just before it
+  deletes a log whose match has none — so the sweep can never lose one. `POST
+  /api/v1/match-replays/backfill` (ADMINISTRATOR, dry run by default) covers matches finalized before
+  this existed.
+- **Versioning is additive only, with one format in use.** A later format adds fields, never renames or
+  redefines one. Every bump ships with an upgrade that regenerates the document from its own stored
+  `events` — on read, and in bulk through the same backfill — which is why `events` is stored at all:
+  the log may be long gone. A field that needs an input older matches never captured stays absent, and
+  the UI gates that feature on the data being present, not on version numbers.
+- **Shown only while true.** `GET /api/v1/matches/code/{code}/replay` is public, like the match, and
+  hidden match history (#622) does not hide it. It answers 404 once the match's recorded result no longer
+  equals the replay's — a replay that leads to a different score than the page shows is worse than none.
+  The replay is kept, so editing the result back shows it again. Any re-record or correction stamps
+  `matches.result_edited_at`, exposed as the public `resultEdited` flag, so the page can say the score
+  was edited after it was saved.
 
 ### Shipped — step 3a of §13, the persistence half
 

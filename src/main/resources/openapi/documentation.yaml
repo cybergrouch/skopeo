@@ -2880,6 +2880,79 @@ paths:
         '404':
           description: No match with that code
 
+  /api/v1/matches/code/{code}/replay:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The match's public code.
+    get:
+      summary: The point-by-point replay of a live-scored match (#1145)
+      description: >-
+        Kept permanently, unlike the scoring log it is built from, which the retention sweep (#939)
+        deletes. Recorded at finalize; the sweep records any missing replay before it deletes a log, and
+        the backfill covers matches finalized before replays existed.
+
+
+        Public and anonymous, like the match page it belongs to. Hidden match history (#622) does not hide
+        it -- the match is public, and so is how it was played.
+
+
+        404 when there is nothing to show: the match was never scored live, or its result has since been
+        edited to something the replay does not end at (`MatchPublicResponse.resultEdited`). The replay is
+        kept in that case, so editing the result back shows it again.
+
+
+        `points` is the timeline to render and `result` is what it ends at; `events` is the undo-resolved
+        source the timeline is regenerated from when the format changes. Additive-only versioning: a field
+        older replays could not compute is absent, and a client hides that feature for them.
+      tags:
+        - Matches
+      security:
+        - {}
+      responses:
+        '200':
+          description: The replay
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplayDocument'
+        '404':
+          description: No match with that code, no replay, or a result the replay no longer ends at
+
+  /api/v1/match-replays/backfill:
+    post:
+      summary: Record missing match replays and upgrade outdated ones (ADMINISTRATOR only, #1145)
+      description: >-
+        Records a replay for every finished match that still has a scoring log and none yet, and
+        regenerates every replay stored in an older format from its own stored events -- so an upgrade
+        never needs the log, which may already be swept. A log that never reaches an ending is skipped.
+
+
+        DRY RUN BY DEFAULT, like every other admin trigger: an absent or unparseable body reports what it
+        WOULD do; only an explicit `{"dryRun": false}` writes.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchReplayBackfillRequest'
+      responses:
+        '200':
+          description: What the backfill did, or would do
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchReplayBackfillResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/events/code/{code}/signup:
     parameters:
       - name: code
@@ -7626,6 +7699,158 @@ components:
           type: integer
           description: Log rows removed. Zero on a dry run, however many matches were listed.
 
+    MatchReplayBackfillRequest:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+          default: true
+
+    MatchReplayBackfillResponse:
+      type: object
+      required: [dryRun, recorded, upgraded, skipped]
+      properties:
+        dryRun:
+          type: boolean
+        recorded:
+          type: integer
+          description: Matches given a replay for the first time.
+        upgraded:
+          type: integer
+          description: Stored replays regenerated into the current format.
+        skipped:
+          type: integer
+          description: Logs that never reach an ending, so there is no result to replay to.
+
+    ReplayDocument:
+      type: object
+      description: >-
+        A live-scored match's replay (#1145) -- the stored document, served as is. Versioning is additive
+        only: later versions add fields and never rename, remove or redefine one.
+      required: [version, result, events, points]
+      properties:
+        version:
+          type: integer
+          description: The format version.
+        result:
+          $ref: '#/components/schemas/ReplayResult'
+        events:
+          type: array
+          description: The umpire's log with every undone action removed, in order. The source `points` is derived from.
+          items:
+            $ref: '#/components/schemas/ReplayEvent'
+        points:
+          type: array
+          description: One step per point, awarded game or set, or ending, with the score after it.
+          items:
+            $ref: '#/components/schemas/ReplayPoint'
+
+    ReplayEvent:
+      type: object
+      required: [kind, atMs]
+      properties:
+        kind:
+          type: string
+          description: The stored live-match event kind, e.g. POINT_WON or SERVER_ASSIGNED.
+        side:
+          type: string
+          enum: [TEAM1, TEAM2]
+        atMs:
+          type: integer
+          format: int64
+          description: Milliseconds since the first surviving action.
+
+    ReplayPoint:
+      type: object
+      required: [index, kind, wonBy, atMs, setNumber, score]
+      properties:
+        index:
+          type: integer
+        kind:
+          type: string
+          enum: [POINT, GAME, SET, END]
+          description: >-
+            POINT for a point played; GAME or SET for one the umpire awarded directly; END for the match's
+            ending, whose kind is in `outcome`.
+        wonBy:
+          type: string
+          enum: [TEAM1, TEAM2]
+        server:
+          type: string
+          enum: [TEAM1, TEAM2]
+          description: The side serving before this step, when the umpire recorded one.
+        atMs:
+          type: integer
+          format: int64
+        setNumber:
+          type: integer
+          description: 1-based set the step belongs to.
+        tiebreak:
+          type: boolean
+        breakPoint:
+          type: boolean
+          description: The receiving side had a break point going into this point.
+        gameWon:
+          type: boolean
+          description: This step won a game (a tiebreak counts as one).
+        breakOfServe:
+          type: boolean
+          description: The game was won by the side that was receiving.
+        setWon:
+          type: boolean
+        outcome:
+          type: string
+          enum: [COMPLETED, RETIRED, DEFAULTED]
+          description: For an END step only.
+        score:
+          $ref: '#/components/schemas/ReplayScore'
+
+    ReplayScore:
+      type: object
+      required: [sets, gamesTeam1, gamesTeam2, pointsTeam1, pointsTeam2]
+      properties:
+        sets:
+          type: array
+          description: Sets completed so far.
+          items:
+            $ref: '#/components/schemas/ReplaySet'
+        gamesTeam1:
+          type: integer
+        gamesTeam2:
+          type: integer
+        pointsTeam1:
+          type: string
+          description: 0, 15, 30, 40 or AD -- or the plain count inside a tiebreak.
+        pointsTeam2:
+          type: string
+
+    ReplaySet:
+      type: object
+      required: [team1, team2]
+      properties:
+        team1:
+          type: integer
+        team2:
+          type: integer
+        tiebreakTeam1:
+          type: integer
+          nullable: true
+        tiebreakTeam2:
+          type: integer
+          nullable: true
+
+    ReplayResult:
+      type: object
+      required: [sets, winner]
+      properties:
+        sets:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReplaySet'
+        winner:
+          type: string
+          enum: [TEAM1, TEAM2]
+
     LivePlayerResponse:
       type: object
       description: A player in a live match, for the server picker (#943).
@@ -8733,6 +8958,13 @@ components:
             True once an ADMINISTRATOR has corrected this match's score AFTER it was rated (#776).
             Public on purpose — a transparency signal that the recorded score changed, shown to
             everyone rather than only to staff. Drives the "Re-rated" badge.
+        resultEdited:
+          type: boolean
+          description: >-
+            True once the recorded result has been written again after it was first recorded (#1145) --
+            re-recorded while unrated, or corrected after rating (#776). Public on purpose, like `reRated`:
+            the match page says the score was edited after it was saved. A live-scored match's replay is
+            shown only while it still ends at the current result, so an edit can also hide it.
         isActive:
           type: boolean
           description: False once the match is soft-deleted (#325); the public page flags it as deleted.

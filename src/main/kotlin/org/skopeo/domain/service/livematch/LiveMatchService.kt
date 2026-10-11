@@ -7,6 +7,7 @@ import arrow.core.Either
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.skopeo.common.dto.livematch.LiveMatchResponse
 import org.skopeo.common.dto.livematch.LivePlayerResponse
 import org.skopeo.common.dto.livematch.LiveScoreEventRequest
@@ -83,6 +84,8 @@ class LiveMatchService(
      * project. A deployed instance is handed the real one at startup.
      */
     private val broadcast: LiveScoreBroadcaster = NoOpLiveScoreBroadcaster,
+    /** Where the permanent replay is recorded at finalize (#1145). */
+    private val replays: MatchReplayService = MatchReplayService(),
 ) {
     /**
      * Take (or take over) the scoring of [matchId], moving the fixture to `IN_PROGRESS`.
@@ -242,6 +245,10 @@ class LiveMatchService(
                     ).bind()
             live.recordUmpires(matchId = matchId, umpires = live.umpireCredit(matchId = matchId))
             live.releaseClaim(matchId = matchId)
+            // Best-effort, like the broadcast: the result is already recorded, and a replay that failed to
+            // write here is written again by the backfill or before the sweep deletes the log (#1145).
+            runCatching { replays.recordFromLog(matchId = matchId) }
+                .onFailure { logger.warn(throwable = it) { "Could not record the replay of match $matchId" } }
             recorded
         }
 
@@ -324,6 +331,8 @@ class LiveMatchService(
             ScoreEngine.replay(log = live.loggedActions(matchId = matchId))
         }
 
+    private val logger = KotlinLogging.logger {}
+
     private companion object {
         /**
          * How many times to re-read and retry after losing a sequence race.
@@ -388,7 +397,7 @@ private fun LiveOutcome.toCompletionReason(): MatchCompletionReason =
  * The decisive partial set carries `abandoned = true` (#972), which is what lets the points rule tell it
  * apart from a set that was played out.
  */
-private fun recordableSets(state: ScoreState): List<SetScoreRequest> =
+internal fun recordableSets(state: ScoreState): List<SetScoreRequest> =
     (state.completedSets.map { it.toRequest() } + state.currentSetIfPlayed()).filterNotNull()
 
 private fun CompletedSet.toRequest(): SetScoreRequest =

@@ -43,4 +43,5 @@ data class MatchEntity(
     val placementBracket: String?,
     val reRatedAt: LocalDateTime?,
     val reRatedCount: Int,
+    val resultEditedAt: LocalDateTime? = null,
 )

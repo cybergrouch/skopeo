@@ -52,4 +52,5 @@ internal class JsonbColumnType : ColumnType<String>() {
     override fun valueFromDB(value: Any): String = (value as PGobject).value.orEmpty()
 }
 
-private fun Table.jsonb(name: String): Column<String> = registerColumn(name = name, type = JsonbColumnType())
+/** A `jsonb` column carrying its JSON text. Shared by the audit log and match replays (#1145). */
+internal fun Table.jsonb(name: String): Column<String> = registerColumn(name = name, type = JsonbColumnType())

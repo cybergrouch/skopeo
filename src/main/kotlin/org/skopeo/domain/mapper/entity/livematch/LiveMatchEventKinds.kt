@@ -102,27 +102,54 @@ fun LiveMatchEventEntity.toLoggedAction(): LoggedAction =
         else -> LoggedAction.Scored(sequence = sequence, event = toScoreEvent())
     }
 
-private fun LiveMatchEventEntity.toScoreEvent(): ScoreEvent =
+private fun LiveMatchEventEntity.toScoreEvent(): ScoreEvent = scoreEventOf(kind = kind, side = side, sequence = sequence)
+
+/**
+ * The [ScoreEvent] a stored [kind] and [side] describe — the inverse of [kindOf]. Shared by the live log
+ * and the match replay's stored events (#1145), so there is still ONE mapping from a stored kind to an
+ * event. [sequence] only labels an error.
+ */
+fun scoreEventOf(
+    kind: String,
+    side: String?,
+    sequence: Long,
+): ScoreEvent =
     when (kind) {
-        LiveMatchEventKinds.POINT_WON -> ScoreEvent.PointWon(side = requiredSide())
-        LiveMatchEventKinds.GAME_AWARDED -> ScoreEvent.GameAwarded(side = requiredSide())
-        LiveMatchEventKinds.SET_AWARDED -> ScoreEvent.SetAwarded(side = requiredSide())
         LiveMatchEventKinds.SET_STARTED -> ScoreEvent.SetStarted
         LiveMatchEventKinds.GAME_STARTED -> ScoreEvent.GameStarted
         LiveMatchEventKinds.TIEBREAK_STARTED -> ScoreEvent.TiebreakStarted
         LiveMatchEventKinds.MATCH_STARTED -> ScoreEvent.MatchStarted
         LiveMatchEventKinds.PAUSED -> ScoreEvent.Paused
         LiveMatchEventKinds.RESUMED -> ScoreEvent.Resumed
-        LiveMatchEventKinds.SERVER_ASSIGNED -> ScoreEvent.ServerAssigned(side = requiredSide())
-        LiveMatchEventKinds.RETIRED -> ScoreEvent.Retired(side = requiredSide())
-        LiveMatchEventKinds.DEFAULTED -> ScoreEvent.Defaulted(side = requiredSide())
-        LiveMatchEventKinds.MATCH_AWARDED -> ScoreEvent.MatchAwarded(side = requiredSide())
-        else -> error(message = "Unknown live-match event kind '$kind' at sequence $sequence. ${CHECK_HINT}")
+        else -> sidedEventOf(kind = kind, sequence = sequence)(sideNamed(kind = kind, side = side, sequence = sequence))
     }
 
-private fun LiveMatchEventEntity.requiredSide(): TeamSide =
+/**
+ * The constructor for a kind that names a side. Split from [scoreEventOf] to keep each `when` within
+ * detekt's complexity limit; the kind is checked before the side, so an unknown kind reports as unknown.
+ */
+private fun sidedEventOf(
+    kind: String,
+    sequence: Long,
+): (TeamSide) -> ScoreEvent =
+    when (kind) {
+        LiveMatchEventKinds.POINT_WON -> { side -> ScoreEvent.PointWon(side = side) }
+        LiveMatchEventKinds.GAME_AWARDED -> { side -> ScoreEvent.GameAwarded(side = side) }
+        LiveMatchEventKinds.SET_AWARDED -> { side -> ScoreEvent.SetAwarded(side = side) }
+        LiveMatchEventKinds.SERVER_ASSIGNED -> { side -> ScoreEvent.ServerAssigned(side = side) }
+        LiveMatchEventKinds.RETIRED -> { side -> ScoreEvent.Retired(side = side) }
+        LiveMatchEventKinds.DEFAULTED -> { side -> ScoreEvent.Defaulted(side = side) }
+        LiveMatchEventKinds.MATCH_AWARDED -> { side -> ScoreEvent.MatchAwarded(side = side) }
+        else -> error(message = "Unknown live-match event kind '$kind' at sequence $sequence. $CHECK_HINT")
+    }
+
+private fun sideNamed(
+    kind: String,
+    side: String?,
+    sequence: Long,
+): TeamSide =
     TeamSide.entries.firstOrNull { it.name == side }
-        ?: error(message = "Live-match event '$kind' at sequence $sequence has side '$side'. ${CHECK_HINT}")
+        ?: error(message = "Live-match event '$kind' at sequence $sequence has side '$side'. $CHECK_HINT")
 
 private fun LiveMatchEventEntity.payloadError(field: String): String =
     "Live-match event '$kind' at sequence $sequence has no $field. $CHECK_HINT"
