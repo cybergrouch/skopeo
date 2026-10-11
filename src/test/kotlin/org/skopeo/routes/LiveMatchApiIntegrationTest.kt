@@ -28,8 +28,10 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.contract.ReplayDocument
 import org.skopeo.common.dto.livematch.LiveMatchResponse
 import org.skopeo.common.dto.livematch.LiveScoreEventRequest
+import org.skopeo.common.dto.match.MatchReplayBackfillResponse
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.livematch.LiveMatchEventKinds
 import org.skopeo.domain.mapper.entity.match.toDomain
@@ -757,5 +759,39 @@ class LiveMatchApiIntegrationTest {
         withApp { client ->
             val matchId = seedFixture()
             client.get(urlString = "/api/v1/matches/$matchId/live").status shouldBe HttpStatusCode.Unauthorized
+        }
+
+    @Test
+    fun `a finalized match has a public replay, and only an administrator may backfill (#1145)`() =
+        withApp { client ->
+            val token = seedFinalizer()
+            val matchId = seedFixture()
+            client.winAGame(token = token, matchId = matchId, side = "TEAM1")
+            client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"))
+            client.finalize(token = token, matchId = matchId).status shouldBe HttpStatusCode.OK
+            val code = MatchRepository().findById(matchId = matchId).shouldBeRight().toDomain().publicCode
+
+            // Anonymous, like the match page it belongs to.
+            val replay = client.get(urlString = "/api/v1/matches/code/$code/replay")
+            replay.status shouldBe HttpStatusCode.OK
+            val document = replay.body<ReplayDocument>()
+            document.points.map { it.kind } shouldBe listOf("POINT", "POINT", "POINT", "POINT", "SET", "END")
+            document.result.winner shouldBe "TEAM1"
+            client.get(urlString = "/api/v1/matches/code/$code").bodyAsText() shouldContain "\"resultEdited\":false"
+            client.get(urlString = "/api/v1/matches/code/NOPE00/replay").status shouldBe HttpStatusCode.NotFound
+
+            val scorer = seedScorer()
+            client
+                .post(urlString = "/api/v1/match-replays/backfill") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $scorer")
+                }.status shouldBe HttpStatusCode.Forbidden
+            val preview =
+                client.post(urlString = "/api/v1/match-replays/backfill") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }
+            preview.status shouldBe HttpStatusCode.OK
+            // Finalize already recorded this match's replay, so there is nothing left to backfill.
+            preview.body<MatchReplayBackfillResponse>() shouldBe
+                MatchReplayBackfillResponse(dryRun = true, recorded = 0, upgraded = 0, skipped = 0)
         }
 }

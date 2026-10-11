@@ -77,6 +77,9 @@ internal object MatchesTable : UUIDTable(name = "matches") {
     // never corrected. Drives the public "Re-rated" badge; [ratedAt] stays set through a correction.
     val reRatedAt = datetime(name = "re_rated_at").nullable()
     val reRatedCount = integer(name = "re_rated_count").default(defaultValue = 0)
+
+    // When a recorded result was edited after it was first saved (#1145, V66); null for one recorded once.
+    val resultEditedAt = datetime(name = "result_edited_at").nullable()
 }
 
 internal object MatchSetsTable : UUIDTable(name = "match_sets") {

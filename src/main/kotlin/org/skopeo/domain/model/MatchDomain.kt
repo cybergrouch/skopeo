@@ -229,6 +229,8 @@ data class Match(
     // never corrected. [ratedAt] stays set through a correction, so the match never re-enters the queue.
     val reRatedAt: LocalDateTime? = null,
     val reRatedCount: Int = 0,
+    // When the recorded result was edited after it was first saved (#1145); null if recorded once.
+    val resultEditedAt: LocalDateTime? = null,
 )
 
 /** Everything needed to create a fixture (the result is uploaded separately). */

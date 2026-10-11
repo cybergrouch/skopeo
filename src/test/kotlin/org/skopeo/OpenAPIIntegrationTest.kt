@@ -90,6 +90,21 @@ class OpenAPIIntegrationTest {
             body shouldContain "matchHistoryHidden"
         }
 
+    /** Match replays (#1145): the public replay read, the admin backfill, their schemas, and the edited flag. */
+    @Test
+    fun testOpenAPISpecIncludesMatchReplays() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "/api/v1/matches/code/{code}/replay"
+            body shouldContain "/api/v1/match-replays/backfill"
+            body shouldContain "ReplayDocument"
+            body shouldContain "MatchReplayBackfillResponse"
+            body shouldContain "resultEdited"
+        }
+
     /** Account merge (#643): the admin merge route, its request schema, and the derived link-status field. */
     @Test
     fun testOpenAPISpecIncludesAccountMerge() =
