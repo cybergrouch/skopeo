@@ -60,8 +60,11 @@ export function authLoaded(): boolean {
 /**
  * Whether a signed-in session is probably persisted, decided **without** loading the SDK.
  *
- * Firebase writes its session to `localStorage` under `firebase:authUser:<apiKey>:[DEFAULT]`. Reading
- * that key is the only way to know whether a visitor is signed in before paying 162 kB to ask properly.
+ * Firebase writes its session to `localStorage` under `firebase:authUser:<apiKey>:[DEFAULT]` **because
+ * `lib/firebaseAuth.ts` tells it to**: `AUTH_PERSISTENCE` lists `localStorage` first (#1141). Under
+ * `getAuth()`'s default the session lives in IndexedDB instead, and this probe returned false for every
+ * signed-in visitor. `firebaseAuth.test.ts` pins that order. Reading the key is the only way to know
+ * whether a visitor is signed in before paying 162 kB to ask properly.
  *
  * **This is a heuristic on a key Firebase owns, and is treated as one.** If the format ever changes it
  * returns false for a signed-in visitor, who then sees the signed-out nav on a public page until they

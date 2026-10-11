@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthLayout } from "@/components/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ interface LocationState {
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signInWithEmail, signInWithGoogle, signInWithFacebook } = useAuth();
+  const { user, initializing, signInWithEmail, signInWithGoogle, signInWithFacebook } = useAuth();
   // Facebook login can be turned off app-wide (#647); show the button unless the flag is explicitly false.
   const facebookEnabled =
     useGetApiV1SettingsFacebookLogin({ query: { retry: false } }).data
@@ -28,6 +28,13 @@ export function LoginPage() {
 
   const from =
     (location.state as LocationState | null)?.from?.pathname ?? "/dashboard";
+
+  // Already signed in (#1141): pass straight through to where the visitor was heading, the dashboard by
+  // default. The public pages' signed-out "← Back" sends people here, and a visitor whose session the
+  // public page could not see yet is in fact signed in, so a login form would only make them sign in
+  // twice. While auth is still resolving, render nothing rather than flash the form at them.
+  if (user) return <Navigate to={from} replace />;
+  if (initializing) return null;
 
   async function run(action: () => Promise<unknown>) {
     setError(null);
