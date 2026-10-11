@@ -80,7 +80,7 @@ class MatchReplayRepository {
                     joinType = JoinType.LEFT,
                     onColumn = LiveMatchEventsTable.matchId,
                     otherColumn = MatchReplaysTable.matchId,
-                ).select(LiveMatchEventsTable.matchId)
+                ).select(columns = listOf(element = LiveMatchEventsTable.matchId))
                 .where { (MatchesTable.status notInList UNFINISHED) and MatchReplaysTable.matchId.isNull() }
                 .withDistinct()
                 .map { it[LiveMatchEventsTable.matchId].value }
@@ -90,7 +90,7 @@ class MatchReplayRepository {
     fun outdated(currentVersion: Int): List<UUID> =
         transaction {
             MatchReplaysTable
-                .select(MatchReplaysTable.matchId)
+                .select(columns = listOf(element = MatchReplaysTable.matchId))
                 .where { MatchReplaysTable.formatVersion less currentVersion }
                 .map { it[MatchReplaysTable.matchId].value }
         }

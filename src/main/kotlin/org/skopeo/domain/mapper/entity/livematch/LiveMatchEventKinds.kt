@@ -113,25 +113,35 @@ fun scoreEventOf(
     kind: String,
     side: String?,
     sequence: Long,
-): ScoreEvent {
-    fun requiredSide(): TeamSide = sideNamed(kind = kind, side = side, sequence = sequence)
-    return when (kind) {
-        LiveMatchEventKinds.POINT_WON -> ScoreEvent.PointWon(side = requiredSide())
-        LiveMatchEventKinds.GAME_AWARDED -> ScoreEvent.GameAwarded(side = requiredSide())
-        LiveMatchEventKinds.SET_AWARDED -> ScoreEvent.SetAwarded(side = requiredSide())
+): ScoreEvent =
+    when (kind) {
         LiveMatchEventKinds.SET_STARTED -> ScoreEvent.SetStarted
         LiveMatchEventKinds.GAME_STARTED -> ScoreEvent.GameStarted
         LiveMatchEventKinds.TIEBREAK_STARTED -> ScoreEvent.TiebreakStarted
         LiveMatchEventKinds.MATCH_STARTED -> ScoreEvent.MatchStarted
         LiveMatchEventKinds.PAUSED -> ScoreEvent.Paused
         LiveMatchEventKinds.RESUMED -> ScoreEvent.Resumed
-        LiveMatchEventKinds.SERVER_ASSIGNED -> ScoreEvent.ServerAssigned(side = requiredSide())
-        LiveMatchEventKinds.RETIRED -> ScoreEvent.Retired(side = requiredSide())
-        LiveMatchEventKinds.DEFAULTED -> ScoreEvent.Defaulted(side = requiredSide())
-        LiveMatchEventKinds.MATCH_AWARDED -> ScoreEvent.MatchAwarded(side = requiredSide())
-        else -> error(message = "Unknown live-match event kind '$kind' at sequence $sequence. ${CHECK_HINT}")
+        else -> sidedEventOf(kind = kind, sequence = sequence)(sideNamed(kind = kind, side = side, sequence = sequence))
     }
-}
+
+/**
+ * The constructor for a kind that names a side. Split from [scoreEventOf] to keep each `when` within
+ * detekt's complexity limit; the kind is checked before the side, so an unknown kind reports as unknown.
+ */
+private fun sidedEventOf(
+    kind: String,
+    sequence: Long,
+): (TeamSide) -> ScoreEvent =
+    when (kind) {
+        LiveMatchEventKinds.POINT_WON -> { side -> ScoreEvent.PointWon(side = side) }
+        LiveMatchEventKinds.GAME_AWARDED -> { side -> ScoreEvent.GameAwarded(side = side) }
+        LiveMatchEventKinds.SET_AWARDED -> { side -> ScoreEvent.SetAwarded(side = side) }
+        LiveMatchEventKinds.SERVER_ASSIGNED -> { side -> ScoreEvent.ServerAssigned(side = side) }
+        LiveMatchEventKinds.RETIRED -> { side -> ScoreEvent.Retired(side = side) }
+        LiveMatchEventKinds.DEFAULTED -> { side -> ScoreEvent.Defaulted(side = side) }
+        LiveMatchEventKinds.MATCH_AWARDED -> { side -> ScoreEvent.MatchAwarded(side = side) }
+        else -> error(message = "Unknown live-match event kind '$kind' at sequence $sequence. $CHECK_HINT")
+    }
 
 private fun sideNamed(
     kind: String,
