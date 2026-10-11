@@ -49,4 +49,43 @@ describe("MatchReplaySection", () => {
     fireEvent.click(screen.getByText("First", { selector: "button" }));
     expect(announcement()).toContain("Start of the match");
   });
+
+  it("draws no chart when there is no replay", () => {
+    useGetApiV1MatchesCodeCodeReplay.mockReturnValue({ data: undefined, isError: true });
+    const { container } = renderSection();
+    expect(container.querySelector('[data-testid^="swimlane-set-"]')).toBeNull();
+    expect(container.querySelector('[data-testid="momentum-share"]')).toBeNull();
+  });
+
+  it("moves the card when a point is picked in either chart", () => {
+    useGetApiV1MatchesCodeCodeReplay.mockReturnValue({ data: RETIRED_REPLAY });
+    const { container } = renderSection();
+
+    fireEvent.click(
+      container.querySelector('[data-testid="swimlane-step"][data-index="4"]') as Element,
+    );
+    expect(announcement()).toContain(`Point 5 of ${LAST}`);
+
+    // The momentum chart's eighth hit target is the eighth point played: position 7.
+    fireEvent.click(container.querySelectorAll('[data-testid="momentum-hit"]')[7]);
+    expect(announcement()).toContain(`Point 8 of ${LAST}`);
+  });
+
+  it("moves both charts when the card steps", () => {
+    useGetApiV1MatchesCodeCodeReplay.mockReturnValue({ data: RETIRED_REPLAY });
+    const { container } = renderSection();
+    const selectedStep = () =>
+      container.querySelector('[data-testid="swimlane-step"][data-selected]')?.getAttribute("data-index");
+    const markerX = () =>
+      Number(container.querySelector('[data-testid="momentum-selected"]')?.getAttribute("x1"));
+
+    fireEvent.click(screen.getByText("First", { selector: "button" }));
+    expect(selectedStep()).toBeUndefined();
+    const atStart = markerX();
+
+    fireEvent.click(screen.getByText("Next", { selector: "button" }));
+    expect(selectedStep()).toBe("0");
+    expect(markerX()).toBeGreaterThan(atStart);
+    expect(screen.getByText(/^After point 1 \(set 1\)/)).toBeInTheDocument();
+  });
 });

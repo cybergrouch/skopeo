@@ -1,6 +1,15 @@
 import { useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useGetApiV1MatchesCodeCodeReplay } from "@/api/generated/matches/matches";
 import { ReplayCard } from "./ReplayCard";
+import { ReplayMomentumChart } from "./ReplayMomentumChart";
+import { ReplaySwimlaneChart } from "./ReplaySwimlaneChart";
 
 /**
  * The replay of a finished live-scored match on its public page (#1146), and the selection the replay's
@@ -44,7 +53,41 @@ export function MatchReplaySection({
         team1Name={team1Name}
         team2Name={team2Name}
       />
-      {/* Charts (#1147) render here, sharing `selected`/`onSelect`. */}
+      {/* The charts (#1147) share the card's selection, so a point picked in any one of the three moves the others. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Points by set</CardTitle>
+          <CardDescription>
+            Every point in the lane of the side that won it, labelled by the score it produced.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ReplaySwimlaneChart
+            replay={replay}
+            selected={selected}
+            onSelect={onSelect}
+            team1Name={team1Name}
+            team2Name={team2Name}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Momentum</CardTitle>
+          <CardDescription>
+            Who was on top at each stage: the share of recent points each side won.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ReplayMomentumChart
+            replay={replay}
+            selected={selected}
+            onSelect={onSelect}
+            team1Name={team1Name}
+            team2Name={team2Name}
+          />
+        </CardContent>
+      </Card>
     </section>
   );
 }
