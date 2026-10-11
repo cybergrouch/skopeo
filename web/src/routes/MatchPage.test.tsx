@@ -29,8 +29,16 @@ vi.mock("@/components/MatchScoreCorrectionCard", () => ({
 // module load. CI has no real Firebase config, so an unmocked import fails with auth/invalid-api-key
 // there while passing locally off .env.local — a trap this repo has hit before. The card has its own
 // test; here it must simply not reach Firebase.
+// A stub that says it is there, so the page's choice between it and the replay (#1146) can be seen.
 vi.mock("@/features/livematch/LiveScoreCard", () => ({
-  LiveScoreCard: () => null,
+  LiveScoreCard: () => <div>Live scoreboard stub</div>,
+}));
+// The replay section fetches its own document and renders nothing on a 404; that is covered in its own
+// test. Here a stub stands in for "a replay exists", and the page's decision is what is asserted.
+vi.mock("@/features/replay/MatchReplaySection", () => ({
+  MatchReplaySection: ({ code }: { code: string }) => (
+    <div>Replay section for {code}</div>
+  ),
 }));
 // The page renders PublicPageNav (#193), which reads auth; default to anonymous here.
 vi.mock("@/auth/useAuth", () => ({ useAuth: () => ({ user: null }) }));
@@ -763,6 +771,58 @@ describe("MatchPage", () => {
       screen.queryByRole("link", { name: /Score this match/ }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Live scoring")).not.toBeInTheDocument();
+  });
+
+  describe("the replay in place of the live scoreboard (#1146)", () => {
+    function showMatch(data: unknown) {
+      useGetApiV1MatchesCodeCode.mockReturnValue({ data, isLoading: false });
+    }
+
+    it("puts the replay where the live card stood once the match is finished", () => {
+      showMatch(match);
+      renderAt();
+      expect(screen.getByText("Replay section for MTCH01")).toBeInTheDocument();
+      expect(screen.queryByText("Live scoreboard stub")).not.toBeInTheDocument();
+    });
+
+    it("keeps the live card, and no replay, while the match is in progress", () => {
+      showMatch({ ...match, status: "IN_PROGRESS", winner: undefined, sets: [] });
+      renderAt();
+      expect(screen.getByText("Live scoreboard stub")).toBeInTheDocument();
+      expect(screen.queryByText(/Replay section/)).not.toBeInTheDocument();
+    });
+
+    it("flags a result edited after it was first saved, to everyone", () => {
+      // Anonymous viewer. Independent of Re-rated: that one is about ratings, this about the score.
+      showMatch({ ...match, resultEdited: true });
+      renderAt();
+      expect(screen.getByText("Score edited after the match")).toBeInTheDocument();
+      expect(screen.queryByText("Re-rated")).not.toBeInTheDocument();
+    });
+
+    it("shows both badges when an edited result was also re-rated", () => {
+      showMatch({ ...match, rated: true, reRated: true, resultEdited: true });
+      renderAt();
+      expect(screen.getByText("Score edited after the match")).toBeInTheDocument();
+      expect(screen.getByText("Re-rated")).toBeInTheDocument();
+    });
+
+    it("says nothing about edits on a match whose result was never rewritten", () => {
+      showMatch({ ...match, resultEdited: false });
+      renderAt();
+      expect(screen.queryByText("Score edited after the match")).not.toBeInTheDocument();
+    });
+
+    it("does not let a player's hidden match history hide the replay (#622)", () => {
+      // The public match response carries no history setting at all — the page has nothing to hide
+      // the replay with, and must not grow one: a match belongs to everyone who played it.
+      showMatch({
+        ...match,
+        team1: [{ displayName: "Ana", publicCode: "AAA111", hideMatchHistory: true }],
+      });
+      renderAt();
+      expect(screen.getByText("Replay section for MTCH01")).toBeInTheDocument();
+    });
   });
 
   it("still offers scoring on a fixture with no result yet (#952)", () => {

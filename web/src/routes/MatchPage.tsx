@@ -19,6 +19,7 @@ import type {
 import { ShareCard } from "@/components/ShareCard";
 import { MatchPointsCard } from "@/features/match/MatchPointsCard";
 import { LiveScoreCard } from "@/features/livematch/LiveScoreCard";
+import { MatchReplaySection } from "@/features/replay/MatchReplaySection";
 import { PublicPageShell } from "@/components/PublicPageShell";
 import { formatConfidence } from "@/lib/confidence";
 import { ConfidenceValue } from "@/components/ConfidenceValue";
@@ -299,6 +300,18 @@ export function MatchPage() {
                   Re-rated
                 </Badge>
               ) : null}
+              {/* Any rewrite of the recorded result after it was first saved (#1145), rated or not — a
+                  different fact from Re-rated, which is about the ratings. Shown to everyone, and it is
+                  also why a live-scored match can lose its replay: the server stops serving one that no
+                  longer ends at the result. */}
+              {match.resultEdited ? (
+                <Badge
+                  variant="outline"
+                  title="The recorded result was changed after it was first saved."
+                >
+                  Score edited after the match
+                </Badge>
+              ) : null}
             </CardTitle>
             <CardDescription>
               Match ID:{" "}
@@ -371,9 +384,20 @@ export function MatchPage() {
         </Card>
       ) : null}
 
-      {/* Renders nothing unless the match is actually being scored (#911) — the normal state for almost
-          every fixture, and an empty scoreboard would read as a fault. */}
-      {match ? (
+      {/* Once the match is over, its replay stands where the live scoreboard stood (#1146) — and a
+          finished match without one (entered by hand, or edited away from its replay) shows neither.
+          Until then the live card, which renders nothing unless the match is actually being scored
+          (#911): the normal state for almost every fixture, and an empty scoreboard would read as a
+          fault. Hidden match history (#622) hides neither — the match is public, and so is its replay. */}
+      {match && isFinished ? (
+        <MatchReplaySection
+          key={match.publicCode}
+          code={match.publicCode}
+          team1Name={match.team1.map(playerName).join(" & ")}
+          team2Name={match.team2.map(playerName).join(" & ")}
+        />
+      ) : null}
+      {match && !isFinished ? (
         <LiveScoreCard
           publicCode={match.publicCode}
           team1Name={match.team1.map(playerName).join(" & ")}
