@@ -11,6 +11,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.server.util.getOrFail
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.common.dto.match.MatchReplayBackfillRequest
 import org.skopeo.domain.service.livematch.MatchReplayService
@@ -26,7 +27,7 @@ fun Application.configureMatchReplayRoutes(service: MatchReplayService = MatchRe
     routing {
         get(path = "/api/v1/matches/code/{code}/replay") {
             respondMappingErrors {
-                respondEither(result = service.byCode(code = call.parameters["code"].orEmpty())) { replay ->
+                respondEither(result = service.byCode(code = call.parameters.getOrFail(name = "code"))) { replay ->
                     call.respond(status = HttpStatusCode.OK, message = replay)
                 }
             }

@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.contract.ReplayDocument
 import org.skopeo.common.dto.livematch.LiveMatchResponse
 import org.skopeo.common.dto.livematch.LiveScoreEventRequest
+import org.skopeo.common.dto.match.MatchReplayBackfillRequest
 import org.skopeo.common.dto.match.MatchReplayBackfillResponse
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.livematch.LiveMatchEventKinds
@@ -793,5 +794,15 @@ class LiveMatchApiIntegrationTest {
             // Finalize already recorded this match's replay, so there is nothing left to backfill.
             preview.body<MatchReplayBackfillResponse>() shouldBe
                 MatchReplayBackfillResponse(dryRun = true, recorded = 0, upgraded = 0, skipped = 0)
+
+            // An explicit body is honoured, not just the absent-body default.
+            val run =
+                client.post(urlString = "/api/v1/match-replays/backfill") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = MatchReplayBackfillRequest(dryRun = false))
+                }
+            run.status shouldBe HttpStatusCode.OK
+            run.body<MatchReplayBackfillResponse>().dryRun shouldBe false
         }
 }
