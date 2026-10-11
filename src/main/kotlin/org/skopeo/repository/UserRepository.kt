@@ -595,41 +595,6 @@ class UserRepository {
         }
 
     /**
-     * Give an unrated survivor the retired account's rating (#1121): the `user_ratings` row moves whole, so the
-     * designation, its calibration window, the stored count and any override (#881/#1051/#1126) travel with the
-     * number they belong to, and the history moves so the rating chart does not start mid-air. Nothing happens
-     * when the survivor already has a rating or the retired account has none. Must run in a transaction.
-     */
-    private fun carryRatingToUnratedSurvivor(
-        fromUserId: UUID,
-        intoUserId: UUID,
-    ): Boolean {
-        val survivorRated = UserRatingsTable.selectAll().where { UserRatingsTable.userId eq intoUserId }.any()
-        val retiredRated = UserRatingsTable.selectAll().where { UserRatingsTable.userId eq fromUserId }.any()
-        if (survivorRated || !retiredRated) return false
-        UserRatingsTable.update(where = { UserRatingsTable.userId eq fromUserId }) { it[userId] = intoUserId }
-        UserRatingHistoryTable.update(where = { UserRatingHistoryTable.userId eq fromUserId }) { it[userId] = intoUserId }
-        return true
-    }
-
-    /**
-     * Move the awards the retired account earned from matches and events (#1121) — the play that earned them is
-     * moving to the survivor, so leaving them behind under-counts the person in the points standings. An award
-     * with neither (granted by hand) is not tied to anything that moves, and stays. Returns how many moved.
-     * Must run in a transaction.
-     */
-    private fun moveEarnedAwards(
-        fromUserId: UUID,
-        intoUserId: UUID,
-    ): Int =
-        RankingPointAwardsTable.update(
-            where = {
-                (RankingPointAwardsTable.userId eq fromUserId) and
-                    (RankingPointAwardsTable.matchId.isNotNull() or RankingPointAwardsTable.eventId.isNotNull())
-            },
-        ) { it[userId] = intoUserId }
-
-    /**
      * Move the retired account's login onto the survivor (#643) so the survivor keeps the accessible login. Order is
      * load-bearing for the UNIQUE constraints (`users.firebase_uid`, `uq_identity_provider_uid(provider, provider_uid)`):
      * FIRST free the retired account — null out its `firebase_uid` and delete its primary identity row (freeing the
@@ -1189,3 +1154,38 @@ private fun ResultRow.toUserEntity(): UserEntity =
 /** Generate a unique shareable player code (issue #56), retrying on the (rare) collision. Must run in a transaction. */
 private fun generateUniquePublicCode(): String =
     PublicCode.generate { code -> UsersTable.selectAll().where { UsersTable.publicCode eq code }.any() }
+
+/**
+ * Give an unrated survivor the retired account's rating (#1121): the `user_ratings` row moves whole, so the
+ * designation, its calibration window, the stored count and any override (#881/#1051/#1126) travel with the
+ * number they belong to, and the history moves so the rating chart does not start mid-air. Nothing happens
+ * when the survivor already has a rating or the retired account has none. Must run in a transaction.
+ */
+private fun carryRatingToUnratedSurvivor(
+    fromUserId: UUID,
+    intoUserId: UUID,
+): Boolean {
+    val survivorRated = UserRatingsTable.selectAll().where { UserRatingsTable.userId eq intoUserId }.any()
+    val retiredRated = UserRatingsTable.selectAll().where { UserRatingsTable.userId eq fromUserId }.any()
+    if (survivorRated || !retiredRated) return false
+    UserRatingsTable.update(where = { UserRatingsTable.userId eq fromUserId }) { it[userId] = intoUserId }
+    UserRatingHistoryTable.update(where = { UserRatingHistoryTable.userId eq fromUserId }) { it[userId] = intoUserId }
+    return true
+}
+
+/**
+ * Move the awards the retired account earned from matches and events (#1121) — the play that earned them is
+ * moving to the survivor, so leaving them behind under-counts the person in the points standings. An award
+ * with neither (granted by hand) is not tied to anything that moves, and stays. Returns how many moved.
+ * Must run in a transaction.
+ */
+private fun moveEarnedAwards(
+    fromUserId: UUID,
+    intoUserId: UUID,
+): Int =
+    RankingPointAwardsTable.update(
+        where = {
+            (RankingPointAwardsTable.userId eq fromUserId) and
+                (RankingPointAwardsTable.matchId.isNotNull() or RankingPointAwardsTable.eventId.isNotNull())
+        },
+    ) { it[userId] = intoUserId }

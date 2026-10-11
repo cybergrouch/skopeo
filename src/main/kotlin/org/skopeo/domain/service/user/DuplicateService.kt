@@ -142,12 +142,12 @@ class DuplicateService(
      * Generalized admin account-merge (#643) — the "Merge accounts" operation. Consolidate the [retiredAccountId]
      * into the admin-chosen [survivorId], moving **all participation/membership records** (matches, event
      * participants, player-list members, club owners, seeding entries) onto the survivor, with the ranking-point
-     * awards those matches and events produced (#1121). A rated survivor **keeps its own rating, with no
-     * recompute**; an unrated one takes on the retired account's rating and history (#1121). The survivor keeps the best available login: when the
-     * retired account has one it is transferred to the survivor (freeing the retired account's login first so the
-     * UNIQUE anchors don't collide). The retired account is then retired as a "merged → survivor" card. A required,
-     * non-blank [verificationNote] records how the admin confirmed the two accounts are the same person and is kept
-     * in the audit trail. Irreversible; audited. Guards: both accounts exist and survivor ≠ retired.
+     * awards those matches and events produced (#1121). A rated survivor **keeps its own rating, with no recompute**;
+     * an unrated one takes on the retired account's rating and history (#1121). The survivor keeps the best available
+     * login: when the retired account has one it is transferred to the survivor (freeing the retired account's login
+     * first so the UNIQUE anchors don't collide). The retired account is then retired as a "merged → survivor" card.
+     * A required, non-blank [verificationNote] records how the admin confirmed the two accounts are the same person
+     * and is kept in the audit trail. Irreversible; audited. Guards: both accounts exist and survivor ≠ retired.
      */
     fun mergeAccounts(
         token: VerifiedFirebaseToken,
@@ -176,12 +176,12 @@ class DuplicateService(
                 )
             // Calibration is inherited, taking the EARLIER designation (#881) — the safer side.
             //
-            // A rated survivor keeps its own rating, but a merge moves the retired account's matches onto
-            // it, so the survivor's rating is now answerable for play it did not previously own. (An unrated
-            // survivor took the retired account's whole rating row above, window included, so there is no
-            // retired row left and this is a no-op — #1121.) Inheriting the longer remaining window is the conservative outcome: suppression can
-            // only ever withhold a change, never damage a settled rating, whereas dropping a window would
-            // start moving opponents' ratings off a rating that is still a guess.
+            // A rated survivor keeps its own rating, but a merge moves the retired account's matches onto it, so the
+            // survivor's rating is now answerable for play it did not previously own. (An unrated survivor took the
+            // retired account's whole rating row above, window included, so there is no retired row left and this is
+            // a no-op — #1121.) Inheriting the longer remaining window is the conservative outcome: suppression can
+            // only ever withhold a change, never damage a settled rating, whereas dropping a window would start
+            // moving opponents' ratings off a rating that is still a guess.
             //
             // Because calibration is derived from the designation timestamp rather than stored (#881),
             // "inherit the longer window" is exactly "keep the earlier timestamp" — no state machine to
