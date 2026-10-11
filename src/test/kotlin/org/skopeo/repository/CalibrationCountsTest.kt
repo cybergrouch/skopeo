@@ -347,6 +347,39 @@ class CalibrationCountsTest {
     }
 
     @Test
+    fun `an unrated survivor takes the retired account's rating, and the count covers both accounts' play (#1121)`() {
+        val survivor = newUser(uid = "survivor")
+        val retired = newUser(uid = "retired")
+        val opponent = newUser(uid = "opponent")
+        val eventId = event(creator = opponent, members = listOf(survivor, retired, opponent))
+        designate(userId = retired)
+        ratings.setCalibrationOverride(
+            userId = retired,
+            override = "FORCED_OFF",
+            reason = "plays at this level already",
+            setBy = opponent,
+            setAt = LocalDateTime.now(),
+        )
+        val retiredRow = ratings.findCurrentRating(userId = retired).shouldNotBeNull()
+        repeat(times = 2) { ratedMatch(u1 = retired, u2 = opponent, eventId = eventId) }
+        // The survivor was never rated, but played a rated match of its own as the same person.
+        ratedMatch(u1 = survivor, u2 = opponent, eventId = eventId)
+
+        val moved = users.mergeAccounts(retiredId = retired, survivorId = survivor, transferLogin = false)
+
+        moved.ratingCarriedOver shouldBe true
+        ratings.findCurrentRating(userId = retired).shouldBeNull()
+        val carried = ratings.findCurrentRating(userId = survivor).shouldNotBeNull()
+        carried.currentRating shouldBe retiredRow.currentRating
+        carried.calibrationStartedAt shouldBe retiredRow.calibrationStartedAt
+        carried.calibrationOverride shouldBe "FORCED_OFF"
+        // 3, not 2: the row moved BEFORE the participation, so the refresh that follows counted the
+        // survivor's own match too. Moving it after would have left the retired account's stale 2.
+        withClue(clue = "the carried row counts every rated match the survivor now holds") { storedCount(userId = survivor) shouldBe 3 }
+        reconcile(userIds = listOf(survivor, retired, opponent))
+    }
+
+    @Test
     fun `inheriting an earlier window recomputes the count against the earlier instant (#881, #1051)`() {
         val survivor = newUser(uid = "survivor")
         val retired = newUser(uid = "retired")

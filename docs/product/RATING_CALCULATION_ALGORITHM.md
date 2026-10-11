@@ -767,8 +767,8 @@ from the viewed player's side, regardless of outcome.
 #### A merged account's rating data stays where it is (#853)
 
 An admin merge (#643) moves *participation* — team memberships, event entries, memberships, seeding — onto
-the survivor, and deliberately leaves *rating* data behind: the survivor keeps its own current rating and
-ranking points, with no recompute.
+the survivor, and deliberately leaves *rating* data behind: the survivor keeps its own current rating, with no
+recompute. (#1121 narrows this to a *rated* survivor and moves earned ranking points; see below.)
 
 So a match played under a since-merged account has its team row on the survivor and its at-match band row
 still on the retired account. Reads therefore **resolve merge aliases at read time** rather than moving
@@ -782,6 +782,20 @@ the person. Worse, they **overlap**: duplicate accounts arise precisely because 
 once, and in production two merge pairs have the retired account's date range nested inside the survivor's.
 The person genuinely held two ratings simultaneously. History entries are therefore attributed to their
 source account and rendered as separate series — never merged into one line.
+
+**Revised in #1121 for two cases, without disturbing the above.**
+
+- **An unrated survivor takes the retired account's rating.** Keeping "the survivor's own" rating assumed
+  there was one. When there is not, the merge left an account holding rated matches but no rating, which put
+  it back on the pending-assessment list. Now the retired account's whole `user_ratings` row moves, so its
+  designation, calibration window and count, and any override (#881, #1051, #1126) all travel with it. Its
+  history moves too. There is only one trajectory here, so this involves no chaining.
+- **Ranking-point awards move with the play that earned them.** An award tied to a match or an event moves
+  with that match or event. An award granted by hand stays. Migration V67 moved the 6 awards that earlier
+  merges had stranded.
+
+When **both** accounts are rated, nothing about rating changes: each keeps its own rating and history, and
+the separate-series rule above still applies.
 
 ---
 

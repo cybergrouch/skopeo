@@ -215,6 +215,10 @@ data class AccountMergeResult(
     val clubOwnerships: Int,
     val seedingEntries: Int,
     val loginTransferred: Boolean,
+    /** The survivor had no rating and took on the retired account's, with its history (#1121). */
+    val ratingCarriedOver: Boolean = false,
+    /** Ranking-point awards moved with the matches and events that produced them (#1121). */
+    val rankingPointAwards: Int = 0,
 )
 
 /**

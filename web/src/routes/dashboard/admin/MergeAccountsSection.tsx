@@ -70,9 +70,11 @@ function Shell({ children }: { children: ReactNode }) {
         <CardTitle>Merge accounts</CardTitle>
         <CardDescription>
           Consolidate a person’s duplicate accounts into one survivor. All participation and membership
-          records (matches, events, lists, clubs, seeding) move to the survivor; the survivor keeps its own
-          rating and ranking points (no recompute). The survivor keeps the best available login — if the
-          retired account has one, it is transferred to the survivor. This is permanent and cannot be undone.
+          records (matches, events, lists, clubs, seeding) move to the survivor, with the ranking points
+          those matches and events earned. A rated survivor keeps its own rating (no recompute); an unrated
+          one takes the retired account&apos;s rating and its history. The survivor keeps the best available
+          login — if the retired account has one, it is transferred to the survivor. This is permanent and
+          cannot be undone.
         </CardDescription>
       </CardHeader>
       <CardContent>{children}</CardContent>

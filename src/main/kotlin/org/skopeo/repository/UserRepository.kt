@@ -563,8 +563,10 @@ class UserRepository {
      * Generalized admin account-merge (#643): consolidate the retired account into an admin-chosen [survivorId]
      * in one transaction. Moves **all participation/membership records** (matches/team_users, event participants,
      * player-list members, club owners, seeding entries) from [retiredId] onto the survivor via [absorbParticipationRecords],
-     * but **NOT** rating history, the current rating, or ranking points — the survivor keeps its own, with no
-     * recompute (the retired's rating/points stay on its now-inactive row, orphaned and harmless). When [transferLogin]
+     * and the ranking-point awards those matches and events produced (#1121) — an award belongs to the play that
+     * earned it. A survivor with **no rating** takes on the retired account's rating row and its history (#1121),
+     * so it does not land on the pending-assessment list holding rated matches; a rated survivor keeps its own
+     * rating and history, with no recompute (two rating trajectories cannot be interleaved into one). When [transferLogin]
      * is true the retired account's login is moved onto the survivor first (see [transferLogin]); the survivor then keeps
      * the best available login. Finally the retired account is retired via the canonical-merge pattern (#124):
      * is_active = false + canonical_user_id = survivor, so its public code reads as a "merged → survivor" card.
@@ -578,6 +580,10 @@ class UserRepository {
         transaction {
             // Free-then-set the login FIRST (uniqueness): the survivor ends up with the accessible login.
             if (transferLogin) transferLogin(fromUserId = retiredId, intoUserId = survivorId)
+            // Before the participation moves (#1121): re-pointing team_users is what refreshes the stored
+            // calibration count (#1051), and it must count against the rating row the survivor ends up with.
+            val ratingCarriedOver = carryRatingToUnratedSurvivor(fromUserId = retiredId, intoUserId = survivorId)
+            val awardsMoved = moveEarnedAwards(fromUserId = retiredId, intoUserId = survivorId)
             val moved = absorbParticipationRecords(fromUserId = retiredId, intoUserId = survivorId)
             // Retire the merged-away account via the canonical-link pattern (#124): it becomes a
             // "merged → survivor" card rather than a plain soft-delete.
@@ -585,7 +591,7 @@ class UserRepository {
                 it[canonicalUserId] = survivorId
                 it[isActive] = false
             }
-            moved.copy(loginTransferred = transferLogin)
+            moved.copy(loginTransferred = transferLogin, ratingCarriedOver = ratingCarriedOver, rankingPointAwards = awardsMoved)
         }
 
     /**
@@ -1148,3 +1154,38 @@ private fun ResultRow.toUserEntity(): UserEntity =
 /** Generate a unique shareable player code (issue #56), retrying on the (rare) collision. Must run in a transaction. */
 private fun generateUniquePublicCode(): String =
     PublicCode.generate { code -> UsersTable.selectAll().where { UsersTable.publicCode eq code }.any() }
+
+/**
+ * Give an unrated survivor the retired account's rating (#1121): the `user_ratings` row moves whole, so the
+ * designation, its calibration window, the stored count and any override (#881/#1051/#1126) travel with the
+ * number they belong to, and the history moves so the rating chart does not start mid-air. Nothing happens
+ * when the survivor already has a rating or the retired account has none. Must run in a transaction.
+ */
+private fun carryRatingToUnratedSurvivor(
+    fromUserId: UUID,
+    intoUserId: UUID,
+): Boolean {
+    val survivorRated = UserRatingsTable.selectAll().where { UserRatingsTable.userId eq intoUserId }.any()
+    val retiredRated = UserRatingsTable.selectAll().where { UserRatingsTable.userId eq fromUserId }.any()
+    if (survivorRated || !retiredRated) return false
+    UserRatingsTable.update(where = { UserRatingsTable.userId eq fromUserId }) { it[userId] = intoUserId }
+    UserRatingHistoryTable.update(where = { UserRatingHistoryTable.userId eq fromUserId }) { it[userId] = intoUserId }
+    return true
+}
+
+/**
+ * Move the awards the retired account earned from matches and events (#1121) — the play that earned them is
+ * moving to the survivor, so leaving them behind under-counts the person in the points standings. An award
+ * with neither (granted by hand) is not tied to anything that moves, and stays. Returns how many moved.
+ * Must run in a transaction.
+ */
+private fun moveEarnedAwards(
+    fromUserId: UUID,
+    intoUserId: UUID,
+): Int =
+    RankingPointAwardsTable.update(
+        where = {
+            (RankingPointAwardsTable.userId eq fromUserId) and
+                (RankingPointAwardsTable.matchId.isNotNull() or RankingPointAwardsTable.eventId.isNotNull())
+        },
+    ) { it[userId] = intoUserId }

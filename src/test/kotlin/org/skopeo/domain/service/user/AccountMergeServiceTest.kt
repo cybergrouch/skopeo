@@ -11,6 +11,8 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -38,6 +40,7 @@ import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
+import org.skopeo.repository.UserRatingHistoryTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.fixtureEventId
@@ -115,28 +118,121 @@ class AccountMergeServiceTest {
             ),
     ).toDomain()
 
-    private fun award(userId: UUID) =
-        points.award(
-            write =
-                RankingPointAwardWrite(
-                    userId = userId,
-                    points = BigDecimal("100"),
-                    pointClass = PointClass.ANNUAL_TOURNAMENT,
-                    sourceType = PointSourceType.INTERNAL,
-                    sourceId = null,
-                    band = "4.0",
-                    sex = "Male",
-                    reason = null,
-                    validFrom = LocalDateTime.now().minusDays(1),
-                    validUntil = LocalDateTime.now().plusMonths(6),
-                    status = AwardStatus.ACTIVE,
-                    revokesAwardId = null,
-                    grantedBy = null,
-                    awardedAt = LocalDateTime.now(),
-                    // v1 is what a freshly migrated database seeds (#862).
-                    pointsScheduleVersion = 1,
-                ),
-        )
+    /** An award to [userId]; with neither [matchId] nor [eventId] it is one granted by hand. */
+    private fun award(
+        userId: UUID,
+        matchId: UUID? = null,
+        eventId: UUID? = null,
+    ) = points.award(
+        write =
+            RankingPointAwardWrite(
+                userId = userId,
+                points = BigDecimal("100"),
+                pointClass = PointClass.ANNUAL_TOURNAMENT,
+                sourceType = PointSourceType.INTERNAL,
+                sourceId = null,
+                band = "4.0",
+                sex = "Male",
+                reason = null,
+                validFrom = LocalDateTime.now().minusDays(1),
+                validUntil = LocalDateTime.now().plusMonths(6),
+                status = AwardStatus.ACTIVE,
+                revokesAwardId = null,
+                grantedBy = null,
+                awardedAt = LocalDateTime.now(),
+                eventId = eventId,
+                matchId = matchId,
+                // v1 is what a freshly migrated database seeds (#862).
+                pointsScheduleVersion = 1,
+            ),
+    )
+
+    /** One rating-history row for [userId], as a rated match would leave. */
+    private fun historyRow(userId: UUID) {
+        transaction {
+            UserRatingHistoryTable.insert {
+                it[UserRatingHistoryTable.userId] = userId
+                it[matchId] = null
+                it[previousRating] = BigDecimal("3.000000")
+                it[newRating] = BigDecimal("3.100000")
+                it[ratingChange] = BigDecimal("0.100000")
+                it[calculatedAt] = LocalDateTime.now()
+            }
+        }
+    }
+
+    private fun merge(
+        survivor: User,
+        retired: User,
+    ) = service
+        .mergeAccounts(
+            token = token(uid = "root"),
+            survivorId = survivor.id,
+            retiredAccountId = retired.id,
+            verificationNote = "same phone",
+        ).shouldBeRight()
+
+    private fun mergeAuditDetails(): Map<String, String?> =
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.USER_ACCOUNTS_MERGED), limit = 10, offset = 0)
+            .first
+            .single()
+            .details
+
+    @Test
+    fun `an unrated survivor takes the retired account's rating and history, and the audit says so (#1121)`() {
+        admin()
+        val survivor = provisionUser(uid = "survivor")
+        val retired = provisionUser(uid = "retired")
+        ratings.setRating(userId = retired.id, rating = BigDecimal("3.1"), level = "3.0")
+        repeat(times = 2) { historyRow(userId = retired.id) }
+
+        merge(survivor = survivor, retired = retired)
+
+        // Off the pending-assessment list: the survivor holds the rated play AND the rating it produced.
+        ratings.findCurrentRating(userId = survivor.id).shouldNotBeNull().currentRating.toPlainString() shouldBe "3.100000"
+        ratings.findCurrentRating(userId = retired.id).shouldBeNull()
+        ratings.historyByUser(userId = survivor.id).size shouldBe 2
+        ratings.historyByUser(userId = retired.id).size shouldBe 0
+        mergeAuditDetails()["ratingCarriedOver"] shouldBe "true"
+    }
+
+    @Test
+    fun `awards move with their matches and events, and a hand-granted award stays (#1121)`() {
+        admin()
+        val survivor = provisionUser(uid = "survivor")
+        val retired = provisionUser(uid = "retired")
+        val opponent = provisionUser(uid = "opp")
+        val match = fixture(u1 = retired.id, u2 = opponent.id)
+        val matchAward = award(userId = retired.id, matchId = match.id)
+        val eventAward = award(userId = retired.id, eventId = match.eventId)
+        val handGranted = award(userId = retired.id)
+
+        merge(survivor = survivor, retired = retired)
+
+        points.findById(id = matchAward.id).shouldNotBeNull().userId shouldBe survivor.id
+        points.findById(id = eventAward.id).shouldNotBeNull().userId shouldBe survivor.id
+        points.findById(id = handGranted.id).shouldNotBeNull().userId shouldBe retired.id
+        mergeAuditDetails()["movedRankingPointAwards"] shouldBe "2"
+    }
+
+    @Test
+    fun `when both accounts are rated each keeps its own history (#1121)`() {
+        admin()
+        val survivor = provisionUser(uid = "survivor")
+        val retired = provisionUser(uid = "retired")
+        ratings.setRating(userId = survivor.id, rating = BigDecimal("4.2"), level = "4.0")
+        ratings.setRating(userId = retired.id, rating = BigDecimal("3.1"), level = "3.0")
+        historyRow(userId = survivor.id)
+        repeat(times = 3) { historyRow(userId = retired.id) }
+
+        merge(survivor = survivor, retired = retired)
+
+        // Two rating trajectories cannot be interleaved into one chart, so neither history moves.
+        ratings.historyByUser(userId = survivor.id).size shouldBe 1
+        ratings.historyByUser(userId = retired.id).size shouldBe 3
+        mergeAuditDetails()["ratingCarriedOver"] shouldBe "false"
+    }
 
     @Test
     fun `merge moves participation and keeps the survivor's own rating and points, leaving the retired's orphaned`() {
@@ -163,7 +259,8 @@ class AccountMergeServiceTest {
         // The survivor keeps its OWN rating (no recompute from the absorbed match) and its OWN points.
         ratings.findCurrentRating(userId = survivor.id).shouldNotBeNull().currentRating.toPlainString() shouldBe "4.200000"
         points.findById(id = survivorAward.id).shouldNotBeNull().userId shouldBe survivor.id
-        // The retired's rating + points are NOT moved — they stay on the retired (now inactive) row.
+        // A rated survivor keeps its own rating (#1121), and a hand-granted award is tied to no match or
+        // event, so neither moves — both stay on the retired (now inactive) row.
         ratings.findCurrentRating(userId = retired.id).shouldNotBeNull().currentRating.toPlainString() shouldBe "3.100000"
         points.findById(id = retiredAward.id).shouldNotBeNull().userId shouldBe retired.id
         // Participation DID move: the survivor now carries the retired's match too; the retired has none.
