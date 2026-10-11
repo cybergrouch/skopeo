@@ -346,6 +346,10 @@ data class MatchPublicResponse(
     // re-applying the rating deltas. Public on purpose: a transparency signal that the recorded score
     // changed, shown to everyone rather than only to staff.
     val reRated: Boolean = false,
+    // True once the recorded result has been edited after it was first saved (#1145): re-recorded while
+    // unrated, or corrected after rating. Public for the same reason as [reRated] — the score shown is not
+    // the one first recorded — and broader than it, which covers only post-rating corrections.
+    val resultEdited: Boolean = false,
     // False once the match has been soft-deleted (#325): its link stays honored for traceability, and
     // the public page flags it as deleted.
     val isActive: Boolean = true,

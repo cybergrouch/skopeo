@@ -46,6 +46,7 @@ class LiveMatchSweepService(
     private val users: UserRepository = UserRepository(),
     private val broadcast: LiveScoreBroadcaster = NoOpLiveScoreBroadcaster,
     private val clock: () -> LocalDateTime = LocalDateTime::now,
+    private val replays: MatchReplayService = MatchReplayService(),
 ) {
     fun sweep(
         token: VerifiedFirebaseToken,
@@ -66,6 +67,10 @@ class LiveMatchSweepService(
                     matches.findById(matchId = matchId).getOrNull()?.toDomain()?.let {
                         broadcast.discard(publicCode = it.publicCode)
                     }
+                    // The replay is the one thing the log still has to give (#1145). Normally finalize
+                    // already wrote it; this catches a match finalized before replays existed, or one
+                    // whose finalize-time write failed.
+                    replays.ensureRecorded(matchId = matchId)
                     // Safe because the umpire credit was folded into match_umpires at finalize (#929):
                     // disposal loses the keystrokes, never the attribution.
                     live.discardLog(matchId = matchId)
