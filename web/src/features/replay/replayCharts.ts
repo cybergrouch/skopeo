@@ -1,5 +1,4 @@
 import type { ReplayDocument, ReplayPoint, ReplaySet } from '@/api/generated/model'
-import { REPLAY_START } from './replayFeatures'
 
 /**
  * Pure derivations behind the replay charts (#1147): lane layout, score labels, rolling point share and the
@@ -37,7 +36,7 @@ export interface LaneStep {
 
 export interface SetLanes {
   setNumber: number
-  /** The selection that shows this set's 0-0 start: the step that closed the previous set, or {@link REPLAY_START}. */
+  /** The selection that shows this set's 0-0 start: the step that closed the previous set, or `REPLAY_START`. */
   startIndex: number
   steps: LaneStep[]
   /** The set's games as it finished — or as it stood, for a set the match ended inside. */
@@ -95,14 +94,13 @@ function finalScoreOf(last: ReplayPoint, setNumber: number): string {
  */
 export function setLanesOf(replay: ReplayDocument, hasBreaks: boolean): SetLanes[] {
   const sets: SetLanes[] = []
-  let current: SetLanes | undefined
-  let last: ReplayPoint | undefined
   replay.points.forEach((point, index) => {
     if (!isDrawn(point)) return
-    if (!current || current.setNumber !== point.setNumber) {
-      if (current && last) current.finalScore = finalScoreOf(last, current.setNumber)
+    let current = sets[sets.length - 1]
+    if (current?.setNumber !== point.setNumber) {
+      // The step before a set's first one is what leaves the score at 0-0 in it — and before the very first
+      // step that is the opening position, REPLAY_START (-1), so `index - 1` is right in both cases.
       current = { setNumber: point.setNumber, startIndex: index - 1, steps: [], finalScore: '' }
-      if (current.startIndex < 0) current.startIndex = REPLAY_START
       sets.push(current)
     }
     current.steps.push({
@@ -113,9 +111,11 @@ export function setLanesOf(replay: ReplayDocument, hasBreaks: boolean): SetLanes
       mark: markOf(point, hasBreaks),
       tiebreak: point.tiebreak ?? false,
     })
-    last = point
   })
-  if (current && last) current.finalScore = finalScoreOf(last, current.setNumber)
+  for (const set of sets) {
+    const lastStep = set.steps[set.steps.length - 1]
+    set.finalScore = finalScoreOf(replay.points[lastStep.index], set.setNumber)
+  }
   return sets
 }
 
@@ -180,7 +180,7 @@ export function setBoundariesOf(samples: MomentumSample[]): { setNumber: number;
 /**
  * The drawn sample a selection lands on: the last one at or before [selected]. A selection on a step the
  * chart does not draw (an awarded game, the ending) shows the position it leaves the match in. `null` for
- * {@link REPLAY_START} or anything before the first drawn step.
+ * `REPLAY_START` or anything before the first drawn step.
  */
 export function sampleAtOrBefore<T extends { index: number }>(samples: T[], selected: number): T | null {
   let found: T | null = null
