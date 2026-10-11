@@ -76,15 +76,7 @@ object ReplayBuilder {
         timed: TimedScoreEvent,
         index: Int,
     ): ReplayPoint? {
-        val event = timed.event
-        val (kind, wonBy) =
-            when (event) {
-                is ScoreEvent.PointWon -> KIND_POINT to event.side
-                is ScoreEvent.GameAwarded -> KIND_GAME to event.side
-                is ScoreEvent.SetAwarded -> KIND_SET to event.side
-                is ScoreEvent.Ending -> KIND_END to (after.outcome?.winner ?: return null)
-                else -> return null
-            }
+        val (kind, wonBy) = stepKindOf(event = timed.event, after = after) ?: return null
         val server = before.servingSide
         val setWon = after.completedSets.size > before.completedSets.size
         // A tiebreak is won by awarding the set, and counts as the set's deciding game.
@@ -106,6 +98,20 @@ object ReplayBuilder {
             score = after.toReplayScore(),
         )
     }
+
+    /** What kind of step [event] is and who it went to, or null for an action that is not a step (a pause, a server). */
+    private fun stepKindOf(
+        event: ScoreEvent,
+        after: ScoreState,
+    ): Pair<String, TeamSide>? =
+        when (event) {
+            is ScoreEvent.PointWon -> KIND_POINT to event.side
+            is ScoreEvent.GameAwarded -> KIND_GAME to event.side
+            is ScoreEvent.SetAwarded -> KIND_SET to event.side
+            // The winner, not the event's side: a retirement names the side that conceded.
+            is ScoreEvent.Ending -> after.outcome?.let { KIND_END to it.winner }
+            else -> null
+        }
 
     /** The set a step belongs to. Between sets, that is the one just banked: an ending there closes it. */
     private fun setNumberOf(before: ScoreState): Int =
