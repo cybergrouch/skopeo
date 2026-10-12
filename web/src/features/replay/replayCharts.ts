@@ -136,7 +136,12 @@ export interface MomentumSample {
   team1InWindow: number
   /** The window's actual size: smaller than {@link MOMENTUM_WINDOW} for the match's first few points. */
   windowSize: number
-  /** Team 1's share of the window, 0..1. */
+  /**
+   * Team 1's share of a full window, 0..1. While fewer than `window` points have been played, the unplayed rest
+   * of the window counts as even, half a point to each side. So the first point plots near the centre rather
+   * than at 100%, and the line moves outward only as points accumulate (#1156). From point `window` on it is
+   * the plain share.
+   */
   team1Share: number
   /** Running points won by team 1 minus team 2. */
   difference: number
@@ -165,7 +170,7 @@ export function momentumOf(replay: ReplayDocument, window: number = MOMENTUM_WIN
       wonBy: point.wonBy,
       team1InWindow,
       windowSize: recent.length,
-      team1Share: team1InWindow / recent.length,
+      team1Share: (team1InWindow + (window - recent.length) / 2) / window,
       difference,
     })
   })

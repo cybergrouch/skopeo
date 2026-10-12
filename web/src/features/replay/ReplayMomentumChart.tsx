@@ -99,13 +99,17 @@ export function ReplayMomentumChart({ replay, selected, onSelect, team1Name = 'T
                 <td>{s.setNumber}</td>
                 <td>{names[s.wonBy]}</td>
                 <td>
-                  {s.team1InWindow} of {s.windowSize} ({percent(s.team1Share)})
+                  {s.team1InWindow} of {s.windowSize} ({percent(s.team1Share)}
+                  {s.windowSize < MOMENTUM_WINDOW ? '*' : ''})
                 </td>
                 <td>{signed(s.difference)}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        <p className="mt-1 text-xs text-muted-foreground">
+          * Fewer than {MOMENTUM_WINDOW} points played yet: the rest of the window counts as even, half to each side.
+        </p>
       </details>
     </div>
   )
@@ -117,7 +121,18 @@ function readout(sample: MomentumSample, names: Record<Side, string>): string {
       ? 'level on points overall'
       : `${names[sample.difference > 0 ? 'TEAM1' : 'TEAM2']} ahead by ${Math.abs(sample.difference)} overall`
   return (
-    `After point ${sample.ordinal} (set ${sample.setNumber}): ${names.TEAM1} won ${sample.team1InWindow} of the last ` +
-    `${sample.windowSize} (${percent(sample.team1Share)}), ${lead}.`
+    `After point ${sample.ordinal} (set ${sample.setNumber}): ${names.TEAM1} won ${sample.team1InWindow} of ${windowText(sample)} ` +
+    `(${percent(sample.team1Share)}${evenNote(sample)}), ${lead}.`
   )
+}
+
+/** "the last 8", or, before the window has filled, "the 3 played so far". */
+function windowText(sample: MomentumSample): string {
+  if (sample.windowSize >= MOMENTUM_WINDOW) return `the last ${sample.windowSize}`
+  return sample.windowSize === 1 ? 'the 1 played so far' : `the ${sample.windowSize} played so far`
+}
+
+/** Says why the plotted share is not the raw ratio while the window is still filling (#1156). */
+function evenNote(sample: MomentumSample): string {
+  return sample.windowSize < MOMENTUM_WINDOW ? `, counting the rest of the ${MOMENTUM_WINDOW} as even` : ''
 }
