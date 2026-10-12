@@ -3,7 +3,7 @@ import { MOMENTUM_WINDOW, SIDE_COLOUR, setBoundariesOf } from './replayCharts'
 import type { MomentumPlotProps } from './ReplayMomentumChart'
 
 /**
- * viewBox units of the narrow (below `md`) plot. The width is fixed and scaled to the screen; the height is
+ * viewBox units of the plot. The width is fixed and scaled to a phone-width cap; the height is
  * {@link ROW} per point, so it grows with the match and nothing ever scrolls sideways (#1156).
  */
 const WIDTH = 300
@@ -20,7 +20,7 @@ const DIFF_CENTRE = (DIFF_LEFT + DIFF_RIGHT) / 2
 const DIFF_HALF = (DIFF_RIGHT - DIFF_LEFT) / 2
 
 /**
- * Momentum below `md` (#1156): time runs top to bottom. Team 1's rolling share is a horizontal deviation from
+ * Momentum, at every screen size (#1156): time runs top to bottom. Team 1's rolling share is a horizontal deviation from
  * a centre line — left when team 1 was on top, right when team 2 was — and the running point difference sits
  * in a narrow column beside it on the same vertical axis, team 1 ahead to the left as well. Set boundaries are
  * horizontal dashed rules.

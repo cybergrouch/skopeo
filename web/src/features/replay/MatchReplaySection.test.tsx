@@ -1,7 +1,6 @@
 import { afterEach, describe, it, expect, beforeEach, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { RETIRED_REPLAY } from "@/test/replayFixtures";
-import { stubMatchMedia } from "@/test/matchMedia";
 import { MatchReplaySection } from "./MatchReplaySection";
 
 const { useGetApiV1MatchesCodeCodeReplay } = vi.hoisted(() => ({
@@ -62,9 +61,11 @@ describe("MatchReplaySection", () => {
   });
 
   it("moves the card when a point is picked in either chart", () => {
-    stubMatchMedia(true);
     useGetApiV1MatchesCodeCodeReplay.mockReturnValue({ data: RETIRED_REPLAY });
     const { container } = renderSection();
+    // The replay opens on the final score, in set 3; step into set 1 so its swimlane block is open.
+    fireEvent.click(screen.getByText("First", { selector: "button" }));
+    fireEvent.click(screen.getByText("Next", { selector: "button" }));
 
     fireEvent.click(
       container.querySelector('[data-testid="swimlane-step"][data-index="4"]') as Element,
@@ -77,26 +78,25 @@ describe("MatchReplaySection", () => {
   });
 
   it("moves both charts when the card steps", () => {
-    stubMatchMedia(true);
     useGetApiV1MatchesCodeCodeReplay.mockReturnValue({ data: RETIRED_REPLAY });
     const { container } = renderSection();
     const selectedStep = () =>
       container.querySelector('[data-testid="swimlane-step"][data-selected]')?.getAttribute("data-index");
-    const markerX = () =>
-      Number(container.querySelector('[data-testid="momentum-selected"]')?.getAttribute("x1"));
+    // Time runs downward (#1156), so the momentum marker moves down as the selection advances.
+    const markerY = () =>
+      Number(container.querySelector('[data-testid="momentum-selected"]')?.getAttribute("y1"));
 
     fireEvent.click(screen.getByText("First", { selector: "button" }));
     expect(selectedStep()).toBeUndefined();
-    const atStart = markerX();
+    const atStart = markerY();
 
     fireEvent.click(screen.getByText("Next", { selector: "button" }));
     expect(selectedStep()).toBe("0");
-    expect(markerX()).toBeGreaterThan(atStart);
+    expect(markerY()).toBeGreaterThan(atStart);
     expect(screen.getByText(/^After point 1 \(set 1\)/)).toBeInTheDocument();
   });
 
-  it("below md, lays both charts out vertically and keeps them on the card's selection", () => {
-    stubMatchMedia(false);
+  it("lays both charts out vertically at every width, and keeps them on the card's selection (#1156)", () => {
     useGetApiV1MatchesCodeCodeReplay.mockReturnValue({ data: RETIRED_REPLAY });
     const { container } = renderSection();
     const selectedStep = () =>
