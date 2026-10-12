@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { afterEach, describe, it, expect, beforeEach, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { RETIRED_REPLAY } from "@/test/replayFixtures";
+import { stubMatchMedia } from "@/test/matchMedia";
 import { MatchReplaySection } from "./MatchReplaySection";
 
 const { useGetApiV1MatchesCodeCodeReplay } = vi.hoisted(() => ({
@@ -22,6 +23,9 @@ const announcement = () => screen.getByTestId("replay-announcement").textContent
 
 describe("MatchReplaySection", () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("asks for this match's replay, once — a 404 is an answer, not a fault to retry", () => {
     useGetApiV1MatchesCodeCodeReplay.mockReturnValue({ data: undefined });
@@ -58,6 +62,7 @@ describe("MatchReplaySection", () => {
   });
 
   it("moves the card when a point is picked in either chart", () => {
+    stubMatchMedia(true);
     useGetApiV1MatchesCodeCodeReplay.mockReturnValue({ data: RETIRED_REPLAY });
     const { container } = renderSection();
 
@@ -72,6 +77,7 @@ describe("MatchReplaySection", () => {
   });
 
   it("moves both charts when the card steps", () => {
+    stubMatchMedia(true);
     useGetApiV1MatchesCodeCodeReplay.mockReturnValue({ data: RETIRED_REPLAY });
     const { container } = renderSection();
     const selectedStep = () =>
@@ -87,5 +93,31 @@ describe("MatchReplaySection", () => {
     expect(selectedStep()).toBe("0");
     expect(markerX()).toBeGreaterThan(atStart);
     expect(screen.getByText(/^After point 1 \(set 1\)/)).toBeInTheDocument();
+  });
+
+  it("below md, lays both charts out vertically and keeps them on the card's selection", () => {
+    stubMatchMedia(false);
+    useGetApiV1MatchesCodeCodeReplay.mockReturnValue({ data: RETIRED_REPLAY });
+    const { container } = renderSection();
+    const selectedStep = () =>
+      container.querySelector('[data-testid="swimlane-step"][data-selected]')?.getAttribute("data-index");
+
+    expect(container.querySelector('[data-testid="swimlane-vertical"]')).not.toBeNull();
+    expect(container.querySelector('svg[data-orientation="vertical"]')).not.toBeNull();
+    expect(container.querySelector('[data-orientation="horizontal"]')).toBeNull();
+    // Opens on the final step, in set 3: only set 3's swimlane block is open.
+    expect(selectedStep()).toBe("12");
+
+    // Stepping back to the start opens set 1 in the swimlanes, and the momentum chart follows.
+    fireEvent.click(screen.getByText("First", { selector: "button" }));
+    fireEvent.click(screen.getByText("Next", { selector: "button" }));
+    expect(selectedStep()).toBe("0");
+    expect(screen.getByText(/^After point 1 \(set 1\)/)).toBeInTheDocument();
+
+    // A point picked in the vertical swimlane moves the card.
+    fireEvent.click(
+      container.querySelector('[data-testid="swimlane-step"][data-index="4"]') as Element,
+    );
+    expect(announcement()).toContain(`Point 5 of ${LAST}`);
   });
 });

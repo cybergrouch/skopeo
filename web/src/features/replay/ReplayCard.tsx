@@ -1,16 +1,11 @@
-import { Fragment, type KeyboardEvent } from "react";
+import type { KeyboardEvent } from "react";
 import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
-import type {
-  ReplayDocument,
-  ReplayPoint,
-  ReplayScore,
-  ReplaySet,
-} from "@/api/generated/model";
+import type { ReplayDocument, ReplayScore } from "@/api/generated/model";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,8 +19,9 @@ import { concessionMark } from "@/lib/concession";
 import { cn } from "@/lib/utils";
 import { formatElapsed } from "@/features/livematch/useMatchClock";
 import { hasReplayFeature, REPLAY_START } from "./replayFeatures";
-
-type Side = "TEAM1" | "TEAM2";
+import { formatSet, type Side } from "./replayCharts";
+import { stepText } from "./replayStepText";
+import { ReplayTimeline } from "./ReplayTimeline";
 
 export type ReplayCardProps = {
   replay: ReplayDocument;
@@ -44,80 +40,6 @@ const START_SCORE: ReplayScore = {
   pointsTeam1: "0",
   pointsTeam2: "0",
 };
-
-/** "6-4", or "7-6 (7-5)" when the set went to a tiebreak — both counts, as the replay gives them. */
-function setText(set: ReplaySet): string {
-  const tiebreak =
-    set.tiebreakTeam1 != null && set.tiebreakTeam2 != null
-      ? ` (${set.tiebreakTeam1}-${set.tiebreakTeam2})`
-      : "";
-  return `${set.team1}-${set.team2}${tiebreak}`;
-}
-
-const OUTCOME_TEXT: Record<string, string> = {
-  RETIRED: "retired",
-  DEFAULTED: "defaulted",
-};
-
-/**
- * How a step reads, short (the timeline button) and long (its accessible name and the announcement).
- *
- * Every word here is read off the step's own flags — `setWon`, `gameWon`, `breakOfServe`, `outcome` —
- * so nothing in the web decides what a point meant. The point label is the score the step produced.
- */
-function stepText(
-  point: ReplayPoint,
-  name: (side: Side) => string,
-  showBreaks: boolean,
-): { short: string; long: string } {
-  const winner = name(point.wonBy);
-  if (point.kind === "END") {
-    const conceded = point.outcome ? OUTCOME_TEXT[point.outcome] : undefined;
-    if (conceded) {
-      const loser = name(point.wonBy === "TEAM1" ? "TEAM2" : "TEAM1");
-      return {
-        short: conceded === "retired" ? "Retired" : "Defaulted",
-        long: `${loser} ${conceded}, ${winner} wins the match`,
-      };
-    }
-    return { short: "Final", long: `${winner} wins the match` };
-  }
-  if (point.setWon) {
-    // The set just won is the last one banked in the score after this step.
-    const set = point.score.sets[point.score.sets.length - 1];
-    return {
-      short: point.tiebreak ? "Tiebreak" : "Set",
-      long: `Set ${winner}, ${setText(set)}`,
-    };
-  }
-  const games = `${point.score.gamesTeam1}-${point.score.gamesTeam2}`;
-  if (point.gameWon) {
-    if (showBreaks && point.breakOfServe === true) {
-      return { short: "Break", long: `Break of serve, ${winner}, games ${games}` };
-    }
-    return { short: "Game", long: `Game ${winner}, games ${games}` };
-  }
-  const points = `${point.score.pointsTeam1}-${point.score.pointsTeam2}`;
-  return {
-    short: points,
-    long: `${point.tiebreak ? "Tiebreak " : ""}${points}, point ${winner}`,
-  };
-}
-
-/** Visual weight of a milestone: a game reads apart from a point, a break apart from a hold. */
-function milestoneClass(point: ReplayPoint, showBreaks: boolean): string {
-  if (point.kind === "END") {
-    return point.outcome && OUTCOME_TEXT[point.outcome]
-      ? "border-destructive/60 text-destructive font-semibold"
-      : "bg-primary text-primary-foreground font-semibold hover:bg-primary/90";
-  }
-  if (point.setWon)
-    return "bg-primary text-primary-foreground font-semibold hover:bg-primary/90";
-  if (point.gameWon && showBreaks && point.breakOfServe === true)
-    return "border-link text-link font-semibold border-2";
-  if (point.gameWon) return "bg-secondary text-secondary-foreground font-semibold";
-  return point.tiebreak ? "italic" : "";
-}
 
 /** One side's line of the scoreboard: name, banked sets, the set in progress, and the point score. */
 function SideRow({
@@ -235,7 +157,7 @@ export function ReplayCard({
     point === undefined
       ? "Start of the match"
       : `Point ${current + 1} of ${points.length}, set ${point.setNumber}`;
-  const banked = score.sets.map(setText).join(", ");
+  const banked = score.sets.map(formatSet).join(", ");
   const announcement = [
     `${position}${step ? `: ${step.long}` : ""}.`,
     banked ? `Sets ${banked}.` : "",
@@ -263,12 +185,6 @@ export function ReplayCard({
     if (!(event.key in moves)) return;
     event.preventDefault();
     go(moves[event.key]);
-  }
-
-  // Grouped per set: each set is its own section, so the set needs no milestone of its own.
-  const sets = new Map<number, ReplayPoint[]>();
-  for (const p of points) {
-    sets.set(p.setNumber, [...(sets.get(p.setNumber) ?? []), p]);
   }
 
   return (
@@ -365,107 +281,16 @@ export function ReplayCard({
           </div>
         </div>
 
-        <nav aria-label="Replay timeline" className="space-y-3">
-          {[...sets.entries()].map(([setNumber, setPoints]) => {
-            const result = replay.result.sets[setNumber - 1];
-            const headingId = `replay-set-${setNumber}`;
-            const firstTiebreak = setPoints.find((p) => p.tiebreak === true);
-            return (
-              <section key={setNumber} aria-labelledby={headingId}>
-                <h3 id={headingId} className="mb-1.5 text-sm font-medium">
-                  Set {setNumber}
-                  {result ? (
-                    <>
-                      {" "}
-                      <span className="font-normal text-muted-foreground tabular-nums">
-                        {`· ${setText(result)}`}
-                      </span>
-                    </>
-                  ) : null}
-                </h3>
-                <ol className="flex flex-wrap items-center gap-1">
-                  {setNumber === points[0]?.setNumber ? (
-                    <li>
-                      <Milestone
-                        label="0-0"
-                        description="Start of the match, 0-0"
-                        selected={current === REPLAY_START}
-                        onClick={() => go(REPLAY_START)}
-                      />
-                    </li>
-                  ) : null}
-                  {setPoints.map((p) => {
-                    const text = stepText(p, name, showBreaks);
-                    const breakPoint = showBreakPoints && p.breakPoint === true;
-                    return (
-                      <Fragment key={p.index}>
-                      {p === firstTiebreak ? (
-                        <li
-                          key={`tiebreak-${setNumber}`}
-                          className="px-1 text-xs font-medium uppercase text-muted-foreground"
-                        >
-                          Tiebreak
-                        </li>
-                      ) : null}
-                      <li>
-                        <Milestone
-                          label={text.short}
-                          description={`Point ${p.index + 1}: ${text.long}${breakPoint ? ", break point" : ""}`}
-                          selected={current === p.index}
-                          onClick={() => go(p.index)}
-                          className={milestoneClass(p, showBreaks)}
-                          breakPoint={breakPoint}
-                        />
-                      </li>
-                      </Fragment>
-                    );
-                  })}
-                </ol>
-              </section>
-            );
-          })}
-        </nav>
+        <ReplayTimeline
+          replay={replay}
+          selected={current}
+          onSelect={go}
+          name={name}
+          showBreaks={showBreaks}
+          showBreakPoints={showBreakPoints}
+          showServe={showServe}
+        />
       </CardContent>
     </Card>
-  );
-}
-
-/** One step on the timeline: a real button, `aria-current` when it is the selected one. */
-function Milestone({
-  label,
-  description,
-  selected,
-  onClick,
-  className,
-  breakPoint = false,
-}: {
-  label: string;
-  description: string;
-  selected: boolean;
-  onClick: () => void;
-  className?: string;
-  breakPoint?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={description}
-      title={description}
-      aria-current={selected ? "step" : undefined}
-      onClick={onClick}
-      className={cn(
-        "relative rounded border px-1.5 py-0.5 text-xs tabular-nums transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        className,
-        selected && "ring-2 ring-ring ring-offset-1",
-      )}
-    >
-      {label}
-      {breakPoint ? (
-        <span
-          aria-hidden="true"
-          className="absolute -right-1 -top-1 size-1.5 rounded-full bg-destructive"
-        />
-      ) : null}
-    </button>
   );
 }
