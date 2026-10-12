@@ -5,8 +5,8 @@ import { ReplayMarkShape } from './ReplayMarkShape'
 import { useFollowedDisclosure } from './useFollowedDisclosure'
 
 /**
- * viewBox units. The SVG scales with `w-full h-auto`, so its width is always the screen's and it grows only
- * downward (#1156): one row per point, however long the set.
+ * viewBox units. The SVG scales with `w-full h-auto` inside a phone-width cap, so it looks the same on every
+ * device and grows only downward (#1156): one row per point, however long the set.
  */
 const WIDTH = 300
 const HEAD = 20
@@ -60,7 +60,7 @@ interface VerticalSwimlanesProps {
 }
 
 /**
- * The swimlanes below `md` (#1156): time runs top to bottom in two columns, one per side, and each set is a
+ * The swimlanes, at every screen size (#1156): time runs top to bottom in two columns, one per side, and each set is a
  * collapsible block. Only the set holding the selected point is open by default, as in the timeline, and
  * stepping into another set opens it.
  */
@@ -120,6 +120,13 @@ function SetColumns({
 }) {
   const { items, height } = itemsOf(group, lane)
   const startSelected = selected === lane.startIndex
+  // The run of play: the 0-0 start, then every mark in the order it happened, so a streak reads as a line held
+  // in one column and a swing as it crossing to the other.
+  const path = items
+    .flatMap((item) =>
+      item.kind === 'start' ? [`${WIDTH / 2},${item.y}`] : item.kind === 'step' ? [`${LANE_X[item.step.side]},${item.y}`] : [],
+    )
+    .join(' ')
   return (
     <svg viewBox={`0 0 ${WIDTH} ${height}`} className="block h-auto w-full" aria-hidden="true" data-testid="swimlane-vertical">
       {(['TEAM1', 'TEAM2'] as const).map((side) => (
@@ -128,6 +135,16 @@ function SetColumns({
         </text>
       ))}
       <line x1={WIDTH / 2} x2={WIDTH / 2} y1={HEAD} y2={height} stroke="var(--border)" />
+      {/* Drawn first, so every mark and label sits on top of it; the row highlights are translucent so it shows through. */}
+      <polyline
+        data-testid="swimlane-path"
+        points={path}
+        fill="none"
+        stroke="var(--muted-foreground)"
+        strokeOpacity={0.5}
+        strokeWidth={1}
+        strokeLinejoin="round"
+      />
       {items.map((item) => {
         if (item.kind === 'start') {
           return (
@@ -138,7 +155,7 @@ function SetColumns({
               className="cursor-pointer"
               onClick={() => onSelect(lane.startIndex)}
             >
-              <rect x={0} y={item.y - ROW / 2} width={WIDTH} height={ROW} fill={startSelected ? 'var(--muted)' : 'transparent'} />
+              <rect x={0} y={item.y - ROW / 2} width={WIDTH} height={ROW} fill={startSelected ? 'var(--muted)' : 'transparent'} fillOpacity={0.7} />
               <circle cx={WIDTH / 2} cy={item.y} r={3} fill="var(--muted-foreground)" stroke={startSelected ? 'var(--foreground)' : 'none'} strokeWidth={2} />
               <text x={WIDTH / 2 + LABEL_GAP} y={item.y + 3} fontSize={9} fill="var(--muted-foreground)">
                 0-0
@@ -190,7 +207,7 @@ function SetColumns({
             onClick={() => onSelect(step.index)}
           >
             {/* A full-width hit target: a whole row is far easier to tap than a 3px dot. */}
-            <rect x={0} y={item.y - ROW / 2} width={WIDTH} height={ROW} fill={isHighlighted ? 'var(--muted)' : 'transparent'} />
+            <rect x={0} y={item.y - ROW / 2} width={WIDTH} height={ROW} fill={isHighlighted ? 'var(--muted)' : 'transparent'} fillOpacity={0.7} />
             <ReplayMarkShape mark={step.mark} x={x} y={item.y} colour={SIDE_COLOUR[step.side]} highlighted={isHighlighted} />
             <text
               x={x + LABEL_GAP}

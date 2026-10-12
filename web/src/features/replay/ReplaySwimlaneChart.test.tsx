@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { ReplaySwimlaneChart } from './ReplaySwimlaneChart'
 import { REPLAY_START } from './replayFeatures'
-import { stubMatchMedia } from '@/test/matchMedia'
 import { OLD_FORMAT_REPLAY, RETIRED_REPLAY, replayOf } from '@/test/replayFixtures'
 
 const steps = (container: HTMLElement) => Array.from(container.querySelectorAll('[data-testid="swimlane-step"]'))
@@ -16,38 +15,7 @@ function renderChart(selected = REPLAY_START, onSelect = vi.fn(), replay = RETIR
   return { ...view, onSelect }
 }
 
-// The horizontal layout is the wide one (#1156): from `md` up. jsdom has no matchMedia, so stub a wide viewport.
 describe('ReplaySwimlaneChart', () => {
-  beforeEach(() => {
-    stubMatchMedia(true)
-  })
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it("draws one pair of lanes per set, with each set's final score outside the scroll area", () => {
-    const { container } = renderChart()
-    const set1 = screen.getByTestId('swimlane-set-1')
-    expect(within(set1).getByText('6-0')).toBeInTheDocument()
-    expect(within(screen.getByTestId('swimlane-set-2')).getByText('6-7 (5-7)')).toBeInTheDocument()
-    expect(screen.getByTestId('swimlane-set-3')).toBeInTheDocument()
-    // The caption is a sibling of the scrolling container, never inside it.
-    expect(set1.querySelector('.overflow-x-auto figcaption')).toBeNull()
-    expect(within(set1).getByText('Ana')).toBeInTheDocument()
-    // Every step but the ending, once each.
-    expect(steps(container)).toHaveLength(13)
-  })
-
-  it("puts each point in its winner's lane, labelled by the score it produced", () => {
-    const { container } = renderChart()
-    expect(stepAt(container, 0).getAttribute('data-side')).toBe('TEAM1')
-    expect(stepAt(container, 1).getAttribute('data-side')).toBe('TEAM2')
-    expect(stepAt(container, 1).querySelector('text')?.textContent).toBe('15-15')
-    expect(stepAt(container, 4).querySelector('text')?.textContent).toBe('Game')
-    expect(stepAt(container, 10).querySelector('text')?.textContent).toBe('0-1')
-    expect(container.querySelectorAll('[data-testid="swimlane-start"]')).toHaveLength(3)
-  })
-
   it('draws games larger than points, and a break as a different shape from a hold', () => {
     const { container } = renderChart()
     expect(stepAt(container, 0).querySelector('circle')?.getAttribute('r')).toBe('3')
@@ -70,14 +38,6 @@ describe('ReplaySwimlaneChart', () => {
     const { container, onSelect } = renderChart()
     fireEvent.click(stepAt(container, 8))
     expect(onSelect).toHaveBeenCalledWith(8)
-  })
-
-  it("selects a set's 0-0 start", () => {
-    const { container, onSelect } = renderChart()
-    const starts = container.querySelectorAll('[data-testid="swimlane-start"]')
-    fireEvent.click(starts[0])
-    fireEvent.click(starts[1])
-    expect(onSelect.mock.calls).toEqual([[REPLAY_START], [9]])
   })
 
   it('highlights the selected point, and the start when nothing has been played', () => {
@@ -121,14 +81,7 @@ describe('ReplaySwimlaneChart', () => {
 })
 
 // Below `md` the lanes run top to bottom (#1156), so a phone never scrolls sideways.
-describe('ReplaySwimlaneChart below md', () => {
-  beforeEach(() => {
-    stubMatchMedia(false)
-  })
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
+describe('ReplaySwimlaneChart, vertical at every width (#1156)', () => {
   const setToggle = (name: string) => screen.getByRole('button', { name })
   const rules = (container: Element) =>
     Array.from(container.querySelectorAll('[data-testid="swimlane-game-rule"]')).map((rule) => rule.textContent)
@@ -177,6 +130,25 @@ describe('ReplaySwimlaneChart below md', () => {
     expect(stepAt(container, 4).querySelector('text')?.textContent).toBe('Game')
   })
 
+  it("connects a set's marks with one line in play order, from the 0-0 start", () => {
+    renderChart(0)
+    const set1 = screen.getByTestId('swimlane-set-1')
+    const points = (set1.querySelector('[data-testid="swimlane-path"]') as Element)
+      .getAttribute('points')!
+      .split(' ')
+      .map((pair) => pair.split(',').map(Number))
+    const marks = steps(set1 as HTMLElement)
+
+    // The start, then one vertex per mark: a streak stays in one column, a swing crosses to the other.
+    expect(points).toHaveLength(marks.length + 1)
+    const centre = points[0][0]
+    marks.forEach((mark, i) => {
+      const x = points[i + 1][0]
+      expect(mark.getAttribute('data-side') === 'TEAM1' ? x < centre : x > centre).toBe(true)
+    })
+    points.slice(1).forEach(([, y], i) => expect(y).toBeGreaterThan(points[i][1]))
+  })
+
   it('ends each game with a rule carrying the score after it, and keeps the break marker', () => {
     const { container } = renderChart(0)
     expect(rules(screen.getByTestId('swimlane-set-1'))).toEqual(['1-0', '2-0', '6-0'])
@@ -201,16 +173,5 @@ describe('ReplaySwimlaneChart below md', () => {
   it('keeps the list equivalent', () => {
     renderChart(13)
     expect(within(screen.getByRole('region', { name: 'Set 1 points' })).getAllByRole('button')).toHaveLength(10)
-  })
-
-  it('switches to the horizontal lanes when the viewport widens past md, and back', () => {
-    const viewport = stubMatchMedia(false)
-    const { container } = renderChart(13)
-    expect(container.querySelector('[data-orientation="vertical"]')).not.toBeNull()
-    act(() => viewport.set(true))
-    expect(container.querySelector('[data-orientation="vertical"]')).toBeNull()
-    expect(container.querySelectorAll('.overflow-x-auto')).toHaveLength(3)
-    act(() => viewport.set(false))
-    expect(container.querySelector('[data-orientation="vertical"]')).not.toBeNull()
   })
 })
