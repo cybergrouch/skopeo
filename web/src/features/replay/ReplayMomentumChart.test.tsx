@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { ReplayMomentumChart } from './ReplayMomentumChart'
 import { REPLAY_START } from './replayFeatures'
-import { stubMatchMedia } from '@/test/matchMedia'
 import { RETIRED_REPLAY, replayOf, replayPoint } from '@/test/replayFixtures'
 
 function renderChart(selected = REPLAY_START, onSelect = vi.fn(), replay = RETIRED_REPLAY) {
@@ -12,47 +11,13 @@ function renderChart(selected = REPLAY_START, onSelect = vi.fn(), replay = RETIR
   return { ...view, onSelect }
 }
 
-const markerX = (container: HTMLElement) =>
-  Number(container.querySelector('[data-testid="momentum-selected"]')?.getAttribute('x1'))
-
-// The horizontal layout is the wide one (#1156): from `md` up. jsdom has no matchMedia, so stub a wide viewport.
 describe('ReplayMomentumChart', () => {
-  beforeEach(() => {
-    stubMatchMedia(true)
-  })
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('draws the rolling share and the point difference across the whole match, with set boundaries', () => {
-    const { container } = renderChart()
-    // A start at 0-0 plus one segment per point played (12).
-    const share = container.querySelector('[data-testid="momentum-share"]')?.getAttribute('d') ?? ''
-    expect(share.split('L')).toHaveLength(13)
-    expect(container.querySelector('[data-testid="momentum-difference"]')).not.toBeNull()
-    const boundaries = container.querySelectorAll('[data-testid="momentum-set-boundary"]')
-    expect(Array.from(boundaries).map((b) => b.textContent)).toEqual(['Set 2', 'Set 3'])
-    expect(screen.getByText("Ana's share of the last 8 points")).toBeInTheDocument()
-  })
-
   it('selects a point from the chart', () => {
     const { container, onSelect } = renderChart()
     const hits = container.querySelectorAll('[data-testid="momentum-hit"]')
     expect(hits).toHaveLength(12)
     fireEvent.click(hits[9])
     expect(onSelect).toHaveBeenCalledWith(10)
-  })
-
-  it('moves its marker with the selection, and reads it out', () => {
-    const { container, rerender } = renderChart(REPLAY_START)
-    const atStart = markerX(container)
-    expect(screen.getByText('Start of the match: no points played yet.')).toBeInTheDocument()
-
-    rerender(<ReplayMomentumChart replay={RETIRED_REPLAY} selected={7} onSelect={vi.fn()} team1Name="Ana" team2Name="Bob" />)
-    expect(markerX(container)).toBeGreaterThan(atStart)
-    expect(
-      screen.getByText('After point 8 (set 1): Ana won 7 of the last 8 (88%), Ana ahead by 6 overall.'),
-    ).toBeInTheDocument()
   })
 
   it('reads a level match and a trailing team 1', () => {
@@ -85,14 +50,7 @@ describe('ReplayMomentumChart', () => {
 })
 
 // Below `md` time runs top to bottom (#1156): the chart grows downward and fits the screen's width.
-describe('ReplayMomentumChart below md', () => {
-  beforeEach(() => {
-    stubMatchMedia(false)
-  })
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
+describe('ReplayMomentumChart, vertical at every width (#1156)', () => {
   /** The [x, y] points of a path made of M/L commands. */
   const pointsOf = (d: string) =>
     d
@@ -154,16 +112,5 @@ describe('ReplayMomentumChart below md', () => {
     renderChart(7)
     expect(screen.getByText(/^After point 8 \(set 1\)/)).toBeInTheDocument()
     expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(13)
-  })
-
-  it('switches to the horizontal plot when the viewport widens past md, and back', () => {
-    const viewport = stubMatchMedia(false)
-    const { container } = renderChart()
-    expect(svg(container)).not.toBeNull()
-    act(() => viewport.set(true))
-    expect(svg(container)).toBeNull()
-    expect(container.querySelector('svg[data-orientation="horizontal"]')).not.toBeNull()
-    act(() => viewport.set(false))
-    expect(svg(container)).not.toBeNull()
   })
 })

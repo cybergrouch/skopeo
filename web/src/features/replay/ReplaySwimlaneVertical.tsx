@@ -5,8 +5,8 @@ import { ReplayMarkShape } from './ReplayMarkShape'
 import { useFollowedDisclosure } from './useFollowedDisclosure'
 
 /**
- * viewBox units. The SVG scales with `w-full h-auto`, so its width is always the screen's and it grows only
- * downward (#1156): one row per point, however long the set.
+ * viewBox units. The SVG scales with `w-full h-auto` inside a phone-width cap, so it looks the same on every
+ * device and grows only downward (#1156): one row per point, however long the set.
  */
 const WIDTH = 300
 const HEAD = 20
@@ -60,7 +60,7 @@ interface VerticalSwimlanesProps {
 }
 
 /**
- * The swimlanes below `md` (#1156): time runs top to bottom in two columns, one per side, and each set is a
+ * The swimlanes, at every screen size (#1156): time runs top to bottom in two columns, one per side, and each set is a
  * collapsible block. Only the set holding the selected point is open by default, as in the timeline, and
  * stepping into another set opens it.
  */

@@ -1,7 +1,7 @@
 import type { LaneMark } from './replayCharts'
 
 /**
- * A step's mark in the swimlanes, in either orientation (#1147, #1156): a small dot for a point, a large one
+ * A step's mark in the swimlanes (#1147, #1156): a small dot for a point, a large one
  * for a game (held, or of unknown kind), a diamond for a break and a hollow square for an umpire's award — so
  * a break differs from a hold in shape and not only in colour.
  */
