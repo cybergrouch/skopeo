@@ -141,3 +141,48 @@ export const OLD_FORMAT_REPLAY: ReplayDocument = {
     return copy;
   }),
 };
+
+const TIEBREAK_SET = { team1: 7, team2: 6, tiebreakTeam1: 7, tiebreakTeam2: 2 };
+
+/**
+ * A set decided by a 7-2 tiebreak, starting from 6-6: Ana serves point 1, then the serve changes every two
+ * points (Bob 2-3, Ana 4-5, Bob 6-7, Ana 8-9) — so the timeline splits it into five serving pairs.
+ */
+export const TIEBREAK_REPLAY: ReplayDocument = replayOf(
+  (
+    [
+      ["TEAM1", "TEAM1", 1, 0],
+      ["TEAM2", "TEAM2", 1, 1],
+      ["TEAM1", "TEAM2", 2, 1],
+      ["TEAM1", "TEAM1", 3, 1],
+      ["TEAM2", "TEAM1", 3, 2],
+      ["TEAM1", "TEAM2", 4, 2],
+      ["TEAM1", "TEAM2", 5, 2],
+      ["TEAM1", "TEAM1", 6, 2],
+    ] as const
+  )
+    .map(([wonBy, server, team1, team2]) =>
+      replayPoint({
+        wonBy,
+        server,
+        tiebreak: true,
+        score: replayScore({
+          gamesTeam1: 6,
+          gamesTeam2: 6,
+          pointsTeam1: String(team1),
+          pointsTeam2: String(team2),
+        }),
+      }),
+    )
+    .concat(
+      replayPoint({
+        wonBy: "TEAM1",
+        server: "TEAM1",
+        tiebreak: true,
+        gameWon: true,
+        setWon: true,
+        score: replayScore({ sets: [TIEBREAK_SET] }),
+      }),
+    ),
+  { sets: [TIEBREAK_SET], winner: "TEAM1" },
+);

@@ -1,23 +1,23 @@
 import type { ReplayDocument } from '@/api/generated/model'
+import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { cn } from '@/lib/utils'
 import { hasReplayFeature } from './replayFeatures'
-import { sampleAtOrBefore, setLanesOf, type LaneStep, type SetLanes, type Side } from './replayCharts'
+import { SIDE_COLOUR, sampleAtOrBefore, setLanesOf, type LaneStep, type SetLanes, type Side } from './replayCharts'
+import { setGroupsOf } from './replayGames'
+import { ReplayMarkShape } from './ReplayMarkShape'
+import { VerticalSwimlanes } from './ReplaySwimlaneVertical'
 
 /**
- * Pixel geometry. Unlike the profile charts, this SVG is NOT scaled to fit: a long set runs past 60 points,
- * and squeezing that into a phone's width would make every label illegible. The lanes keep a fixed column
- * width and the set scrolls horizontally instead (#1147).
+ * Pixel geometry of the wide (`md` and up) layout. Unlike the profile charts, this SVG is NOT scaled to fit: a
+ * long set runs past 60 points, and squeezing that into the width would make every label illegible. The lanes
+ * keep a fixed column width and the set scrolls horizontally instead (#1147). Below `md` the lanes run
+ * downward instead (#1156), so a phone never scrolls sideways.
  */
 const COLUMN = 34
 const LANE = 36
 const PAD_X = 14
 const PAD_Y = 4
 const HEIGHT = PAD_Y * 2 + LANE * 2
-
-const SIDE_COLOUR: Record<Side, string> = {
-  TEAM1: 'var(--chart-1)',
-  TEAM2: 'var(--chart-2)',
-}
 
 const MARK_TEXT: Record<LaneStep['mark'], string> = {
   point: 'point',
@@ -42,7 +42,8 @@ const yOf = (side: Side) => PAD_Y + (side === 'TEAM1' ? LANE * 0.4 : LANE + LANE
 const labelYOf = (side: Side) => yOf(side) + 15
 
 /**
- * Point-by-point swimlanes, one pair per set (#1147): each step sits in the lane of the side that won it and
+ * Point-by-point swimlanes, one pair per set (#1147) — side by side on a wide screen, top to bottom below `md`
+ * (#1156): each step sits in the lane of the side that won it and
  * is labelled by the score it produced. Ordinary points are small marks, games won are larger, and — when the
  * replay carries break data — a break of serve is a diamond where a hold is a circle, so the two differ in
  * shape and not only in colour.
@@ -51,6 +52,7 @@ const labelYOf = (side: Side) => yOf(side) + 15
  * the chart, a real `<button>` per point carrying the same score as text.
  */
 export function ReplaySwimlaneChart({ replay, selected, onSelect, team1Name = 'Team 1', team2Name = 'Team 2' }: ReplayChartProps) {
+  const wide = useMediaQuery(DESKTOP_QUERY)
   const hasBreaks = hasReplayFeature(replay, 'breaks')
   const sets = setLanesOf(replay, hasBreaks)
   if (sets.length === 0) {
@@ -62,16 +64,27 @@ export function ReplaySwimlaneChart({ replay, selected, onSelect, team1Name = 'T
   return (
     <div className="space-y-4">
       <Legend hasBreaks={hasBreaks} names={names} />
-      {sets.map((set) => (
-        <SetLaneRow
-          key={set.setNumber}
-          set={set}
+      {wide ? (
+        sets.map((set) => (
+          <SetLaneRow
+            key={set.setNumber}
+            set={set}
+            names={names}
+            selected={selected}
+            highlighted={highlighted}
+            onSelect={onSelect}
+          />
+        ))
+      ) : (
+        <VerticalSwimlanes
+          lanes={sets}
+          groups={setGroupsOf(replay, false, hasBreaks)}
           names={names}
           selected={selected}
           highlighted={highlighted}
           onSelect={onSelect}
         />
-      ))}
+      )}
       <details className="text-sm">
         <summary className="cursor-pointer text-muted-foreground">Points as a list</summary>
         {sets.map((set) => (
@@ -208,8 +221,6 @@ function SetLaneRow({ set, names, selected, highlighted, onSelect }: SetLaneRowP
 function StepMark({ step, highlighted, onSelect }: { step: LaneStep; highlighted: boolean; onSelect: (index: number) => void }) {
   const x = xOf(step.column)
   const y = yOf(step.side)
-  const colour = SIDE_COLOUR[step.side]
-  const ring = highlighted ? 'var(--foreground)' : 'var(--background)'
   const big = step.mark !== 'point'
   return (
     <g
@@ -221,15 +232,9 @@ function StepMark({ step, highlighted, onSelect }: { step: LaneStep; highlighted
       className="cursor-pointer"
       onClick={() => onSelect(step.index)}
     >
-      {/* A full-height hit target: far easier to tap on a phone than a 3px dot. */}
+      {/* A full-height hit target: far easier to tap than a 3px dot. */}
       <rect x={x - COLUMN / 2} y={0} width={COLUMN} height={HEIGHT} fill={highlighted ? 'var(--muted)' : 'transparent'} />
-      {step.mark === 'break' ? (
-        <path d={`M ${x} ${y - 7} L ${x + 7} ${y} L ${x} ${y + 7} L ${x - 7} ${y} Z`} fill={colour} stroke={ring} strokeWidth={2} />
-      ) : step.mark === 'awarded' ? (
-        <rect x={x - 5} y={y - 5} width={10} height={10} fill="none" stroke={colour} strokeWidth={2} />
-      ) : (
-        <circle cx={x} cy={y} r={big ? 6 : 3} fill={colour} stroke={highlighted ? ring : 'none'} strokeWidth={2} />
-      )}
+      <ReplayMarkShape mark={step.mark} x={x} y={y} colour={SIDE_COLOUR[step.side]} highlighted={highlighted} />
       <text
         x={x}
         y={labelYOf(step.side)}
