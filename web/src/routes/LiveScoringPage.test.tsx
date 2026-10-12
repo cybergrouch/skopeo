@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { LiveScoringPage } from "./LiveScoringPage";
@@ -831,6 +831,28 @@ describe("LiveScoringPage", () => {
       expect(screen.queryByLabelText(absent)).not.toBeInTheDocument();
       mounted.unmount();
     }
+  });
+
+  it("puts Start game and Start tiebreak in the header with the other start controls, not the bottom bar (#1165)", async () => {
+    const user = userEvent.setup();
+    // Between games at six-all: the one state where both appear together.
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({
+      data: { ...liveView, isInGame: false, gamesTeam1: 6, gamesTeam2: 6 },
+      refetch: vi.fn(),
+    });
+    renderPage();
+    await start(user);
+
+    const header = within(screen.getByTestId("umpire-header"));
+    const actions = within(screen.getByTestId("umpire-actions"));
+    expect(header.getByRole("button", { name: "Start game" })).toBeInTheDocument();
+    expect(header.getByRole("button", { name: "Start tiebreak" })).toBeInTheDocument();
+    expect(actions.queryByRole("button", { name: "Start game" })).not.toBeInTheDocument();
+    expect(actions.queryByRole("button", { name: "Start tiebreak" })).not.toBeInTheDocument();
+    // The slot never holds the other start controls at the same time.
+    expect(header.queryByRole("button", { name: /^Start (match|set|next set)$/ })).not.toBeInTheDocument();
+    // The bottom bar is for managing the match.
+    expect(actions.getByRole("button", { name: "Switch sides" })).toBeInTheDocument();
   });
 
   it("starts a game, and the board comes alive when the server says so (#1083)", async () => {

@@ -434,8 +434,6 @@ export function ScoringActions({
   controls,
   busy,
   onUndo,
-  onStartGame,
-  onTiebreak,
   onPauseResume,
   onFlip,
   onFinalize,
@@ -450,31 +448,17 @@ export function ScoringActions({
   controls: ReadonlySet<Control>
   busy: boolean
   onUndo: () => void
-  onStartGame: () => void
-  onTiebreak: () => void
   onPauseResume: () => void
   onFlip: () => void
   onFinalize: () => void
 }) {
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-[0.8dvw] py-[0.6dvh]">
+    <div data-testid="umpire-actions" className="flex shrink-0 flex-wrap items-center gap-[0.8dvw] py-[0.6dvh]">
       {/* Only when there is something in force (#1083) — an Undo that provably does nothing is the
           silently-inert control this work removes. */}
       {controls.has('undo') && (
         <Button size="sm" variant="secondary" disabled={busy} onClick={onUndo}>
           Undo
-        </Button>
-      )}
-      {/* Left of Start tiebreak, because between games they are the two ways forward and at a level
-          score they are a genuine choice. */}
-      {controls.has('startGame') && (
-        <Button size="sm" disabled={busy} onClick={onStartGame}>
-          Start game
-        </Button>
-      )}
-      {controls.has('startTiebreak') && (
-        <Button size="sm" variant="outline" disabled={busy} onClick={onTiebreak}>
-          Start tiebreak
         </Button>
       )}
       {/* One control, two states. `Resume` is the label the spec settled on and the code already used;
@@ -498,10 +482,8 @@ export function ScoringActions({
         next, so the umpire chooses: play on, or this was the last set. Before this existed there was
         no moment at which Finalize could be reached on a match that simply finished.
       */}
-      {/* "Start next set" moved to the header (#1075), beside where "Start match" renders. Both mean
-          "begin play", both appear exactly when play is not under way, and both are the one control
-          the umpire is waiting for — so they belong in one place rather than two. They are mutually
-          exclusive, so a single header slot holds both. */}
+      {/* Every "begin play" control lives in the header: Start next set since #1075, and Start game and Start
+          tiebreak since #1165. This row is for managing the match. */}
       {controls.has('finalize') && (
         <Button size="sm" disabled={busy} onClick={onFinalize} className="ml-auto">
           Finalize
