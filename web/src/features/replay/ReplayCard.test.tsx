@@ -5,6 +5,7 @@ import type { ReplayDocument } from "@/api/generated/model";
 import {
   OLD_FORMAT_REPLAY,
   RETIRED_REPLAY,
+  TIEBREAK_REPLAY,
   replayOf,
   replayPoint,
   replayScore,
@@ -41,6 +42,15 @@ function renderCard(replay = RETIRED_REPLAY, initial = LAST) {
 const announcement = () => screen.getByTestId("replay-announcement").textContent;
 /** A stepping control, found by its visible text — cheaper than a role query over every timeline button. */
 const control = (name: string) => screen.getByText(name, { selector: "button" });
+/** The timeline's set and game toggles, by accessible name. */
+const setToggle = (name: string) => screen.getByRole("button", { name });
+const gameToggle = (name: string | RegExp) => screen.getByRole("button", { name });
+/** The step buttons inside [container], by visible label — the toggles are not steps. */
+const milestones = (container: HTMLElement) =>
+  within(container)
+    .getAllByRole("button")
+    .filter((button) => !button.hasAttribute("aria-expanded"))
+    .map((button) => button.textContent);
 const side = (team: "TEAM1" | "TEAM2") =>
   screen.getByTestId(`replay-side-${team}`).textContent;
 
@@ -149,13 +159,12 @@ describe("ReplayCard", () => {
   });
 
   it("labels point milestones by the score they produced, and games apart from points", () => {
-    renderCard();
+    renderCard(RETIRED_REPLAY, 0);
+    // Game 2 is folded by default: only the game holding the selection is expanded.
+    fireEvent.click(gameToggle(/^G2 ·/));
     const set1 = screen.getByRole("region", { name: "Set 1 · 6-0" });
-    const labels = within(set1)
-      .getAllByRole("button")
-      .map((button) => button.textContent);
 
-    expect(labels).toEqual([
+    expect(milestones(set1)).toEqual([
       "0-0",
       "15-0",
       "15-15",
@@ -171,23 +180,30 @@ describe("ReplayCard", () => {
   });
 
   it("marks a break of serve distinctly from a hold", () => {
-    renderCard();
+    renderCard(RETIRED_REPLAY, 8);
+    fireEvent.click(gameToggle(/^G1 ·/));
     const hold = screen.getByRole("button", { name: "Point 5: Game Ana, games 1-0" });
     const brk = screen.getByRole("button", {
       name: "Point 9: Break of serve, Ana, games 2-0, break point",
     });
     expect(brk.className).not.toEqual(hold.className);
     expect(brk).toHaveClass("text-link");
+    // The row is marked too, not only its last point.
+    expect(screen.getByTestId("replay-row-1-g-2")).toHaveAttribute("data-outcome", "break");
+    expect(screen.getByTestId("replay-row-1-g-1")).toHaveAttribute("data-outcome", "hold");
   });
 
   it("labels tiebreak points and the tiebreak result", () => {
-    renderCard();
+    renderCard(RETIRED_REPLAY, 10);
     const set2 = screen.getByRole("region", { name: "Set 2 · 6-7 (5-7)" });
 
-    expect(within(set2).getByText("Tiebreak", { selector: "li" })).toBeInTheDocument();
     expect(
       within(set2).getByRole("button", { name: "Point 11: Tiebreak 0-1, point Bob" }),
     ).toHaveTextContent("0-1");
+    expect(
+      within(set2).getByRole("button", { name: "Tiebreak point 2 · Bob serving · Set Bob" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(gameToggle("Tiebreak point 2 · Bob serving · Set Bob"));
     expect(
       within(set2).getByRole("button", { name: "Point 12: Set Bob, 6-7 (5-7)" }),
     ).toHaveTextContent("Tiebreak");
@@ -204,6 +220,8 @@ describe("ReplayCard", () => {
 
   it("jumps on a milestone click, and marks the selected one with aria-current", () => {
     renderCard();
+    fireEvent.click(setToggle("Set 1 · 6-0"));
+    fireEvent.click(gameToggle("G1 · Ana serving · Hold, 40-15"));
     const target = screen.getByRole("button", { name: "Point 3: 30-15, point Ana" });
     expect(target).not.toHaveAttribute("aria-current");
 
@@ -248,11 +266,14 @@ describe("ReplayCard", () => {
   it("does not offer serve or break features an older replay lacks the data for", () => {
     renderCard(OLD_FORMAT_REPLAY, REPLAY_START);
     expect(announcement()).not.toContain("to serve");
+    // No server, and no hold or break: the game reads as won by Ana.
+    fireEvent.click(gameToggle("G2 · Game Ana, 40-0"));
     // The break still happened, but this replay cannot say so: it reads as a plain game.
     expect(screen.getByRole("button", { name: "Point 9: Game Ana, games 2-0" })).toHaveTextContent(
       "Game",
     );
     expect(screen.queryByText("Break")).not.toBeInTheDocument();
+    expect(screen.queryByText(/serving/)).not.toBeInTheDocument();
   });
 
   it("finishes on Final, marking nobody, when the match was played out", () => {
@@ -324,5 +345,110 @@ describe("ReplayCard", () => {
     for (const name of ["First", "Previous", "Next", "Last"]) {
       expect(control(name)).toBeDisabled();
     }
+  });
+
+  describe("collapsible timeline (#1156)", () => {
+    const expanded = (name: string | RegExp) =>
+      screen.getByRole("button", { name }).getAttribute("aria-expanded");
+
+    it("opens only the set holding the selected point", () => {
+      renderCard();
+      expect(expanded("Set 1 · 6-0")).toBe("false");
+      expect(expanded("Set 2 · 6-7 (5-7)")).toBe("false");
+      expect(expanded("Set 3")).toBe("true");
+      // A closed set renders none of its steps.
+      expect(screen.queryByRole("button", { name: /^Point 1:/ })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^Point 14:/ })).toBeInTheDocument();
+    });
+
+    it("opens the set the selection steps into, and closes the one it left", () => {
+      renderCard();
+      fireEvent.click(control("First"));
+      expect(expanded("Set 1 · 6-0")).toBe("true");
+      expect(expanded("Set 3")).toBe("false");
+
+      // Last returns to the ending, in set 3.
+      fireEvent.click(control("Last"));
+      expect(expanded("Set 1 · 6-0")).toBe("false");
+      expect(expanded("Set 3")).toBe("true");
+    });
+
+    it("keeps a set the reader opened, and reopens one they closed when the selection moves in it", () => {
+      renderCard(RETIRED_REPLAY, 0);
+      fireEvent.click(setToggle("Set 2 · 6-7 (5-7)"));
+      fireEvent.click(setToggle("Set 1 · 6-0"));
+      expect(expanded("Set 1 · 6-0")).toBe("false");
+      expect(expanded("Set 2 · 6-7 (5-7)")).toBe("true");
+
+      fireEvent.click(control("Next"));
+      expect(expanded("Set 1 · 6-0")).toBe("true");
+      expect(expanded("Set 2 · 6-7 (5-7)")).toBe("true");
+    });
+
+    it("folds every game but the selected one into a one-line summary", () => {
+      renderCard(RETIRED_REPLAY, REPLAY_START);
+      const g1 = gameToggle("G1 · Ana serving · Hold, 40-15");
+      const g2 = gameToggle("G2 · Bob serving · Break, 40-0");
+      // At the 0-0 start no game holds the selection, so every game is folded.
+      expect(g1).toHaveAttribute("aria-expanded", "false");
+      expect(g2).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByRole("button", { name: /^Point 2:/ })).not.toBeInTheDocument();
+      // The awarded set is a single step, not a game: always shown, never folded.
+      expect(screen.getByRole("button", { name: "Point 10: Set Ana, 6-0" })).toBeInTheDocument();
+
+      fireEvent.click(g2);
+      expect(g2).toHaveAttribute("aria-expanded", "true");
+      expect(milestones(screen.getByTestId("replay-row-1-g-2"))).toEqual([
+        "15-0",
+        "30-0",
+        "40-0",
+        "Break",
+      ]);
+      fireEvent.click(g2);
+      expect(g2).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("pins the game holding the selected point open, and follows the selection to the next", () => {
+      renderCard(RETIRED_REPLAY, 4);
+      const g1 = gameToggle(/^G1 ·/);
+      expect(g1).toHaveAttribute("aria-expanded", "true");
+      expect(g1).toBeDisabled();
+      expect(gameToggle(/^G2 ·/)).toHaveAttribute("aria-expanded", "false");
+
+      fireEvent.click(control("Next"));
+      expect(gameToggle(/^G1 ·/)).toHaveAttribute("aria-expanded", "false");
+      expect(gameToggle(/^G2 ·/)).toHaveAttribute("aria-expanded", "true");
+      expect(
+        screen.getByRole("button", { name: "Point 6: 15-0, point Ana" }),
+      ).toHaveAttribute("aria-current", "step");
+    });
+
+    it("summarises the game the match ended in as unfinished", () => {
+      renderCard();
+      expect(gameToggle("G1 · Ana serving · Unfinished, 15-0")).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
+    });
+
+    it("gives a tiebreak one row per serving pair", () => {
+      renderCard(TIEBREAK_REPLAY, REPLAY_START);
+      const rows = screen
+        .getAllByRole("button")
+        .filter((button) => button.hasAttribute("aria-expanded"))
+        .map((button) => button.textContent);
+      expect(rows).toEqual([
+        "Set 1 · 7-6 (7-2)",
+        "Tiebreak point 1 · Ana serving · 1-0",
+        "Tiebreak points 2-3 · Bob serving · 2-1",
+        "Tiebreak points 4-5 · Ana serving · 3-2",
+        "Tiebreak points 6-7 · Bob serving · 5-2",
+        "Tiebreak points 8-9 · Ana serving · Set Ana, 6-2",
+      ]);
+
+      fireEvent.click(control("Next"));
+      fireEvent.click(control("Next"));
+      expect(milestones(screen.getByTestId("replay-row-1-tb-2"))).toEqual(["1-1", "2-1"]);
+    });
   });
 });

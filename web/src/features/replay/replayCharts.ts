@@ -13,6 +13,12 @@ export const MOMENTUM_WINDOW = 8
 
 export type Side = 'TEAM1' | 'TEAM2'
 
+/** Each side's theme token, the same in every replay chart and orientation, light and dark. */
+export const SIDE_COLOUR: Record<Side, string> = {
+  TEAM1: 'var(--chart-1)',
+  TEAM2: 'var(--chart-2)',
+}
+
 /**
  * How a step is drawn in its lane.
  *

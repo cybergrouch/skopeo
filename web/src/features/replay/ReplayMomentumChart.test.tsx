@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { ReplayMomentumChart } from './ReplayMomentumChart'
 import { REPLAY_START } from './replayFeatures'
+import { stubMatchMedia } from '@/test/matchMedia'
 import { RETIRED_REPLAY, replayOf, replayPoint } from '@/test/replayFixtures'
 
 function renderChart(selected = REPLAY_START, onSelect = vi.fn(), replay = RETIRED_REPLAY) {
@@ -14,7 +15,15 @@ function renderChart(selected = REPLAY_START, onSelect = vi.fn(), replay = RETIR
 const markerX = (container: HTMLElement) =>
   Number(container.querySelector('[data-testid="momentum-selected"]')?.getAttribute('x1'))
 
+// The horizontal layout is the wide one (#1156): from `md` up. jsdom has no matchMedia, so stub a wide viewport.
 describe('ReplayMomentumChart', () => {
+  beforeEach(() => {
+    stubMatchMedia(true)
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('draws the rolling share and the point difference across the whole match, with set boundaries', () => {
     const { container } = renderChart()
     // A start at 0-0 plus one segment per point played (12).
@@ -72,5 +81,89 @@ describe('ReplayMomentumChart', () => {
   it('falls back to generic side names', () => {
     render(<ReplayMomentumChart replay={RETIRED_REPLAY} selected={REPLAY_START} onSelect={vi.fn()} />)
     expect(screen.getByText('Team 1 on top')).toBeInTheDocument()
+  })
+})
+
+// Below `md` time runs top to bottom (#1156): the chart grows downward and fits the screen's width.
+describe('ReplayMomentumChart below md', () => {
+  beforeEach(() => {
+    stubMatchMedia(false)
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  /** The [x, y] points of a path made of M/L commands. */
+  const pointsOf = (d: string) =>
+    d
+      .split(/[ML]/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => part.split(' ').map(Number))
+  const svg = (container: HTMLElement) => container.querySelector('svg[data-orientation="vertical"]') as SVGElement
+
+  it('runs time downward, with team 1 on top drawn to the left of the centre line', () => {
+    const { container } = renderChart()
+    expect(svg(container).getAttribute('class')).toContain('w-full')
+    const share = pointsOf(container.querySelector('[data-testid="momentum-share"]')?.getAttribute('d') ?? '')
+    // The 0-0 start plus one point per point played, each lower than the last.
+    expect(share).toHaveLength(13)
+    const ys = share.map(([, y]) => y)
+    expect(ys).toEqual([...ys].sort((a, b) => a - b))
+    // After point 8 Ana had won 7 of the last 8: well left of the start's centre.
+    expect(share[8][0]).toBeLessThan(share[0][0])
+    // The difference runs on the same vertical axis.
+    const diff = pointsOf(container.querySelector('[data-testid="momentum-difference"]')?.getAttribute('d') ?? '')
+    expect(diff.map(([, y]) => y)).toEqual(ys)
+    expect(diff[8][0]).toBeLessThan(diff[0][0])
+  })
+
+  it('grows taller with the match, not wider', () => {
+    const { container, rerender } = renderChart()
+    const [, , width, height] = (svg(container).getAttribute('viewBox') ?? '').split(' ').map(Number)
+    const short = replayOf([replayPoint({ wonBy: 'TEAM1' }), replayPoint({ wonBy: 'TEAM2' })])
+    rerender(<ReplayMomentumChart replay={short} selected={REPLAY_START} onSelect={vi.fn()} />)
+    const [, , shortWidth, shortHeight] = (svg(container).getAttribute('viewBox') ?? '').split(' ').map(Number)
+    expect(shortWidth).toBe(width)
+    expect(shortHeight).toBeLessThan(height)
+  })
+
+  it('marks set boundaries with horizontal dashed rules', () => {
+    const { container } = renderChart()
+    const boundaries = Array.from(container.querySelectorAll('[data-testid="momentum-set-boundary"]'))
+    expect(boundaries.map((b) => b.textContent)).toEqual(['Set 2', 'Set 3'])
+    const line = boundaries[0].querySelector('line') as SVGLineElement
+    expect(line.getAttribute('y1')).toBe(line.getAttribute('y2'))
+    expect(line.getAttribute('stroke-dasharray')).toBe('3 2')
+  })
+
+  it('moves its marker down with the selection, and selects a point from its row', () => {
+    const { container, rerender, onSelect } = renderChart(REPLAY_START)
+    const markerY = () => Number(container.querySelector('[data-testid="momentum-selected"]')?.getAttribute('y1'))
+    const atStart = markerY()
+    rerender(<ReplayMomentumChart replay={RETIRED_REPLAY} selected={7} onSelect={onSelect} team1Name="Ana" team2Name="Bob" />)
+    expect(markerY()).toBeGreaterThan(atStart)
+
+    const hits = container.querySelectorAll('[data-testid="momentum-hit"]')
+    expect(hits).toHaveLength(12)
+    fireEvent.click(hits[9])
+    expect(onSelect).toHaveBeenCalledWith(10)
+  })
+
+  it('keeps the readout and the table equivalent', () => {
+    renderChart(7)
+    expect(screen.getByText(/^After point 8 \(set 1\)/)).toBeInTheDocument()
+    expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(13)
+  })
+
+  it('switches to the horizontal plot when the viewport widens past md, and back', () => {
+    const viewport = stubMatchMedia(false)
+    const { container } = renderChart()
+    expect(svg(container)).not.toBeNull()
+    act(() => viewport.set(true))
+    expect(svg(container)).toBeNull()
+    expect(container.querySelector('svg[data-orientation="horizontal"]')).not.toBeNull()
+    act(() => viewport.set(false))
+    expect(svg(container)).not.toBeNull()
   })
 })
