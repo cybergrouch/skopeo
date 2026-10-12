@@ -130,6 +130,25 @@ describe('ReplaySwimlaneChart, vertical at every width (#1156)', () => {
     expect(stepAt(container, 4).querySelector('text')?.textContent).toBe('Game')
   })
 
+  it("connects a set's marks with one line in play order, from the 0-0 start", () => {
+    renderChart(0)
+    const set1 = screen.getByTestId('swimlane-set-1')
+    const points = (set1.querySelector('[data-testid="swimlane-path"]') as Element)
+      .getAttribute('points')!
+      .split(' ')
+      .map((pair) => pair.split(',').map(Number))
+    const marks = steps(set1 as HTMLElement)
+
+    // The start, then one vertex per mark: a streak stays in one column, a swing crosses to the other.
+    expect(points).toHaveLength(marks.length + 1)
+    const centre = points[0][0]
+    marks.forEach((mark, i) => {
+      const x = points[i + 1][0]
+      expect(mark.getAttribute('data-side') === 'TEAM1' ? x < centre : x > centre).toBe(true)
+    })
+    points.slice(1).forEach(([, y], i) => expect(y).toBeGreaterThan(points[i][1]))
+  })
+
   it('ends each game with a rule carrying the score after it, and keeps the break marker', () => {
     const { container } = renderChart(0)
     expect(rules(screen.getByTestId('swimlane-set-1'))).toEqual(['1-0', '2-0', '6-0'])
