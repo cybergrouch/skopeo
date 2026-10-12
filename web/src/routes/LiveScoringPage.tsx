@@ -363,7 +363,7 @@ export function LiveScoringPage() {
           {setLabel(view)}
         </span>
 
-        <div className="flex items-center gap-[1dvw] text-[2.2dvh] text-muted-foreground">
+        <div data-testid="umpire-header" className="flex items-center gap-[1dvw] text-[2.2dvh] text-muted-foreground">
           {controls.has('toggleServer') && (
             <ServerControl
               view={view}
@@ -422,6 +422,24 @@ export function LiveScoringPage() {
               Start match
             </Button>
           )}
+          {/*
+            Start game and Start tiebreak join the same place (#1165): every "begin the next unit of play"
+            control is here, so the umpire never looks in two places for the button pressed most often. They
+            stay together because between games at a level score they are the genuine choice of what comes
+            next. The table keeps them out of the states that offer Start match or Start set, so the slot
+            holds at most these two. Start game keeps the primary style: it is the expected next step in
+            almost every game.
+          */}
+          {controls.has('startGame') && (
+            <Button size="sm" disabled={busy} onClick={() => send('GAME_STARTED')}>
+              Start game
+            </Button>
+          )}
+          {controls.has('startTiebreak') && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => send('TIEBREAK_STARTED')}>
+              Start tiebreak
+            </Button>
+          )}
         </div>
       </div>
 
@@ -460,8 +478,6 @@ export function LiveScoringPage() {
         controls={controls}
         busy={busy}
         onUndo={() => undo.mutate({ matchId })}
-        onStartGame={() => send('GAME_STARTED')}
-        onTiebreak={() => send('TIEBREAK_STARTED')}
         onPauseResume={() => send(view.isPaused ? 'RESUMED' : 'PAUSED')}
         onFlip={() => setFlipped((f) => !f)}
         onFinalize={() => finalize.mutate({ matchId })}
