@@ -28,12 +28,26 @@ describe('ReplayMomentumChart', () => {
     expect(screen.getByText(/Bob ahead by 1 overall/)).toBeInTheDocument()
   })
 
+  it('says when the share counts unplayed points as even, and stops once the window fills (#1156)', () => {
+    const { rerender } = renderChart(0)
+    expect(
+      screen.getByText('After point 1 (set 1): Ana won 1 of the 1 played so far (56%, counting the rest of the 8 as even), Ana ahead by 1 overall.'),
+    ).toBeInTheDocument()
+    rerender(<ReplayMomentumChart replay={RETIRED_REPLAY} selected={2} onSelect={vi.fn()} team1Name="Ana" team2Name="Bob" />)
+    expect(screen.getByText(/Ana won 2 of the 3 played so far \(56%, counting the rest of the 8 as even\)/)).toBeInTheDocument()
+    rerender(<ReplayMomentumChart replay={RETIRED_REPLAY} selected={7} onSelect={vi.fn()} team1Name="Ana" team2Name="Bob" />)
+    expect(screen.getByText(/Ana won 7 of the last 8 \(88%\), Ana ahead by 6 overall/)).toBeInTheDocument()
+  })
+
   it('has a table equivalent whose rows select their point', () => {
     const { onSelect } = renderChart(4)
     const rows = within(screen.getByRole('table')).getAllByRole('row')
     expect(rows).toHaveLength(13)
     expect(rows[5]).toHaveAttribute('aria-current', 'true')
-    expect(rows[5]).toHaveTextContent('51Ana4 of 5 (80%)+3')
+    // Before the window fills, the unplayed rest counts as even: (4 + 1.5) / 8, marked with an asterisk.
+    expect(rows[5]).toHaveTextContent('51Ana4 of 5 (69%*)+3')
+    // From point 8 it is the plain share, unmarked.
+    expect(rows[8]).toHaveTextContent('81Ana7 of 8 (88%)+6')
     fireEvent.click(within(rows[10]).getByRole('button', { name: '10' }))
     expect(onSelect).toHaveBeenCalledWith(10)
   })

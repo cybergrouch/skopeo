@@ -97,9 +97,11 @@ describe('momentumOf', () => {
     expect(samples.map((s) => s.ordinal)).toEqual([...Array(12).keys()].map((i) => i + 1))
   })
 
-  it('takes the share over a window that grows to MOMENTUM_WINDOW, then rolls', () => {
+  it('takes the share over a full window, counting the unplayed rest as even until it fills, then rolls', () => {
     expect(MOMENTUM_WINDOW).toBe(8)
-    expect(samples[0]).toMatchObject({ team1InWindow: 1, windowSize: 1, team1Share: 1 })
+    // One point won is not total domination: (1 + 3.5) / 8, not 1 of 1 (#1156).
+    expect(samples[0]).toMatchObject({ team1InWindow: 1, windowSize: 1, team1Share: 4.5 / 8 })
+    // Level after two points is level: (1 + 3) / 8.
     expect(samples[1]).toMatchObject({ team1InWindow: 1, windowSize: 2, team1Share: 0.5 })
     // Positions 0–7: one point to Bob among eight.
     expect(samples[7]).toMatchObject({ team1InWindow: 7, windowSize: 8, team1Share: 7 / 8 })
@@ -115,7 +117,9 @@ describe('momentumOf', () => {
   })
 
   it('honours a custom window', () => {
-    expect(momentumOf(RETIRED_REPLAY, 2)[1]).toMatchObject({ team1InWindow: 1, windowSize: 2 })
+    expect(momentumOf(RETIRED_REPLAY, 2)[1]).toMatchObject({ team1InWindow: 1, windowSize: 2, team1Share: 0.5 })
+    // With a custom window the padding scales too: (1 + 0.5) / 2 after the first point.
+    expect(momentumOf(RETIRED_REPLAY, 2)[0]).toMatchObject({ team1Share: 0.75 })
   })
 })
 
