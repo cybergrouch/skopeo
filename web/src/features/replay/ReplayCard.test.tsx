@@ -451,4 +451,14 @@ describe("ReplayCard", () => {
       expect(milestones(screen.getByTestId("replay-row-1-tb-2"))).toEqual(["1-1", "2-1"]);
     });
   });
+
+  it("summarises a game the umpire awarded as awarded, with the score it stood at", () => {
+    const replay = replayOf([
+      replayPoint({ wonBy: "TEAM1", score: replayScore({ pointsTeam1: "15" }) }),
+      replayPoint({ kind: "GAME", wonBy: "TEAM2", gameWon: true, score: replayScore({ gamesTeam2: 1 }) }),
+    ]);
+    renderCard(replay, 1);
+
+    expect(gameToggle("G1 · Awarded to Bob, 15-0")).toBeInTheDocument();
+  });
 });
