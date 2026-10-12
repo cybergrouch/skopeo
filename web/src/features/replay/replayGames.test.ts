@@ -81,6 +81,45 @@ describe('setGroupsOf', () => {
     ])
   })
 
+  it('names no server for a game whose first step has none, though later games have one', () => {
+    // The umpire can assign the server after play has started: the replay carries serve data, but the
+    // opening game does not.
+    const replay = replayOf([
+      replayPoint({ wonBy: 'TEAM1', gameWon: true, score: replayScore({ gamesTeam1: 1 }) }),
+      replayPoint({ wonBy: 'TEAM2', server: 'TEAM2', gameWon: true, score: replayScore({ gamesTeam1: 1, gamesTeam2: 1 }) }),
+    ])
+    const rows = setGroupsOf(replay, true, true)[0].rows
+    expect(rows.map((row) => row.server)).toEqual([null, 'TEAM2'])
+  })
+
+  it('as production records it, a tiebreak ending mid-pair closes that pair and the set award gets its own row', () => {
+    // The backend's shape: every tiebreak point is a plain POINT, and the umpire's SET step that follows
+    // carries the set (tiebreak, gameWon and setWon). A 7-1 tiebreak is 8 points, so point 8 opens a pair
+    // that the award must close rather than join.
+    const tiebreakPoint = (team1: number, team2: number) =>
+      replayPoint({
+        wonBy: team1 > team2 ? 'TEAM1' : 'TEAM2',
+        tiebreak: true,
+        score: replayScore({ gamesTeam1: 6, gamesTeam2: 6, pointsTeam1: String(team1), pointsTeam2: String(team2) }),
+      })
+    const scores = [[1, 0], [2, 0], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1], [7, 1]]
+    const finalSet = { team1: 7, team2: 6, tiebreakTeam1: 7, tiebreakTeam2: 1 }
+    const replay = replayOf([
+      ...scores.map(([a, b]) => tiebreakPoint(a, b)),
+      replayPoint({ kind: 'SET', wonBy: 'TEAM1', tiebreak: true, gameWon: true, setWon: true, score: replayScore({ sets: [finalSet] }) }),
+    ])
+    const rows = setGroupsOf(replay, false, true)[0].rows
+    expect(rows.map((row) => [row.kind, row.tiebreakPoints, row.indices])).toEqual([
+      ['tiebreak', [1, 1], [0]],
+      ['tiebreak', [2, 3], [1, 2]],
+      ['tiebreak', [4, 5], [3, 4]],
+      ['tiebreak', [6, 7], [5, 6]],
+      ['tiebreak', [8, 8], [7]],
+      ['awarded', null, [8]],
+    ])
+    expect(rows[5]).toMatchObject({ outcome: 'awarded', wonBy: 'TEAM1', scoreAfter: '7-6 (7-1)' })
+  })
+
   it('has nothing to group in an empty replay', () => {
     expect(setGroupsOf(replayOf([]), true, true)).toEqual([])
   })
