@@ -156,9 +156,12 @@ dependencies {
     // Mocking for the rare defensive path a real DB can't produce (e.g. a row deleted between an
     // existence check and its update); used sparingly — most service tests run against real Testcontainers.
     testImplementation("io.mockk:mockk:1.14.11")
-    // Data-driven cases via @ParameterizedTest (#1097). Not transitively present — kotlin-test-junit5
-    // brings junit-jupiter api/engine but not params — and pinned to the version those resolve to.
-    testImplementation("org.junit.jupiter:junit-jupiter-params:5.10.1")
+    // One JUnit version for every artifact (#1172): kotlin-test-junit5 brings api/engine through its own,
+    // older junit-bom, and Gradle resolves the two BOMs to the higher one. Stay on 5.x; JUnit 6 is separate.
+    testImplementation(platform("org.junit:junit-bom:5.14.4"))
+    // Data-driven cases via @ParameterizedTest (#1097). Not transitively present: kotlin-test-junit5
+    // brings junit-jupiter api/engine but not params. Versioned by the BOM above.
+    testImplementation("org.junit.jupiter:junit-jupiter-params")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     // Integration tests against a real PostgreSQL (applies the Flyway migration). Testcontainers 2.x
