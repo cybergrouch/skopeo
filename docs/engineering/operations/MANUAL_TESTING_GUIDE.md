@@ -52,7 +52,7 @@ API container (:8080)  ───────►  PostgreSQL container (:5432)
 
 - [ ] Docker Desktop (or Docker Engine) running — `docker --version`
 - [ ] Docker Compose v2 — `docker compose version`
-- [ ] Node.js 20+ and npm — `node --version`
+- [ ] Node.js 24+ and npm — `node --version`
 - [ ] A Google account (for the Google sign-in test)
 - [ ] *(For Test 3)* the Facebook provider enabled in the Firebase console
 - [ ] Repo cloned and you're at its root — `cd /path/to/skopeo`

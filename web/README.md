@@ -21,7 +21,7 @@ for the full architecture.
 
 ## Prerequisites
 
-- Node 22+ and npm
+- Node 24+ and npm (CI runs Node 24)
 - A Firebase project with **Authentication** enabled (Email/Password + Google)
 - The Skopeo backend running (defaults to `http://localhost:8080`)
 
