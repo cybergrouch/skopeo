@@ -66,6 +66,9 @@ val flywayVersion = "13.7.0"
 val hikariVersion = "7.1.0"
 val arrowVersion = "2.2.3"
 
+// Kotest assertions; the Arrow module ships with Kotest (#1170) and must share its version.
+val kotestVersion = "6.2.5"
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
@@ -148,8 +151,8 @@ dependencies {
     testImplementation("io.ktor:ktor-server-test-host-jvm:$ktorVersion")
     testImplementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testImplementation("io.kotest:kotest-assertions-core:6.2.5")
-    testImplementation("io.kotest.extensions:kotest-assertions-arrow:2.0.0")
+    testImplementation("io.kotest:kotest-assertions-core:$kotestVersion")
+    testImplementation("io.kotest:kotest-assertions-arrow:$kotestVersion")
     // Mocking for the rare defensive path a real DB can't produce (e.g. a row deleted between an
     // existence check and its update); used sparingly — most service tests run against real Testcontainers.
     testImplementation("io.mockk:mockk:1.14.11")
