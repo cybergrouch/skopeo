@@ -156,14 +156,15 @@ dependencies {
     // Mocking for the rare defensive path a real DB can't produce (e.g. a row deleted between an
     // existence check and its update); used sparingly — most service tests run against real Testcontainers.
     testImplementation("io.mockk:mockk:1.14.11")
-    // Data-driven cases via @ParameterizedTest (#1097). Not transitively present — testcontainers
+    // Data-driven cases via @ParameterizedTest (#1097). Not transitively present — kotlin-test-junit5
     // brings junit-jupiter api/engine but not params — and pinned to the version those resolve to.
     testImplementation("org.junit.jupiter:junit-jupiter-params:5.10.1")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    // Integration tests against a real PostgreSQL (applies the Flyway migration)
-    testImplementation("org.testcontainers:postgresql:1.21.4")
-    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
+    // Integration tests against a real PostgreSQL (applies the Flyway migration). Testcontainers 2.x
+    // (#1169) prefixes every module with `testcontainers-`. Its JUnit Jupiter module is not used: the
+    // shared container is started by hand in `PostgresTestDatabase`, not via `@Testcontainers`.
+    testImplementation("org.testcontainers:testcontainers-postgresql:2.0.5")
 
     // Architecture tests — enforce layered package dependencies (issue #69). Bytecode-based, so
     // it's robust against Kotlin compiler versions (unlike source-scanning tools).
@@ -208,11 +209,8 @@ val testForks =
 
 tasks.withType<Test> {
     useJUnitPlatform()
-    // Testcontainers' bundled docker-java defaults to Docker API v1.43, but Docker
-    // Engine 25+ requires a minimum of v1.44 and rejects older calls with HTTP 400.
-    // Pin the negotiated version so Testcontainers can reach the daemon (the value
-    // sits within range for both local Docker Desktop and CI runners).
-    systemProperty("api.version", "1.44")
+    // No Docker API pin (`api.version`): Testcontainers 2.0.2+ defaults to API v1.44, the minimum
+    // Docker Engine 25+ accepts, and 2.0.3+ falls back for older engines; a pin would defeat that (#1169).
 
     maxParallelForks = testForks
     if (testForks > 1) {
