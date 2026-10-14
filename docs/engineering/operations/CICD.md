@@ -73,7 +73,7 @@ jobs:
         run: ./gradlew check
 ```
 
-> The committed `ci.yml` also adds a second **`web`** job (Node 22 via
+> The committed `ci.yml` also adds a second **`web`** job (Node 24 via
 > `actions/setup-node@v5`) that lints, type-checks, tests (Vitest), and builds
 > the `web/` SPA — typecheck/build regenerate the orval API client from the
 > backend OpenAPI spec, proving the frontend stays in sync with the contract.
@@ -356,7 +356,7 @@ The monorepo holds both the API and the SPA. This phase is now **implemented**:
   check and posts a sticky `coverage-web` PR comment (overall + patch coverage).
 - **Web CD:** `.github/workflows/deploy-web.yml` deploys to **Firebase Hosting**
   on pushes to `main` that touch `web/**`, the OpenAPI spec, `firebase.json`, or
-  the workflow itself (path-filtered). It uses `actions/setup-node@v5` (Node 22)
+  the workflow itself (path-filtered). It uses `actions/setup-node@v5` (Node 24)
   to build, then `FirebaseExtended/action-hosting-deploy@v0` to deploy the
   `live` channel. The job is **inert until configured** — guarded by
   `if: ${{ vars.VITE_FIREBASE_PROJECT_ID != '' }}` — so merging it never

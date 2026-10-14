@@ -195,7 +195,7 @@ Skopeo has grown from a stateless rating calculator into a capability-gated rank
   [JVM_COMPATIBILITY.md](docs/engineering/operations/JVM_COMPATIBILITY.md).
 - Gradle (included via wrapper)
 - Docker (for PostgreSQL; the app itself can run on the host)
-- Node.js 20+ (for the web app)
+- Node.js 24+ (for the web app; CI runs Node 24)
 
 ### Running the Application
 
