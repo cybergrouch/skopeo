@@ -66,6 +66,9 @@ val flywayVersion = "13.7.0"
 val hikariVersion = "7.1.0"
 val arrowVersion = "2.2.3"
 
+// Kotest assertions; the Arrow module ships with Kotest (#1170) and must share its version.
+val kotestVersion = "6.2.5"
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
@@ -148,19 +151,23 @@ dependencies {
     testImplementation("io.ktor:ktor-server-test-host-jvm:$ktorVersion")
     testImplementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testImplementation("io.kotest:kotest-assertions-core:6.2.5")
-    testImplementation("io.kotest.extensions:kotest-assertions-arrow:2.0.0")
+    testImplementation("io.kotest:kotest-assertions-core:$kotestVersion")
+    testImplementation("io.kotest:kotest-assertions-arrow:$kotestVersion")
     // Mocking for the rare defensive path a real DB can't produce (e.g. a row deleted between an
     // existence check and its update); used sparingly — most service tests run against real Testcontainers.
     testImplementation("io.mockk:mockk:1.14.11")
-    // Data-driven cases via @ParameterizedTest (#1097). Not transitively present — testcontainers
-    // brings junit-jupiter api/engine but not params — and pinned to the version those resolve to.
-    testImplementation("org.junit.jupiter:junit-jupiter-params:5.10.1")
+    // One JUnit version for every artifact (#1172): kotlin-test-junit5 brings api/engine through its own,
+    // older junit-bom, and Gradle resolves the two BOMs to the higher one. Stay on 5.x; JUnit 6 is separate.
+    testImplementation(platform("org.junit:junit-bom:5.14.4"))
+    // Data-driven cases via @ParameterizedTest (#1097). Not transitively present: kotlin-test-junit5
+    // brings junit-jupiter api/engine but not params. Versioned by the BOM above.
+    testImplementation("org.junit.jupiter:junit-jupiter-params")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    // Integration tests against a real PostgreSQL (applies the Flyway migration)
-    testImplementation("org.testcontainers:postgresql:1.21.4")
-    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
+    // Integration tests against a real PostgreSQL (applies the Flyway migration). Testcontainers 2.x
+    // (#1169) prefixes every module with `testcontainers-`. Its JUnit Jupiter module is not used: the
+    // shared container is started by hand in `PostgresTestDatabase`, not via `@Testcontainers`.
+    testImplementation("org.testcontainers:testcontainers-postgresql:2.0.5")
 
     // Architecture tests — enforce layered package dependencies (issue #69). Bytecode-based, so
     // it's robust against Kotlin compiler versions (unlike source-scanning tools).
@@ -205,11 +212,8 @@ val testForks =
 
 tasks.withType<Test> {
     useJUnitPlatform()
-    // Testcontainers' bundled docker-java defaults to Docker API v1.43, but Docker
-    // Engine 25+ requires a minimum of v1.44 and rejects older calls with HTTP 400.
-    // Pin the negotiated version so Testcontainers can reach the daemon (the value
-    // sits within range for both local Docker Desktop and CI runners).
-    systemProperty("api.version", "1.44")
+    // No Docker API pin (`api.version`): Testcontainers 2.0.2+ defaults to API v1.44, the minimum
+    // Docker Engine 25+ accepts, and 2.0.3+ falls back for older engines; a pin would defeat that (#1169).
 
     maxParallelForks = testForks
     if (testForks > 1) {
