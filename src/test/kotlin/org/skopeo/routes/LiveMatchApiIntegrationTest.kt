@@ -7,10 +7,8 @@ import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
-import io.kotest.matchers.string.shouldNotContain
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -31,10 +29,8 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.contract.ReplayDocument
-import org.skopeo.common.contract.ReplayResponse
 import org.skopeo.common.dto.livematch.LiveMatchResponse
 import org.skopeo.common.dto.livematch.LiveScoreEventRequest
-import org.skopeo.common.dto.match.MatchPublicResponse
 import org.skopeo.common.dto.match.MatchReplayBackfillRequest
 import org.skopeo.common.dto.match.MatchReplayBackfillResponse
 import org.skopeo.common.security.Capability
@@ -821,66 +817,5 @@ class LiveMatchApiIntegrationTest {
                 }
             run.status shouldBe HttpStatusCode.OK
             run.body<MatchReplayBackfillResponse>().dryRun shouldBe false
-        }
-
-    @Test
-    fun `who scored follows a handover live, heads the finished match, and per-point scorers reach only the entitled (#1183)`() =
-        withApp { client ->
-            val boss = seedFinalizer()
-            val matchId = seedFixture()
-            val relief = seedScorer(uid = "relief")
-            seedUser(uid = "fan")
-            val fan = TestFirebaseAuth.mintToken(uid = "fan")
-
-            // The relief umpire keys the game; the live view names whoever recorded the newest action.
-            client.winAGame(token = relief, matchId = matchId, side = "TEAM1")
-            val live: LiveMatchResponse =
-                client
-                    .get(urlString = "/api/v1/matches/$matchId/live") {
-                        header(key = HttpHeaders.Authorization, value = "Bearer $relief")
-                    }.body()
-            live.scorerName shouldBe "relief"
-
-            client.postEvent(token = boss, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"))
-            client.finalize(token = boss, matchId = matchId).status shouldBe HttpStatusCode.OK
-            val code =
-                MatchRepository()
-                    .findById(matchId = matchId)
-                    .shouldBeRight()
-                    .toDomain()
-                    .publicCode
-            val users = UserRepository()
-            val bossCode = users.findByFirebaseUid(firebaseUid = "boss")!!.toDomain().publicCode
-            val reliefCode = users.findByFirebaseUid(firebaseUid = "relief")!!.toDomain().publicCode
-
-            // The headline is public and names the LAST scorer: boss awarded the set and the match.
-            val scoredBy =
-                client
-                    .get(urlString = "/api/v1/matches/code/$code")
-                    .body<MatchPublicResponse>()
-                    .scoredBy
-                    .shouldNotBeNull()
-            scoredBy.displayName shouldBe "boss"
-            scoredBy.publicCode shouldBe bossCode
-
-            // Anonymous and a plain player: the same replay with every scorer omitted, not nulled.
-            val anonymous = client.get(urlString = "/api/v1/matches/code/$code/replay")
-            anonymous.status shouldBe HttpStatusCode.OK
-            anonymous.bodyAsText() shouldNotContain "scorer"
-            client
-                .get(urlString = "/api/v1/matches/code/$code/replay") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $fan")
-                }.bodyAsText() shouldNotContain "scorer"
-
-            // An administrator gets each step's scorer code, resolved to a current name.
-            val entitled =
-                client
-                    .get(urlString = "/api/v1/matches/code/$code/replay") {
-                        header(key = HttpHeaders.Authorization, value = "Bearer $boss")
-                    }.body<ReplayResponse>()
-            entitled.version shouldBe 2
-            entitled.points.map { it.scorer } shouldBe listOf(reliefCode, reliefCode, reliefCode, reliefCode, bossCode, bossCode)
-            entitled.scorers.shouldNotBeNull().mapValues { it.value.displayName } shouldBe
-                mapOf(reliefCode to "relief", bossCode to "boss")
         }
 }

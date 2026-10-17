@@ -147,6 +147,6 @@ class MatchScorersTest {
         resolved.keys shouldBe setOf(named.publicCode, placeholder.publicCode)
         resolved.getValue(key = named.publicCode).displayName shouldBe "named"
         resolved.getValue(key = placeholder.publicCode).isPlaceholder shouldBe true
-        scorers.publicCodesOf(userIds = listOf(element = named.id)) shouldBe mapOf(named.id to named.publicCode)
+        scorers.publicCodesOf(userIds = listOf(element = named.id)) shouldBe mapOf(pair = named.id to named.publicCode)
     }
 }
