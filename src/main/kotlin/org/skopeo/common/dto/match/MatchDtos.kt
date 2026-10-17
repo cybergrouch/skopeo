@@ -387,6 +387,15 @@ data class MatchPublicResponse(
     // Per-side rating handicap (#486), shown transparently to participants; null = none on that side.
     val team1Handicap: String? = null,
     val team2Handicap: String? = null,
+    /**
+     * Who scored this match (#1183), for a finished, live-scored match: the umpire who recorded its final
+     * action, from the durable umpire credit. Null for a match not scored live or not yet finished.
+     *
+     * Public, like the players, and shown by the same rules — a display name and a public code, never a
+     * user id; [MatchPublicPlayer.displayName] is null for a deleted scorer, who is shown as deleted.
+     * The last scorer is a known simplification for a headline: the replay attributes each point.
+     */
+    val scoredBy: MatchPublicPlayer? = null,
 )
 
 /**
