@@ -28,6 +28,13 @@ async function currentIdToken(): Promise<string | undefined> {
   if (!authLoaded() && !hasPersistedSession()) return undefined
   try {
     const { auth } = await loadAuth()
+    // Wait for the persisted session to be restored before reading it (#1183). Right after the SDK
+    // loads, `currentUser` is still null while Firebase reads the session back from storage, so a cold
+    // public page's FIRST requests went out anonymous — and an endpoint that tailors its answer to the
+    // caller (the replay's per-point scorers, the points card's derivation) quietly served the
+    // anonymous shape to an organizer, with nothing refetching once the session arrived. Resolves at
+    // once when auth is already settled, so this costs nothing after the first request.
+    await auth.authStateReady()
     return await auth.currentUser?.getIdToken()
   } catch (error) {
     // The SDK could not load (offline, or a stale chunk hash after a deploy). Send the request

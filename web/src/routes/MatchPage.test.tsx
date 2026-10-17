@@ -813,6 +813,30 @@ describe("MatchPage", () => {
       expect(screen.queryByText("Score edited after the match")).not.toBeInTheDocument();
     });
 
+    it("names who scored a finished live-scored match, linked like a player (#1183)", () => {
+      showMatch({ ...match, scoredBy: { displayName: "Uma", publicCode: "UMP001", isPlaceholder: true } });
+      renderAt();
+      const line = screen.getByTestId("match-scored-by");
+      expect(line).toHaveTextContent("Scored by Uma");
+      expect(screen.getByRole("link", { name: "Uma" })).toHaveAttribute("href", "/players/UMP001");
+      expect(line).toHaveTextContent("Unclaimed");
+    });
+
+    it("shows a deleted scorer as deleted and never by name (#1183)", () => {
+      showMatch({ ...match, scoredBy: { displayName: null, publicCode: "UMP001", isDeleted: true } });
+      renderAt();
+      const line = screen.getByTestId("match-scored-by");
+      expect(line).toHaveTextContent("Scored by a deleted account");
+      expect(line).toHaveTextContent("Deleted");
+      expect(screen.queryByRole("link", { name: /UMP001/ })).not.toBeInTheDocument();
+    });
+
+    it("says nothing about a scorer when the match was not scored live (#1183)", () => {
+      showMatch(match);
+      renderAt();
+      expect(screen.queryByTestId("match-scored-by")).not.toBeInTheDocument();
+    });
+
     it("does not let a player's hidden match history hide the replay (#622)", () => {
       // The public match response carries no history setting at all — the page has nothing to hide
       // the replay with, and must not grow one: a match belongs to everyone who played it.

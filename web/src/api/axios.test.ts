@@ -11,6 +11,7 @@ const h = vi.hoisted(() => {
     getIdToken,
     firebaseAuth: {
       currentUser: { getIdToken } as { getIdToken: typeof getIdToken } | null,
+      authStateReady: vi.fn<() => Promise<void>>(),
     },
     requestUse: vi.fn(),
     instance: vi.fn(),
@@ -47,6 +48,7 @@ describe('customAxiosInstance', () => {
     // when a session looks persisted, so this key is what makes it look.
     window.localStorage.setItem(SESSION_KEY, '{}')
     h.firebaseAuth.currentUser = { getIdToken: h.getIdToken }
+    h.firebaseAuth.authStateReady.mockResolvedValue(undefined)
   })
 
   it('unwraps the axios response to its data', async () => {
@@ -84,5 +86,24 @@ describe('customAxiosInstance', () => {
     expect(h.getIdToken).not.toHaveBeenCalled()
     // The build-id header is set unconditionally, so this proves the interceptor ran at all (#752).
     expect(config.headers['X-Client-Version']).toBeDefined()
+  })
+
+  /**
+   * A cold public page (#1183): the SDK has just loaded and is still restoring the persisted session,
+   * so `currentUser` is null for a moment. Reading it then sent an organizer's first request anonymous,
+   * and the replay came back without its per-point scorers. The token must be read only once auth has
+   * settled.
+   */
+  it('waits for the persisted session to be restored before reading the token', async () => {
+    h.firebaseAuth.currentUser = null
+    h.getIdToken.mockResolvedValue('tok-restored')
+    h.firebaseAuth.authStateReady.mockImplementation(async () => {
+      h.firebaseAuth.currentUser = { getIdToken: h.getIdToken }
+    })
+
+    const config = await interceptor({ headers: {} })
+
+    expect(h.firebaseAuth.authStateReady).toHaveBeenCalled()
+    expect(config.headers.Authorization).toBe('Bearer tok-restored')
   })
 })

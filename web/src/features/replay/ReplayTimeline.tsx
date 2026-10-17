@@ -1,15 +1,18 @@
 import type { ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import type { ReplayDocument, ReplaySet } from "@/api/generated/model";
+import type { ReplayResponse, ReplaySet } from "@/api/generated/model";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { formatSet, type Side } from "./replayCharts";
-import { REPLAY_START } from "./replayFeatures";
+import { hasReplayFeature, REPLAY_START } from "./replayFeatures";
+import { scorerOf, type StepScorer } from "./replayScorers";
+import { ScorerPopoverContent } from "./ScorerPopover";
 import { locate, setGroupsOf, type GameRow, type SetGroup } from "./replayGames";
 import { milestoneClass, stepText } from "./replayStepText";
 import { useFollowedDisclosure } from "./useFollowedDisclosure";
 
 export type ReplayTimelineProps = {
-  replay: ReplayDocument;
+  replay: ReplayResponse;
   /** The clamped selection: an index into `replay.points`, or `REPLAY_START`. */
   selected: number;
   onSelect: (index: number) => void;
@@ -81,6 +84,8 @@ export function ReplayTimeline({
   );
   const games = useFollowedDisclosure(location.rowKey, selected);
   const firstSet = groups[0]?.setNumber;
+  // Per-point scorers (#1183) arrive only for a viewer the server entitles to them.
+  const showScorers = hasReplayFeature(replay, "scorers");
 
   const milestone = (index: number) => {
     const p = replay.points[index];
@@ -95,6 +100,7 @@ export function ReplayTimeline({
           onClick={() => onSelect(index)}
           className={milestoneClass(p, showBreaks)}
           breakPoint={breakPoint}
+          scorer={showScorers ? scorerOf(replay, index) : null}
         />
       </li>
     );
@@ -261,6 +267,7 @@ function Milestone({
   onClick,
   className,
   breakPoint = false,
+  scorer = null,
 }: {
   label: string;
   description: string;
@@ -268,14 +275,16 @@ function Milestone({
   onClick: () => void;
   className?: string;
   breakPoint?: boolean;
+  /** Who scored this step (#1183), when the viewer may see it: clicking then also opens a popover naming them. */
+  scorer?: StepScorer | null;
 }) {
-  return (
+  const badge = (
     <button
       type="button"
       aria-label={description}
       title={description}
       aria-current={selected ? "step" : undefined}
-      onClick={onClick}
+      onClick={() => onClick()}
       className={cn(
         "relative rounded border px-1.5 py-0.5 text-xs tabular-nums transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
@@ -290,5 +299,13 @@ function Milestone({
         />
       ) : null}
     </button>
+  );
+  if (!scorer) return badge;
+  // Selecting still happens on click; the trigger only adds the popover on top (Radix composes the two).
+  return (
+    <Popover>
+      <PopoverTrigger asChild>{badge}</PopoverTrigger>
+      <ScorerPopoverContent scorer={scorer} title={description} />
+    </Popover>
   );
 }

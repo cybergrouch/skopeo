@@ -1,6 +1,7 @@
-import type { ReplayDocument } from '@/api/generated/model'
+import type { ReplayResponse } from '@/api/generated/model'
 import { cn } from '@/lib/utils'
 import { hasReplayFeature } from './replayFeatures'
+import { scorerOf } from './replayScorers'
 import { SIDE_COLOUR, sampleAtOrBefore, setLanesOf, type LaneStep, type Side } from './replayCharts'
 import { setGroupsOf } from './replayGames'
 import { VerticalSwimlanes } from './ReplaySwimlaneVertical'
@@ -14,7 +15,7 @@ const MARK_TEXT: Record<LaneStep['mark'], string> = {
 }
 
 interface ReplayChartProps {
-  replay: ReplayDocument
+  replay: ReplayResponse
   /** Position in `replay.points`, or `REPLAY_START` for the opening 0-0. */
   selected: number
   onSelect: (index: number) => void
@@ -53,6 +54,8 @@ export function ReplaySwimlaneChart({ replay, selected, onSelect, team1Name = 'T
           selected={selected}
           highlighted={highlighted}
           onSelect={onSelect}
+          // Per-point scorers (#1183) only when the server sent them, which it does only to the entitled.
+          scorerOf={hasReplayFeature(replay, 'scorers') ? (index) => scorerOf(replay, index) : null}
         />
       </div>
       <details className="text-sm">
