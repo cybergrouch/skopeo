@@ -321,6 +321,27 @@ describe("LiveScoringPage", () => {
     expect(screen.queryByText(/·/)).not.toBeInTheDocument();
   });
 
+  it("names who is scoring at the end of the truncating match label, so it is cut first (#1183)", async () => {
+    useGetApiV1MatchesMatchIdLive.mockReturnValue({ data: { ...liveView, scorerName: "Uma" }, refetch: vi.fn() });
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+
+    const scorer = screen.getByTestId("umpire-scorer");
+    expect(scorer).toHaveTextContent("Scoring: Uma");
+    // Inside the event/match span, which is the one that truncates — never a flex child of its own.
+    const label = scorer.parentElement as HTMLElement;
+    expect(label).toHaveClass("truncate");
+    expect(label).toHaveTextContent(/Match #3 · Scoring: Uma$/);
+  });
+
+  it("says nothing about a scorer before anyone has recorded an action (#1183)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await start(user);
+    expect(screen.queryByTestId("umpire-scorer")).not.toBeInTheDocument();
+  });
+
   it("shows the set IN PROGRESS, not the number banked (#937)", async () => {
     // Off by one is the entire point of showing it: with one set banked, they are playing the second.
     useGetApiV1MatchesMatchIdLive.mockReturnValue({

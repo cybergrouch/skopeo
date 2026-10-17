@@ -51,6 +51,27 @@ function PlayerLink({ player }: { player: MatchPublicPlayer }) {
   );
 }
 
+/**
+ * "Scored by <name>" for a finished, live-scored match (#1183): the umpire who recorded its final action,
+ * by the same rules as a player — linked to their public page, tagged when unclaimed, and never named
+ * once deleted.
+ */
+function ScoredBy({ scorer }: { scorer: MatchPublicPlayer }) {
+  return (
+    <div className="text-muted-foreground" data-testid="match-scored-by">
+      Scored by{" "}
+      {scorer.isDeleted ? (
+        <span>
+          a deleted account
+          <PlaceholderTag show={false} deleted />
+        </span>
+      ) : (
+        <PlayerLink player={scorer} />
+      )}
+    </div>
+  );
+}
+
 /** A side's players, comma-separated, marked as the winner when applicable. */
 function Side({
   players,
@@ -351,6 +372,8 @@ export function MatchPage() {
               <span className="font-medium">Score:</span>{" "}
               {score ?? "Not yet played"}
             </div>
+            {/* The server sends this only for a finished, live-scored match. */}
+            {match.scoredBy ? <ScoredBy scorer={match.scoredBy} /> : null}
             {/* Rating handicap (#486): shown transparently to participants. */}
             {match.team1Handicap || match.team2Handicap ? (
               <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">

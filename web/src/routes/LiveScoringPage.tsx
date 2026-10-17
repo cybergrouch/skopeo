@@ -329,9 +329,22 @@ export function LiveScoringPage() {
           <Button size="sm" variant="ghost" onClick={() => void leave()}>
             ← Back
           </Button>
-          {/* Which match this screen is, for an umpire running several courts (#937). */}
+          {/*
+            Which match this screen is, for an umpire running several courts (#937), and who is scoring
+            it (#1183): whoever recorded the newest action, so it follows a handover once the new umpire
+            keys something.
+
+            The scorer rides at the END of the same truncating span rather than in an element of its own,
+            so it is the first thing the ellipsis eats: it can never push a control off the row, and the
+            match identity — the part an umpire running several courts actually confirms against —
+            survives longest. Same type size as the event name, which this header already relies on being
+            legible at the smallest landscape height.
+          */}
           <span className="truncate text-[2.2dvh] text-muted-foreground">
             {match.event?.name ? `${match.event.name} · ` : ''}Match #{match.matchNumber}
+            {view.scorerName ? (
+              <span data-testid="umpire-scorer"> · Scoring: {view.scorerName}</span>
+            ) : null}
           </span>
           <CompletedSets view={view} />
         </div>
