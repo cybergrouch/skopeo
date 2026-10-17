@@ -95,6 +95,18 @@ describe("the per-point scorer popover", () => {
     expect(popover).toHaveTextContent(/^Point 6:/);
   });
 
+  it("closes the swimlane popover on Escape", () => {
+    const { container } = render(
+      <ReplaySwimlaneChart replay={ENTITLED} selected={0} onSelect={vi.fn()} team1Name="Ana" team2Name="Bob" />,
+    );
+    fireEvent.click(stepAt(container, 5));
+    const popover = screen.getByTestId("replay-scorer-popover");
+
+    fireEvent.keyDown(popover, { key: "Escape" });
+
+    expect(screen.queryByTestId("replay-scorer-popover")).not.toBeInTheDocument();
+  });
+
   it("opens no popover from a swimlane mark for a viewer sent no scorers", () => {
     const onSelect = vi.fn();
     const { container } = render(
