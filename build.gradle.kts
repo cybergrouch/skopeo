@@ -59,10 +59,10 @@ tasks.named("processResources") {
     dependsOn(generateVersionProperties)
 }
 
-val ktorVersion = "3.5.2"
-val exposedVersion = "1.5.0"
-val postgresVersion = "42.7.13"
-val flywayVersion = "13.7.0"
+val ktorVersion = "3.6.0"
+val exposedVersion = "1.5.1"
+val postgresVersion = "42.7.14"
+val flywayVersion = "13.10.0"
 val hikariVersion = "7.1.0"
 val arrowVersion = "2.2.3"
 
@@ -103,7 +103,7 @@ dependencies {
     // in-process SSE/WebSocket registry is broken by construction: the umpire's POST lands on one
     // instance while a spectator's stream is held by the other, and the event never crosses. Firestore
     // fans out server-push with no sockets to operate and no instance affinity.
-    implementation("com.google.firebase:firebase-admin:9.10.0")
+    implementation("com.google.firebase:firebase-admin:9.11.0")
 
     // Authentication — verify Firebase-issued JWTs against Google's public keys
     implementation("io.ktor:ktor-server-auth-jvm:$ktorVersion")
@@ -134,7 +134,7 @@ dependencies {
     implementation("io.arrow-kt:arrow-core:$arrowVersion")
 
     // Logging
-    implementation("ch.qos.logback:logback-classic:1.6.3")
+    implementation("ch.qos.logback:logback-classic:1.6.5")
     implementation("io.github.oshai:kotlin-logging-jvm:8.0.4")
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     // Request id in the MDC and echoed on the response, so a user's screenshot reaches a log line (#805).
@@ -171,7 +171,7 @@ dependencies {
 
     // Architecture tests — enforce layered package dependencies (issue #69). Bytecode-based, so
     // it's robust against Kotlin compiler versions (unlike source-scanning tools).
-    testImplementation("com.tngtech.archunit:archunit:1.5.0")
+    testImplementation("com.tngtech.archunit:archunit:1.5.1")
 
     // YAML parser for OpenAPIIntegrationTest (#401): parse the served spec so a malformed
     // documentation.yaml fails the backend gate instead of only breaking the web orval step.

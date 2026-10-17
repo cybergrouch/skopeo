@@ -34,7 +34,7 @@ The heart of the Skopeo system - a sophisticated performance-based rating calcul
 - **Comprehensive Validation**: Input validation for player profiles, ratings, and match scores
 
 #### 2. **REST API**
-Production-ready HTTP API built with Ktor 3.5.2.
+Production-ready HTTP API built with Ktor 3.6.0.
 
 - **Ranking Calculation Endpoint**: POST `/api/v1/calculate-ranking`
   - Accepts player profiles with ratings and match scores
@@ -160,14 +160,14 @@ Skopeo has grown from a stateless rating calculator into a capability-gated rank
 
 ### Current
 - **Language**: Kotlin 2.4.20
-- **Web Framework**: Ktor 3.5.2 (Netty server)
+- **Web Framework**: Ktor 3.6.0 (Netty server)
 - **Serialization**: kotlinx.serialization (JSON)
 - **Database**: PostgreSQL
 - **Migrations**: Flyway
 - **ORM**: Exposed (Kotlin SQL framework) + HikariCP connection pool
 - **Auth**: Firebase Auth (tokens verified at the API)
 - **Web UI**: React + Vite (`web/`)
-- **Build Tool**: Gradle 9.7.1
+- **Build Tool**: Gradle 9.8.1
 - **Code Quality**: ktlint + Detekt
 - **Testing**: JUnit 5 + Kotest assertions
 - **Coverage**: JaCoCo
