@@ -42,14 +42,16 @@ class DuplicateCandidateRepositoryTest {
     }
 
     private fun newUser(uid: String): UUID =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                ),
-        ).toDomain().id
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                    ),
+            ).toDomain()
+            .id
 
     @Test
     fun `flag stores an ordered pair and is idempotent regardless of argument order`() {

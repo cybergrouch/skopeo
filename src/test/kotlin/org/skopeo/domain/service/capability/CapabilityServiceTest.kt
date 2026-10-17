@@ -58,15 +58,16 @@ class CapabilityServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun admin(uid: String = "root"): User = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
@@ -205,23 +206,24 @@ class CapabilityServiceTest {
         email: String,
         status: VerificationStatus,
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    email =
-                        ContactInfo(
-                            type = ContactType.EMAIL,
-                            value = email,
-                            source = ContactSource.GOOGLE,
-                            status = status,
-                            isPrimary = true,
-                        ),
-                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        email =
+                            ContactInfo(
+                                type = ContactType.EMAIL,
+                                value = email,
+                                source = ContactSource.GOOGLE,
+                                status = status,
+                                isPrimary = true,
+                            ),
+                        capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                    ),
+            ).toDomain()
 
     @Test
     fun `a bootstrap administrator (verified email on the allowlist) cannot be revoked (#194)`() {
@@ -269,23 +271,24 @@ class CapabilityServiceTest {
         admin(uid = "root")
         // A verified PHONE (no email) must not match the email allowlist.
         val phoneAdmin =
-            users.provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = "phone",
-                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "phone", isPrimary = true),
-                        names = listOf(element = UserName(type = NameType.DISPLAY, value = "phone")),
-                        phone =
-                            ContactInfo(
-                                type = ContactType.PHONE,
-                                value = "+639170000000",
-                                source = ContactSource.MANUAL,
-                                status = VerificationStatus.VERIFIED,
-                                isPrimary = true,
-                            ),
-                        capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
-                    ),
-            ).toDomain()
+            users
+                .provision(
+                    command =
+                        ProvisionUserCommand(
+                            firebaseUid = "phone",
+                            identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "phone", isPrimary = true),
+                            names = listOf(element = UserName(type = NameType.DISPLAY, value = "phone")),
+                            phone =
+                                ContactInfo(
+                                    type = ContactType.PHONE,
+                                    value = "+639170000000",
+                                    source = ContactSource.MANUAL,
+                                    status = VerificationStatus.VERIFIED,
+                                    isPrimary = true,
+                                ),
+                            capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                        ),
+                ).toDomain()
 
         gated.revoke(token = token(uid = "root"), userId = phoneAdmin.id, capabilityRaw = Capability.ADMINISTRATOR.name).shouldBeRight()
     }

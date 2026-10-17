@@ -51,16 +51,17 @@ class PlaceholderMergeRepositoryTest {
     }
 
     private fun realUser(uid: String): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    sex = "Male",
-                    capabilities = setOf(element = Capability.PLAYER),
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        sex = "Male",
+                        capabilities = setOf(element = Capability.PLAYER),
+                    ),
+            ).toDomain()
 
     private fun placeholder(name: String): User =
         users.createPlaceholder(command = CreatePlaceholderCommand(displayName = name, sex = "Male")).toDomain()
@@ -166,10 +167,11 @@ class PlaceholderMergeRepositoryTest {
 
     private fun insertTeam(name: String): UUID =
         transaction {
-            TeamsTable.insertAndGetId {
-                it[TeamsTable.name] = name
-                it[teamType] = "SINGLES"
-            }.value
+            TeamsTable
+                .insertAndGetId {
+                    it[TeamsTable.name] = name
+                    it[teamType] = "SINGLES"
+                }.value
         }
 
     private fun insertTeamUser(
@@ -194,14 +196,15 @@ class PlaceholderMergeRepositoryTest {
         clubId: UUID,
     ): UUID =
         transaction {
-            EventsTable.insertAndGetId {
-                it[publicCode] = name.take(n = 6).uppercase().padEnd(length = 6, padChar = 'X')
-                it[EventsTable.name] = name
-                it[startDate] = java.time.LocalDate.now()
-                it[endDate] = java.time.LocalDate.now()
-                it[createdBy] = null
-                it[EventsTable.clubId] = clubId
-            }.value
+            EventsTable
+                .insertAndGetId {
+                    it[publicCode] = name.take(n = 6).uppercase().padEnd(length = 6, padChar = 'X')
+                    it[EventsTable.name] = name
+                    it[startDate] = java.time.LocalDate.now()
+                    it[endDate] = java.time.LocalDate.now()
+                    it[createdBy] = null
+                    it[EventsTable.clubId] = clubId
+                }.value
         }
 
     private fun insertParticipant(
@@ -295,11 +298,12 @@ class PlaceholderMergeRepositoryTest {
         name: String,
     ): UUID =
         transaction {
-            PlayerListsTable.insertAndGetId {
-                it[ownerId] = owner
-                it[PlayerListsTable.name] = name
-                it[createdAt] = LocalDateTime.now()
-            }.value
+            PlayerListsTable
+                .insertAndGetId {
+                    it[ownerId] = owner
+                    it[PlayerListsTable.name] = name
+                    it[createdAt] = LocalDateTime.now()
+                }.value
         }
 
     private fun insertListMember(
@@ -325,12 +329,13 @@ class PlaceholderMergeRepositoryTest {
 
     private fun insertClub(name: String): UUID =
         transaction {
-            ClubsTable.insertAndGetId {
-                it[ClubsTable.name] = name
-                it[publicCode] = name.take(n = 6).uppercase().padEnd(length = 6, padChar = 'X')
-                it[createdBy] = null
-                it[createdAt] = LocalDateTime.now()
-            }.value
+            ClubsTable
+                .insertAndGetId {
+                    it[ClubsTable.name] = name
+                    it[publicCode] = name.take(n = 6).uppercase().padEnd(length = 6, padChar = 'X')
+                    it[createdBy] = null
+                    it[createdAt] = LocalDateTime.now()
+                }.value
         }
 
     private fun insertClubOwner(

@@ -94,7 +94,11 @@ object ReplayBuilder {
             gameWon = gameWon,
             breakOfServe = gameWon && breakable && wonBy != server,
             setWon = setWon,
-            outcome = after.outcome?.kind?.name.takeIf { kind == KIND_END },
+            outcome =
+                after.outcome
+                    ?.kind
+                    ?.name
+                    .takeIf { kind == KIND_END },
             score = after.toReplayScore(),
         )
     }
@@ -106,10 +110,14 @@ object ReplayBuilder {
     ): Pair<String, TeamSide>? =
         when (event) {
             is ScoreEvent.PointWon -> KIND_POINT to event.side
+
             is ScoreEvent.GameAwarded -> KIND_GAME to event.side
+
             is ScoreEvent.SetAwarded -> KIND_SET to event.side
+
             // The winner, not the event's side: a retirement names the side that conceded.
             is ScoreEvent.Ending -> after.outcome?.let { KIND_END to it.winner }
+
             else -> null
         }
 

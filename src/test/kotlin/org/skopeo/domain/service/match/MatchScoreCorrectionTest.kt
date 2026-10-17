@@ -93,15 +93,16 @@ class MatchScoreCorrectionTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -120,20 +121,21 @@ class MatchScoreCorrectionTest {
         team2Games: Int = 4,
     ): Match {
         val match =
-            matchRepo.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = date,
-                        team1UserIds = listOf(element = p1.id),
-                        team2UserIds = listOf(element = p2.id),
-                        team1Name = "t1",
-                        team2Name = "t2",
-                        createdBy = host.id,
-                        eventId = fixtureEventId(),
-                    ),
-            ).toDomain()
+            matchRepo
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = date,
+                            team1UserIds = listOf(element = p1.id),
+                            team2UserIds = listOf(element = p2.id),
+                            team1Name = "t1",
+                            team2Name = "t2",
+                            createdBy = host.id,
+                            eventId = fixtureEventId(),
+                        ),
+                ).toDomain()
         val winner = if (team1Games > team2Games) match.team1.teamId else match.team2.teamId
         matchRepo.addResult(
             matchId = match.id,
@@ -294,7 +296,12 @@ class MatchScoreCorrectionTest {
         laterRowAfter.id shouldBe laterRowBefore.id
         laterRowAfter.ratingChange shouldBe laterRowBefore.ratingChange
         laterRowAfter.newRating shouldBe laterRowBefore.newRating
-        matchRepo.findById(matchId = later.id).shouldBeRight().toDomain().reRatedAt.shouldBeNull()
+        matchRepo
+            .findById(matchId = later.id)
+            .shouldBeRight()
+            .toDomain()
+            .reRatedAt
+            .shouldBeNull()
     }
 
     @Test
@@ -421,7 +428,12 @@ class MatchScoreCorrectionTest {
 
         // The host's attempt changed nothing.
         currentRating(userId = r.p1.id).shouldNotBeNull()
-        matchRepo.findById(matchId = r.match.id).shouldBeRight().toDomain().reRatedAt.shouldBeNull()
+        matchRepo
+            .findById(matchId = r.match.id)
+            .shouldBeRight()
+            .toDomain()
+            .reRatedAt
+            .shouldBeNull()
     }
 
     @Test
@@ -462,7 +474,12 @@ class MatchScoreCorrectionTest {
         error.message shouldContain "no live rating history"
 
         currentRating(userId = r.p1.id) shouldBe before
-        matchRepo.findById(matchId = r.match.id).shouldBeRight().toDomain().reRatedAt.shouldBeNull()
+        matchRepo
+            .findById(matchId = r.match.id)
+            .shouldBeRight()
+            .toDomain()
+            .reRatedAt
+            .shouldBeNull()
     }
 
     @Test
@@ -484,7 +501,12 @@ class MatchScoreCorrectionTest {
                 .shouldBeInstanceOf<ServiceError.Conflict>()
         error.message shouldContain "no current rating"
 
-        matchRepo.findById(matchId = r.match.id).shouldBeRight().toDomain().reRatedAt.shouldBeNull()
+        matchRepo
+            .findById(matchId = r.match.id)
+            .shouldBeRight()
+            .toDomain()
+            .reRatedAt
+            .shouldBeNull()
     }
 
     @Test
@@ -554,11 +576,12 @@ class MatchScoreCorrectionTest {
         // suppressed player has none — so any match involving a calibrating player was permanently
         // uncorrectable, reporting that its ratings "cannot be reversed" when there was nothing to reverse.
         val outcome =
-            service.correctScore(
-                token = token(uid = "admin"),
-                matchId = r.match.id,
-                request = correction(team1Games = 6, team2Games = 0),
-            ).shouldBeRight()
+            service
+                .correctScore(
+                    token = token(uid = "admin"),
+                    matchId = r.match.id,
+                    request = correction(team1Games = 6, team2Games = 0),
+                ).shouldBeRight()
 
         val forP1 = outcome.impacts.single { it.userId == r.p1.id.toString() }
         val forP2 = outcome.impacts.single { it.userId == r.p2.id.toString() }
@@ -576,11 +599,12 @@ class MatchScoreCorrectionTest {
         val r = ratedWithSuppressedOpponent()
         val p2Before = currentRating(userId = r.p2.id)
 
-        service.correctScore(
-            token = token(uid = "admin"),
-            matchId = r.match.id,
-            request = correction(team1Games = 6, team2Games = 0, dryRun = false),
-        ).shouldBeRight()
+        service
+            .correctScore(
+                token = token(uid = "admin"),
+                matchId = r.match.id,
+                request = correction(team1Games = 6, team2Games = 0, dryRun = false),
+            ).shouldBeRight()
 
         // The whole point of reversing what was APPLIED rather than what was computed: p2's rating is
         // untouched, and no replacement history row was written for them.
@@ -605,8 +629,7 @@ class MatchScoreCorrectionTest {
                     token = token(uid = "admin"),
                     matchId = r.match.id,
                     request = correction(team1Games = 6, team2Games = 0, dryRun = false),
-                )
-                .shouldBeRight()
+                ).shouldBeRight()
 
         outcome.impacts.single { it.userId == r.p2.id.toString() }.wasSuppressed shouldBe true
         currentRating(userId = r.p2.id) shouldBe p2Before

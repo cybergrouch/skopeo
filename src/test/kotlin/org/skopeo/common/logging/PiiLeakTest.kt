@@ -347,14 +347,15 @@ class PiiLeakTest {
     }
 
     private fun provisionUser(uid: String): UUID =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.FIRST, value = "Probe")),
-                ),
-        ).user.id
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.FIRST, value = "Probe")),
+                    ),
+            ).user.id
 
     /** Add [EMAIL] to [userId] and verify it — the second call is the one that hits the unique index. */
     private fun verifyEmail(
@@ -405,4 +406,6 @@ class PiiLeakTest {
  * rule. Its message is deliberately generic — an exception message is authored by us and gets logged, so
  * it is the wrong place for anything from the request.
  */
-private class LeakProbe(message: String) : IllegalStateException(message)
+private class LeakProbe(
+    message: String,
+) : IllegalStateException(message)

@@ -101,8 +101,14 @@ class NtrpMatchupMatrixReport {
             calculator.calculate(
                 request = createSinglesRequest(p1Rating = p1, p2Rating = p2, p1Games = gamesWon, p2Games = gamesLost, winner = "T1"),
             )
-        val p1Delta = result.response.ratingChanges["P1"]?.change?.toDouble() ?: 0.0
-        val p2Delta = result.response.ratingChanges["P2"]?.change?.toDouble() ?: 0.0
+        val p1Delta =
+            result.response.ratingChanges["P1"]
+                ?.change
+                ?.toDouble() ?: 0.0
+        val p2Delta =
+            result.response.ratingChanges["P2"]
+                ?.change
+                ?.toDouble() ?: 0.0
 
         val (expectedP1, expectedP2) =
             expectedChange(winnerRating = p1.toDouble(), loserRating = p2.toDouble(), gamesWon = gamesWon, gamesLost = gamesLost)

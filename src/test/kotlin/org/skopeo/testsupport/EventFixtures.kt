@@ -152,7 +152,14 @@ fun fixtureEventId(vararg participantIds: UUID): UUID {
  * `mayFileUnder`, and stay able to organize any event under any club.
  */
 private fun grantOrganizerRights(eventId: UUID) {
-    val clubId = transaction { EventsTable.selectAll().where { EventsTable.id eq eventId }.single()[EventsTable.clubId].value }
+    val clubId =
+        transaction {
+            EventsTable
+                .selectAll()
+                .where { EventsTable.id eq eventId }
+                .single()[EventsTable.clubId]
+                .value
+        }
     val staff =
         transaction {
             UserCapabilitiesTable

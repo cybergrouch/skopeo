@@ -213,17 +213,19 @@ class LiveMatchApiIntegrationTest {
             val matchId = seedFixture()
 
             repeat(times = 3) {
-                client.postEvent(
-                    token = token,
-                    matchId = matchId,
-                    request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"),
-                ).status shouldBe HttpStatusCode.Created
+                client
+                    .postEvent(
+                        token = token,
+                        matchId = matchId,
+                        request = LiveScoreEventRequest(kind = "POINT_WON", side = "TEAM1"),
+                    ).status shouldBe HttpStatusCode.Created
             }
 
             val view: LiveMatchResponse =
-                client.get(urlString = "/api/v1/matches/$matchId/live") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
-                }.body()
+                client
+                    .get(urlString = "/api/v1/matches/$matchId/live") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    }.body()
 
             view.pointsTeam1 shouldBe "40"
             view.pointsTeam2 shouldBe "0"
@@ -666,9 +668,10 @@ class LiveMatchApiIntegrationTest {
                 .status shouldBe HttpStatusCode.Created
 
             val view: LiveMatchResponse =
-                client.get(urlString = "/api/v1/matches/$matchId/live") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
-                }.body()
+                client
+                    .get(urlString = "/api/v1/matches/$matchId/live") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    }.body()
             view.gamesTeam1 shouldBe 1
             view.servingSide.shouldBeNull()
         }
@@ -711,7 +714,12 @@ class LiveMatchApiIntegrationTest {
             client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "RETIRED", side = "TEAM1"))
             client.finalize(token = token, matchId = matchId).status shouldBe HttpStatusCode.OK
 
-            MatchRepository().findById(matchId = matchId).shouldBeRight().toDomain().sets.shouldBeEmpty()
+            MatchRepository()
+                .findById(matchId = matchId)
+                .shouldBeRight()
+                .toDomain()
+                .sets
+                .shouldBeEmpty()
         }
 
     @Test
@@ -770,7 +778,12 @@ class LiveMatchApiIntegrationTest {
             client.winAGame(token = token, matchId = matchId, side = "TEAM1")
             client.postEvent(token = token, matchId = matchId, request = LiveScoreEventRequest(kind = "SET_AWARDED", side = "TEAM1"))
             client.finalize(token = token, matchId = matchId).status shouldBe HttpStatusCode.OK
-            val code = MatchRepository().findById(matchId = matchId).shouldBeRight().toDomain().publicCode
+            val code =
+                MatchRepository()
+                    .findById(matchId = matchId)
+                    .shouldBeRight()
+                    .toDomain()
+                    .publicCode
 
             // Anonymous, like the match page it belongs to.
             val replay = client.get(urlString = "/api/v1/matches/code/$code/replay")

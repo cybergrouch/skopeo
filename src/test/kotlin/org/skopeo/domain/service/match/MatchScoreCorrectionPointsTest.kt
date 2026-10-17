@@ -87,15 +87,16 @@ class MatchScoreCorrectionPointsTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -115,22 +116,23 @@ class MatchScoreCorrectionPointsTest {
         p2: User,
     ): Match {
         val match =
-            matchRepo.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.TOURNAMENT,
-                        matchDate = LocalDate.now(),
-                        team1UserIds = listOf(element = p1.id),
-                        team2UserIds = listOf(element = p2.id),
-                        team1Name = "t1",
-                        team2Name = "t2",
-                        createdBy = host.id,
-                        eventId = eventId,
-                        isPlacementMatch = true,
-                        placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
-                    ),
-            ).toDomain()
+            matchRepo
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.TOURNAMENT,
+                            matchDate = LocalDate.now(),
+                            team1UserIds = listOf(element = p1.id),
+                            team2UserIds = listOf(element = p2.id),
+                            team1Name = "t1",
+                            team2Name = "t2",
+                            createdBy = host.id,
+                            eventId = eventId,
+                            isPlacementMatch = true,
+                            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
+                        ),
+                ).toDomain()
         matchRepo.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = match.team1.teamId)),
@@ -230,20 +232,21 @@ class MatchScoreCorrectionPointsTest {
         p2: User,
     ): Match {
         val match =
-            matchRepo.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.TOURNAMENT,
-                        matchDate = LocalDate.now(),
-                        team1UserIds = listOf(element = p1.id),
-                        team2UserIds = listOf(element = p2.id),
-                        team1Name = "r1",
-                        team2Name = "r2",
-                        createdBy = host.id,
-                        eventId = eventId,
-                    ),
-            ).toDomain()
+            matchRepo
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.TOURNAMENT,
+                            matchDate = LocalDate.now(),
+                            team1UserIds = listOf(element = p1.id),
+                            team2UserIds = listOf(element = p2.id),
+                            team1Name = "r1",
+                            team2Name = "r2",
+                            createdBy = host.id,
+                            eventId = eventId,
+                        ),
+                ).toDomain()
         matchRepo.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = match.team1.teamId)),

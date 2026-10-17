@@ -76,7 +76,8 @@ class AuditRepository {
             val items =
                 query()
                     .orderBy(AuditLogTable.occurredAt to SortOrder.DESC)
-                    .limit(count = limit).offset(start = offset.toLong())
+                    .limit(count = limit)
+                    .offset(start = offset.toLong())
                     .map { it.toAuditEntryEntity() }
             items to total
         }

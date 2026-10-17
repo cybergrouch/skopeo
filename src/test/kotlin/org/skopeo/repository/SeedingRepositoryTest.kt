@@ -50,14 +50,15 @@ class SeedingRepositoryTest {
     }
 
     private fun newUser(uid: String): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                    ),
+            ).toDomain()
 
     private fun entryFor(
         user: User,
@@ -98,11 +99,19 @@ class SeedingRepositoryTest {
 
         // The generate path leaves it false.
         seedings.replace(listId = list.id, generatedBy = owner.id, entries = entries)
-        seedings.findByListId(listId = list.id).shouldBeRight().toDomain().manuallyEdited shouldBe false
+        seedings
+            .findByListId(listId = list.id)
+            .shouldBeRight()
+            .toDomain()
+            .manuallyEdited shouldBe false
 
         // A hand-saved order persists it as true (regenerate/overwrite in place).
         seedings.replace(listId = list.id, generatedBy = owner.id, entries = entries, manuallyEdited = true)
-        seedings.findByListId(listId = list.id).shouldBeRight().toDomain().manuallyEdited shouldBe true
+        seedings
+            .findByListId(listId = list.id)
+            .shouldBeRight()
+            .toDomain()
+            .manuallyEdited shouldBe true
     }
 
     @Test
@@ -117,18 +126,19 @@ class SeedingRepositoryTest {
         val host = newUser(uid = "host")
         val player = newUser(uid = "p1")
         val event =
-            events.create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "Club Open",
-                        startDate = LocalDate.now(),
-                        endDate = LocalDate.now(),
-                        participantIds = listOf(element = player.id),
-                        createdBy = host.id,
-                    ),
-            ).toDomain()
+            events
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "Club Open",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now(),
+                            participantIds = listOf(element = player.id),
+                            createdBy = host.id,
+                        ),
+                ).toDomain()
 
         seedings.replaceForEvent(
             eventId = event.id,
@@ -149,18 +159,19 @@ class SeedingRepositoryTest {
     fun `findByEventId is not found when no event seeding exists (#714)`() {
         val host = newUser(uid = "host")
         val event =
-            events.create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "Empty",
-                        startDate = LocalDate.now(),
-                        endDate = LocalDate.now(),
-                        participantIds = emptyList(),
-                        createdBy = host.id,
-                    ),
-            ).toDomain()
+            events
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "Empty",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now(),
+                            participantIds = emptyList(),
+                            createdBy = host.id,
+                        ),
+                ).toDomain()
         seedings.findByEventId(eventId = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 

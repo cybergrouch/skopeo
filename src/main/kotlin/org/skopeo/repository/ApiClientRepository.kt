@@ -36,16 +36,27 @@ class ApiClientRepository {
     ): ApiClientAggregateEntity =
         transaction {
             val id =
-                ApiClientsTable.insertAndGetId {
-                    it[ApiClientsTable.name] = name
-                    it[status] = ApiClientStatus.ACTIVE.name
-                    it[ApiClientsTable.createdBy] = createdBy
-                }.value
-            ApiClientsTable.selectAll().where { ApiClientsTable.id eq id }.single().toApiClientAggregate()
+                ApiClientsTable
+                    .insertAndGetId {
+                        it[ApiClientsTable.name] = name
+                        it[status] = ApiClientStatus.ACTIVE.name
+                        it[ApiClientsTable.createdBy] = createdBy
+                    }.value
+            ApiClientsTable
+                .selectAll()
+                .where { ApiClientsTable.id eq id }
+                .single()
+                .toApiClientAggregate()
         }
 
     fun findClientById(id: UUID): ApiClientAggregateEntity? =
-        transaction { ApiClientsTable.selectAll().where { ApiClientsTable.id eq id }.singleOrNull()?.toApiClientAggregate() }
+        transaction {
+            ApiClientsTable
+                .selectAll()
+                .where { ApiClientsTable.id eq id }
+                .singleOrNull()
+                ?.toApiClientAggregate()
+        }
 
     /** Set (or clear, when null) a client's per-minute rate-limit override (#603). Returns the refreshed client, or null if missing. */
     fun setRateLimit(
@@ -59,7 +70,11 @@ class ApiClientRepository {
                     it[updatedAt] = LocalDateTime.now()
                 }
             if (updated > 0) {
-                ApiClientsTable.selectAll().where { ApiClientsTable.id eq clientId }.single().toApiClientAggregate()
+                ApiClientsTable
+                    .selectAll()
+                    .where { ApiClientsTable.id eq clientId }
+                    .single()
+                    .toApiClientAggregate()
             } else {
                 null
             }
@@ -85,16 +100,21 @@ class ApiClientRepository {
     fun insertKey(command: InsertApiKeyCommand): ApiKeyEntity =
         transaction {
             val id =
-                ApiKeysTable.insertAndGetId {
-                    it[clientId] = command.clientId
-                    it[keyPrefix] = command.keyPrefix
-                    it[keyHash] = command.keyHash
-                    it[scopes] = command.scopes.joinToString(separator = ",") { scope -> scope.name }
-                    it[status] = ApiKeyStatus.ACTIVE.name
-                    it[createdBy] = command.createdBy
-                    it[expiresAt] = command.expiresAt
-                }.value
-            ApiKeysTable.selectAll().where { ApiKeysTable.id eq id }.single().toApiKeyEntity()
+                ApiKeysTable
+                    .insertAndGetId {
+                        it[clientId] = command.clientId
+                        it[keyPrefix] = command.keyPrefix
+                        it[keyHash] = command.keyHash
+                        it[scopes] = command.scopes.joinToString(separator = ",") { scope -> scope.name }
+                        it[status] = ApiKeyStatus.ACTIVE.name
+                        it[createdBy] = command.createdBy
+                        it[expiresAt] = command.expiresAt
+                    }.value
+            ApiKeysTable
+                .selectAll()
+                .where { ApiKeysTable.id eq id }
+                .single()
+                .toApiKeyEntity()
         }
 
     /**

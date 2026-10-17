@@ -77,16 +77,17 @@ class StaleAccountApiIntegrationTest {
         signedUpDaysAgo: Long = 0,
     ): User {
         val user =
-            UserRepository().provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = uid,
-                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                        sex = "Male",
-                        capabilities = roles,
-                    ),
-            ).toDomain()
+            UserRepository()
+                .provision(
+                    command =
+                        ProvisionUserCommand(
+                            firebaseUid = uid,
+                            identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                            names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                            sex = "Male",
+                            capabilities = roles,
+                        ),
+                ).toDomain()
         transaction {
             exec(stmt = "UPDATE users SET created_at = now() - interval '$signedUpDaysAgo days' WHERE id = '${user.id}'")
         }
@@ -111,7 +112,11 @@ class StaleAccountApiIntegrationTest {
 
             response.status shouldBe HttpStatusCode.OK
             response.body<StaleAccountSweepResponse>().accounts.map { it.publicCode } shouldBe listOf(element = stale.publicCode)
-            UserRepository().findById(id = stale.id).getOrNull()?.toDomain()?.isActive shouldBe false
+            UserRepository()
+                .findById(id = stale.id)
+                .getOrNull()
+                ?.toDomain()
+                ?.isActive shouldBe false
         }
 
     @Test
@@ -121,13 +126,18 @@ class StaleAccountApiIntegrationTest {
             val stale = seedUser(uid = "stale", signedUpDaysAgo = 45)
 
             val body =
-                client.post(urlString = "/api/v1/users/stale-sweeps") {
-                    header(key = HttpHeaders.Authorization, value = adminAuth())
-                }.body<StaleAccountSweepResponse>()
+                client
+                    .post(urlString = "/api/v1/users/stale-sweeps") {
+                        header(key = HttpHeaders.Authorization, value = adminAuth())
+                    }.body<StaleAccountSweepResponse>()
 
             body.dryRun shouldBe true
             body.accounts.map { it.publicCode } shouldBe listOf(element = stale.publicCode)
-            UserRepository().findById(id = stale.id).getOrNull()?.toDomain()?.isActive shouldBe true
+            UserRepository()
+                .findById(id = stale.id)
+                .getOrNull()
+                ?.toDomain()
+                ?.isActive shouldBe true
         }
 
     @Test
@@ -137,9 +147,10 @@ class StaleAccountApiIntegrationTest {
             // Least privilege (#597): an account manager's key restores accounts, it does not sweep them.
             val wrongScope = client.issueKeyFor(scopes = listOf(element = Capability.ACCOUNT_MANAGER.name))
 
-            client.post(urlString = "/api/v1/users/stale-sweeps") {
-                header(key = "X-Api-Key", value = wrongScope.apiKey)
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .post(urlString = "/api/v1/users/stale-sweeps") {
+                    header(key = "X-Api-Key", value = wrongScope.apiKey)
+                }.status shouldBe HttpStatusCode.Forbidden
             client.post(urlString = "/api/v1/users/stale-sweeps").status shouldBe HttpStatusCode.Unauthorized
         }
 
@@ -152,15 +163,24 @@ class StaleAccountApiIntegrationTest {
             val older = seedUser(uid = "older", signedUpDaysAgo = 20)
 
             val page =
-                client.get(urlString = "/api/v1/users/pending-assessment") {
-                    header(key = HttpHeaders.Authorization, value = adminAuth())
-                }.body<PendingAssessmentPageResponse>()
+                client
+                    .get(urlString = "/api/v1/users/pending-assessment") {
+                        header(key = HttpHeaders.Authorization, value = adminAuth())
+                    }.body<PendingAssessmentPageResponse>()
 
             page.items.map { it.publicCode } shouldBe listOf(older.publicCode, newer.publicCode, admin.publicCode)
             page.items.map { it.scheduledRemovalOn } shouldBe
                 listOf(
-                    LocalDate.now().minusDays(20).plusDays(30).toString(),
-                    LocalDate.now().minusDays(5).plusDays(30).toString(),
+                    LocalDate
+                        .now()
+                        .minusDays(20)
+                        .plusDays(30)
+                        .toString(),
+                    LocalDate
+                        .now()
+                        .minusDays(5)
+                        .plusDays(30)
+                        .toString(),
                     null,
                 )
         }

@@ -104,18 +104,20 @@ class ContactApiIntegrationTest {
             val userToken = TestFirebaseAuth.mintToken(uid = "fb-bad")
             val user = client.provisionSelf(token = userToken)
 
-            client.post(urlString = "/api/v1/users/${user.id}/contacts") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = ContactCreateRequest(type = "FAX", value = "x", isPrimary = true))
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .post(urlString = "/api/v1/users/${user.id}/contacts") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = ContactCreateRequest(type = "FAX", value = "x", isPrimary = true))
+                }.status shouldBe HttpStatusCode.BadRequest
 
             val contact = client.addPhone(token = userToken, userId = user.id).body<ContactResponse>()
-            client.put(urlString = "/api/v1/users/${user.id}/contacts/${contact.id}/verification") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = VerificationRequest(status = "MAYBE"))
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .put(urlString = "/api/v1/users/${user.id}/contacts/${contact.id}/verification") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = VerificationRequest(status = "MAYBE"))
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
@@ -131,11 +133,12 @@ class ContactApiIntegrationTest {
             contact.status shouldBe "PENDING"
 
             // The owner cannot mark their own contact verified.
-            client.put(urlString = "/api/v1/users/${user.id}/contacts/${contact.id}/verification") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = VerificationRequest(status = "VERIFIED"))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .put(urlString = "/api/v1/users/${user.id}/contacts/${contact.id}/verification") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = VerificationRequest(status = "VERIFIED"))
+                }.status shouldBe HttpStatusCode.Forbidden
 
             // An administrator can.
             val verified =
@@ -181,14 +184,16 @@ class ContactApiIntegrationTest {
             val user = client.provisionSelf(token = userToken)
             val contact = client.addPhone(token = userToken, userId = user.id).body<ContactResponse>()
 
-            client.get(urlString = "/api/v1/users/${user.id}/contacts") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
-            }.status shouldBe HttpStatusCode.OK
+            client
+                .get(urlString = "/api/v1/users/${user.id}/contacts") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
+                }.status shouldBe HttpStatusCode.OK
 
-            client.put(urlString = "/api/v1/users/${user.id}/contacts/${contact.id}/state") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = ContactStateRequest(isActive = false))
-            }.status shouldBe HttpStatusCode.OK
+            client
+                .put(urlString = "/api/v1/users/${user.id}/contacts/${contact.id}/state") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = ContactStateRequest(isActive = false))
+                }.status shouldBe HttpStatusCode.OK
         }
 }

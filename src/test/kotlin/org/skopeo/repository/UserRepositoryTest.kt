@@ -112,12 +112,14 @@ class UserRepositoryTest {
             (1..3)
                 .map { n ->
                     // Distinct identities — the helper hardcodes providerUid, which is uniquely constrained.
-                    repository.provision(
-                        command =
-                            googleSignup().copy(
-                                identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "sub-$n", isPrimary = true),
-                            ),
-                    ).toDomain().id
+                    repository
+                        .provision(
+                            command =
+                                googleSignup().copy(
+                                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "sub-$n", isPrimary = true),
+                                ),
+                        ).toDomain()
+                        .id
                 }.toSet()
         val query =
             UserSearchQuery(name = null, code = null, q = null, sex = "Male", dobMin = null, dobMax = null, rating = null)
@@ -207,7 +209,8 @@ class UserRepositoryTest {
         val created = repository.provision(command = googleSignup()).toDomain()
 
         // A custom photo overrides the provider photo as the effective photo.
-        repository.updatePhotoSettings(id = created.id, customPhotoUrl = "https://c/me.png", photoHidden = false)
+        repository
+            .updatePhotoSettings(id = created.id, customPhotoUrl = "https://c/me.png", photoHidden = false)
             .shouldBeRight()
             .toDomain()
             .photoUrl shouldBe "https://c/me.png"
@@ -220,12 +223,14 @@ class UserRepositoryTest {
         }
 
         // Hiding suppresses the effective photo; clearing the custom URL reverts to the provider photo.
-        repository.updatePhotoSettings(id = created.id, customPhotoUrl = null, photoHidden = true)
+        repository
+            .updatePhotoSettings(id = created.id, customPhotoUrl = null, photoHidden = true)
             .shouldBeRight()
             .toDomain()
             .photoUrl
             .shouldBeNull()
-        repository.updatePhotoSettings(id = created.id, customPhotoUrl = null, photoHidden = false)
+        repository
+            .updatePhotoSettings(id = created.id, customPhotoUrl = null, photoHidden = false)
             .shouldBeRight()
             .toDomain()
             .photoUrl shouldBe "https://p/new.jpg"
@@ -248,7 +253,8 @@ class UserRepositoryTest {
 
     @Test
     fun `updatePhotoSettings is a NotFound for an unknown user (#303)`() {
-        repository.updatePhotoSettings(id = UUID.randomUUID(), customPhotoUrl = null, photoHidden = true)
+        repository
+            .updatePhotoSettings(id = UUID.randomUUID(), customPhotoUrl = null, photoHidden = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
@@ -294,7 +300,12 @@ class UserRepositoryTest {
 
         repository.deactivate(id = created.id).shouldBeRight()
 
-        repository.findById(id = created.id).shouldBeRight().toDomain().isActive.shouldBeFalse()
+        repository
+            .findById(id = created.id)
+            .shouldBeRight()
+            .toDomain()
+            .isActive
+            .shouldBeFalse()
         repository.deactivate(id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
@@ -326,12 +337,13 @@ class UserRepositoryTest {
             command = googleSignup().copy(identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "cs-1", isPrimary = true)),
         )
         val deleted =
-            repository.provision(
-                command =
-                    googleSignup().copy(
-                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "cs-2", isPrimary = true),
-                    ),
-            ).toDomain()
+            repository
+                .provision(
+                    command =
+                        googleSignup().copy(
+                            identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "cs-2", isPrimary = true),
+                        ),
+                ).toDomain()
         repository.deactivate(id = deleted.id).shouldBeRight()
         val query = UserSearchQuery(name = null, code = null, q = null, sex = "Male", dobMin = null, dobMax = null, rating = null)
 

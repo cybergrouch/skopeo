@@ -85,28 +85,30 @@ class PlayerServiceTest {
         names: List<UserName>,
         sex: String? = null,
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = names,
-                    sex = sex,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = names,
+                        sex = sex,
+                    ),
+            ).toDomain()
 
     private fun display(name: String): List<UserName> = listOf(element = UserName(type = NameType.DISPLAY, value = name))
 
     private fun newAdmin(uid: String): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = display(name = "Admin"),
-                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = display(name = "Admin"),
+                        capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -124,67 +126,71 @@ class PlayerServiceTest {
         name: String,
         email: String,
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = display(name = name),
-                    email = emailContact(value = email),
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = display(name = name),
+                        email = emailContact(value = email),
+                    ),
+            ).toDomain()
 
     private fun viewerWith(
         uid: String,
         capabilities: Set<Capability>,
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = display(name = uid),
-                    capabilities = capabilities,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = display(name = uid),
+                        capabilities = capabilities,
+                    ),
+            ).toDomain()
 
     private fun fixture(
         u1: UUID,
         u2: UUID,
         date: LocalDate,
-    ) = matches.createFixture(
-        command =
-            CreateFixtureCommand(
-                matchFormat = TeamType.SINGLES,
-                matchType = MatchType.OPEN_PLAY,
-                matchDate = date,
-                team1UserIds = listOf(element = u1),
-                team2UserIds = listOf(element = u2),
-                team1Name = "T1",
-                team2Name = "T2",
-                createdBy = u1,
-                eventId = fixtureEventId(),
-            ),
-    ).toDomain()
+    ) = matches
+        .createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.SINGLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = date,
+                    team1UserIds = listOf(element = u1),
+                    team2UserIds = listOf(element = u2),
+                    team1Name = "T1",
+                    team2Name = "T2",
+                    createdBy = u1,
+                    eventId = fixtureEventId(),
+                ),
+        ).toDomain()
 
     private fun doublesFixture(
         team1: List<UUID>,
         team2: List<UUID>,
         date: LocalDate,
-    ) = matches.createFixture(
-        command =
-            CreateFixtureCommand(
-                matchFormat = TeamType.DOUBLES,
-                matchType = MatchType.OPEN_PLAY,
-                matchDate = date,
-                team1UserIds = team1,
-                team2UserIds = team2,
-                team1Name = "T1",
-                team2Name = "T2",
-                createdBy = team1.first(),
-                eventId = fixtureEventId(),
-            ),
-    ).toDomain()
+    ) = matches
+        .createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.DOUBLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = date,
+                    team1UserIds = team1,
+                    team2UserIds = team2,
+                    team1Name = "T1",
+                    team2Name = "T2",
+                    createdBy = team1.first(),
+                    eventId = fixtureEventId(),
+                ),
+        ).toDomain()
 
     /** Append a single player's rating-history row for a match, carrying their pre-match band. */
     private fun history(
@@ -235,7 +241,11 @@ class PlayerServiceTest {
     fun `omits the rating when the player has none`() {
         val user = newUser(uid = "p2", names = listOf(element = UserName(type = NameType.DISPLAY, value = "Bea")))
 
-        service.publicProfile(code = user.publicCode).shouldBeRight().rating.shouldBeNull()
+        service
+            .publicProfile(code = user.publicCode)
+            .shouldBeRight()
+            .rating
+            .shouldBeNull()
     }
 
     @Test
@@ -307,7 +317,11 @@ class PlayerServiceTest {
         val target = newUserWithEmail(uid = "tgt", name = "Bea", email = "bea@example.com")
 
         // No token → the OpenGraph/anonymous path — email must never be included.
-        service.publicProfile(code = target.publicCode).shouldBeRight().email.shouldBeNull()
+        service
+            .publicProfile(code = target.publicCode)
+            .shouldBeRight()
+            .email
+            .shouldBeNull()
     }
 
     @Test
@@ -406,20 +420,29 @@ class PlayerServiceTest {
         service.matchHistory(code = ana.publicCode).shouldBeRight().items.single().let {
             it.playerLevelAtMatch shouldBe "4.0"
             it.playerRatingAtMatch.shouldBeNull()
-            it.opponents.single().ratingAtMatch.shouldBeNull()
+            it.opponents
+                .single()
+                .ratingAtMatch
+                .shouldBeNull()
         }
 
         // Admin with raw enabled: raw NTRP-at-match for the player and the opponent.
         service.matchHistory(code = ana.publicCode, token = token(uid = "admin")).shouldBeRight().items.single().let {
             it.playerRatingAtMatch.shouldNotBeNull()
-            it.opponents.single().ratingAtMatch.shouldNotBeNull()
+            it.opponents
+                .single()
+                .ratingAtMatch
+                .shouldNotBeNull()
         }
 
         // Admin previewing as a non-admin (#583): raw is hidden again, bands remain.
         users.setPreviewRatingsAsNonAdmin(id = admin.id, preview = true).shouldBeRight()
         service.matchHistory(code = ana.publicCode, token = token(uid = "admin")).shouldBeRight().items.single().let {
             it.playerRatingAtMatch.shouldBeNull()
-            it.opponents.single().ratingAtMatch.shouldBeNull()
+            it.opponents
+                .single()
+                .ratingAtMatch
+                .shouldBeNull()
             it.playerLevelAtMatch shouldBe "4.0"
         }
     }
@@ -511,7 +534,10 @@ class PlayerServiceTest {
         rampCurrentRating(userId = ben.id, matchCount = 2)
 
         val win =
-            service.matchHistory(code = ana.publicCode).shouldBeRight().items
+            service
+                .matchHistory(code = ana.publicCode)
+                .shouldBeRight()
+                .items
                 .single { row -> row.opponents.any { it.publicCode == ben.publicCode } }
         win.playerConfidence shouldBe "0.979186"
         win.opponents.single().confidence shouldBe "0.595169"
@@ -691,7 +717,12 @@ class PlayerServiceTest {
         history(userId = cy.id, matchId = match.id, previousLevel = "3.0")
         history(userId = deb.id, matchId = match.id, previousLevel = "3.5")
 
-        val entry = service.matchHistory(code = ana.publicCode).shouldBeRight().items.single()
+        val entry =
+            service
+                .matchHistory(code = ana.publicCode)
+                .shouldBeRight()
+                .items
+                .single()
 
         entry.result shouldBe "WIN"
         entry.playerLevelAtMatch shouldBe "4.0"
@@ -768,7 +799,11 @@ class PlayerServiceTest {
         // Band 3.5 → only the Ben match; band 4.0 → only Cara; blank → no filter (both).
         val band35 = service.matchHistory(code = ana.publicCode, opponentBand = "3.5").shouldBeRight()
         band35.total shouldBe 1
-        band35.items.single().opponents.single().displayName shouldBe "Ben"
+        band35.items
+            .single()
+            .opponents
+            .single()
+            .displayName shouldBe "Ben"
         service
             .matchHistory(code = ana.publicCode, opponentBand = "4.0")
             .shouldBeRight()
@@ -790,7 +825,12 @@ class PlayerServiceTest {
         // Searching by the null-display opponent's public code hits the left (publicCode) arm.
         val byCode = service.matchHistory(code = ana.publicCode, search = noDisplay.publicCode.lowercase()).shouldBeRight()
         byCode.total shouldBe 1
-        byCode.items.single().opponents.single().displayName.shouldBeNull()
+        byCode.items
+            .single()
+            .opponents
+            .single()
+            .displayName
+            .shouldBeNull()
 
         // A needle that matches neither the code nor the (null) display name exercises the right arm's null branch.
         service.matchHistory(code = ana.publicCode, search = "zzz-no-such-needle").shouldBeRight().total shouldBe 0
@@ -805,7 +845,11 @@ class PlayerServiceTest {
         // "benjamin" cannot be a public code (codes are short), so only the display-name (right) arm can match.
         val byName = service.matchHistory(code = ana.publicCode, search = "benjamin").shouldBeRight()
         byName.total shouldBe 1
-        byName.items.single().opponents.single().displayName shouldBe "Benjamin"
+        byName.items
+            .single()
+            .opponents
+            .single()
+            .displayName shouldBe "Benjamin"
     }
 
     @Test
@@ -955,8 +999,11 @@ class PlayerServiceTest {
         ownerView.rating.shouldBeNull()
         ownerView.points.shouldBeNull()
         // Only an ADMINISTRATOR sees the precise rating.
-        service.standing(token = token(uid = "admin"), code = player.publicCode)
-            .shouldBeRight().shouldNotBeNull().rating shouldBe "4.200000"
+        service
+            .standing(token = token(uid = "admin"), code = player.publicCode)
+            .shouldBeRight()
+            .shouldNotBeNull()
+            .rating shouldBe "4.200000"
     }
 
     @Test
@@ -984,15 +1031,36 @@ class PlayerServiceTest {
         newUser(uid = "other", names = display(name = "Other"))
 
         // Only an ADMINISTRATOR sees the precise rating (#583).
-        service.standing(token = token(uid = "admin"), code = player.publicCode)
-            .shouldBeRight().shouldNotBeNull().rating shouldBe "4.200000"
+        service
+            .standing(token = token(uid = "admin"), code = player.publicCode)
+            .shouldBeRight()
+            .shouldNotBeNull()
+            .rating shouldBe "4.200000"
         // A RATER no longer sees it, nor does the owner, anonymous, or another plain player — band only.
-        service.standing(token = token(uid = "rater"), code = player.publicCode)
-            .shouldBeRight().shouldNotBeNull().rating.shouldBeNull()
-        service.standing(token = token(uid = "p"), code = player.publicCode).shouldBeRight().shouldNotBeNull().rating.shouldBeNull()
-        service.standing(token = null, code = player.publicCode).shouldBeRight().shouldNotBeNull().rating.shouldBeNull()
-        service.standing(token = token(uid = "other"), code = player.publicCode)
-            .shouldBeRight().shouldNotBeNull().rating.shouldBeNull()
+        service
+            .standing(token = token(uid = "rater"), code = player.publicCode)
+            .shouldBeRight()
+            .shouldNotBeNull()
+            .rating
+            .shouldBeNull()
+        service
+            .standing(token = token(uid = "p"), code = player.publicCode)
+            .shouldBeRight()
+            .shouldNotBeNull()
+            .rating
+            .shouldBeNull()
+        service
+            .standing(token = null, code = player.publicCode)
+            .shouldBeRight()
+            .shouldNotBeNull()
+            .rating
+            .shouldBeNull()
+        service
+            .standing(token = token(uid = "other"), code = player.publicCode)
+            .shouldBeRight()
+            .shouldNotBeNull()
+            .rating
+            .shouldBeNull()
     }
 
     @Test
@@ -1006,15 +1074,16 @@ class PlayerServiceTest {
         val player = newUser(uid = "p", names = display(name = "Ana"))
         ratings.setRating(userId = player.id, rating = BigDecimal("4.2"), level = "4.0")
         val admin =
-            users.provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = "admin",
-                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
-                        names = display(name = "Admin"),
-                        capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
-                    ),
-            ).toDomain()
+            users
+                .provision(
+                    command =
+                        ProvisionUserCommand(
+                            firebaseUid = "admin",
+                            identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
+                            names = display(name = "Admin"),
+                            capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                        ),
+                ).toDomain()
 
         // Anonymous + the owner (non-admin): band + confidence, but no raw value.
         service.publicProfile(code = player.publicCode).shouldBeRight().rating.shouldNotBeNull().let {
@@ -1022,15 +1091,29 @@ class PlayerServiceTest {
             it.level shouldBe "4.0"
             it.confidence.shouldNotBeNull()
         }
-        service.publicProfile(code = player.publicCode, token = token(uid = "p"))
-            .shouldBeRight().rating.shouldNotBeNull().value.shouldBeNull()
+        service
+            .publicProfile(code = player.publicCode, token = token(uid = "p"))
+            .shouldBeRight()
+            .rating
+            .shouldNotBeNull()
+            .value
+            .shouldBeNull()
         // An ADMINISTRATOR sees the raw value.
-        service.publicProfile(code = player.publicCode, token = token(uid = "admin"))
-            .shouldBeRight().rating.shouldNotBeNull().value shouldBe "4.200000"
+        service
+            .publicProfile(code = player.publicCode, token = token(uid = "admin"))
+            .shouldBeRight()
+            .rating
+            .shouldNotBeNull()
+            .value shouldBe "4.200000"
         // With the per-admin preview toggle on, that admin now sees the non-admin (band-only) view.
         users.setPreviewRatingsAsNonAdmin(id = admin.id, preview = true).shouldBeRight()
-        service.publicProfile(code = player.publicCode, token = token(uid = "admin"))
-            .shouldBeRight().rating.shouldNotBeNull().value.shouldBeNull()
+        service
+            .publicProfile(code = player.publicCode, token = token(uid = "admin"))
+            .shouldBeRight()
+            .rating
+            .shouldNotBeNull()
+            .value
+            .shouldBeNull()
     }
 
     @Test
@@ -1067,10 +1150,19 @@ class PlayerServiceTest {
         val owner = newUser(uid = "owner", names = display(name = "Owner"))
         // Simulate an event id via a real event so the code lookup resolves. Use EventRepository through
         // the service's default dependency by inserting an event and referencing its id on the award.
-        val event = org.skopeo.repository.EventRepository().create(command = eventCommand(createdBy = owner.id)).toDomain()
+        val event =
+            org.skopeo.repository
+                .EventRepository()
+                .create(command = eventCommand(createdBy = owner.id))
+                .toDomain()
         grant(userId = owner.id, points = "15", matchId = null, eventId = event.id)
 
-        val row = service.activePoints(token = token(uid = "owner"), code = owner.publicCode).shouldBeRight().allAwards().single()
+        val row =
+            service
+                .activePoints(token = token(uid = "owner"), code = owner.publicCode)
+                .shouldBeRight()
+                .allAwards()
+                .single()
         row.matchCode.shouldBeNull()
         row.eventCode shouldBe event.publicCode
     }
@@ -1091,15 +1183,19 @@ class PlayerServiceTest {
         newUser(uid = "nosy", names = display(name = "Nosy"))
 
         // Another logged-in user is forbidden.
-        service.activePoints(
-            token = token(uid = "nosy"),
-            code = owner.publicCode,
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .activePoints(
+                token = token(uid = "nosy"),
+                code = owner.publicCode,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
         // An unknown / anonymous caller is forbidden too.
-        service.activePoints(
-            token = token(uid = "ghost"),
-            code = owner.publicCode,
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .activePoints(
+                token = token(uid = "ghost"),
+                code = owner.publicCode,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -1198,7 +1294,8 @@ class PlayerServiceTest {
     fun `event history lists a player's events by code, resolving the code case-insensitively (#704)`() {
         val ana = newUser(uid = "ana", names = display(name = "Ana"))
         val event =
-            org.skopeo.repository.EventRepository()
+            org.skopeo.repository
+                .EventRepository()
                 .create(command = eventCommand(createdBy = ana.id, participantIds = listOf(element = ana.id)))
                 .toDomain()
 
@@ -1254,7 +1351,10 @@ class PlayerServiceTest {
         summary.singles shouldBe ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
         // Before #853 this was played = 0: the at-match band was keyed by the retired id while the team
         // named the survivor, so the lookup missed and the match was dropped with no trace.
-        summary.opponentBands.associateBy { it.relation }.getValue(key = OpponentBand.SAME).totals shouldBe
+        summary.opponentBands
+            .associateBy { it.relation }
+            .getValue(key = OpponentBand.SAME)
+            .totals shouldBe
             ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
     }
 
@@ -1276,7 +1376,10 @@ class PlayerServiceTest {
         // A merge elsewhere must not silently remove a match from an uninvolved player's own chart: the
         // orphaned history row breaks BOTH sides, so 25 players were affected by 11 merges.
         val summary = service.resultsSummary(code = ana.publicCode).shouldBeRight()
-        summary.opponentBands.associateBy { it.relation }.getValue(key = OpponentBand.HIGHER).totals shouldBe
+        summary.opponentBands
+            .associateBy { it.relation }
+            .getValue(key = OpponentBand.HIGHER)
+            .totals shouldBe
             ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
     }
 
@@ -1300,7 +1403,10 @@ class PlayerServiceTest {
 
         val summary = service.resultsSummary(code = last.publicCode).shouldBeRight()
         summary.singles shouldBe ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
-        summary.opponentBands.associateBy { it.relation }.getValue(key = OpponentBand.SAME).totals shouldBe
+        summary.opponentBands
+            .associateBy { it.relation }
+            .getValue(key = OpponentBand.SAME)
+            .totals shouldBe
             ResultsTotals(played = 1, wins = 1, losses = 0, winRate = 100)
     }
 
@@ -1339,15 +1445,27 @@ class PlayerServiceTest {
         val settings = SettingsService()
 
         // Visible while the flag is off — the default, so nothing changed by adding it.
-        service.activePoints(token = token(uid = "p"), code = player.publicCode).shouldBeRight().allAwards().shouldHaveSize(size = 1)
+        service
+            .activePoints(token = token(uid = "p"), code = player.publicCode)
+            .shouldBeRight()
+            .allAwards()
+            .shouldHaveSize(size = 1)
 
         settings.setHideRankingPoints(token = token(uid = "root"), hidden = true).shouldBeRight()
 
         // Suppressed for the OWNER of the profile, not merely for strangers. Deliberately unlike #186,
         // where the owner does see their own precise rating; the rule here is capability-only.
-        service.activePoints(token = token(uid = "p"), code = player.publicCode).shouldBeRight().allAwards().shouldBeEmpty()
+        service
+            .activePoints(token = token(uid = "p"), code = player.publicCode)
+            .shouldBeRight()
+            .allAwards()
+            .shouldBeEmpty()
         // ...and still visible to an administrator, who is exempt.
-        service.activePoints(token = token(uid = "root"), code = player.publicCode).shouldBeRight().allAwards().shouldHaveSize(size = 1)
+        service
+            .activePoints(token = token(uid = "root"), code = player.publicCode)
+            .shouldBeRight()
+            .allAwards()
+            .shouldHaveSize(size = 1)
         admin.id shouldNotBe player.id
     }
 
@@ -1361,6 +1479,10 @@ class PlayerServiceTest {
         val manager = viewerWith(uid = "pm", capabilities = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
         grant(userId = manager.id, points = "10")
 
-        service.activePoints(token = token(uid = "pm"), code = manager.publicCode).shouldBeRight().allAwards().shouldHaveSize(size = 1)
+        service
+            .activePoints(token = token(uid = "pm"), code = manager.publicCode)
+            .shouldBeRight()
+            .allAwards()
+            .shouldHaveSize(size = 1)
     }
 }

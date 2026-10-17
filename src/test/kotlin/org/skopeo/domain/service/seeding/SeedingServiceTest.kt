@@ -65,27 +65,29 @@ class SeedingServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     /** A PLAYER with no display name → seeding falls back to the public code. */
     private fun provisionUnnamed(uid: String): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = emptyList(),
-                    capabilities = setOf(element = Capability.PLAYER),
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = emptyList(),
+                        capabilities = setOf(element = Capability.PLAYER),
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -104,20 +106,21 @@ class SeedingServiceTest {
         repeat(times = matches) {
             val opponent = provision(uid = "spar-${sparringCounter++}")
             val match =
-                matchRepo.createFixture(
-                    command =
-                        CreateFixtureCommand(
-                            matchFormat = TeamType.SINGLES,
-                            matchType = MatchType.OPEN_PLAY,
-                            matchDate = LocalDate.now(),
-                            team1UserIds = listOf(element = user.id),
-                            team2UserIds = listOf(element = opponent.id),
-                            team1Name = "T1",
-                            team2Name = "T2",
-                            createdBy = user.id,
-                            eventId = fixtureEventId(),
-                        ),
-                ).toDomain()
+                matchRepo
+                    .createFixture(
+                        command =
+                            CreateFixtureCommand(
+                                matchFormat = TeamType.SINGLES,
+                                matchType = MatchType.OPEN_PLAY,
+                                matchDate = LocalDate.now(),
+                                team1UserIds = listOf(element = user.id),
+                                team2UserIds = listOf(element = opponent.id),
+                                team1Name = "T1",
+                                team2Name = "T2",
+                                createdBy = user.id,
+                                eventId = fixtureEventId(),
+                            ),
+                    ).toDomain()
             matchRepo.addResult(
                 matchId = match.id,
                 sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId)),
@@ -138,17 +141,18 @@ class SeedingServiceTest {
     /** A HOST-owned event with [members] as its APPROVED roster (#714); returns the event id. */
     private fun eventWith(members: List<User>): UUID {
         val created =
-            eventService.create(
-                token = token(uid = "host"),
-                input =
-                    CreateEventInput(
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
-                        name = "Club Open",
-                        startDate = LocalDate.now(),
-                        endDate = LocalDate.now(),
-                        participantIds = members.map { it.id },
-                    ),
-            ).shouldBeRight()
+            eventService
+                .create(
+                    token = token(uid = "host"),
+                    input =
+                        CreateEventInput(
+                            clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                            name = "Club Open",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now(),
+                            participantIds = members.map { it.id },
+                        ),
+                ).shouldBeRight()
         return UUID.fromString(created.id)
     }
 
@@ -169,7 +173,12 @@ class SeedingServiceTest {
         // Top ⌈3/2⌉ = 2 are seeded; the rest blank.
         seeding.entries.map { it.seed } shouldBe listOf(1, 2, null)
         // The exact rating is captured (stored at scale 6, so compare numerically).
-        seeding.entries.first().rating.shouldNotBeNull().toBigDecimal().compareTo(other = BigDecimal("4.5")) shouldBe 0
+        seeding.entries
+            .first()
+            .rating
+            .shouldNotBeNull()
+            .toBigDecimal()
+            .compareTo(other = BigDecimal("4.5")) shouldBe 0
     }
 
     @Test
@@ -193,7 +202,12 @@ class SeedingServiceTest {
         val unnamed = provisionUnnamed(uid = "nameless").also { rate(user = it, value = "4.0", matches = 5) }
         val listId = listWith(members = listOf(bravo, alpha, unnamed))
 
-        val ids = service.generate(token = token(uid = "host"), listId = listId).shouldBeRight().entries.map { it.userId }
+        val ids =
+            service
+                .generate(token = token(uid = "host"), listId = listId)
+                .shouldBeRight()
+                .entries
+                .map { it.userId }
         ids shouldHaveSize 3
         // "Alpha" sorts before "Bravo"; the unnamed player is ordered by its public code (position not asserted).
         (ids.indexOf(element = alpha.id.toString()) < ids.indexOf(element = bravo.id.toString())) shouldBe true
@@ -238,7 +252,8 @@ class SeedingServiceTest {
         service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
 
         val saved =
-            service.saveOrder(token = token(uid = "host"), listId = listId, orderedUserIds = listOf(b.id, c.id, a.id))
+            service
+                .saveOrder(token = token(uid = "host"), listId = listId, orderedUserIds = listOf(b.id, c.id, a.id))
                 .shouldBeRight()
         saved.entries.map { it.userId } shouldBe listOf(b.id.toString(), c.id.toString(), a.id.toString())
         saved.entries.map { it.position } shouldBe listOf(1, 2, 3)
@@ -261,8 +276,10 @@ class SeedingServiceTest {
         service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
 
         // Missing bob → not a permutation of the seedable set.
-        service.saveOrder(token = token(uid = "host"), listId = listId, orderedUserIds = listOf(element = a.id))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .saveOrder(token = token(uid = "host"), listId = listId, orderedUserIds = listOf(element = a.id))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -286,8 +303,10 @@ class SeedingServiceTest {
         val listId = listWith(members = listOf(element = a))
         service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
 
-        service.saveOrder(token = token(uid = "intruder"), listId = listId, orderedUserIds = listOf(element = a.id))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .saveOrder(token = token(uid = "intruder"), listId = listId, orderedUserIds = listOf(element = a.id))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -303,8 +322,10 @@ class SeedingServiceTest {
         provision(uid = "intruder", roles = setOf(Capability.PLAYER, Capability.HOST))
         val listId = listWith(members = emptyList())
 
-        service.generate(token = token(uid = "intruder"), listId = listId)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .generate(token = token(uid = "intruder"), listId = listId)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     // ---- Event-sourced seeding (#714) ---------------------------------------------------------
@@ -323,7 +344,12 @@ class SeedingServiceTest {
         seeding.entries.map { it.userId } shouldBe listOf(a.id.toString(), c.id.toString(), b.id.toString())
         seeding.entries.map { it.position } shouldBe listOf(1, 2, 3)
         seeding.entries.map { it.seed } shouldBe listOf(1, 2, null)
-        seeding.entries.first().rating.shouldNotBeNull().toBigDecimal().compareTo(other = BigDecimal("4.5")) shouldBe 0
+        seeding.entries
+            .first()
+            .rating
+            .shouldNotBeNull()
+            .toBigDecimal()
+            .compareTo(other = BigDecimal("4.5")) shouldBe 0
     }
 
     @Test
@@ -366,7 +392,8 @@ class SeedingServiceTest {
         service.generateForEvent(token = token(uid = "host"), eventId = eventId).shouldBeRight()
 
         val saved =
-            service.saveOrderForEvent(token = token(uid = "host"), eventId = eventId, orderedUserIds = listOf(c.id, a.id, b.id))
+            service
+                .saveOrderForEvent(token = token(uid = "host"), eventId = eventId, orderedUserIds = listOf(c.id, a.id, b.id))
                 .shouldBeRight()
         saved.entries.map { it.userId } shouldBe listOf(c.id.toString(), a.id.toString(), b.id.toString())
         saved.entries.map { it.seed } shouldBe listOf(1, 2, 3)
@@ -379,8 +406,10 @@ class SeedingServiceTest {
     fun `getForEvent returns not-found before a seeding is generated`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val eventId = eventWith(members = emptyList())
-        service.getForEvent(token = token(uid = "host"), eventId = eventId)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .getForEvent(token = token(uid = "host"), eventId = eventId)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -389,7 +418,9 @@ class SeedingServiceTest {
         provision(uid = "intruder", roles = setOf(Capability.PLAYER, Capability.HOST))
         val eventId = eventWith(members = emptyList())
 
-        service.generateForEvent(token = token(uid = "intruder"), eventId = eventId)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .generateForEvent(token = token(uid = "intruder"), eventId = eventId)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 }

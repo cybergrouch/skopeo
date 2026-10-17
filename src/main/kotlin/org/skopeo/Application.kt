@@ -87,7 +87,10 @@ private val logger = KotlinLogging.logger {}
  */
 private val APP_VERSION: String by lazy {
     object {}.javaClass.getResourceAsStream("/version.properties")?.use { stream ->
-        java.util.Properties().apply { load(stream) }.getProperty("version")
+        java.util
+            .Properties()
+            .apply { load(stream) }
+            .getProperty("version")
     } ?: "unknown"
 }
 
@@ -328,7 +331,11 @@ fun Application.configureOpenAPI() {
     // The interactive docs (Swagger UI + raw spec) are unauthenticated. They default to exposed, but can
     // be turned off in a hardened deployment via `docs.exposed=false` (env DOCS_EXPOSED) before opening
     // the API to external clients (#599).
-    val docsExposed = environment.config.propertyOrNull(path = "docs.exposed")?.getString()?.toBoolean() ?: true
+    val docsExposed =
+        environment.config
+            .propertyOrNull(path = "docs.exposed")
+            ?.getString()
+            ?.toBoolean() ?: true
     if (!docsExposed) {
         logger.info { "API documentation endpoints are disabled (docs.exposed=false)" }
         return
@@ -338,7 +345,9 @@ fun Application.configureOpenAPI() {
         get(path = "/openapi.yaml") {
             logger.debug { "OpenAPI YAML specification requested" }
             val yamlContent =
-                this::class.java.classLoader.getResource("openapi/documentation.yaml")?.readText()
+                this::class.java.classLoader
+                    .getResource("openapi/documentation.yaml")
+                    ?.readText()
                     ?: throw IllegalStateException("OpenAPI specification file not found")
             call.respondText(text = yamlContent, contentType = ContentType.Text.Plain)
         }
@@ -377,22 +386,24 @@ fun Application.configureRouting() {
  * `allowHost`. Blank and malformed entries (missing scheme or host) are dropped.
  */
 internal fun parseWebOrigins(raw: String?): List<Pair<String, String>> =
-    raw?.split(",")
+    raw
+        ?.split(",")
         ?.map { it.trim() }
         ?.filter { it.isNotEmpty() }
         ?.mapNotNull { origin ->
             val scheme = origin.substringBefore(delimiter = "://", missingDelimiterValue = "")
             val host = origin.substringAfter(delimiter = "://", missingDelimiterValue = "")
             if (scheme.isNotBlank() && host.isNotBlank()) host to scheme else null
-        }
-        .orEmpty()
+        }.orEmpty()
 
 /**
  * The ADMIN_EMAILS allowlist (config `admin.emails`), normalized to a lowercase/trimmed set.
  * Empty/unset ⇒ no auto-admins. See docs/engineering/architecture/ADMIN_BOOTSTRAP.md.
  */
 private fun Application.adminEmails(): Set<String> =
-    environment.config.propertyOrNull(path = "admin.emails")?.getString()
+    environment.config
+        .propertyOrNull(path = "admin.emails")
+        ?.getString()
         ?.split(",")
         ?.map { it.trim().lowercase() }
         ?.filter { it.isNotEmpty() }

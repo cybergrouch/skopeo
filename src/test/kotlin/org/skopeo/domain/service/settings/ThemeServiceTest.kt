@@ -52,15 +52,16 @@ class ThemeServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -106,14 +107,16 @@ class ThemeServiceTest {
     @Test
     fun `a non-admin cannot set the theme (#378)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        service.setTheme(token = token(uid = "host"), theme = "GRASS")
+        service
+            .setTheme(token = token(uid = "host"), theme = "GRASS")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
     fun `an unprovisioned caller cannot set the theme (#378)`() {
-        service.setTheme(token = token(uid = "ghost"), theme = "GRASS")
+        service
+            .setTheme(token = token(uid = "ghost"), theme = "GRASS")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -121,7 +124,8 @@ class ThemeServiceTest {
     @Test
     fun `an unknown theme string is a validation error (#378)`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        service.setTheme(token = token(uid = "admin"), theme = "NEON")
+        service
+            .setTheme(token = token(uid = "admin"), theme = "NEON")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -187,21 +191,24 @@ class ThemeServiceTest {
     @Test
     fun `an unknown local theme string is a validation error (#514)`() {
         provision(uid = "u")
-        service.setLocalTheme(token = token(uid = "u"), theme = "NEON")
+        service
+            .setLocalTheme(token = token(uid = "u"), theme = "NEON")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
     fun `an unprovisioned caller cannot read a local theme (#514)`() {
-        service.getLocalTheme(token = token(uid = "ghost"))
+        service
+            .getLocalTheme(token = token(uid = "ghost"))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
     fun `an unprovisioned caller cannot set a local theme (#514)`() {
-        service.setLocalTheme(token = token(uid = "ghost"), theme = "GRASS")
+        service
+            .setLocalTheme(token = token(uid = "ghost"), theme = "GRASS")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -224,6 +231,10 @@ class ThemeServiceTest {
         provision(uid = "b")
         service.setLocalTheme(token = token(uid = "a"), theme = "GRASS", now = LocalDateTime.of(2026, 1, 1, 0, 0)).shouldBeRight()
 
-        service.getLocalTheme(token = token(uid = "b")).shouldBeRight().theme.shouldBeNull()
+        service
+            .getLocalTheme(token = token(uid = "b"))
+            .shouldBeRight()
+            .theme
+            .shouldBeNull()
     }
 }

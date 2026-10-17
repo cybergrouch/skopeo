@@ -72,15 +72,16 @@ class EventSeedingApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun tokenFor(uid: String): String = TestFirebaseAuth.mintToken(uid = uid, emailVerified = true)
 
@@ -117,11 +118,12 @@ class EventSeedingApiIntegrationTest {
             val host = tokenFor(uid = "host")
             val event = client.createEvent(token = host)
 
-            client.post(urlString = "/api/v1/events/${event.id}/participants") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = AddParticipantRequest(userId = player.id.toString()))
-            }.status shouldBe HttpStatusCode.OK
+            client
+                .post(urlString = "/api/v1/events/${event.id}/participants") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = AddParticipantRequest(userId = player.id.toString()))
+                }.status shouldBe HttpStatusCode.OK
 
             val generated =
                 client.post(urlString = "/api/v1/events/${event.id}/seeding") {
@@ -137,9 +139,13 @@ class EventSeedingApiIntegrationTest {
                 it.rating.shouldBeNull()
             }
 
-            client.get(urlString = "/api/v1/events/${event.id}/seeding") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.body<SeedingResponse>().entries.single().userId shouldBe player.id.toString()
+            client
+                .get(urlString = "/api/v1/events/${event.id}/seeding") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.body<SeedingResponse>()
+                .entries
+                .single()
+                .userId shouldBe player.id.toString()
         }
 
     @Test
@@ -153,16 +159,19 @@ class EventSeedingApiIntegrationTest {
             val host = tokenFor(uid = "host")
             val event = client.createEvent(token = host)
             for (id in listOf(p1.id, p2.id)) {
-                client.post(urlString = "/api/v1/events/${event.id}/participants") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
-                    contentType(type = ContentType.Application.Json)
-                    setBody(body = AddParticipantRequest(userId = id.toString()))
-                }.status shouldBe HttpStatusCode.OK
+                client
+                    .post(urlString = "/api/v1/events/${event.id}/participants") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                        contentType(type = ContentType.Application.Json)
+                        setBody(body = AddParticipantRequest(userId = id.toString()))
+                    }.status shouldBe HttpStatusCode.OK
             }
 
-            client.post(urlString = "/api/v1/events/${event.id}/seeding") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.body<SeedingResponse>().manuallyEdited shouldBe false
+            client
+                .post(urlString = "/api/v1/events/${event.id}/seeding") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.body<SeedingResponse>()
+                .manuallyEdited shouldBe false
 
             val saved =
                 client.put(urlString = "/api/v1/events/${event.id}/seeding") {
@@ -185,9 +194,10 @@ class EventSeedingApiIntegrationTest {
             seedUser(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
             val event = client.createEvent(token = tokenFor(uid = "owner"), ownerUid = "owner")
 
-            client.post(urlString = "/api/v1/events/${event.id}/seeding") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "other")}")
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .post(urlString = "/api/v1/events/${event.id}/seeding") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "other")}")
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
@@ -197,8 +207,9 @@ class EventSeedingApiIntegrationTest {
             val host = tokenFor(uid = "host")
             val event = client.createEvent(token = host)
 
-            client.get(urlString = "/api/v1/events/${event.id}/seeding") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.status shouldBe HttpStatusCode.NotFound
+            client
+                .get(urlString = "/api/v1/events/${event.id}/seeding") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.status shouldBe HttpStatusCode.NotFound
         }
 }

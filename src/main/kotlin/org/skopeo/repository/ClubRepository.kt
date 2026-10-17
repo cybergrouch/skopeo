@@ -29,16 +29,28 @@ class ClubRepository {
     fun create(command: CreateClubCommand): ClubAggregateEntity =
         transaction {
             val id =
-                ClubsTable.insertAndGetId {
-                    it[name] = command.name
-                    it[publicCode] = PublicCode.generate { code -> ClubsTable.selectAll().where { ClubsTable.publicCode eq code }.any() }
-                    it[createdBy] = command.createdBy
-                }.value
-            ClubsTable.selectAll().where { ClubsTable.id eq id }.single().toClubAggregate()
+                ClubsTable
+                    .insertAndGetId {
+                        it[name] = command.name
+                        it[publicCode] =
+                            PublicCode.generate { code -> ClubsTable.selectAll().where { ClubsTable.publicCode eq code }.any() }
+                        it[createdBy] = command.createdBy
+                    }.value
+            ClubsTable
+                .selectAll()
+                .where { ClubsTable.id eq id }
+                .single()
+                .toClubAggregate()
         }
 
     fun findById(id: UUID): ClubAggregateEntity? =
-        transaction { ClubsTable.selectAll().where { ClubsTable.id eq id }.singleOrNull()?.toClubAggregate() }
+        transaction {
+            ClubsTable
+                .selectAll()
+                .where { ClubsTable.id eq id }
+                .singleOrNull()
+                ?.toClubAggregate()
+        }
 
     /**
      * Resolve a club by its shareable public code (#327) for the public-by-code page. Unlike [list]
@@ -46,7 +58,13 @@ class ClubRepository {
      * and the caller flags it (mirrors events/matches).
      */
     fun findByPublicCode(code: String): ClubAggregateEntity? =
-        transaction { ClubsTable.selectAll().where { ClubsTable.publicCode eq code }.singleOrNull()?.toClubAggregate() }
+        transaction {
+            ClubsTable
+                .selectAll()
+                .where { ClubsTable.publicCode eq code }
+                .singleOrNull()
+                ?.toClubAggregate()
+        }
 
     /** All active clubs, alphabetical by name. */
     fun list(): List<ClubAggregateEntity> =
@@ -66,7 +84,11 @@ class ClubRepository {
         transaction {
             ClubsTable.selectAll().where { ClubsTable.id eq id }.singleOrNull() ?: return@transaction null
             ClubsTable.update(where = { ClubsTable.id eq id }) { it[ClubsTable.name] = name }
-            ClubsTable.selectAll().where { ClubsTable.id eq id }.single().toClubAggregate()
+            ClubsTable
+                .selectAll()
+                .where { ClubsTable.id eq id }
+                .single()
+                .toClubAggregate()
         }
 
     /**
@@ -132,7 +154,11 @@ class ClubRepository {
         transaction {
             ClubsTable.selectAll().where { ClubsTable.id eq id }.singleOrNull() ?: return@transaction null
             ClubsTable.update(where = { ClubsTable.id eq id }) { it[tournamentsSanctioned] = sanctioned }
-            ClubsTable.selectAll().where { ClubsTable.id eq id }.single().toClubAggregate()
+            ClubsTable
+                .selectAll()
+                .where { ClubsTable.id eq id }
+                .single()
+                .toClubAggregate()
         }
 
     /**

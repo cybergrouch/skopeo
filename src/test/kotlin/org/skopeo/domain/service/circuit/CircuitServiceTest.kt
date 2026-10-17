@@ -47,15 +47,16 @@ class CircuitServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -104,7 +105,8 @@ class CircuitServiceTest {
 
         service
             .rename(token = token(uid = "admin"), circuitId = java.util.UUID.fromString(created.id), name = "NORTH REGION")
-            .shouldBeRight().name shouldBe "NORTH REGION"
+            .shouldBeRight()
+            .name shouldBe "NORTH REGION"
         service.delete(token = token(uid = "admin"), circuitId = java.util.UUID.fromString(created.id)).shouldBeRight()
         service.list(token = token(uid = "admin")).shouldBeRight() shouldHaveSize 0
     }

@@ -42,15 +42,17 @@ class CapabilityRepositoryTest {
     }
 
     private fun newUser(uid: String): UUID =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = emptySet(),
-                ),
-        ).toDomain().id
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = emptySet(),
+                    ),
+            ).toDomain()
+            .id
 
     @Test
     fun `grant inserts an active grant with audit`() {
@@ -94,7 +96,8 @@ class CapabilityRepositoryTest {
     @Test
     fun `revoke reports absence`() {
         val userId = newUser(uid = "u4")
-        capabilities.revoke(userId = userId, capability = Capability.HOST, revokedBy = userId, revokedAt = LocalDateTime.now())
+        capabilities
+            .revoke(userId = userId, capability = Capability.HOST, revokedBy = userId, revokedAt = LocalDateTime.now())
             .shouldBeNull()
     }
 

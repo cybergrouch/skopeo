@@ -74,7 +74,12 @@ class DoublesRatingSimulationReport {
                     ),
                 options = null,
             )
-        return calculator.calculate(request = request).response.ratingChanges.getValue(key = "S").change.toDouble()
+        return calculator
+            .calculate(request = request)
+            .response.ratingChanges
+            .getValue(key = "S")
+            .change
+            .toDouble()
     }
 
     private fun virtualTeam(
@@ -457,10 +462,12 @@ class DoublesRatingSimulationReport {
         // Within-band consistency: for each 0.5-wide true-skill band, the spread of ratings (partner-independence).
         val byBand = (0 until n).groupBy { (theta[it] * 2).roundToInt() }
         val withinBandSd =
-            byBand.values.filter { it.size > 1 }.map { idx ->
-                val m = idx.map { rating[it] }.average()
-                sqrt(idx.sumOf { (rating[it] - m) * (rating[it] - m) } / idx.size)
-            }.average()
+            byBand.values
+                .filter { it.size > 1 }
+                .map { idx ->
+                    val m = idx.map { rating[it] }.average()
+                    sqrt(idx.sumOf { (rating[it] - m) * (rating[it] - m) } / idx.size)
+                }.average()
         return Stats(rmse = rmse, rmseCentered = rmseCentered, pearson = pearson, drift = rMean - initMean, withinBandSd = withinBandSd)
     }
 

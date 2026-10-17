@@ -474,7 +474,10 @@ class AwardDerivationAssemblerTest {
                 award = award(userId = ana.id, matchId = match.id, points = "400", pointClass = PointClass.ANNUAL_TOURNAMENT),
             )
 
-        derivation.placement.shouldNotBeNull().sanctioned.shouldBeFalse()
+        derivation.placement
+            .shouldNotBeNull()
+            .sanctioned
+            .shouldBeFalse()
         derivation.placement.shouldNotBeNull().scheduleAmount shouldBe 400
     }
 

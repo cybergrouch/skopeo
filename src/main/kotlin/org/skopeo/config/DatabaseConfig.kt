@@ -34,27 +34,49 @@ object DatabaseConfig {
         logger.info { "Initializing database configuration..." }
 
         // Read database configuration from application.yaml
-        val dbUrl = application.environment.config.property(path = "database.url").getString()
-        val dbDriver = application.environment.config.property(path = "database.driver").getString()
-        val dbUser = application.environment.config.property(path = "database.user").getString()
-        val dbPassword = application.environment.config.property(path = "database.password").getString()
+        val dbUrl =
+            application.environment.config
+                .property(path = "database.url")
+                .getString()
+        val dbDriver =
+            application.environment.config
+                .property(path = "database.driver")
+                .getString()
+        val dbUser =
+            application.environment.config
+                .property(path = "database.user")
+                .getString()
+        val dbPassword =
+            application.environment.config
+                .property(path = "database.password")
+                .getString()
 
         // Connection pool configuration
         val poolMaxSize =
-            application.environment.config.propertyOrNull(path = "database.pool.maximumPoolSize")
-                ?.getString()?.toInt() ?: 10
+            application.environment.config
+                .propertyOrNull(path = "database.pool.maximumPoolSize")
+                ?.getString()
+                ?.toInt() ?: 10
         val poolMinIdle =
-            application.environment.config.propertyOrNull(path = "database.pool.minimumIdle")
-                ?.getString()?.toInt() ?: 2
+            application.environment.config
+                .propertyOrNull(path = "database.pool.minimumIdle")
+                ?.getString()
+                ?.toInt() ?: 2
         val connectionTimeout =
-            application.environment.config.propertyOrNull(path = "database.pool.connectionTimeout")
-                ?.getString()?.toLong() ?: 30000
+            application.environment.config
+                .propertyOrNull(path = "database.pool.connectionTimeout")
+                ?.getString()
+                ?.toLong() ?: 30000
         val idleTimeout =
-            application.environment.config.propertyOrNull(path = "database.pool.idleTimeout")
-                ?.getString()?.toLong() ?: 600000
+            application.environment.config
+                .propertyOrNull(path = "database.pool.idleTimeout")
+                ?.getString()
+                ?.toLong() ?: 600000
         val maxLifetime =
-            application.environment.config.propertyOrNull(path = "database.pool.maxLifetime")
-                ?.getString()?.toLong() ?: 1800000
+            application.environment.config
+                .propertyOrNull(path = "database.pool.maxLifetime")
+                ?.getString()
+                ?.toLong() ?: 1800000
 
         // Redacted: a JDBC URL is the conventional place to put `?user=…&password=…`, and this line
         // is emitted on every boot (#806).
@@ -135,7 +157,8 @@ object DatabaseConfig {
         logger.info { "Running Flyway database migrations..." }
 
         val flyway =
-            Flyway.configure()
+            Flyway
+                .configure()
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)

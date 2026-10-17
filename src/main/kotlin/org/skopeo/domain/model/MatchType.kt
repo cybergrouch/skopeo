@@ -22,7 +22,9 @@ package org.skopeo.domain.model
  *
  * The factor is the single tuning knob for this feature — kept here so it stays centralized.
  */
-enum class MatchType(val factor: Double) {
+enum class MatchType(
+    val factor: Double,
+) {
     OPEN_PLAY(factor = 0.5),
     FULL_MATCH(factor = 0.8),
     TOURNAMENT(factor = 1.2),

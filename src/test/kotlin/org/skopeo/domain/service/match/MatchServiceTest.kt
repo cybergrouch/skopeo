@@ -92,15 +92,16 @@ class MatchServiceTest {
         rated: Boolean = false,
     ): User {
         val user =
-            users.provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = uid,
-                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                        names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
-                        capabilities = roles,
-                    ),
-            ).toDomain()
+            users
+                .provision(
+                    command =
+                        ProvisionUserCommand(
+                            firebaseUid = uid,
+                            identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                            names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
+                            capabilities = roles,
+                        ),
+                ).toDomain()
         if (rated) {
             ratings.setRating(
                 userId = user.id,
@@ -166,8 +167,16 @@ class MatchServiceTest {
         val upcoming = service.upcomingForCaller(token = token(uid = "p1")).shouldBeRight()
 
         upcoming.map { it.publicCode } shouldBe listOf(soon.publicCode, onTeam2.publicCode, later.publicCode)
-        upcoming.first().opponents.single().publicCode shouldBe p2.publicCode
-        upcoming.single { it.publicCode == onTeam2.publicCode }.opponents.single().publicCode shouldBe p4.publicCode
+        upcoming
+            .first()
+            .opponents
+            .single()
+            .publicCode shouldBe p2.publicCode
+        upcoming
+            .single { it.publicCode == onTeam2.publicCode }
+            .opponents
+            .single()
+            .publicCode shouldBe p4.publicCode
     }
 
     @Test
@@ -238,11 +247,12 @@ class MatchServiceTest {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
 
         val completed =
-            service.uploadResult(
-                token = token(uid = "host"),
-                matchId = UUID.fromString(match.id),
-                request = straightSets(),
-            ).shouldBeRight()
+            service
+                .uploadResult(
+                    token = token(uid = "host"),
+                    matchId = UUID.fromString(match.id),
+                    request = straightSets(),
+                ).shouldBeRight()
 
         completed.status shouldBe MatchStatus.COMPLETED.name
         completed.winnerTeamId shouldBe match.team1.teamId // won both sets
@@ -407,9 +417,18 @@ class MatchServiceTest {
             .isActive
             .shouldBeFalse()
 
-        matchRepo.findById(matchId = UUID.fromString(match.id)).shouldBeRight().toDomain().isActive.shouldBeFalse()
+        matchRepo
+            .findById(matchId = UUID.fromString(match.id))
+            .shouldBeRight()
+            .toDomain()
+            .isActive
+            .shouldBeFalse()
         // The result itself is untouched — this is a soft delete, so the record survives for audit.
-        matchRepo.findById(matchId = UUID.fromString(match.id)).shouldBeRight().toDomain().status shouldBe MatchStatus.COMPLETED
+        matchRepo
+            .findById(matchId = UUID.fromString(match.id))
+            .shouldBeRight()
+            .toDomain()
+            .status shouldBe MatchStatus.COMPLETED
     }
 
     @Test
@@ -442,22 +461,24 @@ class MatchServiceTest {
         // The host is the event's creator, so the club rule (#789) is satisfied and expiry is the only
         // axis under test. The host records nothing here — the expiry gate already stops them.
         val event =
-            EventRepository().create(
-                command =
-                    CreateEventCommand(
-                        clubId = seedClub().id,
-                        name = "Ended",
-                        startDate = LocalDate.now().minusDays(3),
-                        endDate = LocalDate.now().minusDays(1),
-                        participantIds = listOf(p1.id, p2.id),
-                        createdBy = host.id,
-                    ),
-            ).toDomain()
+            EventRepository()
+                .create(
+                    command =
+                        CreateEventCommand(
+                            clubId = seedClub().id,
+                            name = "Ended",
+                            startDate = LocalDate.now().minusDays(3),
+                            endDate = LocalDate.now().minusDays(1),
+                            participantIds = listOf(p1.id, p2.id),
+                            createdBy = host.id,
+                        ),
+                ).toDomain()
         val recorded =
             service
                 .createFixture(token = token(uid = "admin"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
                 .shouldBeRight()
-        service.uploadResult(token = token(uid = "admin"), matchId = UUID.fromString(recorded.id), request = straightSets())
+        service
+            .uploadResult(token = token(uid = "admin"), matchId = UUID.fromString(recorded.id), request = straightSets())
             .shouldBeRight()
 
         // Erasing a recorded result after the event has ended is the same class of act as recording it.
@@ -531,8 +552,7 @@ class MatchServiceTest {
                     matchId = UUID.fromString(match.id),
                     team1Handicap = null,
                     team2Handicap = BigDecimal("0.300"),
-                )
-                .shouldBeRight()
+                ).shouldBeRight()
         set.team2Handicap?.let { BigDecimal(it) }?.compareTo(other = BigDecimal("0.300")) shouldBe 0
         set.team1Handicap shouldBe null
 
@@ -575,8 +595,7 @@ class MatchServiceTest {
                 matchId = UUID.fromString(match.id),
                 team1Handicap = BigDecimal("0.200"),
                 team2Handicap = null,
-            )
-            .shouldBeLeft()
+            ).shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
 
@@ -594,8 +613,7 @@ class MatchServiceTest {
                 matchId = UUID.fromString(match.id),
                 team1Handicap = BigDecimal("0.200"),
                 team2Handicap = null,
-            )
-            .shouldBeLeft()
+            ).shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
@@ -750,10 +768,12 @@ class MatchServiceTest {
 
         service
             .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false)
-            .shouldBeRight().isActive shouldBe false
+            .shouldBeRight()
+            .isActive shouldBe false
         service
             .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = true)
-            .shouldBeRight().isActive shouldBe true
+            .shouldBeRight()
+            .isActive shouldBe true
     }
 
     @Test
@@ -908,8 +928,14 @@ class MatchServiceTest {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = real.id, p2 = dummy.id)).shouldBeRight()
 
         val public = service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight()
-        public.team1.single().isPlaceholder.shouldBeFalse() // real player
-        public.team2.single().isPlaceholder.shouldBeTrue() // placeholder / dummy
+        public.team1
+            .single()
+            .isPlaceholder
+            .shouldBeFalse() // real player
+        public.team2
+            .single()
+            .isPlaceholder
+            .shouldBeTrue() // placeholder / dummy
     }
 
     @Test
@@ -918,18 +944,19 @@ class MatchServiceTest {
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
         val event =
-            EventRepository().create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "Spring Open",
-                        startDate = LocalDate.now(),
-                        endDate = LocalDate.now().plusDays(7),
-                        participantIds = listOf(p1.id, p2.id),
-                        createdBy = host.id,
-                    ),
-            ).toDomain()
+            EventRepository()
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "Spring Open",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now().plusDays(7),
+                            participantIds = listOf(p1.id, p2.id),
+                            createdBy = host.id,
+                        ),
+                ).toDomain()
 
         // A fixture scoped to the event surfaces the event's code + name.
         val evented =
@@ -1044,23 +1071,27 @@ class MatchServiceTest {
                 .createFixture(
                     token = token(uid = "host"),
                     request = fixtureRequest(p1 = p2.id, p2 = p1.id, date = LocalDate.parse("2026-02-01")),
-                )
-                .shouldBeRight()
-        service.uploadResult(
-            token = token(uid = "host"),
-            matchId = UUID.fromString(singlesMeeting.id),
-            request = straightSets(),
-        ).shouldBeRight()
+                ).shouldBeRight()
+        service
+            .uploadResult(
+                token = token(uid = "host"),
+                matchId = UUID.fromString(singlesMeeting.id),
+                request = straightSets(),
+            ).shouldBeRight()
         val current =
             service
                 .createFixture(
                     token = token(uid = "host"),
                     request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-01")),
-                )
-                .shouldBeRight()
+                ).shouldBeRight()
         service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(current.id), request = straightSets()).shouldBeRight()
 
-        val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
+        val h2h =
+            service
+                .publicByCode(token = token(uid = "host"), code = current.publicCode)
+                .shouldBeRight()
+                .headToHead
+                .shouldNotBeNull()
 
         // Both prior meetings count — previously the doubles one was silently dropped from the tally (#285).
         h2h.meetings shouldHaveSize 2
@@ -1083,7 +1114,12 @@ class MatchServiceTest {
 
         // A first-ever meeting still shows head-to-head (#366): no prior meetings listed, but the tally
         // reflects the match being viewed (#339) — p1 (team1) won the straight-sets result.
-        val h2h = service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
+        val h2h =
+            service
+                .publicByCode(token = token(uid = "host"), code = match.publicCode)
+                .shouldBeRight()
+                .headToHead
+                .shouldNotBeNull()
         h2h.meetings shouldBe emptyList()
         h2h.team1Wins shouldBe 1
         h2h.team2Wins shouldBe 0
@@ -1098,7 +1134,12 @@ class MatchServiceTest {
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
 
-        val h2h = service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
+        val h2h =
+            service
+                .publicByCode(token = token(uid = "host"), code = match.publicCode)
+                .shouldBeRight()
+                .headToHead
+                .shouldNotBeNull()
         h2h.meetings shouldBe emptyList()
         h2h.team1Wins shouldBe 0
         h2h.team2Wins shouldBe 0
@@ -1132,8 +1173,16 @@ class MatchServiceTest {
         val pluralTeam1 = doublesFixture(team1 = listOf(element = p1.id) + p2.id, team2 = listOf(element = p3.id))
         val pluralTeam2 = doublesFixture(team1 = listOf(element = p1.id), team2 = listOf(element = p2.id) + p3.id)
 
-        service.publicByCode(token = token(uid = "host"), code = pluralTeam1.publicCode).shouldBeRight().headToHead.shouldBeNull()
-        service.publicByCode(token = token(uid = "host"), code = pluralTeam2.publicCode).shouldBeRight().headToHead.shouldBeNull()
+        service
+            .publicByCode(token = token(uid = "host"), code = pluralTeam1.publicCode)
+            .shouldBeRight()
+            .headToHead
+            .shouldBeNull()
+        service
+            .publicByCode(token = token(uid = "host"), code = pluralTeam2.publicCode)
+            .shouldBeRight()
+            .headToHead
+            .shouldBeNull()
     }
 
     @Test
@@ -1165,7 +1214,11 @@ class MatchServiceTest {
 
         // A viewer with a valid token but no provisioned Skopeo profile still gets the public bands, no rates.
         val asGhost =
-            service.publicByCode(token = token(uid = "ghost"), code = match.publicCode).shouldBeRight().ratingChanges.shouldNotBeNull()
+            service
+                .publicByCode(token = token(uid = "ghost"), code = match.publicCode)
+                .shouldBeRight()
+                .ratingChanges
+                .shouldNotBeNull()
         asGhost.forEach { change ->
             change.newLevel.shouldNotBeNull()
             change.newRating.shouldBeNull()
@@ -1173,15 +1226,23 @@ class MatchServiceTest {
 
         // An anonymous viewer (no token, #193) is treated like any non-privileged viewer: bands, no rates.
         val asAnon =
-            service.publicByCode(token = null, code = match.publicCode).shouldBeRight().ratingChanges.shouldNotBeNull()
+            service
+                .publicByCode(token = null, code = match.publicCode)
+                .shouldBeRight()
+                .ratingChanges
+                .shouldNotBeNull()
         asAnon.forEach { change ->
             change.newLevel.shouldNotBeNull()
             change.newRating.shouldBeNull()
         }
 
         // A RATER no longer sees the precise rates (#583) — bands only, like any non-admin viewer.
-        service.publicByCode(token = token(uid = "rater"), code = match.publicCode).shouldBeRight().ratingChanges
-            .shouldNotBeNull().forEach { change ->
+        service
+            .publicByCode(token = token(uid = "rater"), code = match.publicCode)
+            .shouldBeRight()
+            .ratingChanges
+            .shouldNotBeNull()
+            .forEach { change ->
                 change.newLevel.shouldNotBeNull()
                 change.newRating.shouldBeNull()
                 change.ratingChange.shouldBeNull()
@@ -1189,14 +1250,23 @@ class MatchServiceTest {
 
         // Only an ADMINISTRATOR sees the precise 6-dp rates.
         val staffChanges =
-            service.publicByCode(token = token(uid = "root"), code = match.publicCode).shouldBeRight().ratingChanges.shouldNotBeNull()
+            service
+                .publicByCode(token = token(uid = "root"), code = match.publicCode)
+                .shouldBeRight()
+                .ratingChanges
+                .shouldNotBeNull()
         staffChanges.forEach { change ->
             change.previousRating.shouldNotBeNull()
             change.newRating.shouldNotBeNull()
             change.ratingChange.shouldNotBeNull()
         }
         // The fractional part carries 6 digits, matching the NUMERIC(10,6) storage.
-        staffChanges.first().newRating.shouldNotBeNull().substringAfter(delimiter = ".").length shouldBe 6
+        staffChanges
+            .first()
+            .newRating
+            .shouldNotBeNull()
+            .substringAfter(delimiter = ".")
+            .length shouldBe 6
     }
 
     @Test
@@ -1206,18 +1276,19 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val outsider = provisionUser(uid = "p3", rated = true)
         val event =
-            EventRepository().create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "E",
-                        startDate = LocalDate.now(),
-                        endDate = LocalDate.now().plusDays(7),
-                        participantIds = listOf(p1.id, p2.id),
-                        createdBy = host.id,
-                    ),
-            ).toDomain()
+            EventRepository()
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "E",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now().plusDays(7),
+                            participantIds = listOf(p1.id, p2.id),
+                            createdBy = host.id,
+                        ),
+                ).toDomain()
 
         // Both players are participants → linked to the event.
         val ok =
@@ -1246,18 +1317,19 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val eventRepo = EventRepository()
         val event =
-            eventRepo.create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "E",
-                        startDate = LocalDate.now(),
-                        endDate = LocalDate.now().plusDays(7),
-                        participantIds = listOf(p1.id, p2.id),
-                        createdBy = host.id,
-                    ),
-            ).toDomain()
+            eventRepo
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "E",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now().plusDays(7),
+                            participantIds = listOf(p1.id, p2.id),
+                            createdBy = host.id,
+                        ),
+                ).toDomain()
         // A fixture recorded while the event is open; then the event is finalized.
         val match =
             service
@@ -1271,7 +1343,8 @@ class MatchServiceTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
         // Nor may a result be recorded on its fixture.
-        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets())
+        service
+            .uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -1289,17 +1362,18 @@ class MatchServiceTest {
         val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = clubOwner.id)).toDomain()
         clubs.addOwner(clubId = club.id, userId = clubOwner.id)
         val event =
-            EventRepository().create(
-                command =
-                    CreateEventCommand(
-                        name = "Ended",
-                        startDate = LocalDate.now().minusDays(3),
-                        endDate = LocalDate.now().minusDays(1),
-                        participantIds = listOf(p1.id, p2.id),
-                        createdBy = host.id,
-                        clubId = club.id,
-                    ),
-            ).toDomain()
+            EventRepository()
+                .create(
+                    command =
+                        CreateEventCommand(
+                            name = "Ended",
+                            startDate = LocalDate.now().minusDays(3),
+                            endDate = LocalDate.now().minusDays(1),
+                            participantIds = listOf(p1.id, p2.id),
+                            createdBy = host.id,
+                            clubId = club.id,
+                        ),
+                ).toDomain()
 
         // HOST blocked from creating a fixture on the ended event.
         service
@@ -1314,7 +1388,8 @@ class MatchServiceTest {
                 .shouldBeRight()
 
         // HOST blocked from recording the result; ADMINISTRATOR may.
-        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets())
+        service
+            .uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
         service.uploadResult(token = token(uid = "admin"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
@@ -1324,11 +1399,12 @@ class MatchServiceTest {
             service
                 .createFixture(token = token(uid = "owner"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
                 .shouldBeRight()
-        service.uploadResult(
-            token = token(uid = "owner"),
-            matchId = UUID.fromString(ownerMatch.id),
-            request = straightSets(),
-        ).shouldBeRight()
+        service
+            .uploadResult(
+                token = token(uid = "owner"),
+                matchId = UUID.fromString(ownerMatch.id),
+                request = straightSets(),
+            ).shouldBeRight()
     }
 
     @Test
@@ -1337,18 +1413,19 @@ class MatchServiceTest {
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
         val event =
-            EventRepository().create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "E",
-                        startDate = LocalDate.now(),
-                        endDate = LocalDate.now().plusDays(7),
-                        participantIds = listOf(p1.id, p2.id),
-                        createdBy = host.id,
-                    ),
-            ).toDomain()
+            EventRepository()
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "E",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now().plusDays(7),
+                            participantIds = listOf(p1.id, p2.id),
+                            createdBy = host.id,
+                        ),
+                ).toDomain()
         val inEvent =
             service
                 .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
@@ -1366,18 +1443,19 @@ class MatchServiceTest {
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
         val event =
-            EventRepository().create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "E",
-                        startDate = LocalDate.now(),
-                        endDate = LocalDate.now().plusDays(7),
-                        participantIds = listOf(p1.id, p2.id),
-                        createdBy = host.id,
-                    ),
-            ).toDomain()
+            EventRepository()
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "E",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now().plusDays(7),
+                            participantIds = listOf(p1.id, p2.id),
+                            createdBy = host.id,
+                        ),
+                ).toDomain()
         val inEvent =
             service
                 .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
@@ -1399,18 +1477,19 @@ class MatchServiceTest {
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
         val event =
-            EventRepository().create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "E",
-                        startDate = LocalDate.now(),
-                        endDate = LocalDate.now().plusDays(7),
-                        participantIds = listOf(p1.id, p2.id),
-                        createdBy = host.id,
-                    ),
-            ).toDomain()
+            EventRepository()
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "E",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now().plusDays(7),
+                            participantIds = listOf(p1.id, p2.id),
+                            createdBy = host.id,
+                        ),
+                ).toDomain()
         val recorded =
             service
                 .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
@@ -1481,8 +1560,16 @@ class MatchServiceTest {
         service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m2.id), UUID.fromString(m1.id))).shouldBeRight()
 
         // Renumbering writes the user-visible match_number now, 1-based, not a hidden 0-based tiebreaker.
-        matchRepo.findById(matchId = UUID.fromString(m2.id)).shouldBeRight().toDomain().matchNumber shouldBe 1
-        matchRepo.findById(matchId = UUID.fromString(m1.id)).shouldBeRight().toDomain().matchNumber shouldBe 2
+        matchRepo
+            .findById(matchId = UUID.fromString(m2.id))
+            .shouldBeRight()
+            .toDomain()
+            .matchNumber shouldBe 1
+        matchRepo
+            .findById(matchId = UUID.fromString(m1.id))
+            .shouldBeRight()
+            .toDomain()
+            .matchNumber shouldBe 2
     }
 
     @Test
@@ -1494,18 +1581,27 @@ class MatchServiceTest {
         val m1 = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-02-01")))
         val m2 = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-02-02")))
 
-        service.reorder(token = token(uid = "player"), matchIds = listOf(element = UUID.fromString(m1.id)))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.reorder(token = token(uid = "host"), matchIds = emptyList())
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m1.id), UUID.fromString(m1.id)))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .reorder(token = token(uid = "player"), matchIds = listOf(element = UUID.fromString(m1.id)))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .reorder(token = token(uid = "host"), matchIds = emptyList())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m1.id), UUID.fromString(m1.id)))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
         // Cross-date used to be refused. It is now the point: match_number is the intra-event order, so
         // moving a match between days is meaningful — and this pair is the event's full active set.
-        service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m1.id), UUID.fromString(m2.id)))
+        service
+            .reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m1.id), UUID.fromString(m2.id)))
             .shouldBeRight()
-        service.reorder(token = token(uid = "host"), matchIds = listOf(element = UUID.randomUUID()))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .reorder(token = token(uid = "host"), matchIds = listOf(element = UUID.randomUUID()))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -1517,8 +1613,10 @@ class MatchServiceTest {
         service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
         matchRepo.markRated(matchId = UUID.fromString(match.id), ratedAt = LocalDateTime.now(), ratedBy = host.id)
 
-        service.reorder(token = token(uid = "host"), matchIds = listOf(element = UUID.fromString(match.id)))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
+        service
+            .reorder(token = token(uid = "host"), matchIds = listOf(element = UUID.fromString(match.id)))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
     }
 
     @Test
@@ -1531,8 +1629,10 @@ class MatchServiceTest {
         val disabled = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = date))
         service.setActive(token = token(uid = "host"), matchId = UUID.fromString(disabled.id), active = false).shouldBeRight()
 
-        service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(disabled.id), UUID.fromString(active.id)))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(disabled.id), UUID.fromString(active.id)))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -1566,7 +1666,12 @@ class MatchServiceTest {
             create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-01")))
         service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(current.id), request = straightSets()).shouldBeRight()
 
-        val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
+        val h2h =
+            service
+                .publicByCode(token = token(uid = "host"), code = current.publicCode)
+                .shouldBeRight()
+                .headToHead
+                .shouldNotBeNull()
 
         // The reversed-orientation doubles meeting is included, and p2's side won it there.
         h2h.meetings shouldHaveSize 1
@@ -1606,7 +1711,12 @@ class MatchServiceTest {
             create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-01")))
         service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(current.id), request = straightSets()).shouldBeRight()
 
-        val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
+        val h2h =
+            service
+                .publicByCode(token = token(uid = "host"), code = current.publicCode)
+                .shouldBeRight()
+                .headToHead
+                .shouldNotBeNull()
 
         // The partner meeting is excluded; only the current singles match tallies (p1 won it).
         h2h.meetings shouldBe emptyList()
@@ -1645,7 +1755,12 @@ class MatchServiceTest {
             create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-01")))
         service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(current.id), request = straightSets()).shouldBeRight()
 
-        val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
+        val h2h =
+            service
+                .publicByCode(token = token(uid = "host"), code = current.publicCode)
+                .shouldBeRight()
+                .headToHead
+                .shouldNotBeNull()
 
         // The partner meeting is excluded; only the current singles match tallies (p1 won it).
         h2h.meetings shouldBe emptyList()
@@ -1683,18 +1798,42 @@ class MatchServiceTest {
         // Across dates is now allowed — the same-date guard existed only while the calculation keyed on
         // match_date, which made a cross-date move a no-op. An event is one sortable list.
         service.reorder(token = token(uid = "host"), matchIds = ids.reversed()).shouldBeRight()
-        matchRepo.findById(matchId = ids[1]).shouldBeRight().toDomain().matchNumber shouldBe 1
-        matchRepo.findById(matchId = ids[0]).shouldBeRight().toDomain().matchNumber shouldBe 2
+        matchRepo
+            .findById(matchId = ids[1])
+            .shouldBeRight()
+            .toDomain()
+            .matchNumber shouldBe 1
+        matchRepo
+            .findById(matchId = ids[0])
+            .shouldBeRight()
+            .toDomain()
+            .matchNumber shouldBe 2
 
         // A third match joins as #3. Reordering only the first two permutes {1,2} between them and leaves
         // #3 alone — which is what lets the manager view reorder the fixtures it renders without having to
         // submit the recorded matches it does not.
         val third = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-09")))
-        matchRepo.findById(matchId = UUID.fromString(third.id)).shouldBeRight().toDomain().matchNumber shouldBe 3
+        matchRepo
+            .findById(matchId = UUID.fromString(third.id))
+            .shouldBeRight()
+            .toDomain()
+            .matchNumber shouldBe 3
         service.reorder(token = token(uid = "host"), matchIds = ids).shouldBeRight()
-        matchRepo.findById(matchId = ids[0]).shouldBeRight().toDomain().matchNumber shouldBe 1
-        matchRepo.findById(matchId = ids[1]).shouldBeRight().toDomain().matchNumber shouldBe 2
-        matchRepo.findById(matchId = UUID.fromString(third.id)).shouldBeRight().toDomain().matchNumber shouldBe 3
+        matchRepo
+            .findById(matchId = ids[0])
+            .shouldBeRight()
+            .toDomain()
+            .matchNumber shouldBe 1
+        matchRepo
+            .findById(matchId = ids[1])
+            .shouldBeRight()
+            .toDomain()
+            .matchNumber shouldBe 2
+        matchRepo
+            .findById(matchId = UUID.fromString(third.id))
+            .shouldBeRight()
+            .toDomain()
+            .matchNumber shouldBe 3
         eventId.shouldNotBeNull()
     }
 

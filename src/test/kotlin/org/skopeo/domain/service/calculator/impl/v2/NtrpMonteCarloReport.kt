@@ -79,7 +79,9 @@ class NtrpMonteCarloReport {
         BEYOND_HALF(label = "Majority 0.5–1.0 gap", pWithinHalf = P_WITHIN_HALF_FAR),
     }
 
-    enum class Outcome(val label: String) {
+    enum class Outcome(
+        val label: String,
+    ) {
         DOMINANT_WIN(label = "Dominant win"),
         COMPETITIVE_WIN(label = "Competitive win"),
         COMPETITIVE_LOSS(label = "Competitive loss"),
@@ -242,7 +244,10 @@ class NtrpMonteCarloReport {
                         winner = if (playerWins) "T1" else "T2",
                     ),
             )
-        return result.response.ratingChanges["P1"]?.newRating?.value?.toDouble() ?: rating
+        return result.response.ratingChanges["P1"]
+            ?.newRating
+            ?.value
+            ?.toDouble() ?: rating
     }
 
     private fun pickOpponent(

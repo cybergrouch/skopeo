@@ -68,16 +68,17 @@ class PlaceholderServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    sex = "Male",
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        sex = "Male",
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
@@ -98,11 +99,15 @@ class PlaceholderServiceTest {
                     displayName = "Backlog Player",
                     sex = "Male",
                     dateOfBirth = LocalDate.of(1990, 1, 2),
-                )
-                .shouldBeRight()
+                ).shouldBeRight()
 
         // UserResponse carries no placeholder flag; confirm placeholder-ness via the persisted row.
-        users.findById(id = UUID.fromString(created.id)).shouldBeRight().toDomain().placeholder.shouldBeTrue()
+        users
+            .findById(id = UUID.fromString(created.id))
+            .shouldBeRight()
+            .toDomain()
+            .placeholder
+            .shouldBeTrue()
         created.firebaseUid shouldBe null
         created.capabilities shouldBe listOf(element = "PLAYER")
         created.names.firstOrNull { it.type == "DISPLAY" && it.isActive }?.value shouldBe "Backlog Player"
@@ -154,8 +159,7 @@ class PlaceholderServiceTest {
                     displayName = "Rated Stand-in",
                     sex = "Male",
                     initialRating = "4.0",
-                )
-                .shouldBeRight()
+                ).shouldBeRight()
 
         val current = ratings.findCurrentRating(userId = UUID.fromString(created.id)).shouldNotBeNull()
         // The chosen band 4.0 is stored at its MIDPOINT 4.25 (#579), not the 4.0 floor — mirroring the
@@ -217,7 +221,12 @@ class PlaceholderServiceTest {
                 .createPlaceholder(token = token(uid = "host"), displayName = "Fine", sex = "Male")
                 .shouldBeRight()
 
-        users.findById(id = UUID.fromString(created.id)).shouldBeRight().toDomain().placeholder.shouldBeTrue()
+        users
+            .findById(id = UUID.fromString(created.id))
+            .shouldBeRight()
+            .toDomain()
+            .placeholder
+            .shouldBeTrue()
         ratings.findCurrentRating(userId = UUID.fromString(created.id)) shouldBe null
     }
 

@@ -37,15 +37,22 @@ object ScoreEventParser {
                 ServiceError.Validation(message = "Unknown side '${request.side}'; expected TEAM1 or TEAM2")
             }
             when (val kind = request.kind.uppercase()) {
-                in SIDED_KINDS -> sided(kind = kind, side = requireSide(side = side, kind = kind).bind())
-                in BARE_KINDS -> bare(kind = kind)
-                else ->
+                in SIDED_KINDS -> {
+                    sided(kind = kind, side = requireSide(side = side, kind = kind).bind())
+                }
+
+                in BARE_KINDS -> {
+                    bare(kind = kind)
+                }
+
+                else -> {
                     raise(
                         r =
                             ServiceError.Validation(
                                 message = "Unknown event kind '${request.kind}'; expected one of ${RECORDABLE_KINDS.joinToString()}",
                             ),
                     )
+                }
             }
         }
 

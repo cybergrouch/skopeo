@@ -65,15 +65,16 @@ class ThemeApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     @Test
     fun `the theme is publicly readable and defaults to AUTO (#378)`() =
@@ -107,11 +108,12 @@ class ThemeApiIntegrationTest {
             seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
             val hostToken = TestFirebaseAuth.mintToken(uid = "host")
 
-            client.put(urlString = "/api/v1/theme") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $hostToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetThemeRequest(theme = "GRASS"))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .put(urlString = "/api/v1/theme") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $hostToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetThemeRequest(theme = "GRASS"))
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
@@ -120,11 +122,12 @@ class ThemeApiIntegrationTest {
             seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
             val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
 
-            client.put(urlString = "/api/v1/theme") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetThemeRequest(theme = "NEON"))
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .put(urlString = "/api/v1/theme") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetThemeRequest(theme = "NEON"))
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
@@ -158,9 +161,11 @@ class ThemeApiIntegrationTest {
             setBody.theme shouldBe "GRASS"
             (setBody.setAt != null) shouldBe true
 
-            client.get(urlString = "/api/v1/users/me/theme") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $token")
-            }.body<LocalThemeResponse>().theme shouldBe "GRASS"
+            client
+                .get(urlString = "/api/v1/users/me/theme") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }.body<LocalThemeResponse>()
+                .theme shouldBe "GRASS"
         }
 
     @Test
@@ -192,11 +197,12 @@ class ThemeApiIntegrationTest {
             seedUser(uid = "u", roles = setOf(element = Capability.PLAYER))
             val token = TestFirebaseAuth.mintToken(uid = "u")
 
-            client.put(urlString = "/api/v1/users/me/theme") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $token")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetLocalThemeRequest(theme = "NEON"))
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .put(urlString = "/api/v1/users/me/theme") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetLocalThemeRequest(theme = "NEON"))
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test

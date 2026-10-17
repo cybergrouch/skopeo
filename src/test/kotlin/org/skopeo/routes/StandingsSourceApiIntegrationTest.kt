@@ -63,15 +63,16 @@ class StandingsSourceApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     @Test
     fun `the standings source is readable and defaults to RATING (#146)`() =
@@ -105,11 +106,12 @@ class StandingsSourceApiIntegrationTest {
             seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
             val playerToken = TestFirebaseAuth.mintToken(uid = "player")
 
-            client.put(urlString = "/api/v1/settings/standings-source") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetStandingsSourceRequest(source = "POINTS"))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .put(urlString = "/api/v1/settings/standings-source") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetStandingsSourceRequest(source = "POINTS"))
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
@@ -118,10 +120,11 @@ class StandingsSourceApiIntegrationTest {
             seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
             val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
 
-            client.put(urlString = "/api/v1/settings/standings-source") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetStandingsSourceRequest(source = "GRAVEL"))
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .put(urlString = "/api/v1/settings/standings-source") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetStandingsSourceRequest(source = "GRAVEL"))
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 }

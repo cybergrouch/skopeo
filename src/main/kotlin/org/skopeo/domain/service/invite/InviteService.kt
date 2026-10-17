@@ -59,11 +59,12 @@ class InviteService(
                 ServiceError.Conflict(message = "An account already exists with this email")
             }
             val invite =
-                invites.createOrRotate(
-                    email = email,
-                    invitedBy = adminId,
-                    expiresAt = LocalDateTime.now().plusDays(INVITE_TTL_DAYS),
-                ).toDomain()
+                invites
+                    .createOrRotate(
+                        email = email,
+                        invitedBy = adminId,
+                        expiresAt = LocalDateTime.now().plusDays(INVITE_TTL_DAYS),
+                    ).toDomain()
             audit.record(
                 write =
                     AuditWrite(

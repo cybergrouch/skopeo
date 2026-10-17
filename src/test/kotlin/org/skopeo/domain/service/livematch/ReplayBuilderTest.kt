@@ -117,7 +117,12 @@ class ReplayBuilderTest {
     fun `a game awarded by the umpire is a step of its own`() {
         val log = opening(serving = t2) + ScoreEvent.GameAwarded(side = t1) + ScoreEvent.MatchAwarded(side = t1)
 
-        val game = ReplayBuilder.build(events = timed(events = log)).shouldNotBeNull().points.first()
+        val game =
+            ReplayBuilder
+                .build(events = timed(events = log))
+                .shouldNotBeNull()
+                .points
+                .first()
 
         game.kind shouldBe "GAME"
         game.gameWon shouldBe true
@@ -135,7 +140,10 @@ class ReplayBuilderTest {
 
         replay.points.map { it.kind } shouldBe listOf("POINT", "POINT", "POINT", "POINT", "END")
         replay.points.none { it.breakPoint || it.breakOfServe } shouldBe true
-        replay.points.first().server.shouldBeNull()
+        replay.points
+            .first()
+            .server
+            .shouldBeNull()
     }
 
     @Test

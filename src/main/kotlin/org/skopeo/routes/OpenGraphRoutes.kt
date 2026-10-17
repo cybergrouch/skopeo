@@ -89,7 +89,11 @@ internal fun httpShellProvider(indexUrl: String): WebShellProvider {
     return WebShellProvider {
         cache.get() ?: runCatching {
             val request =
-                HttpRequest.newBuilder(URI.create(indexUrl)).timeout(Duration.ofSeconds(SHELL_TIMEOUT_SECONDS)).GET().build()
+                HttpRequest
+                    .newBuilder(URI.create(indexUrl))
+                    .timeout(Duration.ofSeconds(SHELL_TIMEOUT_SECONDS))
+                    .GET()
+                    .build()
             val response = client.send(request, HttpResponse.BodyHandlers.ofString())
             if (response.statusCode() == HTTP_OK) response.body().also { cache.set(it) } else null
         }.getOrNull()
@@ -98,6 +102,9 @@ internal fun httpShellProvider(indexUrl: String): WebShellProvider {
 
 /** The site origin for canonical URLs + the og:image, from config (`web.origin`) or the prod default. */
 internal fun Application.webOrigin(): String =
-    environment.config.propertyOrNull(path = "web.origin")?.getString()?.trimEnd('/') ?: "https://skopeo.co"
+    environment.config
+        .propertyOrNull(path = "web.origin")
+        ?.getString()
+        ?.trimEnd('/') ?: "https://skopeo.co"
 
 internal fun Application.webIndexUrl(): String = "${webOrigin()}/index.html"

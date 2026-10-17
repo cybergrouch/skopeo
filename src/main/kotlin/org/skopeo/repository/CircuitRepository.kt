@@ -24,15 +24,26 @@ class CircuitRepository {
     fun create(command: CreateCircuitCommand): CircuitEntity =
         transaction {
             val id =
-                CircuitsTable.insertAndGetId {
-                    it[name] = command.name
-                    it[createdBy] = command.createdBy
-                }.value
-            CircuitsTable.selectAll().where { CircuitsTable.id eq id }.single().toCircuitEntity()
+                CircuitsTable
+                    .insertAndGetId {
+                        it[name] = command.name
+                        it[createdBy] = command.createdBy
+                    }.value
+            CircuitsTable
+                .selectAll()
+                .where { CircuitsTable.id eq id }
+                .single()
+                .toCircuitEntity()
         }
 
     fun findById(id: UUID): CircuitEntity? =
-        transaction { CircuitsTable.selectAll().where { CircuitsTable.id eq id }.singleOrNull()?.toCircuitEntity() }
+        transaction {
+            CircuitsTable
+                .selectAll()
+                .where { CircuitsTable.id eq id }
+                .singleOrNull()
+                ?.toCircuitEntity()
+        }
 
     /** All active circuits, alphabetical by name. */
     fun list(): List<CircuitEntity> =
@@ -52,7 +63,11 @@ class CircuitRepository {
         transaction {
             CircuitsTable.selectAll().where { CircuitsTable.id eq id }.singleOrNull() ?: return@transaction null
             CircuitsTable.update(where = { CircuitsTable.id eq id }) { it[CircuitsTable.name] = name }
-            CircuitsTable.selectAll().where { CircuitsTable.id eq id }.single().toCircuitEntity()
+            CircuitsTable
+                .selectAll()
+                .where { CircuitsTable.id eq id }
+                .single()
+                .toCircuitEntity()
         }
 
     /**

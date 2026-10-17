@@ -51,15 +51,16 @@ class DuplicateCandidateServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
@@ -81,7 +82,14 @@ class DuplicateCandidateServiceTest {
         val page =
             service.list(token = token(uid = "root"), limit = 50, offset = 0, statusRaw = "OPEN").shouldBeRight()
         page.items shouldHaveSize 1
-        setOf(page.items.single().userA.id, page.items.single().userB.id) shouldBe setOf(a.id.toString(), b.id.toString())
+        setOf(
+            page.items
+                .single()
+                .userA.id,
+            page.items
+                .single()
+                .userB.id,
+        ) shouldBe setOf(a.id.toString(), b.id.toString())
     }
 
     @Test
@@ -113,11 +121,12 @@ class DuplicateCandidateServiceTest {
             service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = b.id, reason = null).shouldBeRight()
 
         // Keep the userB side → the userA side is the one disabled (the inverse confirm branch).
-        service.confirm(
-            token = token(uid = "root"),
-            id = UUID.fromString(candidate.id),
-            canonicalId = UUID.fromString(candidate.userB.id),
-        ).shouldBeRight()
+        service
+            .confirm(
+                token = token(uid = "root"),
+                id = UUID.fromString(candidate.id),
+                canonicalId = UUID.fromString(candidate.userB.id),
+            ).shouldBeRight()
 
         users.findById(id = UUID.fromString(candidate.userA.id)).shouldBeRight().toDomain().let {
             it.isActive.shouldBeFalse()
@@ -138,10 +147,12 @@ class DuplicateCandidateServiceTest {
 
         candidates.findById(id = UUID.fromString(candidate.id)).shouldBeRight().status shouldBe DuplicateCandidateStatus.DISMISSED.name
         // A second action on a non-open candidate conflicts.
-        service.dismiss(
-            token = token(uid = "root"),
-            id = UUID.fromString(candidate.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
+        service
+            .dismiss(
+                token = token(uid = "root"),
+                id = UUID.fromString(candidate.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.DUPLICATE_CANDIDATE_DISMISSED), limit = 10, offset = 0).second shouldBe 1L
     }
@@ -224,10 +235,12 @@ class DuplicateCandidateServiceTest {
             .flagManual(token = token(uid = "a"), userAId = a.id, userBId = b.id, reason = null)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.dismiss(
-            token = token(uid = "a"),
-            id = UUID.fromString(candidate.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .dismiss(
+                token = token(uid = "a"),
+                id = UUID.fromString(candidate.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
         service
             .confirm(token = token(uid = "a"), id = UUID.fromString(candidate.id), canonicalId = a.id)
             .shouldBeLeft()

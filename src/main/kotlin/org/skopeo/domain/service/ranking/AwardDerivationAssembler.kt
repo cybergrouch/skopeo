@@ -60,7 +60,9 @@ class AwardDerivationAssembler(
         return when (award.pointClass) {
             // A manual or external grant was never computed from a schedule; the reason IS the derivation.
             PointClass.EXTERNAL -> base.copy(recorded = true, reason = award.reason ?: "Manual grant")
+
             PointClass.ANNUAL_TOURNAMENT -> tournamentDerivation(award = award, base = base)
+
             PointClass.OPEN_PLAY, PointClass.FULL_MATCH -> perSetDerivation(award = award, base = base)
         }
     }
@@ -91,8 +93,14 @@ class AwardDerivationAssembler(
         // Single exit: whichever input is missing, the answer is the same shape — an unexplained award
         // that still reports its amount.
         return when {
-            schedule == null -> base.copy(unavailableReason = SCHEDULE_GONE)
-            bracket == null -> base.copy(unavailableReason = "This fixture records no placement bracket.")
+            schedule == null -> {
+                base.copy(unavailableReason = SCHEDULE_GONE)
+            }
+
+            bracket == null -> {
+                base.copy(unavailableReason = "This fixture records no placement bracket.")
+            }
+
             else -> {
                 // Which place this award paid: the winner takes the bracket's higher place, the loser the
                 // lower. Read from the match rather than stored, because the placing is a property of the
@@ -135,16 +143,26 @@ class AwardDerivationAssembler(
         // Single exit. The order of these branches is the order a reader would ask them in: were the
         // inputs recorded at all, is the fixture still here, is the schedule still here.
         return when {
-            teamBand == null || opponentBand == null -> base.copy(unavailableReason = BANDS_NOT_RECORDED)
-            match == null -> base.copy(unavailableReason = MATCH_GONE)
-            config == null -> base.copy(unavailableReason = SCHEDULE_GONE)
-            else ->
+            teamBand == null || opponentBand == null -> {
+                base.copy(unavailableReason = BANDS_NOT_RECORDED)
+            }
+
+            match == null -> {
+                base.copy(unavailableReason = MATCH_GONE)
+            }
+
+            config == null -> {
+                base.copy(unavailableReason = SCHEDULE_GONE)
+            }
+
+            else -> {
                 explainSets(
                     award = award,
                     base = base,
                     inputs =
                         PerSetInputs(match = match, teamBand = teamBand, opponentBand = opponentBand, config = config),
                 )
+            }
         }
     }
 

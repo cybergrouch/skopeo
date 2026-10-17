@@ -104,9 +104,10 @@ class EventTeamService(
             val updated =
                 ensureNotNull(
                     value =
-                        teams.update(
-                            command = UpdateEventTeamCommand(teamId = teamId, name = newName, memberUserIds = newMemberIds),
-                        )?.toDomain(),
+                        teams
+                            .update(
+                                command = UpdateEventTeamCommand(teamId = teamId, name = newName, memberUserIds = newMemberIds),
+                            )?.toDomain(),
                 ) { ServiceError.NotFound(message = "Team $teamId not found") }
             toView(team = updated).toResponse()
         }

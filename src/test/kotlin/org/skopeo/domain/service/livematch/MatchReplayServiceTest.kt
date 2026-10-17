@@ -213,7 +213,12 @@ class MatchReplayServiceTest {
         recordResult(match = match, games = 2 to 0)
 
         service.byCode(code = match.publicCode).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
-        matches.findById(matchId = match.id).shouldBeRight().toDomain().resultEditedAt.shouldNotBeNull()
+        matches
+            .findById(matchId = match.id)
+            .shouldBeRight()
+            .toDomain()
+            .resultEditedAt
+            .shouldNotBeNull()
         // Kept, not deleted: editing the result back would show it again.
         replays.find(matchId = match.id).shouldNotBeNull()
         recordResult(match = match)
@@ -224,7 +229,12 @@ class MatchReplayServiceTest {
     fun `the first recording of a result is not an edit`() {
         val match = finishedMatch()
 
-        matches.findById(matchId = match.id).shouldBeRight().toDomain().resultEditedAt.shouldBeNull()
+        matches
+            .findById(matchId = match.id)
+            .shouldBeRight()
+            .toDomain()
+            .resultEditedAt
+            .shouldBeNull()
     }
 
     @Test

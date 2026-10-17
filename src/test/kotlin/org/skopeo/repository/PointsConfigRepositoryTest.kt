@@ -129,7 +129,11 @@ class PointsConfigRepositoryTest {
         val actor = admin()
         // The seed was written by a migration, so nobody owns it — that is how "never edited" is told
         // apart from "edited back to the defaults".
-        configs.get(key = "open_play").shouldNotBeNull().updatedBy.shouldBeNull()
+        configs
+            .get(key = "open_play")
+            .shouldNotBeNull()
+            .updatedBy
+            .shouldBeNull()
 
         val row = configs.appendVersion(key = "open_play", value = """{"marker":"v2"}""", actorId = actor.id)
 

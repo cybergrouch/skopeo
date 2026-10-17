@@ -189,8 +189,9 @@ class PlayerApiIntegrationTest {
             asAdmin.body<List<RatingHistoryResponse>>() shouldBe emptyList() // no calculations yet
 
             // The player themselves is not an admin → forbidden on the code-based admin view.
-            client.get(urlString = "/api/v1/players/${player.publicCode}/rating-history") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "player")}")
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/players/${player.publicCode}/rating-history") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "player")}")
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 }

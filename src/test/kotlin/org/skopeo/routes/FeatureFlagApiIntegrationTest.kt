@@ -65,15 +65,16 @@ class FeatureFlagApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     @Test
     fun `the facebook-login flag is publicly readable and defaults to enabled (#647)`() =
@@ -107,11 +108,12 @@ class FeatureFlagApiIntegrationTest {
             seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
             val playerToken = TestFirebaseAuth.mintToken(uid = "player")
 
-            client.put(urlString = "/api/v1/settings/facebook-login") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetFacebookLoginRequest(enabled = false))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .put(urlString = "/api/v1/settings/facebook-login") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetFacebookLoginRequest(enabled = false))
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
@@ -137,8 +139,10 @@ class FeatureFlagApiIntegrationTest {
             updated.status shouldBe HttpStatusCode.OK
             updated.body<AwardRankingPointsResponse>().enabled shouldBe true
 
-            client.get(urlString = "/api/v1/settings/award-ranking-points")
-                .body<AwardRankingPointsResponse>().enabled shouldBe true
+            client
+                .get(urlString = "/api/v1/settings/award-ranking-points")
+                .body<AwardRankingPointsResponse>()
+                .enabled shouldBe true
         }
 
     @Test
@@ -147,10 +151,11 @@ class FeatureFlagApiIntegrationTest {
             seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
             val playerToken = TestFirebaseAuth.mintToken(uid = "player")
 
-            client.put(urlString = "/api/v1/settings/award-ranking-points") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetAwardRankingPointsRequest(enabled = true))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .put(urlString = "/api/v1/settings/award-ranking-points") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetAwardRankingPointsRequest(enabled = true))
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 }

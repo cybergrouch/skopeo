@@ -83,7 +83,11 @@ class MatchCompletionReasonTest {
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
-    private data class Fixture(val matchId: UUID, val team1: String, val team2: String)
+    private data class Fixture(
+        val matchId: UUID,
+        val team1: String,
+        val team2: String,
+    )
 
     private fun fixture(): Fixture {
         user(uid = "host", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
@@ -128,7 +132,11 @@ class MatchCompletionReasonTest {
                 request = MatchResultRequest(sets = listOf(element = SetScoreRequest(team1Games = 6, team2Games = 4))),
             ).shouldBeRight()
 
-        matches.findById(matchId = f.matchId).shouldBeRight().toDomain().completionReason shouldBe
+        matches
+            .findById(matchId = f.matchId)
+            .shouldBeRight()
+            .toDomain()
+            .completionReason shouldBe
             MatchCompletionReason.COMPLETED
     }
 
@@ -243,7 +251,11 @@ class MatchCompletionReasonTest {
                 request = MatchResultRequest(sets = listOf(element = SetScoreRequest(team1Games = 6, team2Games = 4))),
             ).shouldBeRight()
 
-        matches.findById(matchId = f.matchId).shouldBeRight().toDomain().completionReason shouldBe
+        matches
+            .findById(matchId = f.matchId)
+            .shouldBeRight()
+            .toDomain()
+            .completionReason shouldBe
             MatchCompletionReason.COMPLETED
     }
 

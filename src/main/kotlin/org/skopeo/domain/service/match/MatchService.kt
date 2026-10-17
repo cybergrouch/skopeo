@@ -146,8 +146,7 @@ class MatchService(
         if (team1Ref == null && team2Ref == null) {
             val expected = if (matchFormat == TeamType.SINGLES) 1 else 2
             require(value = team1.size == expected && team2.size == expected) { "$matchFormat needs $expected player(s) per side" }
-            (team1 + team2).let {
-                    all ->
+            (team1 + team2).let { all ->
                 require(value = all.toSet().size == all.size) { "a player cannot appear more than once in a match" }
             }
         }
@@ -230,15 +229,16 @@ class MatchService(
             val team1Users = resolveActiveParticipants(ids = resolvedRequest.team1).bind()
             val team2Users = resolveActiveParticipants(ids = resolvedRequest.team2).bind()
             val match =
-                matches.createFixture(
-                    command =
-                        fixtureCommand(
-                            request = resolvedRequest,
-                            team1Name = teamName(users = team1Users),
-                            team2Name = teamName(users = team2Users),
-                            createdBy = createdBy,
-                        ),
-                ).toDomain()
+                matches
+                    .createFixture(
+                        command =
+                            fixtureCommand(
+                                request = resolvedRequest,
+                                team1Name = teamName(users = team1Users),
+                                team2Name = teamName(users = team2Users),
+                                createdBy = createdBy,
+                            ),
+                    ).toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -479,7 +479,11 @@ class MatchService(
                 ensureDeletable(match = match, event = event, caller = caller).bind()
             }
             val disabledAt = if (active) null else LocalDateTime.now()
-            matches.setActive(matchId = matchId, active = active, disabledAt = disabledAt).bind().toDomain().toResponse()
+            matches
+                .setActive(matchId = matchId, active = active, disabledAt = disabledAt)
+                .bind()
+                .toDomain()
+                .toResponse()
         }
 
     /**
@@ -807,22 +811,28 @@ class MatchService(
             when (view) {
                 // An event scope (#138) shows that event's recorded-but-unrated fixtures (editable until
                 // the rating calculation runs) to any staff member; otherwise the admin oversight list.
-                MatchQuery.PENDING_CALCULATION ->
+                MatchQuery.PENDING_CALCULATION -> {
                     if (eventId != null) {
                         matches.listPendingCalculation(eventId = eventId)
                     } else {
                         matches.listPendingCalculation(createdBy = scopedTo)
                     }
+                }
+
                 // An event scope (#138) shows that event's awaiting fixtures to any staff member.
-                MatchQuery.AWAITING_RESULTS ->
+                MatchQuery.AWAITING_RESULTS -> {
                     if (eventId != null) {
                         matches.listAwaitingResults(eventId = eventId)
                     } else {
                         matches.listAwaitingResults(createdBy = scopedTo)
                     }
+                }
+
                 // All of an event's completed fixtures (rated or not), so a rated match stays on view as
                 // a read-only record (#138). Event-scoped only.
-                MatchQuery.RESULTS -> eventId?.let { matches.listResultsByEvent(eventId = it) }.orEmpty()
+                MatchQuery.RESULTS -> {
+                    eventId?.let { matches.listResultsByEvent(eventId = it) }.orEmpty()
+                }
             }.map { it.toDomain().toResponse() }
         }
 
@@ -985,13 +995,26 @@ private fun setWinner(
     matchWinnerDesignated: Boolean,
 ): Either<ServiceError, UUID?> =
     when {
-        set.team1Games > set.team2Games -> team1Id.right()
-        set.team2Games > set.team1Games -> team2Id.right()
+        set.team1Games > set.team2Games -> {
+            team1Id.right()
+        }
+
+        set.team2Games > set.team1Games -> {
+            team2Id.right()
+        }
+
         set.tiebreakTeam1Points != null && set.tiebreakTeam2Points != null &&
-            set.tiebreakTeam1Points != set.tiebreakTeam2Points ->
+            set.tiebreakTeam1Points != set.tiebreakTeam2Points -> {
             (if (set.tiebreakTeam1Points > set.tiebreakTeam2Points) team1Id else team2Id).right()
-        matchWinnerDesignated -> null.right()
-        else -> ServiceError.Validation(message = "set $setNumber has no clear winner").left()
+        }
+
+        matchWinnerDesignated -> {
+            null.right()
+        }
+
+        else -> {
+            ServiceError.Validation(message = "set $setNumber has no clear winner").left()
+        }
     }
 
 /** Orient one set's games/tiebreaks to a reference player's side: team1 when [refIsTeam1] (#188). */

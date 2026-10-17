@@ -102,7 +102,10 @@ val RequestLog =
                 listOfNotNull(
                     "method" to call.request.httpMethod.value,
                     "route" to (call.attributes.getOrNull(key = MATCHED_ROUTE) ?: UNMATCHED_ROUTE),
-                    call.response.status()?.value?.let { "status" to it },
+                    call.response
+                        .status()
+                        ?.value
+                        ?.let { "status" to it },
                     startedAt?.let { "durationMs" to (System.nanoTime() - it) / NANOS_PER_MILLI },
                 ).toMap()
             // The message stays human-readable for a local `docker logs`; the fields above are what

@@ -51,14 +51,16 @@ class ClubRepositoryTest {
     }
 
     private fun newUser(uid: String): UUID =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                ),
-        ).toDomain().id
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                    ),
+            ).toDomain()
+            .id
 
     @Test
     fun `create round-trips and findById is null for a missing club`() {
@@ -102,7 +104,11 @@ class ClubRepositoryTest {
         (a.publicCode == b.publicCode) shouldBe false
 
         // findByPublicCode resolves the right club, and is null for an unknown code.
-        clubs.findByPublicCode(code = a.publicCode).shouldNotBeNull().toDomain().id shouldBe a.id
+        clubs
+            .findByPublicCode(code = a.publicCode)
+            .shouldNotBeNull()
+            .toDomain()
+            .id shouldBe a.id
         clubs.findByPublicCode(code = "ZZZZZZ").shouldBeNull()
     }
 
@@ -114,7 +120,11 @@ class ClubRepositoryTest {
         // Hard-delete the creator; the clubs.created_by FK is ON DELETE SET NULL.
         transaction { UsersTable.deleteWhere { UsersTable.id eq admin } }
 
-        clubs.findById(id = club.id)!!.toDomain().createdBy.shouldBeNull()
+        clubs
+            .findById(id = club.id)!!
+            .toDomain()
+            .createdBy
+            .shouldBeNull()
     }
 
     @Test
@@ -122,17 +132,18 @@ class ClubRepositoryTest {
         val admin = newUser(uid = "admin")
         val club = clubs.create(command = CreateClubCommand(name = "Riverside", createdBy = admin)).toDomain()
         val event =
-            events.create(
-                command =
-                    CreateEventCommand(
-                        clubId = club.id,
-                        name = "Riverside Open",
-                        startDate = LocalDate.parse("2026-06-01"),
-                        endDate = LocalDate.parse("2026-06-02"),
-                        participantIds = emptyList(),
-                        createdBy = admin,
-                    ),
-            ).toDomain()
+            events
+                .create(
+                    command =
+                        CreateEventCommand(
+                            clubId = club.id,
+                            name = "Riverside Open",
+                            startDate = LocalDate.parse("2026-06-01"),
+                            endDate = LocalDate.parse("2026-06-02"),
+                            participantIds = emptyList(),
+                            createdBy = admin,
+                        ),
+                ).toDomain()
 
         // No service ever hard-deletes a club — ClubService.disable soft-deletes it and its events — so
         // reach past the service and delete the row, the way a console or a cleanup script would.
@@ -150,6 +161,10 @@ class ClubRepositoryTest {
 
         // Nothing was destroyed or blanked by the attempt.
         clubs.findById(id = club.id).shouldNotBeNull()
-        events.findById(id = event.id).shouldNotBeNull().toDomain().clubId shouldBe club.id
+        events
+            .findById(id = event.id)
+            .shouldNotBeNull()
+            .toDomain()
+            .clubId shouldBe club.id
     }
 }

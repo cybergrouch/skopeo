@@ -114,7 +114,10 @@ class AbandonedTiebreakRatingInputTest {
                     ),
             )
 
-        val tiebreak = request.matchScore.sets.single().tiebreak
+        val tiebreak =
+            request.matchScore.sets
+                .single()
+                .tiebreak
         tiebreak.shouldNotBeNull()
         tiebreak.winnerTeamId shouldBe team1Id.toString()
     }
@@ -137,7 +140,9 @@ class AbandonedTiebreakRatingInputTest {
                     ),
             )
 
-        request.matchScore.sets.single().tiebreak shouldBe null
+        request.matchScore.sets
+            .single()
+            .tiebreak shouldBe null
     }
 
     @Test
@@ -200,7 +205,9 @@ class AbandonedTiebreakRatingInputTest {
                     ),
             )
 
-        request.matchScore.sets.single().tiebreak shouldBe null
+        request.matchScore.sets
+            .single()
+            .tiebreak shouldBe null
     }
 
     /**

@@ -47,7 +47,11 @@ abstract class AbstractMatchTypeHandler(
      */
     final override fun getTeamEffectiveRating(teamId: String): BigDecimal {
         val truePreCalc = getTeamPreCalculationRating(teamId = teamId).value.bd
-        val handicap = request.teams.getValue(key = teamId).handicap?.bd ?: return truePreCalc
+        val handicap =
+            request.teams
+                .getValue(key = teamId)
+                .handicap
+                ?.bd ?: return truePreCalc
         return (truePreCalc - handicap).max(NTRP_MIN)
     }
 
@@ -69,7 +73,11 @@ abstract class AbstractMatchTypeHandler(
         ratingAfter: BigDecimal,
     ) {
         val self = setScore.games.getValue(key = teamId)
-        val opponent = setScore.games.filterKeys { it != teamId }.values.sum()
+        val opponent =
+            setScore.games
+                .filterKeys { it != teamId }
+                .values
+                .sum()
         val scoreLabel = "$self-$opponent"
         // Issue #486: the side's applied handicap, recorded so the breakdown stays interpretable — the
         // dominance/gap/scale reflect the *handicapped* gap while previous/new ratings are true.

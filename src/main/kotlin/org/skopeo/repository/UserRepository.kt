@@ -224,9 +224,9 @@ class UserRepository {
                             includeInactive = includeInactive,
                             calibrationRequired = calibrationRequired,
                         )
-                    }
-                    .apply { terms.forEach { (expression, sortOrder) -> orderBy(column = expression, order = sortOrder) } }
-                    .limit(count = limit).offset(start = offset.toLong())
+                    }.apply { terms.forEach { (expression, sortOrder) -> orderBy(column = expression, order = sortOrder) } }
+                    .limit(count = limit)
+                    .offset(start = offset.toLong())
             rows.map { loadAggregate(id = it[UsersTable.id].value)!! }
         }
 
@@ -608,7 +608,11 @@ class UserRepository {
         intoUserId: UUID,
     ) {
         val uid =
-            UsersTable.selectAll().where { UsersTable.id eq fromUserId }.singleOrNull()?.let { it[UsersTable.firebaseUid] }
+            UsersTable
+                .selectAll()
+                .where { UsersTable.id eq fromUserId }
+                .singleOrNull()
+                ?.let { it[UsersTable.firebaseUid] }
                 ?: return
         val primaryIdentity =
             UserIdentitiesTable
@@ -665,11 +669,36 @@ class UserRepository {
         fromUserId: UUID,
         intoUserId: UUID,
     ): AccountMergeResult {
-        val teamMemberships = TeamUsersTable.selectAll().where { TeamUsersTable.userId eq fromUserId }.count().toInt()
-        val eventParticipations = EventParticipantsTable.selectAll().where { EventParticipantsTable.userId eq fromUserId }.count().toInt()
-        val playerListMemberships = PlayerListMembersTable.selectAll().where { PlayerListMembersTable.userId eq fromUserId }.count().toInt()
-        val clubOwnerships = ClubOwnersTable.selectAll().where { ClubOwnersTable.userId eq fromUserId }.count().toInt()
-        val seedingEntries = SeedingEntriesTable.selectAll().where { SeedingEntriesTable.userId eq fromUserId }.count().toInt()
+        val teamMemberships =
+            TeamUsersTable
+                .selectAll()
+                .where { TeamUsersTable.userId eq fromUserId }
+                .count()
+                .toInt()
+        val eventParticipations =
+            EventParticipantsTable
+                .selectAll()
+                .where { EventParticipantsTable.userId eq fromUserId }
+                .count()
+                .toInt()
+        val playerListMemberships =
+            PlayerListMembersTable
+                .selectAll()
+                .where { PlayerListMembersTable.userId eq fromUserId }
+                .count()
+                .toInt()
+        val clubOwnerships =
+            ClubOwnersTable
+                .selectAll()
+                .where { ClubOwnersTable.userId eq fromUserId }
+                .count()
+                .toInt()
+        val seedingEntries =
+            SeedingEntriesTable
+                .selectAll()
+                .where { SeedingEntriesTable.userId eq fromUserId }
+                .count()
+                .toInt()
 
         repointTeamUsers(fromUserId = fromUserId, intoUserId = intoUserId)
         repointEventParticipants(fromUserId = fromUserId, intoUserId = intoUserId)
@@ -814,7 +843,11 @@ class UserRepository {
     }
 
     private fun loadAggregate(id: UUID): UserAggregateEntity? =
-        UsersTable.selectAll().where { UsersTable.id eq id }.singleOrNull()?.let { row -> buildAggregate(id = id, row = row) }
+        UsersTable
+            .selectAll()
+            .where { UsersTable.id eq id }
+            .singleOrNull()
+            ?.let { row -> buildAggregate(id = id, row = row) }
 
     private fun loadAggregateOrThrow(id: UUID): UserAggregateEntity =
         buildAggregate(id = id, row = UsersTable.selectAll().where { UsersTable.id eq id }.single())
@@ -883,12 +916,21 @@ private fun nameMatches(name: String): Op<Boolean> {
  */
 private fun statusMatches(status: AccountStatus): Op<Boolean> =
     when (status) {
-        AccountStatus.MERGED -> UsersTable.canonicalUserId.isNotNull()
-        AccountStatus.DELETED -> (UsersTable.isActive eq false) and UsersTable.canonicalUserId.isNull()
-        AccountStatus.UNCLAIMED ->
+        AccountStatus.MERGED -> {
+            UsersTable.canonicalUserId.isNotNull()
+        }
+
+        AccountStatus.DELETED -> {
+            (UsersTable.isActive eq false) and UsersTable.canonicalUserId.isNull()
+        }
+
+        AccountStatus.UNCLAIMED -> {
             (UsersTable.isActive eq true) and UsersTable.canonicalUserId.isNull() and (UsersTable.placeholder eq true)
-        AccountStatus.ACTIVE ->
+        }
+
+        AccountStatus.ACTIVE -> {
             (UsersTable.isActive eq true) and UsersTable.canonicalUserId.isNull() and (UsersTable.placeholder eq false)
+        }
     }
 
 /** Correlated EXISTS: the user has a rating within [range] (inclusive/exclusive per bound). */
@@ -988,23 +1030,46 @@ private fun orderingFor(
     calibrationRequired: Int?,
 ): List<Pair<Expression<*>, SortOrder>> =
     when (sort) {
-        null -> emptyList()
-        UserSearchSort.DISPLAY_NAME -> listOf(element = activeNameValue(type = NameType.DISPLAY) to order)
-        UserSearchSort.LAST_NAME -> listOf(element = activeNameValue(type = NameType.LAST) to order)
-        UserSearchSort.FIRST_NAME -> listOf(element = activeNameValue(type = NameType.FIRST) to order)
-        UserSearchSort.SEX -> listOf(element = UsersTable.sex to order)
+        null -> {
+            emptyList()
+        }
+
+        UserSearchSort.DISPLAY_NAME -> {
+            listOf(element = activeNameValue(type = NameType.DISPLAY) to order)
+        }
+
+        UserSearchSort.LAST_NAME -> {
+            listOf(element = activeNameValue(type = NameType.LAST) to order)
+        }
+
+        UserSearchSort.FIRST_NAME -> {
+            listOf(element = activeNameValue(type = NameType.FIRST) to order)
+        }
+
+        UserSearchSort.SEX -> {
+            listOf(element = UsersTable.sex to order)
+        }
+
         // Age is the INVERSE of date of birth: the oldest player has the earliest DOB. Ordering by
         // the raw column would put "ascending age" in descending age order.
-        UserSearchSort.AGE ->
+        UserSearchSort.AGE -> {
             listOf(element = UsersTable.dateOfBirth to if (order == SortOrder.ASC) SortOrder.DESC else SortOrder.ASC)
-        UserSearchSort.RATING -> listOf(element = currentRatingValue() to order)
-        UserSearchSort.STATUS -> listOf(element = statusRank() to order)
+        }
+
+        UserSearchSort.RATING -> {
+            listOf(element = currentRatingValue() to order)
+        }
+
+        UserSearchSort.STATUS -> {
+            listOf(element = statusRank() to order)
+        }
+
         // Calibration is a BOOLEAN, so ordering by it alone yields two blocks in `id` order — true but
         // not useful. The secondary is the count itself, always DESC, so within the calibrating block
         // the players furthest through their window come first ("match 9 of 10" before "match 1 of 10").
         // Fixed rather than following `order`, because "nearly finished" is the interesting end whichever
         // way the blocks are arranged.
-        UserSearchSort.CALIBRATION ->
+        UserSearchSort.CALIBRATION -> {
             listOf(
                 calibrationRank(
                     required =
@@ -1014,6 +1079,7 @@ private fun orderingFor(
                 ) to order,
                 calibrationMatchesRatedValue() to SortOrder.DESC,
             )
+        }
     }
 
 /**

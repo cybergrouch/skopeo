@@ -87,13 +87,14 @@ class DuplicateCandidateService(
             val userA = users.findById(id = userAId).bind().toDomain()
             val userB = users.findById(id = userBId).bind().toDomain()
             val candidate =
-                candidates.flag(
-                    userAId = userAId,
-                    userBId = userBId,
-                    signal = DuplicateSignal.MANUAL,
-                    detail = reason,
-                    flaggedBy = adminId,
-                ).toDomain()
+                candidates
+                    .flag(
+                        userAId = userAId,
+                        userBId = userBId,
+                        signal = DuplicateSignal.MANUAL,
+                        detail = reason,
+                        flaggedBy = adminId,
+                    ).toDomain()
             audit.record(
                 write =
                     AuditWrite(

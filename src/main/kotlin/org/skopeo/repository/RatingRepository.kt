@@ -159,7 +159,11 @@ class RatingRepository {
                     clearCalibrationOverride(row = it)
                 }
             }
-            UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single().toUserRatingEntity()
+            UserRatingsTable
+                .selectAll()
+                .where { UserRatingsTable.userId eq userId }
+                .single()
+                .toUserRatingEntity()
         }
 
     // A fresh designation is a fresh judgement (#1126): any override belonged to the rating it replaces.
@@ -220,8 +224,7 @@ class RatingRepository {
                         joinType = JoinType.INNER,
                         onColumn = UserRatingsTable.userId,
                         otherColumn = UsersTable.id,
-                    )
-                    .selectAll()
+                    ).selectAll()
                     .where { (UsersTable.isActive eq true) and listed }
             }
             val total = query().count()
@@ -438,7 +441,8 @@ class RatingRepository {
                     // top instead of wherever a random UUID put them. Id breaks ties for a stable page boundary;
                     // Postgres sorts a missing created_at last.
                     .orderBy(UsersTable.createdAt to SortOrder.ASC, UsersTable.id to SortOrder.ASC)
-                    .limit(count = limit).offset(start = offset.toLong())
+                    .limit(count = limit)
+                    .offset(start = offset.toLong())
                     .map { it[UsersTable.id].value }
             ids to total
         }

@@ -53,15 +53,16 @@ class ReportServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -158,7 +159,11 @@ class ReportServiceTest {
         result.netJumpedCount shouldBe 2 // jumper + dropper
         result.netBuckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 3, 1 to 1, 2 to 1)
 
-        val jumped = result.excursionBuckets.single { it.hopDistance == 2 }.users.single()
+        val jumped =
+            result.excursionBuckets
+                .single { it.hopDistance == 2 }
+                .users
+                .single()
         jumped.publicCode shouldBe jumper.publicCode
         jumped.fromBand shouldBe "3.0"
         jumped.excursionToBand shouldBe "4.0"
@@ -166,13 +171,20 @@ class ReportServiceTest {
         jumped.netToBand shouldBe "4.0"
         jumped.netDistance shouldBe 2
 
-        val hop1 = result.excursionBuckets.single { it.hopDistance == 1 }.users.associateBy { it.publicCode }
+        val hop1 =
+            result.excursionBuckets
+                .single { it.hopDistance == 1 }
+                .users
+                .associateBy { it.publicCode }
         // The reversing roundtrip is surfaced as an excursion hop but a net stayer (back to its entry band).
         hop1.getValue(key = roundtrip.publicCode).fromBand shouldBe "3.0"
         hop1.getValue(key = roundtrip.publicCode).excursionToBand shouldBe "3.5"
         hop1.getValue(key = roundtrip.publicCode).netToBand shouldBe "3.0"
         hop1.getValue(key = roundtrip.publicCode).netDistance shouldBe 0
-        result.netBuckets.single { it.hopDistance == 0 }.users.map { it.publicCode } shouldContain roundtrip.publicCode
+        result.netBuckets
+            .single { it.hopDistance == 0 }
+            .users
+            .map { it.publicCode } shouldContain roundtrip.publicCode
         // The dropper is a straight one-band drop: excursion and net agree.
         hop1.getValue(key = dropper.publicCode).fromBand shouldBe "3.5"
         hop1.getValue(key = dropper.publicCode).excursionToBand shouldBe "3.0"
@@ -261,7 +273,11 @@ class ReportServiceTest {
         val result = report().shouldBeRight()
 
         result.totalPlayers shouldBe 1
-        result.excursionBuckets.single { it.hopDistance == 0 }.users.single().publicCode shouldBe
+        result.excursionBuckets
+            .single { it.hopDistance == 0 }
+            .users
+            .single()
+            .publicCode shouldBe
             users.findByFirebaseUid(firebaseUid = "banded")!!.toDomain().publicCode
     }
 
@@ -292,7 +308,11 @@ class ReportServiceTest {
         val result = report().shouldBeRight()
 
         result.totalPlayers shouldBe 1
-        val row = result.excursionBuckets.single { it.hopDistance == 0 }.users.single()
+        val row =
+            result.excursionBuckets
+                .single { it.hopDistance == 0 }
+                .users
+                .single()
         row.excursionToBand shouldBe "3.0"
         row.netToBand shouldBe "3.0"
     }
@@ -340,7 +360,11 @@ class ReportServiceTest {
         result.totalPlayers shouldBe 1
         result.excursionJumpedCount shouldBe 1
         result.netJumpedCount shouldBe 1
-        val hop = result.excursionBuckets.single { it.hopDistance == 1 }.users.single()
+        val hop =
+            result.excursionBuckets
+                .single { it.hopDistance == 1 }
+                .users
+                .single()
         hop.publicCode shouldBe crosser.publicCode
         hop.fromBand shouldBe "3.0" // 3.49 snaps down to the 3.0 band
         hop.excursionToBand shouldBe "3.5" // 3.51 snaps to the 3.5 band
@@ -371,8 +395,16 @@ class ReportServiceTest {
         // Each of these players ended where their excursion peaked, so excursion and net bucketings agree.
         result.excursionBuckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 1, 1 to 2, 3 to 1)
         result.netBuckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 1, 1 to 2, 3 to 1)
-        result.excursionBuckets.single { it.hopDistance == 3 }.users.single().publicCode shouldBe leaper.publicCode
-        result.netBuckets.single { it.hopDistance == 3 }.users.single().publicCode shouldBe leaper.publicCode
+        result.excursionBuckets
+            .single { it.hopDistance == 3 }
+            .users
+            .single()
+            .publicCode shouldBe leaper.publicCode
+        result.netBuckets
+            .single { it.hopDistance == 3 }
+            .users
+            .single()
+            .publicCode shouldBe leaper.publicCode
     }
 
     @Test
@@ -391,13 +423,21 @@ class ReportServiceTest {
         // Excursion sees the hop into 2.5; net sees the recovery back to 3.0 (a net stayer).
         result.excursionStayedCount shouldBe 0
         result.netStayedCount shouldBe 1
-        val hop = result.excursionBuckets.single { it.hopDistance == 1 }.users.single()
+        val hop =
+            result.excursionBuckets
+                .single { it.hopDistance == 1 }
+                .users
+                .single()
         hop.publicCode shouldBe wobbler.publicCode
         hop.fromBand shouldBe "3.0" // entered in the 3.0 band
         hop.excursionToBand shouldBe "2.5" // the farthest band reached — surfaced even though it recovered
         hop.netToBand shouldBe "3.0" // closed back in the entry band
         hop.netDistance shouldBe 0
-        result.netBuckets.single { it.hopDistance == 0 }.users.single().publicCode shouldBe wobbler.publicCode
+        result.netBuckets
+            .single { it.hopDistance == 0 }
+            .users
+            .single()
+            .publicCode shouldBe wobbler.publicCode
     }
 
     @Test
@@ -408,7 +448,11 @@ class ReportServiceTest {
         val result = report().shouldBeRight()
 
         result.totalPlayers shouldBe 1
-        val stayed = result.excursionBuckets.single { it.hopDistance == 0 }.users.single()
+        val stayed =
+            result.excursionBuckets
+                .single { it.hopDistance == 0 }
+                .users
+                .single()
         stayed.publicCode shouldBe user.publicCode
         stayed.fromBand shouldBe "4.5"
         stayed.excursionToBand shouldBe "4.5"

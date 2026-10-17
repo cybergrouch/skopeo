@@ -74,15 +74,16 @@ class OpenGraphApiIntegrationTest {
         rated: Boolean = false,
     ): User {
         val user =
-            users.provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = uid,
-                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                        capabilities = roles,
-                    ),
-            ).toDomain()
+            users
+                .provision(
+                    command =
+                        ProvisionUserCommand(
+                            firebaseUid = uid,
+                            identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                            names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                            capabilities = roles,
+                        ),
+                ).toDomain()
         if (rated) {
             ratings.setRating(userId = user.id, rating = BigDecimal("4.0"), level = "4.0")
         }

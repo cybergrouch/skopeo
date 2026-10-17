@@ -20,7 +20,13 @@ import java.util.UUID
  */
 class AppSettingsRepository {
     fun get(key: String): AppSettingEntity? =
-        transaction { AppSettingsTable.selectAll().where { AppSettingsTable.key eq key }.singleOrNull()?.toRow() }
+        transaction {
+            AppSettingsTable
+                .selectAll()
+                .where { AppSettingsTable.key eq key }
+                .singleOrNull()
+                ?.toRow()
+        }
 
     fun upsert(
         key: String,
@@ -44,7 +50,11 @@ class AppSettingsRepository {
                     it[AppSettingsTable.updatedAt] = now
                 }
             }
-            AppSettingsTable.selectAll().where { AppSettingsTable.key eq key }.single().toRow()
+            AppSettingsTable
+                .selectAll()
+                .where { AppSettingsTable.key eq key }
+                .single()
+                .toRow()
         }
 
     private fun ResultRow.toRow(): AppSettingEntity =

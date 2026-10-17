@@ -67,15 +67,16 @@ class PointsConfigApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     @Test
     fun `a signed-in user reads the default open-play schedule (#553)`() =
@@ -107,9 +108,11 @@ class PointsConfigApiIntegrationTest {
             updated.status shouldBe HttpStatusCode.OK
             updated.body<TournamentConfigResponse>().config.sanctioned shouldBe listOf(100, 70, 50, 35)
 
-            client.get(urlString = "/api/v1/settings/points/tournament") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-            }.body<TournamentConfigResponse>().config.sanctioned shouldBe listOf(100, 70, 50, 35)
+            client
+                .get(urlString = "/api/v1/settings/points/tournament") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }.body<TournamentConfigResponse>()
+                .config.sanctioned shouldBe listOf(100, 70, 50, 35)
         }
 
     @Test
@@ -120,11 +123,12 @@ class PointsConfigApiIntegrationTest {
             val config =
                 TournamentPointsConfig(sanctioned = listOf(80, 60, 40, 30), unsanctioned = listOf(40, 30, 20, 15), validityDays = 365)
 
-            client.put(urlString = "/api/v1/settings/points/tournament") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = config)
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .put(urlString = "/api/v1/settings/points/tournament") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = config)
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
@@ -144,9 +148,11 @@ class PointsConfigApiIntegrationTest {
             updated.status shouldBe HttpStatusCode.OK
             updated.body<OpenPlayConfigResponse>().config.validityDays shouldBe 91
 
-            client.get(urlString = "/api/v1/settings/points/open-play") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-            }.body<OpenPlayConfigResponse>().config.validityDays shouldBe 91
+            client
+                .get(urlString = "/api/v1/settings/points/open-play") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }.body<OpenPlayConfigResponse>()
+                .config.validityDays shouldBe 91
         }
 
     @Test
@@ -155,11 +161,12 @@ class PointsConfigApiIntegrationTest {
             seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
             val playerToken = TestFirebaseAuth.mintToken(uid = "player")
 
-            client.put(urlString = "/api/v1/settings/points/open-play") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = OpenPlayPointsConfig.DEFAULT)
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .put(urlString = "/api/v1/settings/points/open-play") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = OpenPlayPointsConfig.DEFAULT)
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
@@ -185,9 +192,11 @@ class PointsConfigApiIntegrationTest {
             updated.status shouldBe HttpStatusCode.OK
             updated.body<FullMatchConfigResponse>().config.validityDays shouldBe 200
 
-            client.get(urlString = "/api/v1/settings/points/full-match") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-            }.body<FullMatchConfigResponse>().config.validityDays shouldBe 200
+            client
+                .get(urlString = "/api/v1/settings/points/full-match") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }.body<FullMatchConfigResponse>()
+                .config.validityDays shouldBe 200
         }
 
     @Test
@@ -196,11 +205,12 @@ class PointsConfigApiIntegrationTest {
             seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
             val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
 
-            client.put(urlString = "/api/v1/settings/points/full-match") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = FullMatchPointsConfig(validityDays = 0))
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .put(urlString = "/api/v1/settings/points/full-match") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = FullMatchPointsConfig(validityDays = 0))
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
@@ -209,10 +219,11 @@ class PointsConfigApiIntegrationTest {
             seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
             val playerToken = TestFirebaseAuth.mintToken(uid = "player")
 
-            client.put(urlString = "/api/v1/settings/points/full-match") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = FullMatchPointsConfig(validityDays = 200))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .put(urlString = "/api/v1/settings/points/full-match") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = FullMatchPointsConfig(validityDays = 200))
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 }

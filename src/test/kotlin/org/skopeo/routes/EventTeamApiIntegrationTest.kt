@@ -73,15 +73,16 @@ class EventTeamApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun tokenFor(uid: String): String = TestFirebaseAuth.mintToken(uid = uid, emailVerified = true)
 
@@ -143,9 +144,10 @@ class EventTeamApiIntegrationTest {
             team.name shouldBe "Alice/Bob"
             team.members shouldHaveSize 2
 
-            client.get(urlString = "/api/v1/events/${event.id}/teams") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.body<List<EventTeamResponse>>() shouldHaveSize 1
+            client
+                .get(urlString = "/api/v1/events/${event.id}/teams") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.body<List<EventTeamResponse>>() shouldHaveSize 1
 
             val updated =
                 client.patch(urlString = "/api/v1/events/${event.id}/teams/${team.id}") {
@@ -156,13 +158,15 @@ class EventTeamApiIntegrationTest {
             updated.status shouldBe HttpStatusCode.OK
             updated.body<EventTeamResponse>().name shouldBe "Renamed"
 
-            client.delete(urlString = "/api/v1/events/${event.id}/teams/${team.id}") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.status shouldBe HttpStatusCode.NoContent
+            client
+                .delete(urlString = "/api/v1/events/${event.id}/teams/${team.id}") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.status shouldBe HttpStatusCode.NoContent
 
-            client.get(urlString = "/api/v1/events/${event.id}/teams") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.body<List<EventTeamResponse>>() shouldHaveSize 0
+            client
+                .get(urlString = "/api/v1/events/${event.id}/teams") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.body<List<EventTeamResponse>>() shouldHaveSize 0
         }
 
     @Test
@@ -178,17 +182,18 @@ class EventTeamApiIntegrationTest {
 
             // 2 is the hard cap, so a third member is a 400. Asserted before any team exists, so the
             // rejection can only be about size — not membership exclusivity.
-            client.post(urlString = "/api/v1/events/${event.id}/teams") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-                contentType(type = ContentType.Application.Json)
-                setBody(
-                    body =
-                        CreateEventTeamRequest(
-                            memberUserIds = listOf(a.id.toString(), b.id.toString(), c.id.toString()),
-                            name = null,
-                        ),
-                )
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .post(urlString = "/api/v1/events/${event.id}/teams") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(
+                        body =
+                            CreateEventTeamRequest(
+                                memberUserIds = listOf(a.id.toString(), b.id.toString(), c.id.toString()),
+                                name = null,
+                            ),
+                    )
+                }.status shouldBe HttpStatusCode.BadRequest
 
             // Team size is independent of the event format (#734): 1 member is allowed, if degenerate.
             val single =
@@ -212,11 +217,12 @@ class EventTeamApiIntegrationTest {
             val event = client.createDoublesEvent(token = owner, ownerUid = "owner")
             listOf(a, b).forEach { client.addParticipant(token = owner, eventId = event.id, userId = it.id.toString()) }
 
-            client.post(urlString = "/api/v1/events/${event.id}/teams") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "intruder")}")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = CreateEventTeamRequest(memberUserIds = listOf(a.id.toString(), b.id.toString()), name = null))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .post(urlString = "/api/v1/events/${event.id}/teams") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "intruder")}")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = CreateEventTeamRequest(memberUserIds = listOf(a.id.toString(), b.id.toString()), name = null))
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
@@ -229,11 +235,12 @@ class EventTeamApiIntegrationTest {
             val event = client.createDoublesEvent(token = host)
             listOf(a, b).forEach { client.addParticipant(token = host, eventId = event.id, userId = it.id.toString()) }
 
-            client.patch(urlString = "/api/v1/events/${event.id}/teams/${UUID.randomUUID()}") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = UpdateEventTeamRequest(memberUserIds = listOf(a.id.toString(), b.id.toString()), name = null))
-            }.status shouldBe HttpStatusCode.NotFound
+            client
+                .patch(urlString = "/api/v1/events/${event.id}/teams/${UUID.randomUUID()}") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = UpdateEventTeamRequest(memberUserIds = listOf(a.id.toString(), b.id.toString()), name = null))
+                }.status shouldBe HttpStatusCode.NotFound
         }
 
     @Test
@@ -243,8 +250,9 @@ class EventTeamApiIntegrationTest {
             val host = tokenFor(uid = "host")
             val event = client.createDoublesEvent(token = host)
 
-            client.delete(urlString = "/api/v1/events/${event.id}/teams/${UUID.randomUUID()}") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.status shouldBe HttpStatusCode.NotFound
+            client
+                .delete(urlString = "/api/v1/events/${event.id}/teams/${UUID.randomUUID()}") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.status shouldBe HttpStatusCode.NotFound
         }
 }

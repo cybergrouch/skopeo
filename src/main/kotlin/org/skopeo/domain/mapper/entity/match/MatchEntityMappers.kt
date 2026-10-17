@@ -75,14 +75,24 @@ private fun MatchSetEntity.derivedSetWinner(
     team2Id: UUID,
 ): UUID? =
     when {
-        team1Games > team2Games -> team1Id
-        team2Games > team1Games -> team2Id
-        tiebreakTeam1Points != null && tiebreakTeam2Points != null && tiebreakTeam1Points != tiebreakTeam2Points ->
+        team1Games > team2Games -> {
+            team1Id
+        }
+
+        team2Games > team1Games -> {
+            team2Id
+        }
+
+        tiebreakTeam1Points != null && tiebreakTeam2Points != null && tiebreakTeam1Points != tiebreakTeam2Points -> {
             if (tiebreakTeam1Points > tiebreakTeam2Points) team1Id else team2Id
+        }
+
         // Nobody won it (#968). This used to throw, on the premise that such a set was unrecordable —
         // true until a retirement in a level set needed its games kept. Throwing now would make the
         // match unreadable rather than protecting anything: the row exists, and null is what it means.
-        else -> null
+        else -> {
+            null
+        }
     }
 
 // Build the domain Match from the raw MatchAggregateEntity graph the repository returns: the `matches`

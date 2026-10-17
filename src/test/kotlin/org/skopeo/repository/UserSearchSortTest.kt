@@ -80,28 +80,30 @@ class UserSearchSortTest {
         sex: String = "Male",
         dateOfBirth: LocalDate? = null,
     ): UUID =
-        repository.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = "firebase-${UUID.randomUUID()}",
-                    identity =
-                        UserIdentity(
-                            provider = AuthProvider.GOOGLE,
-                            providerUid = "sub-${subCounter++}",
-                            isPrimary = true,
-                        ),
-                    names =
-                        listOf(
-                            UserName(type = NameType.DISPLAY, value = display),
-                            UserName(type = NameType.FIRST, value = first),
-                            UserName(type = NameType.LAST, value = last),
-                        ),
-                    photoUrl = null,
-                    email = null,
-                    sex = sex,
-                    dateOfBirth = dateOfBirth,
-                ),
-        ).toDomain().id
+        repository
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = "firebase-${UUID.randomUUID()}",
+                        identity =
+                            UserIdentity(
+                                provider = AuthProvider.GOOGLE,
+                                providerUid = "sub-${subCounter++}",
+                                isPrimary = true,
+                            ),
+                        names =
+                            listOf(
+                                UserName(type = NameType.DISPLAY, value = display),
+                                UserName(type = NameType.FIRST, value = first),
+                                UserName(type = NameType.LAST, value = last),
+                            ),
+                        photoUrl = null,
+                        email = null,
+                        sex = sex,
+                        dateOfBirth = dateOfBirth,
+                    ),
+            ).toDomain()
+            .id
 
     /** The DISPLAY names of a search result, in the order the database returned them. */
     private fun displayNames(
@@ -118,9 +120,12 @@ class UserSearchSortTest {
                 direction = direction,
                 includeInactive = includeInactive,
                 calibrationRequired = required,
-            )
-            .map { entity ->
-                entity.toDomain().names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
+            ).map { entity ->
+                entity
+                    .toDomain()
+                    .names
+                    .firstOrNull { it.type == NameType.DISPLAY && it.isActive }
+                    ?.value
             }
 
     /**

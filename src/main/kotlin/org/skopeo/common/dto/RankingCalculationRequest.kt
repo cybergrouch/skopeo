@@ -53,7 +53,13 @@ data class RankingCalculationRequest(
 
         // Both teams must be the same format (no singles-vs-doubles). Per-team player counts are already
         // enforced by Team.init (SINGLES = 1, DOUBLES/MIXED_DOUBLES = 2), so this only rules out a mismatch.
-        require(value = teams.values.map { it.teamType }.toSet().size == 1) {
+        require(
+            value =
+                teams.values
+                    .map { it.teamType }
+                    .toSet()
+                    .size == 1,
+        ) {
             "Both teams must have the same format, got ${teams.values.map { it.teamType }}"
         }
     }

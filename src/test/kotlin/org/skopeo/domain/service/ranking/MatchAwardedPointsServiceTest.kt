@@ -269,8 +269,14 @@ class MatchAwardedPointsServiceTest {
         // Omitted from the payload, not hidden client-side: the band relation is rating-adjacent
         // (#583/#654), so a curious reader must not be able to read it out of the network response.
         anonymous.rows.single().points shouldBe "8.0000"
-        anonymous.rows.single().derivation.shouldBeNull()
-        player.rows.single().derivation.shouldBeNull()
+        anonymous.rows
+            .single()
+            .derivation
+            .shouldBeNull()
+        player.rows
+            .single()
+            .derivation
+            .shouldBeNull()
     }
 
     @Test
@@ -284,7 +290,12 @@ class MatchAwardedPointsServiceTest {
 
         listOf("root", "rater").forEach { uid ->
             withClue(clue = "$uid should see the derivation") {
-                val row = service.forMatch(code = match.publicCode, token = token(uid = uid)).shouldBeRight().rows.single()
+                val row =
+                    service
+                        .forMatch(code = match.publicCode, token = token(uid = uid))
+                        .shouldBeRight()
+                        .rows
+                        .single()
                 val derivation = row.derivation.shouldNotBeNull()
                 // And it is the real thing, not a stub: 6-4 at equal bands pays 8 at margin 2 (v1).
                 derivation.recorded shouldBe true
@@ -309,8 +320,14 @@ class MatchAwardedPointsServiceTest {
 
         // Reach over an event is per-club since #789 — the capability alone is not a global licence, and
         // a rating-adjacent field is exactly where that has to hold.
-        theirs.rows.single().derivation.shouldNotBeNull()
-        notTheirs.rows.single().derivation.shouldBeNull()
+        theirs.rows
+            .single()
+            .derivation
+            .shouldNotBeNull()
+        notTheirs.rows
+            .single()
+            .derivation
+            .shouldBeNull()
         withClue(clue = "both still see the amount") {
             notTheirs.rows.single().points shouldBe "8.0000"
         }
@@ -326,8 +343,13 @@ class MatchAwardedPointsServiceTest {
         val match = completedMatch(one = ana, two = ben, clubOwnerUid = "owner", creator = host)
         matchAward(userId = ana.id, match = match, points = "8")
 
-        service.forMatch(code = match.publicCode, token = token(uid = "host")).shouldBeRight()
-            .rows.single().derivation.shouldNotBeNull()
+        service
+            .forMatch(code = match.publicCode, token = token(uid = "host"))
+            .shouldBeRight()
+            .rows
+            .single()
+            .derivation
+            .shouldNotBeNull()
     }
 
     @Test
@@ -340,8 +362,13 @@ class MatchAwardedPointsServiceTest {
         val match = completedMatch(one = ana, two = ben, clubOwnerUid = "owner", creator = ana)
         matchAward(userId = ana.id, match = match, points = "8")
 
-        service.forMatch(code = match.publicCode, token = token(uid = "host")).shouldBeRight()
-            .rows.single().derivation.shouldBeNull()
+        service
+            .forMatch(code = match.publicCode, token = token(uid = "host"))
+            .shouldBeRight()
+            .rows
+            .single()
+            .derivation
+            .shouldBeNull()
     }
 
     @Test
@@ -352,7 +379,12 @@ class MatchAwardedPointsServiceTest {
         val match = completedMatch(one = ana, two = ben)
         matchAward(userId = ana.id, match = match, points = "8", teamBand = null, opponentBand = null)
 
-        val row = service.forMatch(code = match.publicCode, token = token(uid = "root")).shouldBeRight().rows.single()
+        val row =
+            service
+                .forMatch(code = match.publicCode, token = token(uid = "root"))
+                .shouldBeRight()
+                .rows
+                .single()
 
         // The derivation is present but honest: the amount is real, only its explanation is missing.
         val derivation = row.derivation.shouldNotBeNull()
@@ -369,14 +401,30 @@ class MatchAwardedPointsServiceTest {
         val match = completedMatch(one = ana, two = ben)
         matchAward(userId = ana.id, match = match, points = "8")
 
-        service.forMatch(code = match.publicCode).shouldBeRight().rows.shouldHaveSize(size = 1)
+        service
+            .forMatch(code = match.publicCode)
+            .shouldBeRight()
+            .rows
+            .shouldHaveSize(size = 1)
 
         SettingsService().setHideRankingPoints(token = token(uid = "root"), hidden = true).shouldBeRight()
 
         // Same shape as the event card: an empty summary, not a Forbidden — the endpoint is public and
         // the match is real, there is simply nothing this viewer may see.
-        service.forMatch(code = match.publicCode).shouldBeRight().rows.shouldBeEmpty()
-        service.forMatch(code = match.publicCode, token = token(uid = "ben")).shouldBeRight().rows.shouldBeEmpty()
-        service.forMatch(code = match.publicCode, token = token(uid = "root")).shouldBeRight().rows.shouldHaveSize(size = 1)
+        service
+            .forMatch(code = match.publicCode)
+            .shouldBeRight()
+            .rows
+            .shouldBeEmpty()
+        service
+            .forMatch(code = match.publicCode, token = token(uid = "ben"))
+            .shouldBeRight()
+            .rows
+            .shouldBeEmpty()
+        service
+            .forMatch(code = match.publicCode, token = token(uid = "root"))
+            .shouldBeRight()
+            .rows
+            .shouldHaveSize(size = 1)
     }
 }

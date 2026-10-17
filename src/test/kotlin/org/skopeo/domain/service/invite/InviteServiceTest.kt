@@ -56,38 +56,40 @@ class InviteServiceTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     /** Provision an account that owns a verified EMAIL contact — the existing-account guard input (#132). */
     private fun provisionWithEmail(
         uid: String,
         email: String,
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    email =
-                        ContactInfo(
-                            type = ContactType.EMAIL,
-                            value = email,
-                            source = ContactSource.GOOGLE,
-                            status = VerificationStatus.VERIFIED,
-                            method = VerificationMethod.OAUTH_PROVIDER,
-                            isPrimary = true,
-                        ),
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        email =
+                            ContactInfo(
+                                type = ContactType.EMAIL,
+                                value = email,
+                                source = ContactSource.GOOGLE,
+                                status = VerificationStatus.VERIFIED,
+                                method = VerificationMethod.OAUTH_PROVIDER,
+                                isPrimary = true,
+                            ),
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -164,10 +166,12 @@ class InviteServiceTest {
 
         service.create(token = token(uid = "player"), email = "y@example.com").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.list(token = token(uid = "player"), limit = 50, offset = 0).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.revoke(
-            token = token(uid = "player"),
-            id = UUID.fromString(invite.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .revoke(
+                token = token(uid = "player"),
+                id = UUID.fromString(invite.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -190,10 +194,12 @@ class InviteServiceTest {
         // The token's uid maps to no user (caller == null) -> the admin gate denies before any work.
         service.create(token = token(uid = "ghost"), email = "y@example.com").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.list(token = token(uid = "ghost"), limit = 50, offset = 0).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.revoke(
-            token = token(uid = "ghost"),
-            id = UUID.fromString(invite.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .revoke(
+                token = token(uid = "ghost"),
+                id = UUID.fromString(invite.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test

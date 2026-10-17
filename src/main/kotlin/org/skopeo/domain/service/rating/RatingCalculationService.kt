@@ -141,12 +141,13 @@ class RatingCalculationService(
         } else {
             // Every match belongs to an event since #898, so there is no event-less label to fall back to.
             val label = "event ${excluded.eventId}"
-            ServiceError.Validation(
-                message =
-                    "Selection must be a contiguous prefix of the pending timeline: " +
-                        "$label (match ${excluded.id}, dated ${excluded.matchDate}) is older than a " +
-                        "selected event but was not included.",
-            ).left()
+            ServiceError
+                .Validation(
+                    message =
+                        "Selection must be a contiguous prefix of the pending timeline: " +
+                            "$label (match ${excluded.id}, dated ${excluded.matchDate}) is older than a " +
+                            "selected event but was not included.",
+                ).left()
         }
     }
 
@@ -154,7 +155,12 @@ class RatingCalculationService(
     private fun calculationDetails(processed: List<MatchCalculation>): Map<String, String?> =
         mapOf(
             "matches" to processed.size.toString(),
-            "players" to processed.flatMap { calc -> calc.changes.map { it.userId } }.distinct().size.toString(),
+            "players" to
+                processed
+                    .flatMap { calc -> calc.changes.map { it.userId } }
+                    .distinct()
+                    .size
+                    .toString(),
         )
 
     private fun commit(
@@ -310,7 +316,12 @@ class RatingCalculationService(
         }
 
     /** A player's display name for an error message, falling back to their public code (never null). */
-    private fun nameOf(userId: UUID): String = users.findById(id = userId).getOrNull()?.toDomain()?.nameForMessage() ?: "User $userId"
+    private fun nameOf(userId: UUID): String =
+        users
+            .findById(id = userId)
+            .getOrNull()
+            ?.toDomain()
+            ?.nameForMessage() ?: "User $userId"
 
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()

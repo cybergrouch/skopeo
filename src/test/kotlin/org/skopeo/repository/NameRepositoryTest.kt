@@ -42,14 +42,16 @@ class NameRepositoryTest {
     }
 
     private fun newUser(uid: String): UUID =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = emptyList(),
-                ),
-        ).toDomain().id
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = emptyList(),
+                    ),
+            ).toDomain()
+            .id
 
     @Test
     fun `create stores an active name`() {
@@ -75,7 +77,11 @@ class NameRepositoryTest {
 
         val second = names.create(userId = userId, type = NameType.DISPLAY, value = "Johnny")
 
-        names.findById(id = first.id).shouldBeRight().isActive.shouldBeFalse()
+        names
+            .findById(id = first.id)
+            .shouldBeRight()
+            .isActive
+            .shouldBeFalse()
         second.isActive.shouldBeTrue()
         names.listByUser(userId = userId).map { it.toDomain() }.count { it.type == NameType.DISPLAY && it.isActive } shouldBe 1
     }
@@ -90,8 +96,16 @@ class NameRepositoryTest {
         val lastB = names.create(userId = userId, type = NameType.LAST, value = "dela Cruz")
 
         // The prior active first/last are disabled; exactly one of each stays active.
-        names.findById(id = firstA.id).shouldBeRight().isActive.shouldBeFalse()
-        names.findById(id = lastA.id).shouldBeRight().isActive.shouldBeFalse()
+        names
+            .findById(id = firstA.id)
+            .shouldBeRight()
+            .isActive
+            .shouldBeFalse()
+        names
+            .findById(id = lastA.id)
+            .shouldBeRight()
+            .isActive
+            .shouldBeFalse()
         firstB.isActive.shouldBeTrue()
         lastB.isActive.shouldBeTrue()
         names.listByUser(userId = userId).map { it.toDomain() }.count { it.type == NameType.FIRST && it.isActive } shouldBe 1
@@ -116,12 +130,17 @@ class NameRepositoryTest {
         disabled.isActive.shouldBeFalse()
         disabled.disabledAt.shouldNotBeNull()
 
-        names.setActive(id = name.id, active = true, disabledAt = null).shouldBeRight().isActive.shouldBeTrue()
+        names
+            .setActive(id = name.id, active = true, disabledAt = null)
+            .shouldBeRight()
+            .isActive
+            .shouldBeTrue()
     }
 
     @Test
     fun `setActive reports absence`() {
-        names.setActive(id = UUID.randomUUID(), active = false, disabledAt = LocalDateTime.now())
+        names
+            .setActive(id = UUID.randomUUID(), active = false, disabledAt = LocalDateTime.now())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }

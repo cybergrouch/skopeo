@@ -155,7 +155,12 @@ class ClubService(
     ): Either<ServiceError, ClubResponse> =
         either {
             val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
-            val owner = users.findById(id = userId).mapLeft { ServiceError.Validation(message = "Unknown user $userId") }.bind().toDomain()
+            val owner =
+                users
+                    .findById(id = userId)
+                    .mapLeft { ServiceError.Validation(message = "Unknown user $userId") }
+                    .bind()
+                    .toDomain()
             ensure(condition = owner.isActive) { ServiceError.Validation(message = "User $userId is not active") }
             // A club owner must hold the CLUB_OWNER capability (#317) — grant it first via capabilities.
             ensure(condition = owner.capabilities.contains(element = Capability.CLUB_OWNER)) {

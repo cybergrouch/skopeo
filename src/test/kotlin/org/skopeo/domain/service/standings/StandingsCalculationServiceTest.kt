@@ -74,29 +74,45 @@ class StandingsCalculationServiceTest {
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
         sex: String? = "Male",
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = org.skopeo.domain.model.UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = org.skopeo.domain.model.UserName(type = NameType.DISPLAY, value = uid)),
-                    sex = sex,
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity =
+                            org.skopeo.domain.model
+                                .UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names =
+                            listOf(
+                                element =
+                                    org.skopeo.domain.model
+                                        .UserName(type = NameType.DISPLAY, value = uid),
+                            ),
+                        sex = sex,
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     /** A user with only a NICKNAME name (no active DISPLAY name) so [User.displayName] is null. */
     private fun provisionNoDisplayName(uid: String): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = org.skopeo.domain.model.UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = org.skopeo.domain.model.UserName(type = NameType.NICKNAME, value = uid)),
-                    sex = "Male",
-                    capabilities = setOf(element = Capability.PLAYER),
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity =
+                            org.skopeo.domain.model
+                                .UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names =
+                            listOf(
+                                element =
+                                    org.skopeo.domain.model
+                                        .UserName(type = NameType.NICKNAME, value = uid),
+                            ),
+                        sex = "Male",
+                        capabilities = setOf(element = Capability.PLAYER),
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -119,27 +135,28 @@ class StandingsCalculationServiceTest {
         if (setBand && ratings.findCurrentRating(userId = userId) == null) {
             ratings.setRating(userId = userId, rating = BigDecimal(band), level = band)
         }
-        return awards.award(
-            write =
-                RankingPointAwardWrite(
-                    userId = userId,
-                    points = BigDecimal(points),
-                    pointClass = PointClass.ANNUAL_TOURNAMENT,
-                    sourceType = PointSourceType.INTERNAL,
-                    sourceId = null,
-                    band = band,
-                    sex = sex,
-                    reason = null,
-                    validFrom = validFrom,
-                    validUntil = validUntil,
-                    status = status,
-                    revokesAwardId = null,
-                    grantedBy = null,
-                    awardedAt = LocalDateTime.now(),
-                    // v1 is what a freshly migrated database seeds (#862).
-                    pointsScheduleVersion = 1,
-                ),
-        ).toDomain()
+        return awards
+            .award(
+                write =
+                    RankingPointAwardWrite(
+                        userId = userId,
+                        points = BigDecimal(points),
+                        pointClass = PointClass.ANNUAL_TOURNAMENT,
+                        sourceType = PointSourceType.INTERNAL,
+                        sourceId = null,
+                        band = band,
+                        sex = sex,
+                        reason = null,
+                        validFrom = validFrom,
+                        validUntil = validUntil,
+                        status = status,
+                        revokesAwardId = null,
+                        grantedBy = null,
+                        awardedAt = LocalDateTime.now(),
+                        // v1 is what a freshly migrated database seeds (#862).
+                        pointsScheduleVersion = 1,
+                    ),
+            ).toDomain()
     }
 
     /** Record a COMPLETED in-window match so the player accrues rating confidence (#459). */
@@ -149,20 +166,21 @@ class StandingsCalculationServiceTest {
         matchDate: LocalDate,
     ) {
         val match =
-            matches.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = matchDate,
-                        team1UserIds = listOf(element = u1),
-                        team2UserIds = listOf(element = u2),
-                        team1Name = "T1",
-                        team2Name = "T2",
-                        createdBy = u1,
-                        eventId = fixtureEventId(),
-                    ),
-            ).toDomain()
+            matches
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = matchDate,
+                            team1UserIds = listOf(element = u1),
+                            team2UserIds = listOf(element = u2),
+                            team1Name = "T1",
+                            team2Name = "T2",
+                            createdBy = u1,
+                            eventId = fixtureEventId(),
+                        ),
+                ).toDomain()
         matches.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId)),
@@ -187,7 +205,12 @@ class StandingsCalculationServiceTest {
         val today = LocalDate.now()
         repeat(times = 2) { completedMatch(u1 = established.id, u2 = opponent.id, matchDate = today) }
 
-        val group = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single()
+        val group =
+            service
+                .calculate(token = token(uid = "admin"), dryRun = true)
+                .shouldBeRight()
+                .groups
+                .single()
         // Same points, so confidence breaks the tie: the established player ranks first.
         group.entries.map { it.userId } shouldContainExactly listOf(established.id.toString(), provisional.id.toString())
         group.entries.first().rank shouldBe 1
@@ -202,7 +225,11 @@ class StandingsCalculationServiceTest {
         val outcome = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
         outcome.dryRun shouldBe true
         outcome.groups shouldHaveSize 1
-        outcome.groups.single().entries.single().points shouldBe "100.0000"
+        outcome.groups
+            .single()
+            .entries
+            .single()
+            .points shouldBe "100.0000"
         // Nothing was published — the preferring-points read has no snapshot.
         snapshots.latestPublishedPreferringPoints().shouldBeNull()
     }
@@ -256,7 +283,8 @@ class StandingsCalculationServiceTest {
     fun `a plain player cannot recompute (#389)`() {
         provision(uid = "nobody")
 
-        service.calculate(token = token(uid = "nobody"), dryRun = true)
+        service
+            .calculate(token = token(uid = "nobody"), dryRun = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -267,7 +295,8 @@ class StandingsCalculationServiceTest {
         // future change to the allowed set could quietly let RATER or HOST publish standings.
         provision(uid = "rater", roles = setOf(Capability.PLAYER, Capability.RATER))
 
-        service.calculate(token = token(uid = "rater"), dryRun = true)
+        service
+            .calculate(token = token(uid = "rater"), dryRun = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -349,7 +378,11 @@ class StandingsCalculationServiceTest {
         grant(userId = player.id, points = "30")
 
         val outcome = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
-        outcome.groups.single().entries.single().points shouldBe "30.0000"
+        outcome.groups
+            .single()
+            .entries
+            .single()
+            .points shouldBe "30.0000"
     }
 
     @Test
@@ -360,7 +393,14 @@ class StandingsCalculationServiceTest {
         grant(userId = player.id, points = "50")
         grant(userId = player.id, points = "-100")
 
-        val entry = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single().entries.single()
+        val entry =
+            service
+                .calculate(token = token(uid = "admin"), dryRun = true)
+                .shouldBeRight()
+                .groups
+                .single()
+                .entries
+                .single()
         entry.points shouldBe "0"
     }
 
@@ -376,7 +416,13 @@ class StandingsCalculationServiceTest {
         // Everyone has the same points → the tie-break decides the order.
         listOf(higherRated, lowerRated, unratedAlpha, unratedBeta).forEach { grant(userId = it.id, points = "100") }
 
-        val entries = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single().entries
+        val entries =
+            service
+                .calculate(token = token(uid = "admin"), dryRun = true)
+                .shouldBeRight()
+                .groups
+                .single()
+                .entries
         // Higher rating first, then lower rating, then the two unrated by display name (a-, b-).
         entries.map { it.userId } shouldContainExactly
             listOf(higherRated.id.toString(), lowerRated.id.toString(), unratedAlpha.id.toString(), unratedBeta.id.toString())
@@ -392,7 +438,13 @@ class StandingsCalculationServiceTest {
         grant(userId = one.id, points = "100")
         grant(userId = two.id, points = "100")
 
-        val entries = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single().entries
+        val entries =
+            service
+                .calculate(token = token(uid = "admin"), dryRun = true)
+                .shouldBeRight()
+                .groups
+                .single()
+                .entries
         entries shouldHaveSize 2
         // Ranked by public code ascending — both codes are non-null, so the order is deterministic.
         entries.map { it.publicCode } shouldContainExactly entries.map { it.publicCode }.sorted()
@@ -407,7 +459,13 @@ class StandingsCalculationServiceTest {
         grant(userId = gone.id, points = "200")
         users.deactivate(id = gone.id).shouldBeRight()
 
-        val entries = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single().entries
+        val entries =
+            service
+                .calculate(token = token(uid = "admin"), dryRun = true)
+                .shouldBeRight()
+                .groups
+                .single()
+                .entries
         entries.map { it.userId } shouldContainExactly listOf(element = active.id.toString())
     }
 
@@ -417,7 +475,12 @@ class StandingsCalculationServiceTest {
         val player = provision(uid = "player", sex = null)
         grant(userId = player.id, points = "100", sex = "Unspecified")
 
-        val group = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single()
+        val group =
+            service
+                .calculate(token = token(uid = "admin"), dryRun = true)
+                .shouldBeRight()
+                .groups
+                .single()
         group.sex.shouldBeNull()
         group.entries.single().userId shouldBe player.id.toString()
     }
@@ -425,11 +488,15 @@ class StandingsCalculationServiceTest {
     @Test
     fun `a non-admin is forbidden`() {
         provision(uid = "rater", roles = setOf(Capability.PLAYER, Capability.RATER))
-        service.calculate(token = token(uid = "rater"), dryRun = true)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .calculate(token = token(uid = "rater"), dryRun = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
         // An unprovisioned caller is also forbidden (null-caller arm).
-        service.calculate(token = token(uid = "ghost"), dryRun = false)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .calculate(token = token(uid = "ghost"), dryRun = false)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
