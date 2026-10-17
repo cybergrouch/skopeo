@@ -51,55 +51,63 @@ class EventRepositoryTest {
     }
 
     private fun newUser(uid: String): UUID =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                ),
-        ).toDomain().id
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                    ),
+            ).toDomain()
+            .id
 
     @Test
     fun `an event whose creator was removed (created_by SET NULL) still loads`() {
         val creator = newUser(uid = "creator")
         val event =
-            events.create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "Orphan Cup",
-                        startDate = LocalDate.parse("2026-04-01"),
-                        endDate = LocalDate.parse("2026-04-02"),
-                        participantIds = emptyList(),
-                        createdBy = creator,
-                    ),
-            ).toDomain()
+            events
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "Orphan Cup",
+                            startDate = LocalDate.parse("2026-04-01"),
+                            endDate = LocalDate.parse("2026-04-02"),
+                            participantIds = emptyList(),
+                            createdBy = creator,
+                        ),
+                ).toDomain()
         event.createdBy shouldBe creator
 
         // Simulate the creator's account being removed — the FK is ON DELETE SET NULL.
         transaction { EventsTable.update(where = { EventsTable.id eq event.id }) { it[createdBy] = null } }
 
-        events.findById(id = event.id)!!.toDomain().createdBy.shouldBeNull()
+        events
+            .findById(id = event.id)!!
+            .toDomain()
+            .createdBy
+            .shouldBeNull()
     }
 
     @Test
     fun `findByPublicCode resolves an event even once disabled, for traceability (#325)`() {
         val creator = newUser(uid = "creator")
         val event =
-            events.create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "Code Cup",
-                        startDate = LocalDate.parse("2026-05-01"),
-                        endDate = LocalDate.parse("2026-05-02"),
-                        participantIds = emptyList(),
-                        createdBy = creator,
-                    ),
-            ).toDomain()
+            events
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "Code Cup",
+                            startDate = LocalDate.parse("2026-05-01"),
+                            endDate = LocalDate.parse("2026-05-02"),
+                            participantIds = emptyList(),
+                            createdBy = creator,
+                        ),
+                ).toDomain()
         events.findByPublicCode(code = event.publicCode)!!.toDomain().id shouldBe event.id
 
         // A disabled (soft-deleted) event still resolves by code so its link stays honored (#325);
@@ -112,18 +120,19 @@ class EventRepositoryTest {
     fun `rename updates the name and returns the event, or null when absent`() {
         val creator = newUser(uid = "creator")
         val event =
-            events.create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "Old Name",
-                        startDate = LocalDate.parse("2026-06-01"),
-                        endDate = LocalDate.parse("2026-06-02"),
-                        participantIds = emptyList(),
-                        createdBy = creator,
-                    ),
-            ).toDomain()
+            events
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "Old Name",
+                            startDate = LocalDate.parse("2026-06-01"),
+                            endDate = LocalDate.parse("2026-06-02"),
+                            participantIds = emptyList(),
+                            createdBy = creator,
+                        ),
+                ).toDomain()
 
         events.rename(id = event.id, name = "New Name")!!.toDomain().name shouldBe "New Name"
         events.findById(id = event.id)!!.toDomain().name shouldBe "New Name"
@@ -134,20 +143,25 @@ class EventRepositoryTest {
     fun `setCalcPriority stores the override and a missing id is a harmless no-op (#335)`() {
         val creator = newUser(uid = "creator")
         val event =
-            events.create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "Priority Cup",
-                        startDate = LocalDate.parse("2026-07-01"),
-                        endDate = LocalDate.parse("2026-07-02"),
-                        participantIds = emptyList(),
-                        createdBy = creator,
-                    ),
-            ).toDomain()
+            events
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "Priority Cup",
+                            startDate = LocalDate.parse("2026-07-01"),
+                            endDate = LocalDate.parse("2026-07-02"),
+                            participantIds = emptyList(),
+                            createdBy = creator,
+                        ),
+                ).toDomain()
         // No override to start with.
-        events.findById(id = event.id)!!.toDomain().calcPriority.shouldBeNull()
+        events
+            .findById(id = event.id)!!
+            .toDomain()
+            .calcPriority
+            .shouldBeNull()
 
         events.setCalcPriority(id = event.id, priority = 3.5)
         events.findById(id = event.id)!!.toDomain().calcPriority shouldBe 3.5

@@ -102,17 +102,18 @@ class StandingsServiceTest {
         dateOfBirth: LocalDate? = LocalDate.of(2000, 1, 1),
         withName: Boolean = true,
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = if (withName) listOf(element = UserName(type = NameType.DISPLAY, value = uid)) else emptyList(),
-                    dateOfBirth = dateOfBirth,
-                    sex = sex,
-                    capabilities = capabilities,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = if (withName) listOf(element = UserName(type = NameType.DISPLAY, value = uid)) else emptyList(),
+                        dateOfBirth = dateOfBirth,
+                        sex = sex,
+                        capabilities = capabilities,
+                    ),
+            ).toDomain()
 
     // A bare override with no in-window matches → confidence 0 (#459); standings order these players by
     // rating alone, with confidence/matches as the (here equal) tie-breaks.
@@ -186,8 +187,14 @@ class StandingsServiceTest {
         val dummy = placeholder(displayName = "Dummy").also { rate(user = it, value = "4.1") }
 
         val men = page(band = StandingsBand.FROM_4_0.code, sex = "Male")
-        men.entries.single { it.userId == dummy.id.toString() }.isPlaceholder.shouldBeTrue()
-        men.entries.single { it.userId == real.id.toString() }.isPlaceholder.shouldBeFalse()
+        men.entries
+            .single { it.userId == dummy.id.toString() }
+            .isPlaceholder
+            .shouldBeTrue()
+        men.entries
+            .single { it.userId == real.id.toString() }
+            .isPlaceholder
+            .shouldBeFalse()
     }
 
     @Test
@@ -231,11 +238,19 @@ class StandingsServiceTest {
         val player = provision(uid = "p", sex = "Male").also { rate(user = it, value = "4.2") }
 
         page(band = StandingsBand.FROM_4_0.code, sex = "Male", token = token(uid = "admin"))
-            .entries.single { it.userId == player.id.toString() }.currentRating shouldBe "4.200000"
+            .entries
+            .single { it.userId == player.id.toString() }
+            .currentRating shouldBe "4.200000"
         page(band = StandingsBand.FROM_4_0.code, sex = "Male", token = token(uid = "rater"))
-            .entries.single { it.userId == player.id.toString() }.currentRating.shouldBeNull()
+            .entries
+            .single { it.userId == player.id.toString() }
+            .currentRating
+            .shouldBeNull()
         page(band = StandingsBand.FROM_4_0.code, sex = "Male", token = token(uid = "p"))
-            .entries.single { it.userId == player.id.toString() }.currentRating.shouldBeNull()
+            .entries
+            .single { it.userId == player.id.toString() }
+            .currentRating
+            .shouldBeNull()
     }
 
     @Test

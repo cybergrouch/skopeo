@@ -101,7 +101,8 @@ class UserApiIntegrationTest {
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-2")
 
-            client.get(urlString = "/api/v1/users/me") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
+            client
+                .get(urlString = "/api/v1/users/me") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
                 .status shouldBe HttpStatusCode.NotFound
 
             client.createUser(token = token)
@@ -119,9 +120,11 @@ class UserApiIntegrationTest {
             val alice = client.createUser(token = aliceToken).body<UserResponse>()
             client.createUser(token = bobToken)
 
-            client.get(urlString = "/api/v1/users/${alice.id}") { header(key = HttpHeaders.Authorization, value = "Bearer $aliceToken") }
+            client
+                .get(urlString = "/api/v1/users/${alice.id}") { header(key = HttpHeaders.Authorization, value = "Bearer $aliceToken") }
                 .status shouldBe HttpStatusCode.OK
-            client.get(urlString = "/api/v1/users/${alice.id}") { header(key = HttpHeaders.Authorization, value = "Bearer $bobToken") }
+            client
+                .get(urlString = "/api/v1/users/${alice.id}") { header(key = HttpHeaders.Authorization, value = "Bearer $bobToken") }
                 .status shouldBe HttpStatusCode.Forbidden
         }
 
@@ -131,11 +134,12 @@ class UserApiIntegrationTest {
             val token = TestFirebaseAuth.mintToken(uid = "fb-3")
             client.createUser(token = token)
 
-            client.get(urlString = "/api/v1/users/${java.util.UUID.randomUUID()}") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $token")
-            }
-                .status shouldBe HttpStatusCode.NotFound
-            client.get(urlString = "/api/v1/users/not-a-uuid") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
+            client
+                .get(urlString = "/api/v1/users/${java.util.UUID.randomUUID()}") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }.status shouldBe HttpStatusCode.NotFound
+            client
+                .get(urlString = "/api/v1/users/not-a-uuid") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
                 .status shouldBe HttpStatusCode.BadRequest
         }
 
@@ -154,19 +158,24 @@ class UserApiIntegrationTest {
             patched.status shouldBe HttpStatusCode.OK
             patched.body<UserResponse>().city shouldBe "Cebu"
 
-            client.put(urlString = "/api/v1/users/${user.id}") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $token")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = ProfileRequest(city = "Davao"))
-            }.body<UserResponse>().city shouldBe "Davao"
+            client
+                .put(urlString = "/api/v1/users/${user.id}") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = ProfileRequest(city = "Davao"))
+                }.body<UserResponse>()
+                .city shouldBe "Davao"
 
             // Deletion is ADMINISTRATOR-only (#518): a user cannot delete their own account.
-            client.delete(urlString = "/api/v1/users/${user.id}") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
+            client
+                .delete(urlString = "/api/v1/users/${user.id}") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
                 .status shouldBe HttpStatusCode.Forbidden
 
             // The account is untouched — still active.
-            client.get(urlString = "/api/v1/users/me") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
-                .body<UserResponse>().isActive shouldBe true
+            client
+                .get(urlString = "/api/v1/users/me") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
+                .body<UserResponse>()
+                .isActive shouldBe true
         }
 
     @Test
@@ -190,17 +199,22 @@ class UserApiIntegrationTest {
 
             // A non-http(s) URL is rejected. Sent as raw JSON — the DTO's init validation would
             // otherwise throw client-side before the request is even made.
-            client.put(urlString = "/api/v1/users/${user.id}/photo") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $token")
-                setBody(body = TextContent(text = """{"customPhotoUrl":"ftp://nope/x.jpg"}""", contentType = ContentType.Application.Json))
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .put(urlString = "/api/v1/users/${user.id}/photo") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    setBody(
+                        body = TextContent(text = """{"customPhotoUrl":"ftp://nope/x.jpg"}""", contentType = ContentType.Application.Json),
+                    )
+                }.status shouldBe HttpStatusCode.BadRequest
 
             // Hiding suppresses the effective photo.
-            client.put(urlString = "/api/v1/users/${user.id}/photo") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $token")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = PhotoSettingsRequest(customPhotoUrl = "https://c/me.png", hidden = true))
-            }.body<UserResponse>().photoUrl shouldBe null
+            client
+                .put(urlString = "/api/v1/users/${user.id}/photo") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = PhotoSettingsRequest(customPhotoUrl = "https://c/me.png", hidden = true))
+                }.body<UserResponse>()
+                .photoUrl shouldBe null
         }
 
     @Test

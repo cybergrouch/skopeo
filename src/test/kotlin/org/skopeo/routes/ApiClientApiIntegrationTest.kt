@@ -74,15 +74,16 @@ class ApiClientApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun bearer(uid: String) = "Bearer ${TestFirebaseAuth.mintToken(uid = uid)}"
 
@@ -133,11 +134,12 @@ class ApiClientApiIntegrationTest {
     fun `a non-admin cannot manage clients, and an anonymous caller is unauthorized`() =
         withApp { client ->
             seedUser(uid = "plain", roles = setOf(element = Capability.PLAYER))
-            client.post(urlString = "/api/v1/api-clients") {
-                header(key = HttpHeaders.Authorization, value = bearer(uid = "plain"))
-                contentType(type = ContentType.Application.Json)
-                setBody(body = CreateApiClientRequest(name = "X"))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .post(urlString = "/api/v1/api-clients") {
+                    header(key = HttpHeaders.Authorization, value = bearer(uid = "plain"))
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = CreateApiClientRequest(name = "X"))
+                }.status shouldBe HttpStatusCode.Forbidden
 
             // No Firebase token at all → the JWT provider rejects with 401.
             client.get(urlString = "/api/v1/api-clients").status shouldBe HttpStatusCode.Unauthorized
@@ -147,9 +149,10 @@ class ApiClientApiIntegrationTest {
     fun `client-me rejects a missing or malformed key with 401`() =
         withApp { client ->
             client.get(urlString = "/api/v1/client/me").status shouldBe HttpStatusCode.Unauthorized
-            client.get(urlString = "/api/v1/client/me") {
-                header(key = "X-Api-Key", value = "garbage")
-            }.status shouldBe HttpStatusCode.Unauthorized
+            client
+                .get(urlString = "/api/v1/client/me") {
+                    header(key = "X-Api-Key", value = "garbage")
+                }.status shouldBe HttpStatusCode.Unauthorized
         }
 
     private suspend fun HttpClient.issueKeyFor(
@@ -178,9 +181,10 @@ class ApiClientApiIntegrationTest {
 
             // A key without the RESEARCHER scope is refused.
             val unscoped = client.issueKeyFor(adminAuth = adminAuth, scopes = emptyList())
-            client.get(urlString = "/api/v1/client/players") {
-                header(key = "X-Api-Key", value = unscoped.apiKey)
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/client/players") {
+                    header(key = "X-Api-Key", value = unscoped.apiKey)
+                }.status shouldBe HttpStatusCode.Forbidden
 
             // A key scoped for RESEARCHER may read the public directory.
             val scoped = client.issueKeyFor(adminAuth = adminAuth, scopes = listOf(element = "RESEARCHER"))
@@ -210,14 +214,16 @@ class ApiClientApiIntegrationTest {
             ok.body<ClientEffectiveCapabilitiesResponse>().capabilities shouldBe listOf(element = "RESEARCHER")
 
             // Missing the user token → the Firebase provider rejects with 401.
-            client.get(urlString = "/api/v1/client/me/capabilities") {
-                header(key = "X-Api-Key", value = key.apiKey)
-            }.status shouldBe HttpStatusCode.Unauthorized
+            client
+                .get(urlString = "/api/v1/client/me/capabilities") {
+                    header(key = "X-Api-Key", value = key.apiKey)
+                }.status shouldBe HttpStatusCode.Unauthorized
 
             // Missing the API key → the resolver rejects with 401.
-            client.get(urlString = "/api/v1/client/me/capabilities") {
-                header(key = HttpHeaders.Authorization, value = bearer(uid = "researcher"))
-            }.status shouldBe HttpStatusCode.Unauthorized
+            client
+                .get(urlString = "/api/v1/client/me/capabilities") {
+                    header(key = HttpHeaders.Authorization, value = bearer(uid = "researcher"))
+                }.status shouldBe HttpStatusCode.Unauthorized
         }
 
     @Test
@@ -226,11 +232,13 @@ class ApiClientApiIntegrationTest {
             seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
             val adminAuth = bearer(uid = "admin")
             val clientId =
-                client.post(urlString = "/api/v1/api-clients") {
-                    header(key = HttpHeaders.Authorization, value = adminAuth)
-                    contentType(type = ContentType.Application.Json)
-                    setBody(body = CreateApiClientRequest(name = "Partner A"))
-                }.body<ApiClientResponse>().id
+                client
+                    .post(urlString = "/api/v1/api-clients") {
+                        header(key = HttpHeaders.Authorization, value = adminAuth)
+                        contentType(type = ContentType.Application.Json)
+                        setBody(body = CreateApiClientRequest(name = "Partner A"))
+                    }.body<ApiClientResponse>()
+                    .id
 
             val set =
                 client.put(urlString = "/api/v1/api-clients/$clientId/rate-limit") {
@@ -243,11 +251,12 @@ class ApiClientApiIntegrationTest {
 
             // A non-admin cannot change it.
             seedUser(uid = "plain", roles = setOf(element = Capability.PLAYER))
-            client.put(urlString = "/api/v1/api-clients/$clientId/rate-limit") {
-                header(key = HttpHeaders.Authorization, value = bearer(uid = "plain"))
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetRateLimitRequest(rateLimitPerMin = 5))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .put(urlString = "/api/v1/api-clients/$clientId/rate-limit") {
+                    header(key = HttpHeaders.Authorization, value = bearer(uid = "plain"))
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetRateLimitRequest(rateLimitPerMin = 5))
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
@@ -260,11 +269,13 @@ class ApiClientApiIntegrationTest {
             seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
             val adminAuth = bearer(uid = "admin")
             val clientId =
-                client.post(urlString = "/api/v1/api-clients") {
-                    header(key = HttpHeaders.Authorization, value = adminAuth)
-                    contentType(type = ContentType.Application.Json)
-                    setBody(body = CreateApiClientRequest(name = "Partner A"))
-                }.body<ApiClientResponse>().id
+                client
+                    .post(urlString = "/api/v1/api-clients") {
+                        header(key = HttpHeaders.Authorization, value = adminAuth)
+                        contentType(type = ContentType.Application.Json)
+                        setBody(body = CreateApiClientRequest(name = "Partner A"))
+                    }.body<ApiClientResponse>()
+                    .id
             // Override this client to 1/min despite the default of 100.
             client.put(urlString = "/api/v1/api-clients/$clientId/rate-limit") {
                 header(key = HttpHeaders.Authorization, value = adminAuth)
@@ -273,19 +284,22 @@ class ApiClientApiIntegrationTest {
             }
             // Issue a key under THIS client (so the bucket is keyed to the overridden client).
             val key =
-                client.post(urlString = "/api/v1/api-clients/$clientId/keys") {
-                    header(key = HttpHeaders.Authorization, value = adminAuth)
-                    contentType(type = ContentType.Application.Json)
-                    setBody(body = IssueApiKeyRequest())
-                }.body<IssuedApiKeyResponse>()
+                client
+                    .post(urlString = "/api/v1/api-clients/$clientId/keys") {
+                        header(key = HttpHeaders.Authorization, value = adminAuth)
+                        contentType(type = ContentType.Application.Json)
+                        setBody(body = IssueApiKeyRequest())
+                    }.body<IssuedApiKeyResponse>()
 
-            client.get(urlString = "/api/v1/client/me") {
-                header(key = "X-Api-Key", value = key.apiKey)
-            }.status shouldBe HttpStatusCode.OK
+            client
+                .get(urlString = "/api/v1/client/me") {
+                    header(key = "X-Api-Key", value = key.apiKey)
+                }.status shouldBe HttpStatusCode.OK
             // The client's own limit (1) is hit on the second request, well below the default.
-            client.get(urlString = "/api/v1/client/me") {
-                header(key = "X-Api-Key", value = key.apiKey)
-            }.status shouldBe HttpStatusCode.TooManyRequests
+            client
+                .get(urlString = "/api/v1/client/me") {
+                    header(key = "X-Api-Key", value = key.apiKey)
+                }.status shouldBe HttpStatusCode.TooManyRequests
         }
 
     @Test
@@ -298,9 +312,10 @@ class ApiClientApiIntegrationTest {
 
             // The first two requests for this client are allowed…
             repeat(times = 2) {
-                client.get(urlString = "/api/v1/client/me") {
-                    header(key = "X-Api-Key", value = key.apiKey)
-                }.status shouldBe HttpStatusCode.OK
+                client
+                    .get(urlString = "/api/v1/client/me") {
+                        header(key = "X-Api-Key", value = key.apiKey)
+                    }.status shouldBe HttpStatusCode.OK
             }
             // …the third exceeds the per-client bucket → 429 with a Retry-After hint.
             val throttled =
@@ -317,30 +332,36 @@ class ApiClientApiIntegrationTest {
             seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
             val adminAuth = bearer(uid = "admin")
             val clientId =
-                client.post(urlString = "/api/v1/api-clients") {
-                    header(key = HttpHeaders.Authorization, value = adminAuth)
-                    contentType(type = ContentType.Application.Json)
-                    setBody(body = CreateApiClientRequest(name = "Partner A"))
-                }.body<ApiClientResponse>().id
+                client
+                    .post(urlString = "/api/v1/api-clients") {
+                        header(key = HttpHeaders.Authorization, value = adminAuth)
+                        contentType(type = ContentType.Application.Json)
+                        setBody(body = CreateApiClientRequest(name = "Partner A"))
+                    }.body<ApiClientResponse>()
+                    .id
             val issued =
-                client.post(urlString = "/api/v1/api-clients/$clientId/keys") {
-                    header(key = HttpHeaders.Authorization, value = adminAuth)
-                    contentType(type = ContentType.Application.Json)
-                    setBody(body = IssueApiKeyRequest())
-                }.body<IssuedApiKeyResponse>()
+                client
+                    .post(urlString = "/api/v1/api-clients/$clientId/keys") {
+                        header(key = HttpHeaders.Authorization, value = adminAuth)
+                        contentType(type = ContentType.Application.Json)
+                        setBody(body = IssueApiKeyRequest())
+                    }.body<IssuedApiKeyResponse>()
 
             // The key works before revocation…
-            client.get(urlString = "/api/v1/client/me") {
-                header(key = "X-Api-Key", value = issued.apiKey)
-            }.status shouldBe HttpStatusCode.OK
+            client
+                .get(urlString = "/api/v1/client/me") {
+                    header(key = "X-Api-Key", value = issued.apiKey)
+                }.status shouldBe HttpStatusCode.OK
 
-            client.delete(urlString = "/api/v1/api-clients/$clientId/keys/${issued.key.id}") {
-                header(key = HttpHeaders.Authorization, value = adminAuth)
-            }.status shouldBe HttpStatusCode.NoContent
+            client
+                .delete(urlString = "/api/v1/api-clients/$clientId/keys/${issued.key.id}") {
+                    header(key = HttpHeaders.Authorization, value = adminAuth)
+                }.status shouldBe HttpStatusCode.NoContent
 
             // …and is forbidden after.
-            client.get(urlString = "/api/v1/client/me") {
-                header(key = "X-Api-Key", value = issued.apiKey)
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/client/me") {
+                    header(key = "X-Api-Key", value = issued.apiKey)
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 }

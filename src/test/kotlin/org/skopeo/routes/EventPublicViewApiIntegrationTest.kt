@@ -74,15 +74,16 @@ class EventPublicViewApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun tokenFor(uid: String): String = TestFirebaseAuth.mintToken(uid = uid, emailVerified = true)
 
@@ -126,9 +127,10 @@ class EventPublicViewApiIntegrationTest {
                 it.awardRankingPoints shouldBe true
             }
 
-            client.post(urlString = "/api/v1/events/${event.id}/finalize") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.status shouldBe HttpStatusCode.OK
+            client
+                .post(urlString = "/api/v1/events/${event.id}/finalize") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.status shouldBe HttpStatusCode.OK
 
             client.publicEvent(code = event.publicCode).isFinalized shouldBe true
         }
@@ -141,13 +143,15 @@ class EventPublicViewApiIntegrationTest {
             val host = tokenFor(uid = "host")
             val event = client.createEvent(token = host)
 
-            client.post(urlString = "/api/v1/events/${event.id}/finalize") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.status shouldBe HttpStatusCode.OK
+            client
+                .post(urlString = "/api/v1/events/${event.id}/finalize") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.status shouldBe HttpStatusCode.OK
 
-            client.post(urlString = "/api/v1/events/code/${event.publicCode}/signup") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "joiner")}")
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .post(urlString = "/api/v1/events/code/${event.publicCode}/signup") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "joiner")}")
+                }.status shouldBe HttpStatusCode.BadRequest
 
             client.publicEvent(code = event.publicCode).participants.shouldHaveSize(size = 0)
         }
@@ -160,13 +164,15 @@ class EventPublicViewApiIntegrationTest {
             val host = tokenFor(uid = "host")
             val event = client.createEvent(token = host)
 
-            client.delete(urlString = "/api/v1/events/${event.id}") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.status shouldBe HttpStatusCode.NoContent
+            client
+                .delete(urlString = "/api/v1/events/${event.id}") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.status shouldBe HttpStatusCode.NoContent
 
-            client.post(urlString = "/api/v1/events/code/${event.publicCode}/signup") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "joiner")}")
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .post(urlString = "/api/v1/events/code/${event.publicCode}/signup") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "joiner")}")
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
@@ -185,12 +191,14 @@ class EventPublicViewApiIntegrationTest {
             managed.status shouldBe HttpStatusCode.OK
             managed.body<EventResponse>().id shouldBe event.id
 
-            client.get(urlString = "/api/v1/events/code/${event.publicCode}/manage") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "player")}")
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/events/code/${event.publicCode}/manage") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "player")}")
+                }.status shouldBe HttpStatusCode.Forbidden
 
-            client.get(urlString = "/api/v1/events/code/NOPE1234/manage") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.status shouldBe HttpStatusCode.NotFound
+            client
+                .get(urlString = "/api/v1/events/code/NOPE1234/manage") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.status shouldBe HttpStatusCode.NotFound
         }
 }

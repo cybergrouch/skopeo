@@ -49,16 +49,22 @@ fun matchTiming(
     var playingSince: LocalDateTime? = startedAt
     considered.forEach { row ->
         when (row.kind) {
-            LiveMatchEventKinds.PAUSED ->
+            LiveMatchEventKinds.PAUSED -> {
                 playingSince?.let { since ->
                     elapsed += Duration.between(since, row.recordedAt)
                     playingSince = null
                 }
+            }
+
             // MATCH_STARTED also resumes: a restart after a suspension needs no separate RESUMED, which
             // mirrors what the engine does to the paused flag.
-            LiveMatchEventKinds.RESUMED, LiveMatchEventKinds.MATCH_STARTED ->
+            LiveMatchEventKinds.RESUMED, LiveMatchEventKinds.MATCH_STARTED -> {
                 if (playingSince == null) playingSince = row.recordedAt
-            else -> Unit
+            }
+
+            else -> {
+                Unit
+            }
         }
     }
 

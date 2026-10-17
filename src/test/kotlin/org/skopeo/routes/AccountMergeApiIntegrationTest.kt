@@ -60,16 +60,17 @@ class AccountMergeApiIntegrationTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    sex = "Male",
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        sex = "Male",
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     @Test
     fun `an admin merges the retired account into the survivor while a non-admin is forbidden`() =
@@ -81,18 +82,20 @@ class AccountMergeApiIntegrationTest {
             val retiredToken = TestFirebaseAuth.mintToken(uid = "retired")
 
             // A non-admin cannot merge.
-            client.post(urlString = "/api/v1/users/${survivor.id}/merge") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $retiredToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = MergeAccountsRequest(retiredAccountId = retired.id.toString(), verificationNote = "same person"))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .post(urlString = "/api/v1/users/${survivor.id}/merge") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $retiredToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = MergeAccountsRequest(retiredAccountId = retired.id.toString(), verificationNote = "same person"))
+                }.status shouldBe HttpStatusCode.Forbidden
 
             // An admin merges successfully.
-            client.post(urlString = "/api/v1/users/${survivor.id}/merge") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = MergeAccountsRequest(retiredAccountId = retired.id.toString(), verificationNote = "same person"))
-            }.status shouldBe HttpStatusCode.OK
+            client
+                .post(urlString = "/api/v1/users/${survivor.id}/merge") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = MergeAccountsRequest(retiredAccountId = retired.id.toString(), verificationNote = "same person"))
+                }.status shouldBe HttpStatusCode.OK
 
             // The retired account is retired as a "merged → survivor" card.
             val retiredAfter = UserRepository().findById(id = retired.id).getOrNull()!!.toDomain()
@@ -108,10 +111,11 @@ class AccountMergeApiIntegrationTest {
             val retired = seedUser(uid = "retired")
             val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
 
-            client.post(urlString = "/api/v1/users/${survivor.id}/merge") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = """{"retiredAccountId":"${retired.id}","verificationNote":"  "}""")
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .post(urlString = "/api/v1/users/${survivor.id}/merge") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = """{"retiredAccountId":"${retired.id}","verificationNote":"  "}""")
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 }

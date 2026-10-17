@@ -116,16 +116,19 @@ class DuplicateCandidateApiIntegrationTest {
             setOf(candidate.userA.id, candidate.userB.id) shouldBe setOf(userA.id, userB.id)
 
             // Confirm keeping alice → bob is disabled (drops from search) and the candidate is resolved.
-            client.post(urlString = "/api/v1/duplicate-candidates/${candidate.id}/confirm") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = ConfirmCandidateRequest(canonicalId = userA.id))
-            }.status shouldBe HttpStatusCode.NoContent
+            client
+                .post(urlString = "/api/v1/duplicate-candidates/${candidate.id}/confirm") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = ConfirmCandidateRequest(canonicalId = userA.id))
+                }.status shouldBe HttpStatusCode.NoContent
 
             client.openCandidates(adminToken = adminToken).items.any { it.id == candidate.id } shouldBe false
-            client.get(urlString = "/api/v1/users?name=bob") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-            }.body<List<org.skopeo.common.dto.user.UserSummaryResponse>>().any { it.id == userB.id } shouldBe false
+            client
+                .get(urlString = "/api/v1/users?name=bob") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }.body<List<org.skopeo.common.dto.user.UserSummaryResponse>>()
+                .any { it.id == userB.id } shouldBe false
         }
 
     @Test
@@ -133,8 +136,9 @@ class DuplicateCandidateApiIntegrationTest {
         withApp { client ->
             seedAdminToken()
             val (tokenA, _) = client.provisionSelf(uid = "alice")
-            client.get(urlString = "/api/v1/duplicate-candidates") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $tokenA")
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/duplicate-candidates") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $tokenA")
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 }

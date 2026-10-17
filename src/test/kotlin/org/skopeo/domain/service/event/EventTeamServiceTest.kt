@@ -59,15 +59,16 @@ class EventTeamServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -98,12 +99,13 @@ class EventTeamServiceTest {
         val ev = event(host = host.id, participants = listOf(element = p1.id), format = TeamType.SINGLES)
 
         val team =
-            service.create(
-                token = token(uid = "host"),
-                eventId = ev.id,
-                memberUserIds = listOf(element = p1.id),
-                name = null,
-            ).shouldBeRight()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    eventId = ev.id,
+                    memberUserIds = listOf(element = p1.id),
+                    name = null,
+                ).shouldBeRight()
         team.name shouldBe "Alice"
         team.members shouldHaveSize 1
         team.members.single().position shouldBe 1
@@ -134,12 +136,13 @@ class EventTeamServiceTest {
         val ev = event(host = host.id, participants = listOf(element = p1.id), format = TeamType.SINGLES)
 
         val error =
-            service.create(
-                token = token(uid = "host"),
-                eventId = ev.id,
-                memberUserIds = listOf(element = outsider.id),
-                name = null,
-            ).shouldBeLeft()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    eventId = ev.id,
+                    memberUserIds = listOf(element = outsider.id),
+                    name = null,
+                ).shouldBeLeft()
         error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "approved participants"
     }
 
@@ -196,12 +199,13 @@ class EventTeamServiceTest {
         service.create(token = token(uid = "host"), eventId = ev.id, memberUserIds = listOf(element = p1.id), name = null).shouldBeRight()
 
         val error =
-            service.create(
-                token = token(uid = "host"),
-                eventId = ev.id,
-                memberUserIds = listOf(element = p1.id),
-                name = null,
-            ).shouldBeLeft()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    eventId = ev.id,
+                    memberUserIds = listOf(element = p1.id),
+                    name = null,
+                ).shouldBeLeft()
         error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "already in another team"
     }
 
@@ -212,12 +216,13 @@ class EventTeamServiceTest {
         val p2 = provision(uid = "Bob")
         val ev = event(host = host.id, participants = listOf(p1.id, p2.id), format = TeamType.SINGLES)
         val team =
-            service.create(
-                token = token(uid = "host"),
-                eventId = ev.id,
-                memberUserIds = listOf(element = p1.id),
-                name = "Custom",
-            ).shouldBeRight()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    eventId = ev.id,
+                    memberUserIds = listOf(element = p1.id),
+                    name = "Custom",
+                ).shouldBeRight()
 
         val updated =
             service
@@ -238,12 +243,13 @@ class EventTeamServiceTest {
         val p1 = provision(uid = "Alice")
         val ev = event(host = host.id, participants = listOf(element = p1.id), format = TeamType.SINGLES)
         val team =
-            service.create(
-                token = token(uid = "host"),
-                eventId = ev.id,
-                memberUserIds = listOf(element = p1.id),
-                name = null,
-            ).shouldBeRight()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    eventId = ev.id,
+                    memberUserIds = listOf(element = p1.id),
+                    name = null,
+                ).shouldBeRight()
 
         service.dissolve(token = token(uid = "host"), eventId = ev.id, teamId = UUID.fromString(team.id)).shouldBeRight()
         service.list(token = token(uid = "host"), eventId = ev.id).shouldBeRight() shouldHaveSize 0
@@ -349,13 +355,14 @@ class EventTeamServiceTest {
                 .shouldBeRight()
 
         val updated =
-            service.update(
-                token = token(uid = "host"),
-                eventId = ev.id,
-                teamId = UUID.fromString(team.id),
-                memberUserIds = listOf(element = p2.id),
-                name = null,
-            ).shouldBeRight()
+            service
+                .update(
+                    token = token(uid = "host"),
+                    eventId = ev.id,
+                    teamId = UUID.fromString(team.id),
+                    memberUserIds = listOf(element = p2.id),
+                    name = null,
+                ).shouldBeRight()
         updated.name shouldBe "Keepers"
         updated.members.single().userId shouldBe p2.id.toString()
     }
@@ -423,19 +430,20 @@ class EventTeamServiceTest {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "Alice")
         val ended =
-            events.create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "Old Cup",
-                        startDate = LocalDate.now().minusDays(30),
-                        endDate = LocalDate.now().minusDays(20),
-                        participantIds = listOf(element = p1.id),
-                        createdBy = host.id,
-                        format = TeamType.SINGLES,
-                    ),
-            ).toDomain()
+            events
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "Old Cup",
+                            startDate = LocalDate.now().minusDays(30),
+                            endDate = LocalDate.now().minusDays(20),
+                            participantIds = listOf(element = p1.id),
+                            createdBy = host.id,
+                            format = TeamType.SINGLES,
+                        ),
+                ).toDomain()
 
         service
             .create(token = token(uid = "host"), eventId = ended.id, memberUserIds = listOf(element = p1.id), name = null)

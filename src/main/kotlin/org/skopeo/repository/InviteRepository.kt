@@ -36,11 +36,12 @@ class InviteRepository {
             val existing = pendingRow(email = email)
             val id =
                 if (existing == null) {
-                    InvitesTable.insertAndGetId {
-                        it[InvitesTable.email] = email
-                        it[InvitesTable.invitedBy] = invitedBy
-                        it[InvitesTable.expiresAt] = expiresAt
-                    }.value
+                    InvitesTable
+                        .insertAndGetId {
+                            it[InvitesTable.email] = email
+                            it[InvitesTable.invitedBy] = invitedBy
+                            it[InvitesTable.expiresAt] = expiresAt
+                        }.value
                 } else {
                     val existingId = existing[InvitesTable.id].value
                     InvitesTable.update(where = { InvitesTable.id eq existingId }) {
@@ -117,7 +118,8 @@ class InviteRepository {
             val items =
                 query()
                     .orderBy(InvitesTable.createdAt to SortOrder.DESC)
-                    .limit(count = limit).offset(start = offset.toLong())
+                    .limit(count = limit)
+                    .offset(start = offset.toLong())
                     .map { it.toInviteEntity() }
             items to total
         }
@@ -128,7 +130,12 @@ class InviteRepository {
             .where { (InvitesTable.email eq email) and (InvitesTable.status eq InviteStatus.PENDING.name) }
             .firstOrNull()
 
-    private fun loadByIdOrThrow(id: UUID): InviteEntity = InvitesTable.selectAll().where { InvitesTable.id eq id }.single().toInviteEntity()
+    private fun loadByIdOrThrow(id: UUID): InviteEntity =
+        InvitesTable
+            .selectAll()
+            .where { InvitesTable.id eq id }
+            .single()
+            .toInviteEntity()
 }
 
 internal fun ResultRow.toInviteEntity(): InviteEntity =

@@ -222,7 +222,12 @@ class LiveMatchSweepServiceTest {
         val discarded = mutableListOf<String>()
         val boss = admin()
         val id = scoredMatch(name = "doc", ageDays = 200, status = MatchStatus.COMPLETED)
-        val code = matches.findById(matchId = id).shouldBeRight().toDomain().publicCode
+        val code =
+            matches
+                .findById(matchId = id)
+                .shouldBeRight()
+                .toDomain()
+                .publicCode
 
         LiveMatchSweepService(
             clock = { now },

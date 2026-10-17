@@ -106,15 +106,16 @@ class EventServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     // A login-less placeholder ("dummy") player (#496/#505) — a real users row with placeholder = true.
     private fun placeholder(displayName: String): User =
@@ -230,8 +231,14 @@ class EventServiceTest {
             service.create(token = token(uid = "host"), input = input(participants = listOf(real.id, dummy.id))).shouldBeRight()
 
         // The DTO carries the placeholder flag through verbatim as isPlaceholder (#505).
-        view.participants.single { it.userId == dummy.id.toString() }.isPlaceholder.shouldBeTrue()
-        view.participants.single { it.userId == real.id.toString() }.isPlaceholder.shouldBeFalse()
+        view.participants
+            .single { it.userId == dummy.id.toString() }
+            .isPlaceholder
+            .shouldBeTrue()
+        view.participants
+            .single { it.userId == real.id.toString() }
+            .isPlaceholder
+            .shouldBeFalse()
     }
 
     @Test
@@ -315,7 +322,8 @@ class EventServiceTest {
         }
 
         // An unknown club is rejected at create.
-        service.create(token = token(uid = "host"), input = clubInput(clubId = UUID.randomUUID()))
+        service
+            .create(token = token(uid = "host"), input = clubInput(clubId = UUID.randomUUID()))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -398,7 +406,8 @@ class EventServiceTest {
             }
         }
         // And back — the move is symmetric.
-        service.setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = clubA.id)
+        service
+            .setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = clubA.id)
             .shouldBeRight()
             .club
             .shouldNotBeNull()
@@ -428,19 +437,25 @@ class EventServiceTest {
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
 
         // Unknown club → Validation.
-        service.setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = UUID.randomUUID())
+        service
+            .setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = UUID.randomUUID())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
         // A different host (not the creator) → Forbidden.
-        service.setClub(token = token(uid = "other"), id = UUID.fromString(event.id), clubId = club.id)
+        service
+            .setClub(token = token(uid = "other"), id = UUID.fromString(event.id), clubId = club.id)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         // An ADMINISTRATOR may edit any event's club.
         service
             .setClub(token = token(uid = "admin"), id = UUID.fromString(event.id), clubId = club.id)
-            .shouldBeRight().club.shouldNotBeNull().id shouldBe club.id.toString()
+            .shouldBeRight()
+            .club
+            .shouldNotBeNull()
+            .id shouldBe club.id.toString()
         // Unknown event → NotFound.
-        service.setClub(token = token(uid = "admin"), id = UUID.randomUUID(), clubId = club.id)
+        service
+            .setClub(token = token(uid = "admin"), id = UUID.randomUUID(), clubId = club.id)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
@@ -452,14 +467,21 @@ class EventServiceTest {
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
 
         // A non-admin staff member (host) cannot set the calculation priority.
-        service.setCalcPriority(token = token(uid = "host"), id = UUID.fromString(event.id), priority = 5.0)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .setCalcPriority(token = token(uid = "host"), id = UUID.fromString(event.id), priority = 5.0)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
         // An ADMINISTRATOR sets it, and it round-trips on the view.
-        service.setCalcPriority(token = token(uid = "admin"), id = UUID.fromString(event.id), priority = 5.0)
-            .shouldBeRight().domain().calcPriority shouldBe 5.0
+        service
+            .setCalcPriority(token = token(uid = "admin"), id = UUID.fromString(event.id), priority = 5.0)
+            .shouldBeRight()
+            .domain()
+            .calcPriority shouldBe 5.0
         // Unknown event → NotFound.
-        service.setCalcPriority(token = token(uid = "admin"), id = UUID.randomUUID(), priority = 1.0)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .setCalcPriority(token = token(uid = "admin"), id = UUID.randomUUID(), priority = 1.0)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -470,10 +492,15 @@ class EventServiceTest {
         created.creatorDisplayName shouldBe "host"
         created.creatorPublicCode shouldBe host.publicCode
         // Also present on the list and single-event views (both go through toView).
-        service.list(token = token(uid = "host")).shouldBeRight().single().creatorPublicCode shouldBe host.publicCode
+        service
+            .list(token = token(uid = "host"))
+            .shouldBeRight()
+            .single()
+            .creatorPublicCode shouldBe host.publicCode
         service
             .get(token = token(uid = "host"), id = UUID.fromString(created.id))
-            .shouldBeRight().creatorPublicCode shouldBe host.publicCode
+            .shouldBeRight()
+            .creatorPublicCode shouldBe host.publicCode
     }
 
     @Test
@@ -487,10 +514,18 @@ class EventServiceTest {
         transaction { EventsTable.update(where = { EventsTable.id eq event.id }) { it[createdBy] = null } }
 
         // The creator attribution is gone from the view.
-        service.get(token = token(uid = "admin"), id = event.id).shouldBeRight().creatorPublicCode.shouldBeNull()
+        service
+            .get(token = token(uid = "admin"), id = event.id)
+            .shouldBeRight()
+            .creatorPublicCode
+            .shouldBeNull()
         // Losing the creator no longer strands the event: since #794 it always has a club, and that club's
         // named owner is still an ownership anchor (#789). A host who owns neither is refused.
-        service.get(token = token(uid = "host"), id = event.id).shouldBeRight().creatorPublicCode.shouldBeNull()
+        service
+            .get(token = token(uid = "host"), id = event.id)
+            .shouldBeRight()
+            .creatorPublicCode
+            .shouldBeNull()
         service.get(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
@@ -501,16 +536,17 @@ class EventServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.HOST, Capability.ADMINISTRATOR))
         val dob = LocalDate.parse("1990-09-09")
         val player =
-            users.provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = "p1",
-                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "p1", isPrimary = true),
-                        names = listOf(element = UserName(type = NameType.DISPLAY, value = "Maria")),
-                        sex = "Female",
-                        dateOfBirth = dob,
-                    ),
-            ).toDomain()
+            users
+                .provision(
+                    command =
+                        ProvisionUserCommand(
+                            firebaseUid = "p1",
+                            identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "p1", isPrimary = true),
+                            names = listOf(element = UserName(type = NameType.DISPLAY, value = "Maria")),
+                            sex = "Female",
+                            dateOfBirth = dob,
+                        ),
+                ).toDomain()
         RatingRepository().setRating(
             userId = player.id,
             rating = BigDecimal("4.000000"),
@@ -532,12 +568,18 @@ class EventServiceTest {
     fun `create rejects a blank name, an inverted date range, and an unknown participant`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
 
-        service.create(token = token(uid = "host"), input = input(name = "  "))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.create(token = token(uid = "host"), input = input(start = "2026-03-05", end = "2026-03-01"))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.create(token = token(uid = "host"), input = input(participants = listOf(element = UUID.randomUUID())))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .create(token = token(uid = "host"), input = input(name = "  "))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .create(token = token(uid = "host"), input = input(start = "2026-03-05", end = "2026-03-01"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .create(token = token(uid = "host"), input = input(participants = listOf(element = UUID.randomUUID())))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -550,7 +592,11 @@ class EventServiceTest {
         val b = service.create(token = token(uid = "host2"), input = input(name = "H2 Cup", ownerUid = "host2")).shouldBeRight()
 
         service.list(token = token(uid = "host1")).shouldBeRight().map { it.id } shouldBe listOf(element = a.id)
-        service.list(token = token(uid = "admin")).shouldBeRight().map { it.id }.toSet() shouldBe setOf(a.id, b.id)
+        service
+            .list(token = token(uid = "admin"))
+            .shouldBeRight()
+            .map { it.id }
+            .toSet() shouldBe setOf(a.id, b.id)
     }
 
     @Test
@@ -574,11 +620,12 @@ class EventServiceTest {
         after.participants shouldHaveSize 1
 
         val removed =
-            service.removeParticipant(
-                token = token(uid = "host"),
-                eventId = UUID.fromString(event.id),
-                userId = p1.id,
-            ).shouldBeRight()
+            service
+                .removeParticipant(
+                    token = token(uid = "host"),
+                    eventId = UUID.fromString(event.id),
+                    userId = p1.id,
+                ).shouldBeRight()
         removed.participants shouldHaveSize 0
     }
 
@@ -602,17 +649,20 @@ class EventServiceTest {
         val event = service.create(token = token(uid = "host"), input = expired).shouldBeRight()
 
         // The event has ended → the HOST is blocked.
-        service.addParticipant(token = token(uid = "host"), eventId = UUID.fromString(event.id), userId = p1.id)
+        service
+            .addParticipant(token = token(uid = "host"), eventId = UUID.fromString(event.id), userId = p1.id)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
 
         // An ADMINISTRATOR may still add.
-        service.addParticipant(token = token(uid = "admin"), eventId = UUID.fromString(event.id), userId = p1.id)
+        service
+            .addParticipant(token = token(uid = "admin"), eventId = UUID.fromString(event.id), userId = p1.id)
             .shouldBeRight()
             .participants shouldHaveSize 1
 
         // A CLUB_OWNER may still add too (#310 follow-up).
-        service.addParticipant(token = token(uid = "owner"), eventId = UUID.fromString(event.id), userId = p2.id)
+        service
+            .addParticipant(token = token(uid = "owner"), eventId = UUID.fromString(event.id), userId = p2.id)
             .shouldBeRight()
             .participants shouldHaveSize 2
     }
@@ -633,13 +683,19 @@ class EventServiceTest {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
 
-        service.addParticipant(token = token(uid = "host"), eventId = UUID.randomUUID(), userId = provision(uid = "p9").id)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
-        service.addParticipant(token = token(uid = "host"), eventId = UUID.fromString(event.id), userId = UUID.randomUUID())
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .addParticipant(token = token(uid = "host"), eventId = UUID.randomUUID(), userId = provision(uid = "p9").id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .addParticipant(token = token(uid = "host"), eventId = UUID.fromString(event.id), userId = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
         // Removing from a missing event is also a not-found.
-        service.removeParticipant(token = token(uid = "host"), eventId = UUID.randomUUID(), userId = provision(uid = "p8").id)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .removeParticipant(token = token(uid = "host"), eventId = UUID.randomUUID(), userId = provision(uid = "p8").id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -650,14 +706,20 @@ class EventServiceTest {
 
         service.create(token = token(uid = "player"), input = input()).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.list(token = token(uid = "player")).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.get(
-            token = token(uid = "player"),
-            id = UUID.fromString(event.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.addParticipant(token = token(uid = "player"), eventId = UUID.fromString(event.id), userId = UUID.fromString(event.id))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.removeParticipant(token = token(uid = "player"), eventId = UUID.fromString(event.id), userId = UUID.fromString(event.id))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .get(
+                token = token(uid = "player"),
+                id = UUID.fromString(event.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .addParticipant(token = token(uid = "player"), eventId = UUID.fromString(event.id), userId = UUID.fromString(event.id))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .removeParticipant(token = token(uid = "player"), eventId = UUID.fromString(event.id), userId = UUID.fromString(event.id))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -685,7 +747,11 @@ class EventServiceTest {
         public.name shouldBe "Spring Open"
         public.participants.map { it.userId }.toSet() shouldBe setOf(p1.id.toString(), p2.id.toString())
         public.matches shouldHaveSize 1
-        public.matches.single().team1.single().publicCode shouldBe p1.publicCode
+        public.matches
+            .single()
+            .team1
+            .single()
+            .publicCode shouldBe p1.publicCode
 
         service
             .publicByCode(token = token(uid = "host"), code = "ZZZZZZ")
@@ -718,20 +784,21 @@ class EventServiceTest {
         p1: User,
         p2: User,
     ): Match =
-        matchRepo.createFixture(
-            command =
-                CreateFixtureCommand(
-                    matchFormat = TeamType.SINGLES,
-                    matchType = MatchType.OPEN_PLAY,
-                    matchDate = LocalDate.parse("2026-03-02"),
-                    team1UserIds = listOf(element = p1.id),
-                    team2UserIds = listOf(element = p2.id),
-                    team1Name = "p1",
-                    team2Name = "p2",
-                    createdBy = host.id,
-                    eventId = eventId,
-                ),
-        ).toDomain()
+        matchRepo
+            .createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.parse("2026-03-02"),
+                        team1UserIds = listOf(element = p1.id),
+                        team2UserIds = listOf(element = p2.id),
+                        team1Name = "p1",
+                        team2Name = "p2",
+                        createdBy = host.id,
+                        eventId = eventId,
+                    ),
+            ).toDomain()
 
     private fun recordResult(match: Match) {
         matchRepo.addResult(
@@ -755,7 +822,11 @@ class EventServiceTest {
 
         service.delete(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        events.findById(id = event.id)!!.toDomain().isActive.shouldBeFalse()
+        events
+            .findById(id = event.id)!!
+            .toDomain()
+            .isActive
+            .shouldBeFalse()
         service.list(token = token(uid = "host")).shouldBeRight() shouldHaveSize 0
         // The soft-delete writes an Activity Log entry (#354).
         AuditRepository().list(actions = listOf(element = AuditAction.EVENT_DELETED), limit = 10, offset = 0).first.single().let {
@@ -788,7 +859,11 @@ class EventServiceTest {
 
         val error = service.delete(token = token(uid = "host"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
         error.message shouldContain "recorded matches first"
-        events.findById(id = event.id)!!.toDomain().isActive.shouldBeTrue()
+        events
+            .findById(id = event.id)!!
+            .toDomain()
+            .isActive
+            .shouldBeTrue()
     }
 
     /**
@@ -821,9 +896,18 @@ class EventServiceTest {
         // 3. The event now deletes, taking the remaining scheduled fixture with it.
         service.delete(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        events.findById(id = event.id)!!.toDomain().isActive.shouldBeFalse()
+        events
+            .findById(id = event.id)!!
+            .toDomain()
+            .isActive
+            .shouldBeFalse()
         matchRepo.listByEvent(eventId = event.id) shouldHaveSize 0
-        matchRepo.findById(matchId = scheduled.id).shouldBeRight().toDomain().isActive.shouldBeFalse()
+        matchRepo
+            .findById(matchId = scheduled.id)
+            .shouldBeRight()
+            .toDomain()
+            .isActive
+            .shouldBeFalse()
     }
 
     @Test
@@ -838,7 +922,11 @@ class EventServiceTest {
 
         val error = service.delete(token = token(uid = "host"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
         error.message shouldContain "rated matches"
-        events.findById(id = event.id)!!.toDomain().isActive.shouldBeTrue()
+        events
+            .findById(id = event.id)!!
+            .toDomain()
+            .isActive
+            .shouldBeTrue()
     }
 
     /**
@@ -879,10 +967,18 @@ class EventServiceTest {
         val event = service.create(token = token(uid = "owner"), input = input(ownerUid = "owner")).shouldBeRight().domain()
 
         service.delete(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        events.findById(id = event.id)!!.toDomain().isActive.shouldBeTrue()
+        events
+            .findById(id = event.id)!!
+            .toDomain()
+            .isActive
+            .shouldBeTrue()
 
         service.delete(token = token(uid = "admin"), id = event.id).shouldBeRight()
-        events.findById(id = event.id)!!.toDomain().isActive.shouldBeFalse()
+        events
+            .findById(id = event.id)!!
+            .toDomain()
+            .isActive
+            .shouldBeFalse()
         owner.id shouldBe event.createdBy
     }
 
@@ -908,8 +1004,10 @@ class EventServiceTest {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().domain()
 
-        service.rename(token = token(uid = "host"), id = event.id, name = "   ")
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .rename(token = token(uid = "host"), id = event.id, name = "   ")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
         events.findById(id = event.id)!!.toDomain().name shouldBe "Spring Open"
     }
 
@@ -921,8 +1019,10 @@ class EventServiceTest {
         val event =
             service.create(token = token(uid = "owner"), input = input(name = "Owner Cup", ownerUid = "owner")).shouldBeRight().domain()
 
-        service.rename(token = token(uid = "other"), id = event.id, name = "Hijacked")
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .rename(token = token(uid = "other"), id = event.id, name = "Hijacked")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
         events.findById(id = event.id)!!.toDomain().name shouldBe "Owner Cup"
 
         service.rename(token = token(uid = "admin"), id = event.id, name = "Admin Renamed").shouldBeRight()
@@ -954,22 +1054,29 @@ class EventServiceTest {
     fun `an event is created with each type, defaulting to OPEN_PLAY (#403)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
 
-        service.create(token = token(uid = "host"), input = input(name = "Default")).shouldBeRight()
-            .domain().type shouldBe EventType.OPEN_PLAY
-        service.create(
-            token = token(uid = "host"),
-            input = input(name = "Casual", type = EventType.OPEN_PLAY),
-        ).shouldBeRight().domain().type shouldBe EventType.OPEN_PLAY
-        val tourney =
-            service.create(
+        service
+            .create(token = token(uid = "host"), input = input(name = "Default"))
+            .shouldBeRight()
+            .domain()
+            .type shouldBe EventType.OPEN_PLAY
+        service
+            .create(
                 token = token(uid = "host"),
-                input =
-                    input(
-                        name = "Tourney",
-                        type = EventType.TOURNAMENT,
-                        circuitId = seedCircuit(hostUid = "host"),
-                    ),
+                input = input(name = "Casual", type = EventType.OPEN_PLAY),
             ).shouldBeRight()
+            .domain()
+            .type shouldBe EventType.OPEN_PLAY
+        val tourney =
+            service
+                .create(
+                    token = token(uid = "host"),
+                    input =
+                        input(
+                            name = "Tourney",
+                            type = EventType.TOURNAMENT,
+                            circuitId = seedCircuit(hostUid = "host"),
+                        ),
+                ).shouldBeRight()
         tourney.type shouldBe "TOURNAMENT"
         // The type round-trips through persistence.
         events.findById(id = UUID.fromString(tourney.id))!!.toDomain().type shouldBe EventType.TOURNAMENT
@@ -1001,8 +1108,10 @@ class EventServiceTest {
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().domain()
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        service.finalize(token = token(uid = "host"), id = event.id)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .finalize(token = token(uid = "host"), id = event.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -1017,10 +1126,19 @@ class EventServiceTest {
 
         service.finalize(token = token(uid = "ghost"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.finalize(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        events.findById(id = event.id)!!.toDomain().isFinalized.shouldBeFalse()
+        events
+            .findById(id = event.id)!!
+            .toDomain()
+            .isFinalized
+            .shouldBeFalse()
 
         // A named owner of the event's club may finalize an event they didn't create (#789).
-        service.finalize(token = token(uid = "clubowner"), id = event.id).shouldBeRight().domain().isFinalized.shouldBeTrue()
+        service
+            .finalize(token = token(uid = "clubowner"), id = event.id)
+            .shouldBeRight()
+            .domain()
+            .isFinalized
+            .shouldBeTrue()
     }
 
     @Test
@@ -1029,20 +1147,29 @@ class EventServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val event = service.create(token = token(uid = "owner"), input = input(ownerUid = "owner")).shouldBeRight().domain()
 
-        service.finalize(token = token(uid = "admin"), id = event.id).shouldBeRight().domain().isFinalized.shouldBeTrue()
+        service
+            .finalize(token = token(uid = "admin"), id = event.id)
+            .shouldBeRight()
+            .domain()
+            .isFinalized
+            .shouldBeTrue()
     }
 
     @Test
     fun `finalizing a non-existent event is NotFound, and a deleted event is Validation (#403)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        service.finalize(token = token(uid = "host"), id = UUID.randomUUID())
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .finalize(token = token(uid = "host"), id = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
 
         // A soft-deleted (inactive) event cannot be finalized.
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().domain()
         service.delete(token = token(uid = "host"), id = event.id).shouldBeRight()
-        service.finalize(token = token(uid = "host"), id = event.id)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .finalize(token = token(uid = "host"), id = event.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -1052,18 +1179,26 @@ class EventServiceTest {
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().domain()
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        service.rename(token = token(uid = "host"), id = event.id, name = "New Name")
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.setClub(token = token(uid = "host"), id = event.id, clubId = fixtureClub(ownerUid = "host"))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.addParticipant(token = token(uid = "host"), eventId = event.id, userId = player.id)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.decideParticipant(
-            token = token(uid = "host"),
-            eventId = event.id,
-            userId = player.id,
-            statusRaw = EventParticipantStatus.APPROVED.name,
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .rename(token = token(uid = "host"), id = event.id, name = "New Name")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .setClub(token = token(uid = "host"), id = event.id, clubId = fixtureClub(ownerUid = "host"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .addParticipant(token = token(uid = "host"), eventId = event.id, userId = player.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .decideParticipant(
+                token = token(uid = "host"),
+                eventId = event.id,
+                userId = player.id,
+                statusRaw = EventParticipantStatus.APPROVED.name,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     // --- Un-finalize (#477). ---
@@ -1100,11 +1235,21 @@ class EventServiceTest {
         val event = service.create(token = token(uid = "owner"), input = clubInput(clubId = club.id)).shouldBeRight().domain()
         service.finalize(token = token(uid = "owner"), id = event.id).shouldBeRight()
 
-        service.unfinalize(token = token(uid = "admin"), id = event.id).shouldBeRight().domain().isFinalized.shouldBeFalse()
+        service
+            .unfinalize(token = token(uid = "admin"), id = event.id)
+            .shouldBeRight()
+            .domain()
+            .isFinalized
+            .shouldBeFalse()
 
         // A named owner of the event's club may also un-finalize an event they didn't create (#789).
         service.finalize(token = token(uid = "owner"), id = event.id).shouldBeRight()
-        service.unfinalize(token = token(uid = "clubowner"), id = event.id).shouldBeRight().domain().isFinalized.shouldBeFalse()
+        service
+            .unfinalize(token = token(uid = "clubowner"), id = event.id)
+            .shouldBeRight()
+            .domain()
+            .isFinalized
+            .shouldBeFalse()
     }
 
     @Test
@@ -1116,7 +1261,11 @@ class EventServiceTest {
 
         service.unfinalize(token = token(uid = "ghost"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.unfinalize(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        events.findById(id = event.id)!!.toDomain().isFinalized.shouldBeTrue()
+        events
+            .findById(id = event.id)!!
+            .toDomain()
+            .isFinalized
+            .shouldBeTrue()
     }
 
     @Test
@@ -1124,11 +1273,15 @@ class EventServiceTest {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().domain()
 
-        service.unfinalize(token = token(uid = "host"), id = event.id)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .unfinalize(token = token(uid = "host"), id = event.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
             .message shouldContain "not finalized"
-        service.unfinalize(token = token(uid = "host"), id = UUID.randomUUID())
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .unfinalize(token = token(uid = "host"), id = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -1152,11 +1305,17 @@ class EventServiceTest {
         matchRepo.markRated(matchId = match.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
 
         val error =
-            service.unfinalize(token = token(uid = "host"), id = event.id)
-                .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+            service
+                .unfinalize(token = token(uid = "host"), id = event.id)
+                .shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Validation>()
         error.message shouldContain "already-rated"
         // The event stays finalized and its awards stay live — nothing was reversed (both placements).
-        events.findById(id = event.id)!!.toDomain().isFinalized.shouldBeTrue()
+        events
+            .findById(id = event.id)!!
+            .toDomain()
+            .isFinalized
+            .shouldBeTrue()
         awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 2
     }
 
@@ -1191,8 +1350,11 @@ class EventServiceTest {
         marker.points shouldBe BigDecimal("0.0000")
         marker.reason.shouldNotBeNull() shouldContain "Reversed on un-finalize"
         // The reversal is audited with the revoked count (both placement awards).
-        AuditRepository().list(actions = listOf(element = AuditAction.EVENT_UNFINALIZED), limit = 10, offset = 0)
-            .first.single().details["awardsRevoked"] shouldBe "2"
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.EVENT_UNFINALIZED), limit = 10, offset = 0)
+            .first
+            .single()
+            .details["awardsRevoked"] shouldBe "2"
     }
 
     @Test
@@ -1222,10 +1384,14 @@ class EventServiceTest {
     @Test
     fun `renaming a non-existent event is NotFound, and a non-staff caller is forbidden`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        service.rename(token = token(uid = "host"), id = UUID.randomUUID(), name = "X")
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
-        service.rename(token = token(uid = "ghost"), id = UUID.randomUUID(), name = "X")
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .rename(token = token(uid = "host"), id = UUID.randomUUID(), name = "X")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .rename(token = token(uid = "ghost"), id = UUID.randomUUID(), name = "X")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -1265,7 +1431,11 @@ class EventServiceTest {
         // The organizer sees the request; the approved roster (fixtures/seeding) excludes it.
         val view = service.get(token = token(uid = "host"), id = event.id).shouldBeRight()
         view.participants.single { it.userId == player.id.toString() }.status shouldBe "PENDING"
-        view.domain().participantIds.contains(element = player.id).shouldBeFalse()
+        view
+            .domain()
+            .participantIds
+            .contains(element = player.id)
+            .shouldBeFalse()
     }
 
     @Test
@@ -1298,7 +1468,11 @@ class EventServiceTest {
                     statusRaw = EventParticipantStatus.APPROVED.name,
                 ).shouldBeRight()
         view.participants.single { it.userId == player.id.toString() }.status shouldBe "APPROVED"
-        view.domain().participantIds.contains(element = player.id).shouldBeTrue()
+        view
+            .domain()
+            .participantIds
+            .contains(element = player.id)
+            .shouldBeTrue()
 
         val public = service.publicByCode(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
         public.viewerStatus shouldBe "APPROVED"
@@ -1318,16 +1492,20 @@ class EventServiceTest {
                 eventId = event.id,
                 userId = player.id,
                 statusRaw = EventParticipantStatus.HOLD.name,
-            )
-            .shouldBeRight()
+            ).shouldBeRight()
             .participants
             .single { it.userId == player.id.toString() }
             .status shouldBe "HOLD"
         // On hold → still off the approved roster.
-        service.get(
-            token = token(uid = "host"),
-            id = event.id,
-        ).shouldBeRight().domain().participantIds.contains(element = player.id).shouldBeFalse()
+        service
+            .get(
+                token = token(uid = "host"),
+                id = event.id,
+            ).shouldBeRight()
+            .domain()
+            .participantIds
+            .contains(element = player.id)
+            .shouldBeFalse()
 
         // A held request can later be approved.
         service
@@ -1337,7 +1515,8 @@ class EventServiceTest {
                 userId = player.id,
                 statusRaw = EventParticipantStatus.APPROVED.name,
             ).shouldBeRight()
-            .domain().participantIds
+            .domain()
+            .participantIds
             .contains(element = player.id)
             .shouldBeTrue()
     }
@@ -1360,10 +1539,12 @@ class EventServiceTest {
             .shouldBeInstanceOf<ServiceError.Forbidden>()
 
         // An unprovisioned token can't self-sign-up.
-        service.selfSignup(
-            token = token(uid = "ghost"),
-            code = event.publicCode,
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .selfSignup(
+                token = token(uid = "ghost"),
+                code = event.publicCode,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -1391,7 +1572,11 @@ class EventServiceTest {
 
         val view = service.addParticipant(token = token(uid = "host"), eventId = event.id, userId = p1.id).shouldBeRight()
         view.participants.single { it.userId == p1.id.toString() }.status shouldBe "APPROVED"
-        view.domain().participantIds.contains(element = p1.id).shouldBeTrue()
+        view
+            .domain()
+            .participantIds
+            .contains(element = p1.id)
+            .shouldBeTrue()
     }
 
     @Test
@@ -1403,7 +1588,11 @@ class EventServiceTest {
 
         val view = service.addParticipant(token = token(uid = "host"), eventId = event.id, userId = player.id).shouldBeRight()
         view.participants.single { it.userId == player.id.toString() }.status shouldBe "APPROVED"
-        view.domain().participantIds.contains(element = player.id).shouldBeTrue()
+        view
+            .domain()
+            .participantIds
+            .contains(element = player.id)
+            .shouldBeTrue()
     }
 
     @Test
@@ -1480,15 +1669,19 @@ class EventServiceTest {
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
         val withResults =
-            service.create(
-                token = token(uid = "host"),
-                input = input(name = "WithResults", participants = listOf(p1.id, p2.id)),
-            ).shouldBeRight().domain()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    input = input(name = "WithResults", participants = listOf(p1.id, p2.id)),
+                ).shouldBeRight()
+                .domain()
         val scheduledOnly =
-            service.create(
-                token = token(uid = "host"),
-                input = input(name = "ScheduledOnly", participants = listOf(p1.id, p2.id)),
-            ).shouldBeRight().domain()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    input = input(name = "ScheduledOnly", participants = listOf(p1.id, p2.id)),
+                ).shouldBeRight()
+                .domain()
         recordResult(match = seedFixture(eventId = withResults.id, host = host, p1 = p1, p2 = p2))
         // A scheduled fixture (no recorded result) must not lift the count off zero.
         seedFixture(eventId = scheduledOnly.id, host = host, p1 = p1, p2 = p2)
@@ -1507,10 +1700,12 @@ class EventServiceTest {
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "3.5")
         val created =
-            service.create(
-                token = token(uid = "host"),
-                input = input(name = "Finalized", participants = listOf(p1.id, p2.id)),
-            ).shouldBeRight().domain()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    input = input(name = "Finalized", participants = listOf(p1.id, p2.id)),
+                ).shouldBeRight()
+                .domain()
         recordResult(match = seedFixture(eventId = created.id, host = host, p1 = p1, p2 = p2))
         service.finalize(token = token(uid = "host"), id = created.id).shouldBeRight()
 
@@ -1535,21 +1730,23 @@ class EventServiceTest {
         // The global award flag (#641) gates awarding at create AND at finalize (#752), and defaults off,
         // so an event that is meant to pay out has to be created with it on.
         enableGlobalAwarding(hostUid = hostUid)
-        return service.create(
-            token = token(uid = hostUid),
-            input =
-                input(
-                    // Ends today, so award validity (#559: from the event end) is active as of now — events
-                    // are finalized once they have ended.
-                    start = LocalDate.now().toString(),
-                    end = LocalDate.now().toString(),
-                    type = type,
-                    participants = participants,
-                    // A TOURNAMENT must belong to a circuit (#525); other types carry none.
-                    circuitId = if (type == EventType.TOURNAMENT) seedCircuit(hostUid = hostUid) else null,
-                    awardRankingPoints = awardRankingPoints,
-                ),
-        ).shouldBeRight().domain()
+        return service
+            .create(
+                token = token(uid = hostUid),
+                input =
+                    input(
+                        // Ends today, so award validity (#559: from the event end) is active as of now — events
+                        // are finalized once they have ended.
+                        start = LocalDate.now().toString(),
+                        end = LocalDate.now().toString(),
+                        type = type,
+                        participants = participants,
+                        // A TOURNAMENT must belong to a circuit (#525); other types carry none.
+                        circuitId = if (type == EventType.TOURNAMENT) seedCircuit(hostUid = hostUid) else null,
+                        awardRankingPoints = awardRankingPoints,
+                    ),
+            ).shouldBeRight()
+            .domain()
     }
 
     /** Turn the global "award ranking points" flag (#641) on, attributed to [hostUid] (#752). */
@@ -1582,22 +1779,23 @@ class EventServiceTest {
         placementBracket: PlacementBracket? = null,
     ): Match {
         val match =
-            matchRepo.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = format,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.now(),
-                        team1UserIds = team1UserIds,
-                        team2UserIds = team2UserIds,
-                        team1Name = "t1",
-                        team2Name = "t2",
-                        createdBy = host.id,
-                        eventId = eventId,
-                        isPlacementMatch = placementBracket != null,
-                        placementBracket = placementBracket,
-                    ),
-            ).toDomain()
+            matchRepo
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = format,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.now(),
+                            team1UserIds = team1UserIds,
+                            team2UserIds = team2UserIds,
+                            team1Name = "t1",
+                            team2Name = "t2",
+                            createdBy = host.id,
+                            eventId = eventId,
+                            isPlacementMatch = placementBracket != null,
+                            placementBracket = placementBracket,
+                        ),
+                ).toDomain()
         recordResult(match = match)
         return matchRepo.findById(matchId = match.id).shouldBeRight().toDomain()
     }
@@ -1699,14 +1897,25 @@ class EventServiceTest {
         winner.sourceId shouldBe event.id.toString()
         winner.pointClass shouldBe org.skopeo.domain.model.PointClass.ANNUAL_TOURNAMENT.name
         // Validity (#559) runs from the event end for the global tournament schedule's window (no per-event override).
-        val tvDays = org.skopeo.domain.service.settings.PointsConfigService().getTournament().value.validityDays.toLong()
+        val tvDays =
+            org.skopeo.domain.service.settings
+                .PointsConfigService()
+                .getTournament()
+                .value.validityDays
+                .toLong()
         winner.validFrom shouldBe event.endDate.atStartOfDay()
         winner.validUntil shouldBe event.endDate.plusDays(tvDays + 1).atStartOfDay()
         awardRepo.listByUser(userId = p2.id).single().points shouldBe placementRate(place = 2)
         // The award summary totals both placements (40 + 30).
-        AuditRepository().list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0)
-            .first.single().details["totalPoints"] shouldBe
-            TournamentPointsConfig.DEFAULT.unsanctioned.take(n = 2).sum().toString()
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0)
+            .first
+            .single()
+            .details["totalPoints"] shouldBe
+            TournamentPointsConfig.DEFAULT.unsanctioned
+                .take(n = 2)
+                .sum()
+                .toString()
     }
 
     @Test
@@ -1912,7 +2121,9 @@ class EventServiceTest {
         awardRepo.listByUser(userId = p1.id).single().points shouldBe placementRate(place = 1)
         AuditRepository()
             .list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0)
-            .first.single().details["suppressedByGlobalFlag"] shouldBe "false"
+            .first
+            .single()
+            .details["suppressedByGlobalFlag"] shouldBe "false"
     }
 
     @Test
@@ -1975,7 +2186,10 @@ class EventServiceTest {
         entries.map { it.entityId }.toSet() shouldBe setOf(p1.id, p2.id)
 
         val p1Entry = entries.single { it.entityId == p1.id }
-        p1Entry.details["points"] shouldBe TournamentPointsConfig.DEFAULT.unsanctioned.first().toString()
+        p1Entry.details["points"] shouldBe
+            TournamentPointsConfig.DEFAULT.unsanctioned
+                .first()
+                .toString()
         p1Entry.details["matchId"] shouldBe match.id.toString()
         p1Entry.details["matchPublicCode"] shouldBe match.publicCode
         p1Entry.details["eventId"] shouldBe event.id.toString()
@@ -2024,10 +2238,12 @@ class EventServiceTest {
         rate(userId = p2.id, level = "4.0")
         enableGlobalAwarding(hostUid = "host")
         val event =
-            service.create(
-                token = token(uid = "host"),
-                input = input(type = EventType.OPEN_PLAY, participants = listOf(p1.id, p2.id)),
-            ).shouldBeRight().domain()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    input = input(type = EventType.OPEN_PLAY, participants = listOf(p1.id, p2.id)),
+                ).shouldBeRight()
+                .domain()
         // Open play does not designate points — the amount is computed from the result.
         seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
 
@@ -2134,7 +2350,11 @@ class EventServiceTest {
                 placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
             )
             service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
-            return awardRepo.listByUser(userId = p1.id).single().toDomain().pointClass
+            return awardRepo
+                .listByUser(userId = p1.id)
+                .single()
+                .toDomain()
+                .pointClass
         }
 
         // Placement points always carry ANNUAL_TOURNAMENT (#525) — the old window→class mapping is gone.
@@ -2151,22 +2371,23 @@ class EventServiceTest {
         rate(userId = p2.id, level = "4.0")
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
         val match =
-            matchRepo.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.now(),
-                        team1UserIds = listOf(element = p1.id),
-                        team2UserIds = listOf(element = p2.id),
-                        team1Name = "t1",
-                        team2Name = "t2",
-                        createdBy = host.id,
-                        eventId = event.id,
-                        isPlacementMatch = true,
-                        placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
-                    ),
-            ).toDomain()
+            matchRepo
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.now(),
+                            team1UserIds = listOf(element = p1.id),
+                            team2UserIds = listOf(element = p2.id),
+                            team1Name = "t1",
+                            team2Name = "t2",
+                            createdBy = host.id,
+                            eventId = event.id,
+                            isPlacementMatch = true,
+                            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
+                        ),
+                ).toDomain()
         // team2 (p2) wins the Super Finals → p2 places 1st (40), the team1 loser places 2nd (30).
         matchRepo.addResult(
             matchId = match.id,
@@ -2192,16 +2413,18 @@ class EventServiceTest {
         clubs.setSanction(id = club.id, sanctioned = true)
         enableGlobalAwarding(hostUid = "host")
         val event =
-            service.create(
-                token = token(uid = "host"),
-                input =
-                    input(
-                        type = EventType.TOURNAMENT,
-                        participants = listOf(p1.id, p2.id),
-                        clubId = club.id,
-                        circuitId = seedCircuit(hostUid = "host"),
-                    ),
-            ).shouldBeRight().domain()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    input =
+                        input(
+                            type = EventType.TOURNAMENT,
+                            participants = listOf(p1.id, p2.id),
+                            clubId = club.id,
+                            circuitId = seedCircuit(hostUid = "host"),
+                        ),
+                ).shouldBeRight()
+                .domain()
         seedCompletedFixture(
             eventId = event.id,
             host = host,
@@ -2273,15 +2496,17 @@ class EventServiceTest {
         rate(userId = p2.id, level = "4.0")
         enableGlobalAwarding(hostUid = "host")
         val event =
-            service.create(
-                token = token(uid = "host"),
-                input =
-                    input(
-                        type = EventType.TOURNAMENT,
-                        participants = listOf(p1.id, p2.id),
-                        circuitId = seedCircuit(hostUid = "host"),
-                    ),
-            ).shouldBeRight().domain()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    input =
+                        input(
+                            type = EventType.TOURNAMENT,
+                            participants = listOf(p1.id, p2.id),
+                            circuitId = seedCircuit(hostUid = "host"),
+                        ),
+                ).shouldBeRight()
+                .domain()
         // No placementBracket: an elimination round, which paid nothing before #836.
         seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
 
@@ -2311,15 +2536,17 @@ class EventServiceTest {
         rate(userId = p2.id, level = "4.0")
         enableGlobalAwarding(hostUid = "host")
         val event =
-            service.create(
-                token = token(uid = "host"),
-                input =
-                    input(
-                        type = EventType.TOURNAMENT,
-                        participants = listOf(p1.id, p2.id),
-                        circuitId = seedCircuit(hostUid = "host"),
-                    ),
-            ).shouldBeRight().domain()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    input =
+                        input(
+                            type = EventType.TOURNAMENT,
+                            participants = listOf(p1.id, p2.id),
+                            circuitId = seedCircuit(hostUid = "host"),
+                        ),
+                ).shouldBeRight()
+                .domain()
         seedCompletedFixture(
             eventId = event.id,
             host = host,
@@ -2344,15 +2571,17 @@ class EventServiceTest {
         rate(userId = p2.id, level = "4.0")
         enableGlobalAwarding(hostUid = "host")
         val event =
-            service.create(
-                token = token(uid = "host"),
-                input =
-                    input(
-                        type = EventType.TOURNAMENT,
-                        participants = listOf(p1.id, p2.id),
-                        circuitId = seedCircuit(hostUid = "host"),
-                    ),
-            ).shouldBeRight().domain()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    input =
+                        input(
+                            type = EventType.TOURNAMENT,
+                            participants = listOf(p1.id, p2.id),
+                            circuitId = seedCircuit(hostUid = "host"),
+                        ),
+                ).shouldBeRight()
+                .domain()
         // A round-robin fixture and the final, same two players.
         seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
         seedCompletedFixture(
@@ -2383,15 +2612,17 @@ class EventServiceTest {
         rate(userId = p2.id, level = "4.0")
         enableGlobalAwarding(hostUid = "host")
         val event =
-            service.create(
-                token = token(uid = "host"),
-                input =
-                    input(
-                        type = EventType.TOURNAMENT,
-                        participants = listOf(p1.id, p2.id),
-                        circuitId = seedCircuit(hostUid = "host"),
-                    ),
-            ).shouldBeRight().domain()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    input =
+                        input(
+                            type = EventType.TOURNAMENT,
+                            participants = listOf(p1.id, p2.id),
+                            circuitId = seedCircuit(hostUid = "host"),
+                        ),
+                ).shouldBeRight()
+                .domain()
         seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
         awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 2
@@ -2411,10 +2642,12 @@ class EventServiceTest {
         rate(userId = p2.id, level = "4.0")
         enableGlobalAwarding(hostUid = "host")
         val event =
-            service.create(
-                token = token(uid = "host"),
-                input = input(type = EventType.FULL_MATCH, participants = listOf(p1.id, p2.id)),
-            ).shouldBeRight().domain()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    input = input(type = EventType.FULL_MATCH, participants = listOf(p1.id, p2.id)),
+                ).shouldBeRight()
+                .domain()
         seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()

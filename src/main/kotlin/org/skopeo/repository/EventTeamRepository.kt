@@ -26,10 +26,11 @@ class EventTeamRepository {
     fun create(command: CreateEventTeamCommand): EventTeamAggregateEntity =
         transaction {
             val teamId =
-                EventTeamsTable.insertAndGetId {
-                    it[eventId] = command.eventId
-                    it[name] = command.name
-                }.value
+                EventTeamsTable
+                    .insertAndGetId {
+                        it[eventId] = command.eventId
+                        it[name] = command.name
+                    }.value
             insertMembers(teamId = teamId, eventId = command.eventId, memberUserIds = command.memberUserIds)
             loadTeamOrThrow(id = teamId)
         }
@@ -103,7 +104,11 @@ class EventTeamRepository {
     }
 
     private fun loadTeam(id: UUID): EventTeamAggregateEntity? =
-        EventTeamsTable.selectAll().where { EventTeamsTable.id eq id }.singleOrNull()?.let { buildAggregate(row = it) }
+        EventTeamsTable
+            .selectAll()
+            .where { EventTeamsTable.id eq id }
+            .singleOrNull()
+            ?.let { buildAggregate(row = it) }
 }
 
 /** Reload a team that is known to exist (e.g. just inserted) — no caller-side null branch. Runs in a transaction. */

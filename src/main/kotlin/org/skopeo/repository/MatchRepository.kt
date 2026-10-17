@@ -64,24 +64,25 @@ class MatchRepository {
             val team1 = createTeam(name = command.team1Name, type = command.matchFormat, userIds = command.team1UserIds)
             val team2 = createTeam(name = command.team2Name, type = command.matchFormat, userIds = command.team2UserIds)
             val matchId =
-                MatchesTable.insertAndGetId {
-                    it[publicCode] = generateUniqueMatchCode()
-                    it[team1Id] = team1
-                    it[team2Id] = team2
-                    it[matchFormat] = command.matchFormat.name
-                    it[matchType] = command.matchType.name
-                    it[matchDate] = command.matchDate
-                    it[status] = MatchStatus.SCHEDULED.name
-                    it[venue] = command.venue
-                    it[tournamentName] = command.tournamentName
-                    it[createdBy] = command.createdBy
-                    it[eventId] = command.eventId
-                    it[matchNumber] = nextMatchNumber(eventId = command.eventId)
-                    it[team1Handicap] = command.team1Handicap
-                    it[team2Handicap] = command.team2Handicap
-                    it[isPlacementMatch] = command.isPlacementMatch
-                    it[placementBracket] = command.placementBracket?.name
-                }.value
+                MatchesTable
+                    .insertAndGetId {
+                        it[publicCode] = generateUniqueMatchCode()
+                        it[team1Id] = team1
+                        it[team2Id] = team2
+                        it[matchFormat] = command.matchFormat.name
+                        it[matchType] = command.matchType.name
+                        it[matchDate] = command.matchDate
+                        it[status] = MatchStatus.SCHEDULED.name
+                        it[venue] = command.venue
+                        it[tournamentName] = command.tournamentName
+                        it[createdBy] = command.createdBy
+                        it[eventId] = command.eventId
+                        it[matchNumber] = nextMatchNumber(eventId = command.eventId)
+                        it[team1Handicap] = command.team1Handicap
+                        it[team2Handicap] = command.team2Handicap
+                        it[isPlacementMatch] = command.isPlacementMatch
+                        it[placementBracket] = command.placementBracket?.name
+                    }.value
             loadMatchOrThrow(id = matchId)
         }
 
@@ -135,14 +136,15 @@ class MatchRepository {
             sets.forEach { set ->
                 val hasTb = set.tiebreakTeam1Points != null && set.tiebreakTeam2Points != null
                 val setId =
-                    MatchSetsTable.insertAndGetId {
-                        it[MatchSetsTable.matchId] = matchId
-                        it[setNumber] = set.setNumber
-                        it[team1Games] = set.team1Games
-                        it[team2Games] = set.team2Games
-                        it[hasTiebreak] = hasTb
-                        it[abandoned] = set.abandoned
-                    }.value
+                    MatchSetsTable
+                        .insertAndGetId {
+                            it[MatchSetsTable.matchId] = matchId
+                            it[setNumber] = set.setNumber
+                            it[team1Games] = set.team1Games
+                            it[team2Games] = set.team2Games
+                            it[hasTiebreak] = hasTb
+                            it[abandoned] = set.abandoned
+                        }.value
                 if (hasTb) {
                     MatchSetTiebreaksTable.insert {
                         it[matchSetId] = setId
@@ -896,7 +898,8 @@ class MatchRepository {
                             usersByTeam[row[MatchesTable.team2Id].value].orEmpty()
                     // A user sits on exactly one side per match; distinct guards a degenerate self-vs-self row.
                     participants.distinct().forEach { uid ->
-                        rows.getOrPut(key = uid) { mutableListOf() }
+                        rows
+                            .getOrPut(key = uid) { mutableListOf() }
                             .add(element = WindowMatch(matchDate = matchDate, weightClass = weightClass))
                     }
                 }
@@ -1067,11 +1070,12 @@ class MatchRepository {
         userIds: List<UUID>,
     ): UUID {
         val teamId =
-            TeamsTable.insertAndGetId {
-                it[TeamsTable.name] = name
-                it[teamType] = type.name
-                it[isTemporary] = true
-            }.value
+            TeamsTable
+                .insertAndGetId {
+                    it[TeamsTable.name] = name
+                    it[teamType] = type.name
+                    it[isTemporary] = true
+                }.value
         userIds.forEachIndexed { index, uid ->
             TeamUsersTable.insert {
                 it[TeamUsersTable.teamId] = teamId
@@ -1083,7 +1087,11 @@ class MatchRepository {
     }
 
     private fun loadMatch(id: UUID): MatchAggregateEntity? =
-        MatchesTable.selectAll().where { MatchesTable.id eq id }.singleOrNull()?.let { row -> buildMatchAggregate(row = row) }
+        MatchesTable
+            .selectAll()
+            .where { MatchesTable.id eq id }
+            .singleOrNull()
+            ?.let { row -> buildMatchAggregate(row = row) }
 }
 
 /** Reload a match that is known to exist (e.g. just inserted/updated) — no caller-side null branch. */

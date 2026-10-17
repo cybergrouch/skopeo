@@ -219,7 +219,11 @@ internal fun activeParticipants(
     either {
         ids.map { id ->
             val user =
-                users.findById(id = id).map { it.toDomain() }.mapLeft { ServiceError.Validation(message = "Unknown user $id") }.bind()
+                users
+                    .findById(id = id)
+                    .map { it.toDomain() }
+                    .mapLeft { ServiceError.Validation(message = "Unknown user $id") }
+                    .bind()
             ensure(condition = user.isActive) { ServiceError.Validation(message = "User $id is not active") }
             user
         }

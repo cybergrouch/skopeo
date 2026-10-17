@@ -96,23 +96,33 @@ internal suspend fun RoutingContext.respondError(error: ServiceError) {
     // log level (previously NotFound logged at INFO and was easily filtered out) and points at the call.
     logger.warn { "${call.request.httpMethod.value} ${call.request.path()} → ${error::class.simpleName}: ${error.message}" }
     when (error) {
-        is ServiceError.NotFound ->
+        is ServiceError.NotFound -> {
             call.respond(status = HttpStatusCode.NotFound, message = errorBody(error = "Not found", message = error.message))
-        is ServiceError.Forbidden ->
+        }
+
+        is ServiceError.Forbidden -> {
             call.respond(status = HttpStatusCode.Forbidden, message = errorBody(error = "Forbidden", message = error.message))
-        is ServiceError.Conflict ->
+        }
+
+        is ServiceError.Conflict -> {
             call.respond(status = HttpStatusCode.Conflict, message = errorBody(error = "Conflict", message = error.message))
-        is ServiceError.Validation ->
+        }
+
+        is ServiceError.Validation -> {
             call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Validation error", message = error.message))
+        }
+
         is ServiceError.AccountMerged -> {
             // A merged duplicate's sign-in (#124): 403 + the canonical code so the client can link to it.
             val base = errorBody(error = "Account merged", message = error.message)
             val body = error.canonicalPublicCode?.let { base + ("canonicalCode" to it) } ?: base
             call.respond(status = HttpStatusCode.Forbidden, message = body)
         }
-        is ServiceError.AccountDeleted ->
+
+        is ServiceError.AccountDeleted -> {
             // An admin-deleted account's sign-in (#518): 403 with a contact-an-administrator message.
             call.respond(status = HttpStatusCode.Forbidden, message = errorBody(error = "Account deleted", message = error.message))
+        }
     }
 }
 
@@ -193,7 +203,10 @@ internal const val API_KEY_HEADER = "X-Api-Key"
 internal suspend fun RoutingContext.resolveClient(service: ApiClientService): ClientPrincipal? {
     val raw = call.request.header(name = API_KEY_HEADER).orEmpty()
     return when (val result = service.authenticate(rawKey = raw)) {
-        is ClientAuthResult.Authenticated -> result.principal
+        is ClientAuthResult.Authenticated -> {
+            result.principal
+        }
+
         ClientAuthResult.Missing, ClientAuthResult.Invalid -> {
             call.respond(
                 status = HttpStatusCode.Unauthorized,
@@ -201,6 +214,7 @@ internal suspend fun RoutingContext.resolveClient(service: ApiClientService): Cl
             )
             null
         }
+
         ClientAuthResult.Forbidden -> {
             call.respond(
                 status = HttpStatusCode.Forbidden,

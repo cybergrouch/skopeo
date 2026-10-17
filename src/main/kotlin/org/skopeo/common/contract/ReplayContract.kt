@@ -3,6 +3,8 @@
 
 package org.skopeo.common.contract
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -21,6 +23,14 @@ import kotlinx.serialization.Serializable
  *
  * [events] is the source and [points] is derived from it, which is what makes regeneration possible
  * after the raw `live_match_events` log has been swept (#939). The web reads [points] and [result] only.
+ *
+ * ## Who scored each step (v2, #1183)
+ *
+ * Each event and point carries the **public code** of the umpire who recorded it — never a name, which
+ * changes, and never a user id, which is not a public identifier. The endpoint resolves codes to current
+ * display names at read time ([ReplayResponse.scorers]) and only for a caller entitled to see them; for
+ * everyone else the codes are stripped from the response. A replay regenerated from a v1 document has no
+ * codes to carry, so the field is simply absent there.
  */
 @Serializable
 data class ReplayDocument(
@@ -39,6 +49,10 @@ data class ReplayEvent(
     val kind: String,
     val side: String? = null,
     val atMs: Long,
+    /** Public code of the umpire who recorded this action (v2, #1183); absent when not known or not shown. */
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
+    val scorer: String? = null,
 )
 
 /**
@@ -70,6 +84,10 @@ data class ReplayPoint(
     /** For an END step: COMPLETED, RETIRED or DEFAULTED. */
     val outcome: String? = null,
     val score: ReplayScore,
+    /** Public code of the umpire who recorded this step (v2, #1183); absent when not known or not shown. */
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
+    val scorer: String? = null,
 )
 
 /** The score at a step: sets already completed, games in the current set, and the point (or tiebreak) score. */
@@ -97,4 +115,36 @@ data class ReplaySet(
 data class ReplayResult(
     val sets: List<ReplaySet>,
     val winner: String,
+)
+
+/**
+ * What `GET /api/v1/matches/code/{code}/replay` answers (#1183): the stored [ReplayDocument], filtered for
+ * the caller.
+ *
+ * For a caller entitled to per-point scorers (an administrator, or whoever may organize the match's
+ * event) the per-step `scorer` codes stay and [scorers] resolves each one. For everyone else both are
+ * **omitted from the JSON** — not sent as null — so an anonymous response never carries them. Same format
+ * either way: a client gates on the data being present, never on who it thinks it is.
+ */
+@Serializable
+data class ReplayResponse(
+    val version: Int,
+    val result: ReplayResult,
+    val events: List<ReplayEvent>,
+    val points: List<ReplayPoint>,
+    /** Public code → the scorer as shown today. Present only for an entitled caller. */
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
+    val scorers: Map<String, ReplayScorer>? = null,
+)
+
+/**
+ * A scorer, resolved at read time by the same display rules as a player: a deleted account shows as
+ * deleted and never by name, so [displayName] is null whenever [isDeleted] is true.
+ */
+@Serializable
+data class ReplayScorer(
+    val displayName: String? = null,
+    val isPlaceholder: Boolean = false,
+    val isDeleted: Boolean = false,
 )

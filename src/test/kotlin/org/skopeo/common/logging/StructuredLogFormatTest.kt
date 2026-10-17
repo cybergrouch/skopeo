@@ -125,4 +125,6 @@ class StructuredLogFormatTest {
  * A Kotlin-declared exception so the test can name the constructor argument, which the repo's
  * `NamedArguments` rule requires and a Java constructor cannot accept.
  */
-private class ProbeFailure(message: String) : IllegalStateException(message)
+private class ProbeFailure(
+    message: String,
+) : IllegalStateException(message)

@@ -118,9 +118,10 @@ class DuplicateApiIntegrationTest {
 
             // Public profile renders the merged state with a link to the canonical.
             val profile =
-                client.get(urlString = "/api/v1/players/${duplicate.publicCode}") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                }.body<PublicPlayerResponse>()
+                client
+                    .get(urlString = "/api/v1/players/${duplicate.publicCode}") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    }.body<PublicPlayerResponse>()
             profile.isDisabled shouldBe true
             profile.canonical?.publicCode shouldBe canonical.publicCode
 
@@ -143,9 +144,10 @@ class DuplicateApiIntegrationTest {
             relogin.body<Map<String, String>>()["canonicalCode"] shouldBe canonical.publicCode
 
             // Restore brings it back into search.
-            client.delete(urlString = "/api/v1/users/${duplicate.id}/duplicate") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-            }.status shouldBe HttpStatusCode.NoContent
+            client
+                .delete(urlString = "/api/v1/users/${duplicate.id}/duplicate") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }.status shouldBe HttpStatusCode.NoContent
             client.searchByName(token = adminToken, name = "Dupliton").any { it.id == duplicate.id } shouldBe true
         }
 
@@ -156,10 +158,11 @@ class DuplicateApiIntegrationTest {
             val canonical = client.provisionNamed(uid = "keep", displayName = "Realeza")
             val duplicate = client.provisionNamed(uid = "dup", displayName = "Dupliton")
 
-            client.post(urlString = "/api/v1/users/${canonical.id}/duplicates") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "dup")}")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = MarkDuplicatesRequest(duplicateIds = listOf(element = duplicate.id)))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .post(urlString = "/api/v1/users/${canonical.id}/duplicates") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "dup")}")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = MarkDuplicatesRequest(duplicateIds = listOf(element = duplicate.id)))
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 }

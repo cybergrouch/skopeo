@@ -147,8 +147,12 @@ read it and **nobody** to write it. The Admin SDK bypasses rules, so denying all
 the server — that asymmetry is what makes the rules trivial.
 
 - **The projection is a pure function** (`toBroadcast`), so what spectators receive is tested without
-  Firestore or a network. It drops `scorerId` deliberately: the document is world-readable, and who is
-  holding the phone is not a spectator's concern.
+  Firestore or a network. It drops `scorerId` deliberately: the document is world-readable, and an
+  internal user id has no business on it. **Revised in #1183:** it now carries the current scorer's
+  *display name* (`scorerName`, whoever recorded the newest action) and a `version` field (absent = 1,
+  the new shape = 2). The "no umpire identity" rule was an implementation note from step 5a, not a
+  product decision; a name is the same fact the finished match page shows as "Scored by", so carrying it
+  while the match is live reveals nothing new. Still never a user id.
 - **Absent credentials is a supported state, not a failure.** Local development and CI have no Firestore
   project, so the default is a no-op broadcaster and live scoring works fully without one. A deployment
   with unusable credentials logs and degrades rather than failing to boot.
@@ -831,6 +835,17 @@ kept for good in `match_replays`, one JSONB document per match — the log is st
   The replay is kept, so editing the result back shows it again. Any re-record or correction stamps
   `matches.result_edited_at`, exposed as the public `resultEdited` flag, so the page can say the score
   was edited after it was saved.
+- **Who scored it (#1183).** The match page's headline "Scored by <name>" is public and names the
+  *last* scorer: while live, the recorder of the newest log row (`LiveMatchResponse.scorerName`, the
+  Firestore `scorerName`); once finished, the umpire with the latest `match_umpires.last_recorded_at`
+  (`MatchPublicResponse.scoredBy`) — the same person, because that credit is folded out of the same log
+  at finalize. Format 2 of the replay adds a per-step `scorer`, the scorer's **public code** (names change
+  and accounts are deleted; the replay is permanent), resolved to a current display name at read time in
+  the response's `scorers` map. Those per-point scorers are **restricted**: the replay read is optional-auth,
+  and the codes and map are included only for a caller who may organize the match's event
+  (`ClubAccess.mayOrganize`, which includes administrators) and omitted from the JSON for everyone else.
+  Upgrading a format-1 replay re-records it from the log while the log still exists, so it gains scorers;
+  after the sweep it is regenerated from its stored events, without them.
 
 ### Shipped — step 3a of §13, the persistence half
 

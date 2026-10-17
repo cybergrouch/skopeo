@@ -216,10 +216,18 @@ class LiveMatchServiceTest {
         // a live match is its first user.
         val id = umpire()
         val matchId = fixture()
-        matches.findById(matchId = matchId).shouldBeRight().toDomain().status shouldBe MatchStatus.SCHEDULED
+        matches
+            .findById(matchId = matchId)
+            .shouldBeRight()
+            .toDomain()
+            .status shouldBe MatchStatus.SCHEDULED
 
         service.claim(token = token(uid = "ump"), matchId = matchId).shouldBeRight().scorerId shouldBe id.toString()
-        matches.findById(matchId = matchId).shouldBeRight().toDomain().status shouldBe MatchStatus.IN_PROGRESS
+        matches
+            .findById(matchId = matchId)
+            .shouldBeRight()
+            .toDomain()
+            .status shouldBe MatchStatus.IN_PROGRESS
     }
 
     @Test
@@ -239,7 +247,11 @@ class LiveMatchServiceTest {
         service.claim(token = token(uid = "ump"), matchId = matchId).shouldBeRight()
 
         service.release(token = token(uid = "ump"), matchId = matchId).shouldBeRight().scorerId shouldBe null
-        matches.findById(matchId = matchId).shouldBeRight().toDomain().status shouldBe MatchStatus.IN_PROGRESS
+        matches
+            .findById(matchId = matchId)
+            .shouldBeRight()
+            .toDomain()
+            .status shouldBe MatchStatus.IN_PROGRESS
     }
 
     @Test
@@ -373,7 +385,11 @@ class LiveMatchServiceTest {
         service.undo(token = token(uid = "ump"), matchId = matchId)
 
         // Past the rows `fixture` seeded, which are arrangement rather than anything the umpire did.
-        live.log(matchId = matchId).drop(n = setupRows).map { it.recordedBy }.toSet() shouldBe setOf(element = id)
+        live
+            .log(matchId = matchId)
+            .drop(n = setupRows)
+            .map { it.recordedBy }
+            .toSet() shouldBe setOf(element = id)
     }
 
     @Test
@@ -522,7 +538,11 @@ class LiveMatchServiceTest {
         matches.setStatus(matchId = matchId, status = MatchStatus.COMPLETED.name).shouldBeRight()
 
         // Deliberately NOT rated: that is the point of the test.
-        matches.findById(matchId = matchId).shouldBeRight().toDomain().ratedAt shouldBe null
+        matches
+            .findById(matchId = matchId)
+            .shouldBeRight()
+            .toDomain()
+            .ratedAt shouldBe null
 
         service
             .record(token = token(uid = "ump"), matchId = matchId, request = point(side = TeamSide.TEAM1))

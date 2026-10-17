@@ -101,15 +101,16 @@ class ClubScopedEventAuthzTest {
         rated: Boolean = false,
     ): User {
         val user =
-            users.provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = uid,
-                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                        capabilities = roles,
-                    ),
-            ).toDomain()
+            users
+                .provision(
+                    command =
+                        ProvisionUserCommand(
+                            firebaseUid = uid,
+                            identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                            names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                            capabilities = roles,
+                        ),
+                ).toDomain()
         if (rated) {
             ratings.setRating(userId = user.id, rating = BigDecimal("4.0"), level = "4.0")
         }
@@ -296,8 +297,16 @@ class ClubScopedEventAuthzTest {
         service.removeParticipant(token = token(uid = "owner"), eventId = event.id, userId = p2.id).shouldBeRight()
         teamService.list(token = token(uid = "owner"), eventId = event.id).shouldBeRight()
         service.rosterForSeeding(token = token(uid = "owner"), id = event.id).shouldBeRight()
-        service.finalize(token = token(uid = "owner"), id = event.id).shouldBeRight().isFinalized.shouldBeTrue()
-        service.unfinalize(token = token(uid = "owner"), id = event.id).shouldBeRight().isFinalized.shouldBeFalse()
+        service
+            .finalize(token = token(uid = "owner"), id = event.id)
+            .shouldBeRight()
+            .isFinalized
+            .shouldBeTrue()
+        service
+            .unfinalize(token = token(uid = "owner"), id = event.id)
+            .shouldBeRight()
+            .isFinalized
+            .shouldBeFalse()
         service.delete(token = token(uid = "owner"), id = event.id).shouldBeRight()
     }
 
@@ -310,7 +319,11 @@ class ClubScopedEventAuthzTest {
 
         service.get(token = token(uid = "hostowner"), id = event.id).shouldBeRight()
         service.rename(token = token(uid = "hostowner"), id = event.id, name = "Autumn Open").shouldBeRight()
-        service.finalize(token = token(uid = "hostowner"), id = event.id).shouldBeRight().isFinalized.shouldBeTrue()
+        service
+            .finalize(token = token(uid = "hostowner"), id = event.id)
+            .shouldBeRight()
+            .isFinalized
+            .shouldBeTrue()
     }
 
     // --- refusals for a club the caller does not own ---------------------

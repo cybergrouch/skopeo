@@ -321,12 +321,13 @@ class CalibrationOverrideServiceTest {
         } shouldContainExactlyInAnyOrder everyone.filter { evaluator.getValue(key = it.id).inCalibration }.map { it.id.toString() }
 
         val withForcedOff =
-            service.listCalibrations(
-                token = token(uid = "admin"),
-                includeForcedOff = true,
-                limit = 10,
-                offset = 0,
-            ).shouldBeRight()
+            service
+                .listCalibrations(
+                    token = token(uid = "admin"),
+                    includeForcedOff = true,
+                    limit = 10,
+                    offset = 0,
+                ).shouldBeRight()
         withForcedOff.items.map { it.publicCode } shouldContainExactlyInAnyOrder
             listOf(fresh.publicCode, oneIn.publicCode, forcedOn.publicCode, forcedOff.publicCode)
         withForcedOff.items.single { it.publicCode == forcedOff.publicCode }.let {

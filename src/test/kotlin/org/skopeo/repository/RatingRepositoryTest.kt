@@ -61,14 +61,16 @@ class RatingRepositoryTest {
     }
 
     private fun newUser(uid: String): UUID =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
-                ),
-        ).toDomain().id
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
+                    ),
+            ).toDomain()
+            .id
 
     /** Create a COMPLETED match on [matchDate] between [u1] and [u2] of the given [matchType]. */
     private fun completedMatch(
@@ -78,20 +80,21 @@ class RatingRepositoryTest {
         matchDate: LocalDate,
     ) {
         val match =
-            matches.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = matchType,
-                        matchDate = matchDate,
-                        team1UserIds = listOf(element = u1),
-                        team2UserIds = listOf(element = u2),
-                        team1Name = "T1",
-                        team2Name = "T2",
-                        createdBy = u1,
-                        eventId = fixtureEventId(),
-                    ),
-            ).toDomain()
+            matches
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = matchType,
+                            matchDate = matchDate,
+                            team1UserIds = listOf(element = u1),
+                            team2UserIds = listOf(element = u2),
+                            team1Name = "T1",
+                            team2Name = "T2",
+                            createdBy = u1,
+                            eventId = fixtureEventId(),
+                        ),
+                ).toDomain()
         matches.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId)),

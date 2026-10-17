@@ -66,8 +66,12 @@ class ScoreEventParserTest {
         val retired = parse(kind = "RETIRED", side = "TEAM2").shouldBeRight()
         retired shouldBe ScoreEvent.Retired(side = TeamSide.TEAM2)
         ScoreEngine
-            .apply(state = org.skopeo.domain.model.ScoreState(), event = retired)
-            .outcome
+            .apply(
+                state =
+                    org.skopeo.domain.model
+                        .ScoreState(),
+                event = retired,
+            ).outcome
             ?.winner shouldBe TeamSide.TEAM1
     }
 

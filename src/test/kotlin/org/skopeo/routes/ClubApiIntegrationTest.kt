@@ -68,15 +68,16 @@ class ClubApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private suspend fun HttpClient.createClub(
         token: String,
@@ -107,7 +108,11 @@ class ClubApiIntegrationTest {
                     setBody(body = AssignOwnerRequest(userId = owner.id.toString()))
                 }
             assigned.status shouldBe HttpStatusCode.OK
-            assigned.body<ClubResponse>().owners.single().userId shouldBe owner.id.toString()
+            assigned
+                .body<ClubResponse>()
+                .owners
+                .single()
+                .userId shouldBe owner.id.toString()
 
             // It shows in the list.
             val list =
@@ -135,10 +140,12 @@ class ClubApiIntegrationTest {
             // Creating remains ADMINISTRATOR-only.
             client.createClub(token = hostToken, name = "Nope").status shouldBe HttpStatusCode.Forbidden
             // Listing is staff-readable (event creators pick a club), so a HOST may list…
-            client.get(urlString = "/api/v1/clubs") { header(key = HttpHeaders.Authorization, value = "Bearer $hostToken") }
+            client
+                .get(urlString = "/api/v1/clubs") { header(key = HttpHeaders.Authorization, value = "Bearer $hostToken") }
                 .status shouldBe HttpStatusCode.OK
             // …but a plain player may not.
-            client.get(urlString = "/api/v1/clubs") { header(key = HttpHeaders.Authorization, value = "Bearer $playerToken") }
+            client
+                .get(urlString = "/api/v1/clubs") { header(key = HttpHeaders.Authorization, value = "Bearer $playerToken") }
                 .status shouldBe HttpStatusCode.Forbidden
         }
 
@@ -173,10 +180,11 @@ class ClubApiIntegrationTest {
 
             client.createClub(token = adminToken, name = "   ").status shouldBe HttpStatusCode.BadRequest
 
-            client.post(urlString = "/api/v1/clubs/${UUID.randomUUID()}/owners") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = AssignOwnerRequest(userId = owner.id.toString()))
-            }.status shouldBe HttpStatusCode.NotFound
+            client
+                .post(urlString = "/api/v1/clubs/${UUID.randomUUID()}/owners") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = AssignOwnerRequest(userId = owner.id.toString()))
+                }.status shouldBe HttpStatusCode.NotFound
         }
 }

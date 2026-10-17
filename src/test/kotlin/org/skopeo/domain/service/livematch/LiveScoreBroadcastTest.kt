@@ -24,10 +24,12 @@ class LiveScoreBroadcastTest {
         scorerId: String? = "ump-1",
         outcome: LiveOutcomeResponse? = null,
         sets: List<LiveSetResponse> = emptyList(),
+        scorerName: String? = "Uma",
     ) = LiveMatchResponse(
         matchId = "m-1",
         sequence = sequence,
         scorerId = scorerId,
+        scorerName = scorerName,
         hasStarted = true,
         isPaused = false,
         isTiebreak = false,
@@ -230,5 +232,46 @@ class LiveScoreBroadcastTest {
 
         lambdaOnly.discard(publicCode = "MTCH01")
         lambdaOnly.publish(payload = view().toBroadcast(publicCode = "MTCH01"))
+    }
+
+    @Test
+    fun `the document carries the current scorer's NAME and its version, pinning both shapes (#1183)`() {
+        // Version 1 never wrote a `version` field, so its absence is what identifies one. Version 2 is
+        // additive: every v1 key is still there, plus exactly `version` and `scorerName`.
+        val v1Keys =
+            setOf(
+                "publicCode",
+                "sequence",
+                "pointsTeam1",
+                "pointsTeam2",
+                "gamesTeam1",
+                "gamesTeam2",
+                "sets",
+                "isTiebreak",
+                "isPaused",
+                "hasStarted",
+                "isBetweenSets",
+                "elapsedSeconds",
+                "isRunning",
+                "serverName",
+                "outcomeKind",
+                "outcomeWinner",
+            )
+        val document = view(scorerId = "ump-1", scorerName = "Uma").toBroadcast(publicCode = "MTCH01").asDocument()
+
+        LIVE_SCORE_PAYLOAD_VERSION shouldBe 2
+        document["version"] shouldBe 2
+        document["scorerName"] shouldBe "Uma"
+        document.keys shouldBe v1Keys + setOf("version", "scorerName")
+        // A name, never the id behind it.
+        document.values.none { it == "ump-1" } shouldBe true
+    }
+
+    @Test
+    fun `no scorer yet is an explicit null, so a handover to nobody clears the name`() {
+        val document = view(scorerName = null).toBroadcast(publicCode = "MTCH01").asDocument()
+
+        document.keys shouldContain "scorerName"
+        document["scorerName"] shouldBe null
     }
 }

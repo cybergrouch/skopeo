@@ -147,33 +147,46 @@ class UserServiceTest {
     @Test
     fun `an OAuth sign-up does not require an invite`() {
         val user =
-            service.provision(
-                token = token(uid = "g", email = "g@example.com", emailVerified = true, signInProvider = "google.com"),
-                request = request,
-            ).shouldBeRight().user
+            service
+                .provision(
+                    token = token(uid = "g", email = "g@example.com", emailVerified = true, signInProvider = "google.com"),
+                    request = request,
+                ).shouldBeRight()
+                .user
         user.capabilities shouldBe listOf(element = "PLAYER")
     }
 
     @Test
     fun `provision creates a player then is idempotent`() {
         val first =
-            service.provision(
-                token = token(uid = "u1", email = "u1@example.com", emailVerified = true, name = "U One", signInProvider = "google.com"),
-                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
-            ).shouldBeRight()
+            service
+                .provision(
+                    token =
+                        token(
+                            uid = "u1",
+                            email = "u1@example.com",
+                            emailVerified = true,
+                            name = "U One",
+                            signInProvider = "google.com",
+                        ),
+                    request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
+                ).shouldBeRight()
 
         first.created.shouldBeTrue()
         first.user.capabilities shouldBe listOf(element = "PLAYER")
-        first.user.names.single().value shouldBe "U One" // token display name fallback
-        first.user.contacts.single().status shouldBe "VERIFIED"
+        first.user.names
+            .single()
+            .value shouldBe "U One" // token display name fallback
+        first.user.contacts
+            .single()
+            .status shouldBe "VERIFIED"
 
         val again =
             service
                 .provision(
                     token = token(uid = "u1"),
                     request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
-                )
-                .shouldBeRight()
+                ).shouldBeRight()
         again.created.shouldBeFalse()
         again.user.id shouldBe first.user.id
     }
@@ -207,13 +220,13 @@ class UserServiceTest {
         val user = service.provision(token = token(uid = "u4", picture = "https://p/old.jpg"), request = request).shouldBeRight().user
 
         // A custom photo becomes the effective photo.
-        service.updatePhotoSettings(
-            token = token(uid = "u4"),
-            id = UUID.fromString(user.id),
-            customPhotoUrl = "https://c/me.png",
-            photoHidden = false,
-        )
-            .shouldBeRight()
+        service
+            .updatePhotoSettings(
+                token = token(uid = "u4"),
+                id = UUID.fromString(user.id),
+                customPhotoUrl = "https://c/me.png",
+                photoHidden = false,
+            ).shouldBeRight()
             .photoUrl shouldBe "https://c/me.png"
 
         // A later login with a new provider picture refreshes the provider photo underneath but does
@@ -224,7 +237,8 @@ class UserServiceTest {
         repository.findByFirebaseUid(firebaseUid = "u4")!!.toDomain().providerPhotoUrl shouldBe "https://p/new.jpg"
 
         // Clearing the custom photo reverts to the (freshly synced) provider photo.
-        service.updatePhotoSettings(token = token(uid = "u4"), id = UUID.fromString(user.id), customPhotoUrl = null, photoHidden = false)
+        service
+            .updatePhotoSettings(token = token(uid = "u4"), id = UUID.fromString(user.id), customPhotoUrl = null, photoHidden = false)
             .shouldBeRight()
             .photoUrl shouldBe "https://p/new.jpg"
     }
@@ -233,7 +247,8 @@ class UserServiceTest {
     fun `a hidden photo is suppressed and login sync never re-enables it (#303)`() {
         val user = service.provision(token = token(uid = "u5", picture = "https://p/old.jpg"), request = request).shouldBeRight().user
 
-        service.updatePhotoSettings(token = token(uid = "u5"), id = UUID.fromString(user.id), customPhotoUrl = null, photoHidden = true)
+        service
+            .updatePhotoSettings(token = token(uid = "u5"), id = UUID.fromString(user.id), customPhotoUrl = null, photoHidden = true)
             .shouldBeRight()
             .photoUrl
             .shouldBeNull()
@@ -247,15 +262,16 @@ class UserServiceTest {
         val alice = service.provision(token = token(uid = "ph-alice"), request = request).shouldBeRight().user
         service.provision(token = token(uid = "ph-bob"), request = request).shouldBeRight()
 
-        service.updatePhotoSettings(
-            token = token(uid = "ph-bob"),
-            id = UUID.fromString(alice.id),
-            customPhotoUrl = null,
-            photoHidden = true,
-        )
-            .shouldBeLeft()
+        service
+            .updatePhotoSettings(
+                token = token(uid = "ph-bob"),
+                id = UUID.fromString(alice.id),
+                customPhotoUrl = null,
+                photoHidden = true,
+            ).shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.updatePhotoSettings(token = token(uid = "ph-alice"), id = UUID.randomUUID(), customPhotoUrl = null, photoHidden = true)
+        service
+            .updatePhotoSettings(token = token(uid = "ph-alice"), id = UUID.randomUUID(), customPhotoUrl = null, photoHidden = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
@@ -266,17 +282,20 @@ class UserServiceTest {
         service.provision(token = token(uid = "mh-bob"), request = request).shouldBeRight()
 
         // The owner hides their own match history.
-        service.setMatchHistoryHidden(token = token(uid = "mh-alice"), id = UUID.fromString(alice.id), hidden = true)
+        service
+            .setMatchHistoryHidden(token = token(uid = "mh-alice"), id = UUID.fromString(alice.id), hidden = true)
             .shouldBeRight()
             .matchHistoryHidden shouldBe true
 
         // Another player cannot toggle someone else's flag.
-        service.setMatchHistoryHidden(token = token(uid = "mh-bob"), id = UUID.fromString(alice.id), hidden = true)
+        service
+            .setMatchHistoryHidden(token = token(uid = "mh-bob"), id = UUID.fromString(alice.id), hidden = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
 
         // An unknown id is a 404.
-        service.setMatchHistoryHidden(token = token(uid = "mh-alice"), id = UUID.randomUUID(), hidden = true)
+        service
+            .setMatchHistoryHidden(token = token(uid = "mh-alice"), id = UUID.randomUUID(), hidden = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
@@ -287,10 +306,12 @@ class UserServiceTest {
         service.provision(token = token(uid = "bob"), request = request).shouldBeRight()
 
         service.getById(token = token(uid = "alice"), id = UUID.fromString(alice.id)).shouldBeRight().id shouldBe alice.id
-        service.getById(
-            token = token(uid = "bob"),
-            id = UUID.fromString(alice.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .getById(
+                token = token(uid = "bob"),
+                id = UUID.fromString(alice.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
         service.getById(token = token(uid = "alice"), id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
@@ -313,29 +334,33 @@ class UserServiceTest {
     @Test
     fun `patch updates provided fields, replace clears omitted ones`() {
         val user =
-            service.provision(
-                token = token(uid = "p1"),
-                request =
-                    CreateUserRequest(
-                        proposedRating = "4.0",
-                        displayName = "Juan",
-                        sex = "Male",
-                        city = "Manila",
-                        dateOfBirth = "2000-01-01",
-                    ),
-            ).shouldBeRight().user
+            service
+                .provision(
+                    token = token(uid = "p1"),
+                    request =
+                        CreateUserRequest(
+                            proposedRating = "4.0",
+                            displayName = "Juan",
+                            sex = "Male",
+                            city = "Manila",
+                            dateOfBirth = "2000-01-01",
+                        ),
+                ).shouldBeRight()
+                .user
 
         val patched =
-            service.patchProfile(
-                token = token(uid = "p1"),
-                id = UUID.fromString(user.id),
-                patch = ProfilePatch(city = "Cebu"),
-            ).shouldBeRight()
+            service
+                .patchProfile(
+                    token = token(uid = "p1"),
+                    id = UUID.fromString(user.id),
+                    patch = ProfilePatch(city = "Cebu"),
+                ).shouldBeRight()
         patched.city shouldBe "Cebu"
         patched.sex shouldBe "Male" // untouched by PATCH
 
         val replaced =
-            service.replaceProfile(token = token(uid = "p1"), id = UUID.fromString(user.id), patch = ProfilePatch(city = "Davao"))
+            service
+                .replaceProfile(token = token(uid = "p1"), id = UUID.fromString(user.id), patch = ProfilePatch(city = "Davao"))
                 .shouldBeRight()
         replaced.city shouldBe "Davao"
         replaced.sex.shouldBeNull() // cleared by PUT
@@ -357,27 +382,39 @@ class UserServiceTest {
 
     /** Provision an ADMINISTRATOR directly (bypassing the invite gate) so admin-only paths can be exercised (#518). */
     private fun provisionAdmin(uid: String) =
-        repository.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.FIRST, value = uid)),
-                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
-                ),
-        ).toDomain()
+        repository
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity =
+                            UserIdentity(
+                                provider = org.skopeo.domain.model.AuthProvider.GOOGLE,
+                                providerUid = uid,
+                                isPrimary = true,
+                            ),
+                        names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.FIRST, value = uid)),
+                        capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                    ),
+            ).toDomain()
 
     /** As [provisionAdmin], but for the account-management role (#1002). */
     private fun provisionAccountManager(uid: String) =
-        repository.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = org.skopeo.domain.model.AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.FIRST, value = uid)),
-                    capabilities = setOf(Capability.PLAYER, Capability.ACCOUNT_MANAGER),
-                ),
-        ).toDomain()
+        repository
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity =
+                            UserIdentity(
+                                provider = org.skopeo.domain.model.AuthProvider.GOOGLE,
+                                providerUid = uid,
+                                isPrimary = true,
+                            ),
+                        names = listOf(element = UserName(type = org.skopeo.domain.model.NameType.FIRST, value = uid)),
+                        capabilities = setOf(Capability.PLAYER, Capability.ACCOUNT_MANAGER),
+                    ),
+            ).toDomain()
 
     @Test
     fun `setRatingPreview toggles the per-admin flag for an admin, and is forbidden for a non-admin (#583)`() {
@@ -393,13 +430,18 @@ class UserServiceTest {
         // It's audited as SETTINGS_RATING_PREVIEW_CHANGED.
         AuditRepository()
             .list(actions = listOf(element = AuditAction.SETTINGS_RATING_PREVIEW_CHANGED), limit = 10, offset = 0)
-            .first.isNotEmpty() shouldBe true
+            .first
+            .isNotEmpty() shouldBe true
 
         // A non-admin (and an unknown caller) cannot set it.
-        service.setRatingPreview(token = token(uid = "player"), previewAsNonAdmin = true)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.setRatingPreview(token = token(uid = "ghost"), previewAsNonAdmin = true)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .setRatingPreview(token = token(uid = "player"), previewAsNonAdmin = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .setRatingPreview(token = token(uid = "ghost"), previewAsNonAdmin = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -424,20 +466,26 @@ class UserServiceTest {
         service.provision(token = token(uid = "stranger"), request = request).shouldBeRight()
 
         // Self is no longer allowed (tightened from self-or-admin to admin-only).
-        service.deactivate(
-            token = token(uid = "self-del"),
-            id = UUID.fromString(user.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.deactivate(
-            token = token(uid = "stranger"),
-            id = UUID.fromString(user.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .deactivate(
+                token = token(uid = "self-del"),
+                id = UUID.fromString(user.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .deactivate(
+                token = token(uid = "stranger"),
+                id = UUID.fromString(user.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
 
         provisionAdmin(uid = "admin-404")
-        service.deactivate(
-            token = token(uid = "admin-404"),
-            id = UUID.randomUUID(),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .deactivate(
+                token = token(uid = "admin-404"),
+                id = UUID.randomUUID(),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -499,13 +547,20 @@ class UserServiceTest {
 
         // A non-admin cannot reactivate.
         service.provision(token = token(uid = "nobody"), request = request).shouldBeRight()
-        service.reactivate(
-            token = token(uid = "nobody"),
-            id = UUID.fromString(target.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .reactivate(
+                token = token(uid = "nobody"),
+                id = UUID.fromString(target.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
 
         service.reactivate(token = token(uid = "admin-re"), id = UUID.fromString(target.id)).shouldBeRight()
-        repository.findById(id = UUID.fromString(target.id)).shouldBeRight().toDomain().isActive.shouldBeTrue()
+        repository
+            .findById(id = UUID.fromString(target.id))
+            .shouldBeRight()
+            .toDomain()
+            .isActive
+            .shouldBeTrue()
         // Login works again.
         service.provision(token = token(uid = "back"), request = request).shouldBeRight()
         AuditRepository().list(actions = listOf(element = AuditAction.ACCOUNT_REACTIVATED), limit = 10, offset = 0).first.single().let {
@@ -533,20 +588,29 @@ class UserServiceTest {
         val user = service.provision(token = token(uid = "victim"), request = request).shouldBeRight().user
 
         // The caller's token has no user row, so requireAccess sees caller == null (isAdmin == false).
-        service.getById(
-            token = token(uid = "no-such-user"),
-            id = UUID.fromString(user.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .getById(
+                token = token(uid = "no-such-user"),
+                id = UUID.fromString(user.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
     fun `provision bootstraps a verified allowlisted email to ADMINISTRATOR`() {
         val result =
-            bootstrapService.provision(
-                token =
-                    token(uid = "boss", email = "admin@example.com", emailVerified = true, name = "Boss", signInProvider = "google.com"),
-                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
-            ).shouldBeRight()
+            bootstrapService
+                .provision(
+                    token =
+                        token(
+                            uid = "boss",
+                            email = "admin@example.com",
+                            emailVerified = true,
+                            name = "Boss",
+                            signInProvider = "google.com",
+                        ),
+                    request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
+                ).shouldBeRight()
 
         result.user.capabilities shouldBe listOf("ADMINISTRATOR", "PLAYER", "RESEARCHER")
     }
@@ -556,32 +620,39 @@ class UserServiceTest {
         // Signed up before being allowlisted (unverified at provision -> plain PLAYER).
         invite(email = "admin@example.com")
         val created =
-            bootstrapService.provision(
-                token = token(uid = "later", email = "admin@example.com", emailVerified = false, name = "Later"),
-                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
-            ).shouldBeRight()
+            bootstrapService
+                .provision(
+                    token = token(uid = "later", email = "admin@example.com", emailVerified = false, name = "Later"),
+                    request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
+                ).shouldBeRight()
         created.user.capabilities shouldBe listOf(element = "PLAYER")
 
         // Logs in with a verified email -> promoted.
-        bootstrapService.currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
+        bootstrapService
+            .currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
             .capabilities shouldBe listOf("ADMINISTRATOR", "PLAYER", "RESEARCHER")
 
         // A second login does not double-grant.
-        bootstrapService.currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
+        bootstrapService
+            .currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
             .capabilities shouldBe listOf("ADMINISTRATOR", "PLAYER", "RESEARCHER")
-        repository.findByFirebaseUid(firebaseUid = "later")!!.toDomain()
+        repository
+            .findByFirebaseUid(firebaseUid = "later")!!
+            .toDomain()
             .capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
     }
 
     @Test
     fun `currentUser does not promote an UNVERIFIED allowlisted email (verified-email gate)`() {
         invite(email = "admin@example.com")
-        bootstrapService.provision(
-            token = token(uid = "unv", email = "admin@example.com", emailVerified = false, name = "Unv"),
-            request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
-        ).shouldBeRight()
+        bootstrapService
+            .provision(
+                token = token(uid = "unv", email = "admin@example.com", emailVerified = false, name = "Unv"),
+                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
+            ).shouldBeRight()
 
-        bootstrapService.currentUser(token = token(uid = "unv", email = "admin@example.com", emailVerified = false))!!
+        bootstrapService
+            .currentUser(token = token(uid = "unv", email = "admin@example.com", emailVerified = false))!!
             .capabilities shouldBe listOf(element = "PLAYER")
     }
 
@@ -882,10 +953,11 @@ class UserServiceTest {
         byName.map { it.id } shouldContain member.id
 
         val byCodePrefix =
-            service.search(
-                token = token(uid = "staff4"),
-                filters = UserSearchFilters(q = member.publicCode.take(n = 3).lowercase()),
-            ).shouldBeRight()
+            service
+                .search(
+                    token = token(uid = "staff4"),
+                    filters = UserSearchFilters(q = member.publicCode.take(n = 3).lowercase()),
+                ).shouldBeRight()
         byCodePrefix.map { it.id } shouldContain member.id
     }
 

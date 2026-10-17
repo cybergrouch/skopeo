@@ -7,6 +7,7 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.server.application.Application
+import io.ktor.server.config.ApplicationConfig
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.skopeo.common.logging.redactedJdbcUrl
@@ -34,27 +35,18 @@ object DatabaseConfig {
         logger.info { "Initializing database configuration..." }
 
         // Read database configuration from application.yaml
-        val dbUrl = application.environment.config.property(path = "database.url").getString()
-        val dbDriver = application.environment.config.property(path = "database.driver").getString()
-        val dbUser = application.environment.config.property(path = "database.user").getString()
-        val dbPassword = application.environment.config.property(path = "database.password").getString()
+        val config = application.environment.config
+        val dbUrl = config.required(path = "database.url")
+        val dbDriver = config.required(path = "database.driver")
+        val dbUser = config.required(path = "database.user")
+        val dbPassword = config.required(path = "database.password")
 
         // Connection pool configuration
-        val poolMaxSize =
-            application.environment.config.propertyOrNull(path = "database.pool.maximumPoolSize")
-                ?.getString()?.toInt() ?: 10
-        val poolMinIdle =
-            application.environment.config.propertyOrNull(path = "database.pool.minimumIdle")
-                ?.getString()?.toInt() ?: 2
-        val connectionTimeout =
-            application.environment.config.propertyOrNull(path = "database.pool.connectionTimeout")
-                ?.getString()?.toLong() ?: 30000
-        val idleTimeout =
-            application.environment.config.propertyOrNull(path = "database.pool.idleTimeout")
-                ?.getString()?.toLong() ?: 600000
-        val maxLifetime =
-            application.environment.config.propertyOrNull(path = "database.pool.maxLifetime")
-                ?.getString()?.toLong() ?: 1800000
+        val poolMaxSize = config.optional(path = "database.pool.maximumPoolSize")?.toInt() ?: 10
+        val poolMinIdle = config.optional(path = "database.pool.minimumIdle")?.toInt() ?: 2
+        val connectionTimeout = config.optional(path = "database.pool.connectionTimeout")?.toLong() ?: 30000
+        val idleTimeout = config.optional(path = "database.pool.idleTimeout")?.toLong() ?: 600000
+        val maxLifetime = config.optional(path = "database.pool.maxLifetime")?.toLong() ?: 1800000
 
         // Redacted: a JDBC URL is the conventional place to put `?user=…&password=…`, and this line
         // is emitted on every boot (#806).
@@ -135,7 +127,8 @@ object DatabaseConfig {
         logger.info { "Running Flyway database migrations..." }
 
         val flyway =
-            Flyway.configure()
+            Flyway
+                .configure()
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)
@@ -160,3 +153,7 @@ object DatabaseConfig {
         logger.info { "Database connection pool closed" }
     }
 }
+
+private fun ApplicationConfig.required(path: String): String = property(path = path).getString()
+
+private fun ApplicationConfig.optional(path: String): String? = propertyOrNull(path = path)?.getString()

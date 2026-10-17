@@ -30,7 +30,11 @@ import org.skopeo.configurePlugins
  */
 class RequestIdErrorTest {
     private fun requestIdOf(body: String): String =
-        Json.parseToJsonElement(string = body).jsonObject.getValue(key = "requestId").jsonPrimitive.content
+        Json
+            .parseToJsonElement(string = body)
+            .jsonObject
+            .getValue(key = "requestId")
+            .jsonPrimitive.content
 
     @Test
     fun `an inbound request id is echoed back, so a caller can correlate its own traffic`() =
@@ -126,4 +130,6 @@ class RequestIdErrorTest {
  * A Kotlin-declared exception so the constructor argument can be named, which the repo's
  * `NamedArguments` rule requires and a Java constructor cannot accept.
  */
-private class ProbeBoom(message: String) : IllegalStateException(message)
+private class ProbeBoom(
+    message: String,
+) : IllegalStateException(message)

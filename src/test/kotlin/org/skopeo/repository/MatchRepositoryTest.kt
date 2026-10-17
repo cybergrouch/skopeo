@@ -80,34 +80,37 @@ class MatchRepositoryTest {
     }
 
     private fun newUser(uid: String): UUID =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
-                ),
-        ).toDomain().id
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
+                    ),
+            ).toDomain()
+            .id
 
     private fun fixture(
         u1: UUID,
         u2: UUID,
         date: LocalDate = LocalDate.of(2026, 1, 1),
         eventId: UUID = fixtureEventId(),
-    ) = matches.createFixture(
-        command =
-            CreateFixtureCommand(
-                matchFormat = TeamType.SINGLES,
-                matchType = MatchType.OPEN_PLAY,
-                matchDate = date,
-                team1UserIds = listOf(u1),
-                team2UserIds = listOf(u2),
-                team1Name = "T1",
-                team2Name = "T2",
-                createdBy = u1,
-                eventId = eventId,
-            ),
-    ).toDomain()
+    ) = matches
+        .createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.SINGLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = date,
+                    team1UserIds = listOf(u1),
+                    team2UserIds = listOf(u2),
+                    team1Name = "T1",
+                    team2Name = "T2",
+                    createdBy = u1,
+                    eventId = eventId,
+                ),
+        ).toDomain()
 
     /** Create a COMPLETED (pending-calculation) match on [matchDate], optionally under [eventId]. */
     private fun completedMatch(
@@ -120,20 +123,21 @@ class MatchRepositoryTest {
         completionReason: MatchCompletionReason = MatchCompletionReason.COMPLETED,
     ): UUID {
         val match =
-            matches.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = matchType,
-                        matchDate = matchDate,
-                        team1UserIds = listOf(element = u1),
-                        team2UserIds = listOf(element = u2),
-                        team1Name = "T1",
-                        team2Name = "T2",
-                        createdBy = u1,
-                        eventId = eventId,
-                    ),
-            ).toDomain()
+            matches
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = matchType,
+                            matchDate = matchDate,
+                            team1UserIds = listOf(element = u1),
+                            team2UserIds = listOf(element = u2),
+                            team1Name = "T1",
+                            team2Name = "T2",
+                            createdBy = u1,
+                            eventId = eventId,
+                        ),
+                ).toDomain()
         matches.addResult(
             matchId = match.id,
             sets =
@@ -158,20 +162,21 @@ class MatchRepositoryTest {
         eventId: UUID = fixtureEventId(),
     ): UUID {
         val match =
-            matches.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = matchDate,
-                        team1UserIds = listOf(element = u1),
-                        team2UserIds = listOf(element = u2),
-                        team1Name = "T1",
-                        team2Name = "T2",
-                        createdBy = creator,
-                        eventId = eventId,
-                    ),
-            ).toDomain()
+            matches
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = matchDate,
+                            team1UserIds = listOf(element = u1),
+                            team2UserIds = listOf(element = u2),
+                            team1Name = "T1",
+                            team2Name = "T2",
+                            createdBy = creator,
+                            eventId = eventId,
+                        ),
+                ).toDomain()
         matches.addResult(
             matchId = match.id,
             sets =
@@ -191,18 +196,20 @@ class MatchRepositoryTest {
         endDate: LocalDate,
         members: List<UUID>,
     ): UUID =
-        events.create(
-            command =
-                CreateEventCommand(
-                    // Every event needs a club (#794).
-                    clubId = seedClub().id,
-                    name = "E-$endDate",
-                    startDate = endDate.minusDays(2),
-                    endDate = endDate,
-                    participantIds = members,
-                    createdBy = creator,
-                ),
-        ).toDomain().id
+        events
+            .create(
+                command =
+                    CreateEventCommand(
+                        // Every event needs a club (#794).
+                        clubId = seedClub().id,
+                        name = "E-$endDate",
+                        startDate = endDate.minusDays(2),
+                        endDate = endDate,
+                        participantIds = members,
+                        createdBy = creator,
+                    ),
+            ).toDomain()
+            .id
 
     /** A COMPLETED doubles match (two a side) where [winners] beat [losers]. */
     private fun completedDoubles(
@@ -210,20 +217,21 @@ class MatchRepositoryTest {
         losers: List<UUID>,
     ): UUID {
         val match =
-            matches.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.DOUBLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.of(2026, 2, 1),
-                        team1UserIds = winners,
-                        team2UserIds = losers,
-                        team1Name = "T1",
-                        team2Name = "T2",
-                        createdBy = winners.first(),
-                        eventId = fixtureEventId(),
-                    ),
-            ).toDomain()
+            matches
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.DOUBLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.of(2026, 2, 1),
+                            team1UserIds = winners,
+                            team2UserIds = losers,
+                            team1Name = "T1",
+                            team2Name = "T2",
+                            createdBy = winners.first(),
+                            eventId = fixtureEventId(),
+                        ),
+                ).toDomain()
         matches.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId)),
@@ -239,22 +247,23 @@ class MatchRepositoryTest {
         val u1 = newUser(uid = "u1")
         val u2 = newUser(uid = "u2")
         val placement =
-            matches.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.TOURNAMENT,
-                        matchDate = LocalDate.of(2026, 1, 1),
-                        team1UserIds = listOf(element = u1),
-                        team2UserIds = listOf(element = u2),
-                        team1Name = "T1",
-                        team2Name = "T2",
-                        createdBy = u1,
-                        eventId = fixtureEventId(),
-                        isPlacementMatch = true,
-                        placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
-                    ),
-            ).toDomain()
+            matches
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.TOURNAMENT,
+                            matchDate = LocalDate.of(2026, 1, 1),
+                            team1UserIds = listOf(element = u1),
+                            team2UserIds = listOf(element = u2),
+                            team1Name = "T1",
+                            team2Name = "T2",
+                            createdBy = u1,
+                            eventId = fixtureEventId(),
+                            isPlacementMatch = true,
+                            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
+                        ),
+                ).toDomain()
         matches.findById(matchId = placement.id).shouldBeRight().toDomain().let {
             it.isPlacementMatch shouldBe true
             it.placementBracket shouldBe PlacementBracket.CHAMPIONSHIP_FINALS
@@ -298,20 +307,21 @@ class MatchRepositoryTest {
 
         // A singles match where TEAM 2 wins (b beats a): exercises the winner-is-team2 branch.
         val match =
-            matches.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.of(2026, 1, 1),
-                        team1UserIds = listOf(element = a),
-                        team2UserIds = listOf(element = b),
-                        team1Name = "T1",
-                        team2Name = "T2",
-                        createdBy = a,
-                        eventId = fixtureEventId(),
-                    ),
-            ).toDomain()
+            matches
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.of(2026, 1, 1),
+                            team1UserIds = listOf(element = a),
+                            team2UserIds = listOf(element = b),
+                            team1Name = "T1",
+                            team2Name = "T2",
+                            createdBy = a,
+                            eventId = fixtureEventId(),
+                        ),
+                ).toDomain()
         matches.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 2, team2Games = 6, winnerTeamId = match.team2.teamId)),
@@ -406,7 +416,13 @@ class MatchRepositoryTest {
         // Self-check: assert the case can actually tell the two keys apart, so that "fixing" the dates
         // into ascending order cannot quietly turn this into a test that passes for no reason.
         withClue(clue = "the fixtures must order differently by date than by match_number, or this proves nothing") {
-            expected.sortedBy { matches.findById(matchId = it).shouldBeRight().toDomain().matchDate } shouldNotBe expected
+            expected.sortedBy {
+                matches
+                    .findById(matchId = it)
+                    .shouldBeRight()
+                    .toDomain()
+                    .matchDate
+            } shouldNotBe expected
         }
     }
 
@@ -790,8 +806,7 @@ class MatchRepositoryTest {
                 matchId = UUID.randomUUID(),
                 team1Handicap = java.math.BigDecimal("0.300"),
                 team2Handicap = null,
-            )
-            .shouldBeLeft()
+            ).shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
@@ -814,7 +829,12 @@ class MatchRepositoryTest {
         matches.setActive(matchId = match.id, active = false, disabledAt = LocalDateTime.now()).shouldBeRight().toDomain().let {
             it.isActive.shouldBeFalse()
         }
-        matches.setActive(matchId = match.id, active = true, disabledAt = null).shouldBeRight().toDomain().isActive.shouldBeTrue()
+        matches
+            .setActive(matchId = match.id, active = true, disabledAt = null)
+            .shouldBeRight()
+            .toDomain()
+            .isActive
+            .shouldBeTrue()
     }
 
     @Test
@@ -1233,9 +1253,21 @@ class MatchRepositoryTest {
         val a = (1..3).map { completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventA) }
         val b = (1..2).map { completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 2, 1), eventId = eventB) }
 
-        a.map { matches.findById(matchId = it).shouldBeRight().toDomain().matchNumber } shouldBe listOf(1, 2, 3)
+        a.map {
+            matches
+                .findById(matchId = it)
+                .shouldBeRight()
+                .toDomain()
+                .matchNumber
+        } shouldBe listOf(1, 2, 3)
         // The number is scoped to its event, so the second event starts again at 1 rather than continuing.
-        b.map { matches.findById(matchId = it).shouldBeRight().toDomain().matchNumber } shouldBe listOf(1, 2)
+        b.map {
+            matches
+                .findById(matchId = it)
+                .shouldBeRight()
+                .toDomain()
+                .matchNumber
+        } shouldBe listOf(1, 2)
     }
 
     @Test
@@ -1244,14 +1276,27 @@ class MatchRepositoryTest {
         val u2 = newUser(uid = "u2")
         val eventId = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
         val ids = (1..5).map { completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId) }
-        val before = ids.map { matches.findById(matchId = it).shouldBeRight().toDomain().matchNumber }
+        val before =
+            ids.map {
+                matches
+                    .findById(matchId = it)
+                    .shouldBeRight()
+                    .toDomain()
+                    .matchNumber
+            }
 
         // Rate them OUT OF ORDER — the middle one first, then the last. This is the case that would break
         // a number derived from a filtered list: #3 leaving the unrated set would renumber #4 and #5.
         matches.markRated(matchId = ids[2], ratedAt = LocalDateTime.now(), ratedBy = u1)
         matches.markRated(matchId = ids[4], ratedAt = LocalDateTime.now(), ratedBy = u1)
 
-        ids.map { matches.findById(matchId = it).shouldBeRight().toDomain().matchNumber } shouldBe before
+        ids.map {
+            matches
+                .findById(matchId = it)
+                .shouldBeRight()
+                .toDomain()
+                .matchNumber
+        } shouldBe before
     }
 
     @Test
@@ -1265,10 +1310,18 @@ class MatchRepositoryTest {
 
         // #2 is gone from the listings but keeps its number, and #3 does NOT slide down into the gap:
         // recycling a number people have already said out loud is exactly what an identifier must not do.
-        matches.findById(matchId = ids[2]).shouldBeRight().toDomain().matchNumber shouldBe 3
+        matches
+            .findById(matchId = ids[2])
+            .shouldBeRight()
+            .toDomain()
+            .matchNumber shouldBe 3
         // ...and the next fixture continues past the gap rather than filling it, so the number stays unique.
         val next = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId)
-        matches.findById(matchId = next).shouldBeRight().toDomain().matchNumber shouldBe 4
+        matches
+            .findById(matchId = next)
+            .shouldBeRight()
+            .toDomain()
+            .matchNumber shouldBe 4
     }
 
     @Test
@@ -1381,8 +1434,16 @@ class MatchRepositoryTest {
         // DEFERRABLE. The two-phase update is what makes this pass.
         matches.renumberMatches(matchIds = listOf(b, a))
 
-        matches.findById(matchId = b).shouldBeRight().toDomain().matchNumber shouldBe 1
-        matches.findById(matchId = a).shouldBeRight().toDomain().matchNumber shouldBe 2
+        matches
+            .findById(matchId = b)
+            .shouldBeRight()
+            .toDomain()
+            .matchNumber shouldBe 1
+        matches
+            .findById(matchId = a)
+            .shouldBeRight()
+            .toDomain()
+            .matchNumber shouldBe 2
     }
 
     @Test
@@ -1395,10 +1456,21 @@ class MatchRepositoryTest {
         matches.renumberMatches(matchIds = ids.reversed())
 
         ids.reversed().forEachIndexed { index, id ->
-            matches.findById(matchId = id).shouldBeRight().toDomain().matchNumber shouldBe index + 1
+            matches
+                .findById(matchId = id)
+                .shouldBeRight()
+                .toDomain()
+                .matchNumber shouldBe index + 1
         }
         // Every number is still in 1..N and unique — no negative parking value survived the transaction.
-        val numbers = ids.map { matches.findById(matchId = it).shouldBeRight().toDomain().matchNumber }
+        val numbers =
+            ids.map {
+                matches
+                    .findById(matchId = it)
+                    .shouldBeRight()
+                    .toDomain()
+                    .matchNumber
+            }
         numbers.sorted() shouldBe listOf(1, 2, 3, 4)
     }
 
@@ -1491,7 +1563,12 @@ class MatchRepositoryTest {
         val id = fixture(u1 = u1, u2 = u2, date = LocalDate.of(2026, 5, 1)).id
 
         // Turn side 1 into a standing team, exactly as an event team would be.
-        val team1Id = matches.findById(matchId = id).shouldBeRight().toDomain().team1.teamId
+        val team1Id =
+            matches
+                .findById(matchId = id)
+                .shouldBeRight()
+                .toDomain()
+                .team1.teamId
         transaction {
             TeamsTable.update(where = { TeamsTable.id eq team1Id }) { it[isTemporary] = false }
         }
@@ -1507,6 +1584,10 @@ class MatchRepositoryTest {
             .shouldBeInstanceOf<ServiceError.Validation>()
 
         // ...and nothing was written: a refusal that half-applied would be worse than the bug.
-        matches.findById(matchId = id).shouldBeRight().toDomain().team1.userIds shouldBe listOf(element = u1)
+        matches
+            .findById(matchId = id)
+            .shouldBeRight()
+            .toDomain()
+            .team1.userIds shouldBe listOf(element = u1)
     }
 }

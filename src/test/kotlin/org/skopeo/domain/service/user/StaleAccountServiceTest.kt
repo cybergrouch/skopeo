@@ -101,11 +101,36 @@ class StaleAccountServiceTest {
         exec(stmt = "UPDATE users SET created_at = '${now.minusDays(daysAgo)}' WHERE id = '$id'")
     }
 
-    private fun publicCode(id: UUID): String = users.findById(id = id).shouldBeRight().toDomain().publicCode
+    private fun publicCode(id: UUID): String =
+        users
+            .findById(id = id)
+            .shouldBeRight()
+            .toDomain()
+            .publicCode
 
-    private fun isActive(id: UUID): Boolean = users.findById(id = id).shouldBeRight().toDomain().isActive
+    private fun isActive(id: UUID): Boolean =
+        users
+            .findById(id = id)
+            .shouldBeRight()
+            .toDomain()
+            .isActive
 
     private fun admin(): UUID = signUp(uid = "root", daysAgo = 400, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+    /** A team row for [userId] with no event or match around it: match history in its barest form. */
+    private fun seedTeamMembership(userId: UUID) {
+        transaction {
+            val team =
+                TeamsTable.insertAndGetId {
+                    it[name] = "T"
+                    it[teamType] = "SINGLES"
+                }
+            TeamUsersTable.insert {
+                it[teamId] = team
+                it[TeamUsersTable.userId] = userId
+            }
+        }
+    }
 
     @Test
     fun `the rule matches only an old, unrated, untouched self-sign-up`() {
@@ -119,20 +144,7 @@ class StaleAccountServiceTest {
         val staff = signUp(uid = "staff", daysAgo = 45).also { CapabilityRepository().grant(userId = it, capability = Capability.HOST) }
         val inEvent = signUp(uid = "event", daysAgo = 45).also { fixtureEventFor(team1 = listOf(element = it), team2 = emptyList()) }
         // Match history without an event entry, so this proves the team_users exclusion on its own.
-        val inMatch =
-            signUp(uid = "match", daysAgo = 45).also { userId ->
-                transaction {
-                    val team =
-                        TeamsTable.insertAndGetId {
-                            it[name] = "T"
-                            it[teamType] = "SINGLES"
-                        }
-                    TeamUsersTable.insert {
-                        it[teamId] = team
-                        it[TeamUsersTable.userId] = userId
-                    }
-                }
-            }
+        val inMatch = signUp(uid = "match", daysAgo = 45).also { seedTeamMembership(userId = it) }
         // The #1121 shape: an unrated account something was merged into.
         val mergeTarget =
             signUp(uid = "survivor", daysAgo = 45).also { survivor ->
@@ -154,7 +166,12 @@ class StaleAccountServiceTest {
 
         admin()
 
-        val swept = service.sweep(token = token(uid = "root"), dryRun = true).shouldBeRight().accounts.map { it.userId }
+        val swept =
+            service
+                .sweep(token = token(uid = "root"), dryRun = true)
+                .shouldBeRight()
+                .accounts
+                .map { it.userId }
 
         mapOf(
             "too young" to young,
@@ -214,7 +231,11 @@ class StaleAccountServiceTest {
         audit.list(actions = listOf(element = AuditAction.STALE_ACCOUNT_SWEEP_COMMITTED), limit = 10, offset = 0).first.size shouldBe 1
 
         // Swept accounts are no longer active, so the same run again has nothing to do.
-        service.sweep(token = token(uid = "root"), dryRun = false).shouldBeRight().accounts.shouldBeEmpty()
+        service
+            .sweep(token = token(uid = "root"), dryRun = false)
+            .shouldBeRight()
+            .accounts
+            .shouldBeEmpty()
         audit.list(actions = listOf(element = AuditAction.ACCOUNT_AUTO_DELETED), limit = 10, offset = 0).first.size shouldBe 1
     }
 
@@ -230,7 +251,11 @@ class StaleAccountServiceTest {
         }
 
         settings.setStaleAccountDays(token = token(uid = "root"), days = 30).shouldBeRight()
-        service.sweep(token = token(uid = "root"), dryRun = true).shouldBeRight().accounts.map { it.userId } shouldContainExactly
+        service
+            .sweep(token = token(uid = "root"), dryRun = true)
+            .shouldBeRight()
+            .accounts
+            .map { it.userId } shouldContainExactly
             listOf(element = fortyDays.toString())
     }
 
@@ -260,7 +285,11 @@ class StaleAccountServiceTest {
         service.sweep(principal = pointsKey, dryRun = false).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         isActive(id = stale) shouldBe true
 
-        service.sweep(principal = sweeperKey, dryRun = false).shouldBeRight().accounts.map { it.userId } shouldContainExactly
+        service
+            .sweep(principal = sweeperKey, dryRun = false)
+            .shouldBeRight()
+            .accounts
+            .map { it.userId } shouldContainExactly
             listOf(element = stale.toString())
         val removal = audit.list(actions = listOf(element = AuditAction.ACCOUNT_AUTO_DELETED), limit = 10, offset = 0).first.single()
         removal.actorClientId shouldBe client.id

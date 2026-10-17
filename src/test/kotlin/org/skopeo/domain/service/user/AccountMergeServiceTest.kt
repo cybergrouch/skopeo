@@ -79,22 +79,25 @@ class AccountMergeServiceTest {
         provider: AuthProvider = AuthProvider.PASSWORD,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = provider, providerUid = "$provider:$uid", isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    sex = "Male",
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = provider, providerUid = "$provider:$uid", isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        sex = "Male",
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun placeholder(displayName: String): User =
-        users.createPlaceholder(
-            command =
-                org.skopeo.domain.model.CreatePlaceholderCommand(displayName = displayName, sex = "Male", dateOfBirth = null),
-        ).toDomain()
+        users
+            .createPlaceholder(
+                command =
+                    org.skopeo.domain.model
+                        .CreatePlaceholderCommand(displayName = displayName, sex = "Male", dateOfBirth = null),
+            ).toDomain()
 
     private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
@@ -103,20 +106,21 @@ class AccountMergeServiceTest {
     private fun fixture(
         u1: UUID,
         u2: UUID,
-    ) = matches.createFixture(
-        command =
-            CreateFixtureCommand(
-                matchFormat = TeamType.SINGLES,
-                matchType = MatchType.OPEN_PLAY,
-                matchDate = LocalDate.of(2026, 1, 1),
-                team1UserIds = listOf(element = u1),
-                team2UserIds = listOf(element = u2),
-                team1Name = "T1",
-                team2Name = "T2",
-                createdBy = u1,
-                eventId = fixtureEventId(),
-            ),
-    ).toDomain()
+    ) = matches
+        .createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.SINGLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = LocalDate.of(2026, 1, 1),
+                    team1UserIds = listOf(element = u1),
+                    team2UserIds = listOf(element = u2),
+                    team1Name = "T1",
+                    team2Name = "T2",
+                    createdBy = u1,
+                    eventId = fixtureEventId(),
+                ),
+        ).toDomain()
 
     /** An award to [userId]; with neither [matchId] nor [eventId] it is one granted by hand. */
     private fun award(
@@ -190,7 +194,11 @@ class AccountMergeServiceTest {
         merge(survivor = survivor, retired = retired)
 
         // Off the pending-assessment list: the survivor holds the rated play AND the rating it produced.
-        ratings.findCurrentRating(userId = survivor.id).shouldNotBeNull().currentRating.toPlainString() shouldBe "3.100000"
+        ratings
+            .findCurrentRating(userId = survivor.id)
+            .shouldNotBeNull()
+            .currentRating
+            .toPlainString() shouldBe "3.100000"
         ratings.findCurrentRating(userId = retired.id).shouldBeNull()
         ratings.historyByUser(userId = survivor.id).size shouldBe 2
         ratings.historyByUser(userId = retired.id).size shouldBe 0
@@ -257,11 +265,19 @@ class AccountMergeServiceTest {
             ).shouldBeRight()
 
         // The survivor keeps its OWN rating (no recompute from the absorbed match) and its OWN points.
-        ratings.findCurrentRating(userId = survivor.id).shouldNotBeNull().currentRating.toPlainString() shouldBe "4.200000"
+        ratings
+            .findCurrentRating(userId = survivor.id)
+            .shouldNotBeNull()
+            .currentRating
+            .toPlainString() shouldBe "4.200000"
         points.findById(id = survivorAward.id).shouldNotBeNull().userId shouldBe survivor.id
         // A rated survivor keeps its own rating (#1121), and a hand-granted award is tied to no match or
         // event, so neither moves — both stay on the retired (now inactive) row.
-        ratings.findCurrentRating(userId = retired.id).shouldNotBeNull().currentRating.toPlainString() shouldBe "3.100000"
+        ratings
+            .findCurrentRating(userId = retired.id)
+            .shouldNotBeNull()
+            .currentRating
+            .toPlainString() shouldBe "3.100000"
         points.findById(id = retiredAward.id).shouldNotBeNull().userId shouldBe retired.id
         // Participation DID move: the survivor now carries the retired's match too; the retired has none.
         users.hasMatchParticipation(userId = survivor.id).shouldBeTrue()
@@ -304,7 +320,10 @@ class AccountMergeServiceTest {
         retiredAfter.firebaseUid.shouldBeNull()
         retiredAfter.linkStatus() shouldBe AccountLinkStatus.NONE
         // The login actually resolves to the survivor now.
-        users.findByFirebaseUid(firebaseUid = "retired").shouldNotBeNull().user.id shouldBe survivor.id
+        users
+            .findByFirebaseUid(firebaseUid = "retired")
+            .shouldNotBeNull()
+            .user.id shouldBe survivor.id
     }
 
     @Test
@@ -322,7 +341,10 @@ class AccountMergeServiceTest {
         survivorAfter.firebaseUid shouldBe "retired"
         survivorAfter.linkStatus() shouldBe AccountLinkStatus.GOOGLE
         survivorAfter.placeholder.shouldBeFalse()
-        users.findByFirebaseUid(firebaseUid = "retired").shouldNotBeNull().user.id shouldBe survivor.id
+        users
+            .findByFirebaseUid(firebaseUid = "retired")
+            .shouldNotBeNull()
+            .user.id shouldBe survivor.id
     }
 
     @Test

@@ -91,7 +91,8 @@ class NameApiIntegrationTest {
             val token = TestFirebaseAuth.mintToken(uid = "fb-bad")
             val user = client.provisionSelf(token = token)
 
-            client.addName(token = token, userId = user.id, request = NameCreateRequest(type = "ALIAS", value = "x"))
+            client
+                .addName(token = token, userId = user.id, request = NameCreateRequest(type = "ALIAS", value = "x"))
                 .status shouldBe HttpStatusCode.BadRequest
         }
 
@@ -135,11 +136,12 @@ class NameApiIntegrationTest {
             val user = client.provisionSelf(token = token)
             val display = client.listNames(token = token, userId = user.id).single { it.type == "DISPLAY" }
 
-            client.put(urlString = "/api/v1/users/${user.id}/names/${display.id}/state") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $token")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = NameStateRequest(isActive = false))
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .put(urlString = "/api/v1/users/${user.id}/names/${display.id}/state") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = NameStateRequest(isActive = false))
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
@@ -150,8 +152,9 @@ class NameApiIntegrationTest {
             val owner = client.provisionSelf(token = ownerToken)
             client.provisionSelf(token = intruderToken)
 
-            client.get(urlString = "/api/v1/users/${owner.id}/names") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $intruderToken")
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/users/${owner.id}/names") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $intruderToken")
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 }

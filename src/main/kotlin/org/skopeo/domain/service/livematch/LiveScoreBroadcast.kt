@@ -37,11 +37,24 @@ fun interface LiveScoreBroadcaster {
 }
 
 /**
+ * The shape of [LiveScorePayload] this code writes, stored on the document as `version` (#1183).
+ *
+ * - 1: the original document. It carried no `version` field, so a document **without** one is a 1.
+ * - 2: adds `version` itself and `scorerName`.
+ *
+ * Additive only, like the replay format: a reader gates each feature on its field being present.
+ */
+const val LIVE_SCORE_PAYLOAD_VERSION = 2
+
+/**
  * The spectator-facing document: one per live match, overwritten on every change.
  *
  * Deliberately a **projection of [LiveMatchResponse] minus the umpire's business** — no log, no scorer
- * id. A spectator needs the scoreboard; who is holding the phone and how they corrected themselves are
- * internal. Keeping the public surface to one small document is also what makes reconnect a plain read.
+ * id. A spectator needs the scoreboard; how the umpire corrected themselves is internal. Keeping the
+ * public surface to one small document is also what makes reconnect a plain read.
+ *
+ * Who is scoring **is** public since #1183, as a display name: it is the same fact the finished match
+ * page shows ("Scored by"), so carrying it while the match is live reveals nothing new.
  */
 data class LiveScorePayload(
     /**
@@ -83,6 +96,13 @@ data class LiveScorePayload(
     val serverName: String?,
     val outcomeKind: String?,
     val outcomeWinner: String?,
+    /**
+     * The current scorer's **display name** (#1183) — whoever recorded the newest action. A name, never a
+     * user id, for the same reason as [serverName]; null before the first action and for a deleted account.
+     */
+    val scorerName: String? = null,
+    /** The document's shape, [LIVE_SCORE_PAYLOAD_VERSION]. A document without it predates the field and is a 1. */
+    val version: Int = LIVE_SCORE_PAYLOAD_VERSION,
 ) {
     /** Firestore takes a plain map; nulls are kept so a field that *became* null is cleared on overwrite. */
     fun asDocument(): Map<String, Any?> =
@@ -103,6 +123,8 @@ data class LiveScorePayload(
             "serverName" to serverName,
             "outcomeKind" to outcomeKind,
             "outcomeWinner" to outcomeWinner,
+            "scorerName" to scorerName,
+            "version" to version,
         )
 }
 
@@ -125,9 +147,10 @@ data class LiveScorePayloadSet(
 /**
  * The projection, as a pure function so it can be tested without Firestore or a network.
  *
- * Note `scorerId` is dropped on purpose: it is the umpire's view, not the spectators'. So is the
- * internal `matchId`: [publicCode] is passed in instead, because this ends up on a world-readable
- * document and the internal id is not a public identifier.
+ * Note `scorerId` is dropped on purpose: it is the umpire's view, not the spectators' — the scorer
+ * reaches them as `scorerName` instead (#1183). So is the internal `matchId`: [publicCode] is passed in
+ * instead, because this ends up on a world-readable document and the internal id is not a public
+ * identifier.
  */
 fun LiveMatchResponse.toBroadcast(publicCode: String): LiveScorePayload =
     LiveScorePayload(
@@ -155,6 +178,7 @@ fun LiveMatchResponse.toBroadcast(publicCode: String): LiveScorePayload =
         serverName = serverName,
         outcomeKind = outcome?.kind,
         outcomeWinner = outcome?.winner,
+        scorerName = scorerName,
     )
 
 /**

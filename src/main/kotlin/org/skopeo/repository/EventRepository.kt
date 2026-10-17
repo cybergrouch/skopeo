@@ -41,18 +41,19 @@ class EventRepository {
     fun create(command: CreateEventCommand): EventAggregateEntity =
         transaction {
             val id =
-                EventsTable.insertAndGetId {
-                    it[publicCode] = generateUniqueEventCode()
-                    it[name] = command.name
-                    it[startDate] = command.startDate
-                    it[endDate] = command.endDate
-                    it[createdBy] = command.createdBy
-                    it[clubId] = command.clubId
-                    it[circuitId] = command.circuitId
-                    it[format] = command.format.name
-                    it[type] = command.type.name
-                    it[awardRankingPoints] = command.awardRankingPoints
-                }.value
+                EventsTable
+                    .insertAndGetId {
+                        it[publicCode] = generateUniqueEventCode()
+                        it[name] = command.name
+                        it[startDate] = command.startDate
+                        it[endDate] = command.endDate
+                        it[createdBy] = command.createdBy
+                        it[clubId] = command.clubId
+                        it[circuitId] = command.circuitId
+                        it[format] = command.format.name
+                        it[type] = command.type.name
+                        it[awardRankingPoints] = command.awardRankingPoints
+                    }.value
             // Host-listed participants join APPROVED outright, attributed to the creator.
             command.participantIds.distinct().forEach { uid ->
                 insertParticipant(eventId = id, userId = uid, status = EventParticipantStatus.APPROVED, approvedBy = command.createdBy)
@@ -159,11 +160,17 @@ class EventRepository {
                 )
             val inBucket: Op<Boolean> =
                 when (bucket) {
-                    EventBucket.FINALIZED -> EventsTable.finalizedAt.isNotNull()
-                    EventBucket.UNFINALIZED ->
+                    EventBucket.FINALIZED -> {
+                        EventsTable.finalizedAt.isNotNull()
+                    }
+
+                    EventBucket.UNFINALIZED -> {
                         EventsTable.finalizedAt.isNull() and ((EventsTable.endDate less today) or hasResult)
-                    EventBucket.UPCOMING ->
+                    }
+
+                    EventBucket.UPCOMING -> {
                         EventsTable.finalizedAt.isNull() and (EventsTable.endDate greaterEq today) and not(op = hasResult)
+                    }
                 }
             val scope = EventsTable.isActive and (EventsTable.clubId eq clubId) and inBucket
             val total = EventsTable.selectAll().where { scope }.count()
@@ -178,7 +185,8 @@ class EventRepository {
                     .selectAll()
                     .where { scope }
                     .orderBy(order, EventsTable.endDate to SortOrder.DESC)
-                    .limit(count = limit).offset(start = offset.toLong())
+                    .limit(count = limit)
+                    .offset(start = offset.toLong())
                     .map { buildEventAggregate(row = it) }
             page to total
         }
@@ -459,7 +467,11 @@ class EventRepository {
     }
 
     private fun loadEvent(id: UUID): EventAggregateEntity? =
-        EventsTable.selectAll().where { EventsTable.id eq id }.singleOrNull()?.let { buildEventAggregate(row = it) }
+        EventsTable
+            .selectAll()
+            .where { EventsTable.id eq id }
+            .singleOrNull()
+            ?.let { buildEventAggregate(row = it) }
 
     private fun loadEventOrThrow(id: UUID): EventAggregateEntity =
         buildEventAggregate(row = EventsTable.selectAll().where { EventsTable.id eq id }.single())

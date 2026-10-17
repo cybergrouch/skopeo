@@ -2908,17 +2908,26 @@ paths:
         `points` is the timeline to render and `result` is what it ends at; `events` is the undo-resolved
         source the timeline is regenerated from when the format changes. Additive-only versioning: a field
         older replays could not compute is absent, and a client hides that feature for them.
+
+
+        Optional auth (#1183), like the match points read: a Firebase token is used when supplied and never
+        required. It decides only whether per-point scorers are included. For a caller who may organize the
+        match's event -- an ADMINISTRATOR, a named owner of the event's club, or the event's creator -- each
+        event and point carries its `scorer` public code and `scorers` resolves every code to a display name.
+        For everyone else, including anonymous callers, both are omitted from the JSON entirely (not sent as
+        null). A plain HOST of another club's event is not entitled.
       tags:
         - Matches
       security:
+        - firebaseAuth: []
         - {}
       responses:
         '200':
-          description: The replay
+          description: The replay, filtered for the caller
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReplayDocument'
+                $ref: '#/components/schemas/ReplayResponse'
         '404':
           description: No match with that code, no replay, or a result the replay no longer ends at
 
@@ -7725,8 +7734,9 @@ components:
     ReplayDocument:
       type: object
       description: >-
-        A live-scored match's replay (#1145) -- the stored document, served as is. Versioning is additive
-        only: later versions add fields and never rename, remove or redefine one.
+        A live-scored match's replay (#1145) -- the stored document. The endpoint serves it as a
+        ReplayResponse, filtered for the caller (#1183). Versioning is additive only: later versions add
+        fields and never rename, remove or redefine one.
       required: [version, result, events, points]
       properties:
         version:
@@ -7745,6 +7755,38 @@ components:
           items:
             $ref: '#/components/schemas/ReplayPoint'
 
+    ReplayResponse:
+      description: >-
+        What the replay endpoint answers (#1183): the stored ReplayDocument, filtered for the caller. Format
+        2 adds a per-step `scorer` (a public code) on events and points. For a caller entitled to per-point
+        scorers those codes stay and `scorers` resolves them; for everyone else the codes and `scorers` are
+        absent. A replay upgraded from format 1 after its scoring log was swept has no scorer codes at all.
+      allOf:
+        - $ref: '#/components/schemas/ReplayDocument'
+        - type: object
+          properties:
+            scorers:
+              type: object
+              description: >-
+                Public code -> the scorer as shown today, for every code in `events`/`points`. Present only
+                for an entitled caller (see the endpoint). A code that no longer resolves is left out.
+              additionalProperties:
+                $ref: '#/components/schemas/ReplayScorer'
+
+    ReplayScorer:
+      type: object
+      description: >-
+        A scorer resolved at read time by the player display rules (#1183): a deleted account is shown as
+        deleted and never by name, so `displayName` is null whenever `isDeleted` is true.
+      properties:
+        displayName:
+          type: string
+          nullable: true
+        isPlaceholder:
+          type: boolean
+        isDeleted:
+          type: boolean
+
     ReplayEvent:
       type: object
       required: [kind, atMs]
@@ -7759,6 +7801,11 @@ components:
           type: integer
           format: int64
           description: Milliseconds since the first surviving action.
+        scorer:
+          type: string
+          description: >-
+            Format 2 (#1183): public code of the umpire who recorded this action. Absent when unknown (a
+            replay upgraded without its log) or when the caller is not entitled to per-point scorers.
 
     ReplayPoint:
       type: object
@@ -7804,6 +7851,11 @@ components:
           description: For an END step only.
         score:
           $ref: '#/components/schemas/ReplayScore'
+        scorer:
+          type: string
+          description: >-
+            Format 2 (#1183): public code of the umpire who recorded this step, resolved in
+            ReplayResponse.scorers. Absent when unknown or when the caller is not entitled to it.
 
     ReplayScore:
       type: object
@@ -7930,6 +7982,13 @@ components:
           format: uuid
           nullable: true
           description: Who currently holds the soft claim, if anyone.
+        scorerName:
+          type: string
+          nullable: true
+          description: >-
+            The current scorer's display name (#1183): whoever recorded the most recent action, so it
+            follows a handover once the new umpire keys something. Null before the first action and for a
+            deleted account. Not the soft-claim holder named by `scorerId`.
         hasStarted:
           type: boolean
         isPaused:
@@ -9037,6 +9096,16 @@ components:
           type: string
           nullable: true
           description: Per-side rating handicap (#486) for team2, shown transparently to participants; null = none.
+        scoredBy:
+          allOf:
+            - $ref: '#/components/schemas/MatchPublicPlayer'
+          nullable: true
+          description: >-
+            Who scored this match (#1183), for a finished, live-scored match: the umpire who recorded its
+            final action, from the durable umpire credit. Public, like the players -- display name and public
+            code, never a user id -- with the placeholder and deleted flags; `displayName` is null for a
+            deleted scorer, who is shown as deleted. Null when the match was not scored live or is not
+            finished.
 
     MatchPublicEvent:
       type: object

@@ -69,7 +69,8 @@ class SeedingService(
             val list = lists.get(token = token, listId = listId).bind() // ownership + access
             val reordered =
                 reorderedEntries(entries = buildEntries(memberIds = list.memberUserIds), orderedUserIds = orderedUserIds).bind()
-            seedings.replace(listId = listId, generatedBy = list.ownerId, entries = reordered, manuallyEdited = true)
+            seedings
+                .replace(listId = listId, generatedBy = list.ownerId, entries = reordered, manuallyEdited = true)
                 .toResponse(showRawRating = showRaw)
         }
 
@@ -80,7 +81,11 @@ class SeedingService(
         either {
             val showRaw = userService.callerCanSeeRawRating(token = token)
             lists.get(token = token, listId = listId).bind() // ownership + access
-            seedings.findByListId(listId = listId).bind().toDomain().toResponse(showRawRating = showRaw)
+            seedings
+                .findByListId(listId = listId)
+                .bind()
+                .toDomain()
+                .toResponse(showRawRating = showRaw)
         }
 
     /**
@@ -97,7 +102,8 @@ class SeedingService(
             val showRaw = userService.callerCanSeeRawRating(token = token)
             val roster = events.rosterForSeeding(token = token, id = eventId).bind()
             val entries = buildEntries(memberIds = roster.participantUserIds)
-            seedings.replaceForEvent(eventId = eventId, generatedBy = roster.generatedBy, entries = entries)
+            seedings
+                .replaceForEvent(eventId = eventId, generatedBy = roster.generatedBy, entries = entries)
                 .toResponse(showRawRating = showRaw)
         }
 
@@ -116,7 +122,8 @@ class SeedingService(
             val roster = events.rosterForSeeding(token = token, id = eventId).bind()
             val reordered =
                 reorderedEntries(entries = buildEntries(memberIds = roster.participantUserIds), orderedUserIds = orderedUserIds).bind()
-            seedings.replaceForEvent(eventId = eventId, generatedBy = roster.generatedBy, entries = reordered, manuallyEdited = true)
+            seedings
+                .replaceForEvent(eventId = eventId, generatedBy = roster.generatedBy, entries = reordered, manuallyEdited = true)
                 .toResponse(showRawRating = showRaw)
         }
 
@@ -127,7 +134,11 @@ class SeedingService(
         either {
             val showRaw = userService.callerCanSeeRawRating(token = token)
             events.rosterForSeeding(token = token, id = eventId).bind() // access check
-            seedings.findByEventId(eventId = eventId).bind().toDomain().toResponse(showRawRating = showRaw)
+            seedings
+                .findByEventId(eventId = eventId)
+                .bind()
+                .toDomain()
+                .toResponse(showRawRating = showRaw)
         }
 
     /**

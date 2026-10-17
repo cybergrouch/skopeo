@@ -83,7 +83,7 @@ private fun MatchPlayerCalculation.toResponse(): MatchPlayerCalculationResponse 
  */
 private fun RatingHistoryEntry.toBreakdownResponse(): CalculationBreakdownResponse? =
     when {
-        kFactor != null ->
+        kFactor != null -> {
             CalculationBreakdownResponse(
                 dominance = dominanceFactor?.toPlainString(),
                 scale = scale?.toPlainString(),
@@ -95,8 +95,15 @@ private fun RatingHistoryEntry.toBreakdownResponse(): CalculationBreakdownRespon
                 kFactor = kFactor.toPlainString(),
                 sets = setBreakdown.map { it.toResponse() },
             )
-        setBreakdown.isNotEmpty() -> CalculationBreakdownResponse(sets = setBreakdown.map { it.toResponse() })
-        else -> null
+        }
+
+        setBreakdown.isNotEmpty() -> {
+            CalculationBreakdownResponse(sets = setBreakdown.map { it.toResponse() })
+        }
+
+        else -> {
+            null
+        }
     }
 
 /** Map a persisted per-set breakdown (#110) to its response. */

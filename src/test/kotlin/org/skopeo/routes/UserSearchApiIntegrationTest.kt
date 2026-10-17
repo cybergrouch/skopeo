@@ -396,8 +396,14 @@ class UserSearchApiIntegrationTest {
         withApp { client ->
             val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
             client
-                .searchWith(token = host, "ids" to java.util.UUID.randomUUID().toString(), "sex" to "Male")
-                .status shouldBe HttpStatusCode.BadRequest
+                .searchWith(
+                    token = host,
+                    "ids" to
+                        java.util.UUID
+                            .randomUUID()
+                            .toString(),
+                    "sex" to "Male",
+                ).status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
@@ -421,16 +427,18 @@ class UserSearchApiIntegrationTest {
             (1..3).forEach { n -> client.provisionNamed(uid = "u$n", displayName = "Alice $n") }
 
             val first =
-                client.get(urlString = "/api/v1/users/search?name=alice&limit=2&offset=0") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
-                }.body<UserSummaryPageResponse>()
+                client
+                    .get(urlString = "/api/v1/users/search?name=alice&limit=2&offset=0") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    }.body<UserSummaryPageResponse>()
             first.total shouldBe 3 // all three match...
             first.items.size shouldBe 2 // ...but only the requested page of 2 is returned
 
             val second =
-                client.get(urlString = "/api/v1/users/search?name=alice&limit=2&offset=2") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
-                }.body<UserSummaryPageResponse>()
+                client
+                    .get(urlString = "/api/v1/users/search?name=alice&limit=2&offset=2") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    }.body<UserSummaryPageResponse>()
             second.total shouldBe 3
             second.items.size shouldBe 1 // the remainder
         }
@@ -451,20 +459,21 @@ class UserSearchApiIntegrationTest {
             // Alice beats Bob in one completed singles match (seeded directly).
             val matches = MatchRepository()
             val match =
-                matches.createFixture(
-                    command =
-                        CreateFixtureCommand(
-                            matchFormat = TeamType.SINGLES,
-                            matchType = MatchType.OPEN_PLAY,
-                            matchDate = LocalDate.of(2026, 1, 1),
-                            team1UserIds = listOf(element = UUID.fromString(alice.id)),
-                            team2UserIds = listOf(element = UUID.fromString(bob.id)),
-                            team1Name = "T1",
-                            team2Name = "T2",
-                            createdBy = UUID.fromString(alice.id),
-                            eventId = fixtureEventId(),
-                        ),
-                ).toDomain()
+                matches
+                    .createFixture(
+                        command =
+                            CreateFixtureCommand(
+                                matchFormat = TeamType.SINGLES,
+                                matchType = MatchType.OPEN_PLAY,
+                                matchDate = LocalDate.of(2026, 1, 1),
+                                team1UserIds = listOf(element = UUID.fromString(alice.id)),
+                                team2UserIds = listOf(element = UUID.fromString(bob.id)),
+                                team1Name = "T1",
+                                team2Name = "T2",
+                                createdBy = UUID.fromString(alice.id),
+                                eventId = fixtureEventId(),
+                            ),
+                    ).toDomain()
             matches.addResult(
                 matchId = match.id,
                 sets =
@@ -475,20 +484,30 @@ class UserSearchApiIntegrationTest {
             )
 
             val page =
-                client.get(urlString = "/api/v1/users/search?name=Racer&limit=25&offset=0") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
-                }.body<UserSummaryPageResponse>()
+                client
+                    .get(urlString = "/api/v1/users/search?name=Racer&limit=25&offset=0") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    }.body<UserSummaryPageResponse>()
 
             // Both players have a decided match, so #342's version of this test saw 1-0 and 0-1 here.
             // #1050's column spec excluded the record and #1053 removed its display; #1062 removed the
             // query that had outlived both. `record` stays nullable on the schema — the bare
             // `GET /users` search never populated it either — so no client contract changes shape.
-            page.items.single { it.id == alice.id }.record.shouldBeNull()
-            page.items.single { it.id == bob.id }.record.shouldBeNull()
+            page.items
+                .single { it.id == alice.id }
+                .record
+                .shouldBeNull()
+            page.items
+                .single { it.id == bob.id }
+                .record
+                .shouldBeNull()
             // The other enrichments still arrive, so this asserts a targeted removal rather than a
             // wholesale gutting of the page's enrichment.
             page.items.single { it.id == alice.id }.status shouldBe "ACTIVE"
-            page.items.single { it.id == alice.id }.inCalibration.shouldNotBeNull()
+            page.items
+                .single { it.id == alice.id }
+                .inCalibration
+                .shouldNotBeNull()
         }
 
     @Test

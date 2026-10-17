@@ -53,12 +53,14 @@ class StandingsSnapshotRepository {
     ): UUID =
         transaction {
             val snapshotId =
-                StandingsSnapshotsTable.insert {
-                    it[StandingsSnapshotsTable.computedAt] = computedAt
-                    it[StandingsSnapshotsTable.asOf] = asOf
-                    it[StandingsSnapshotsTable.status] = status.name
-                    it[StandingsSnapshotsTable.sourceCol] = source.name
-                }[StandingsSnapshotsTable.id].value
+                StandingsSnapshotsTable
+                    .insert {
+                        it[StandingsSnapshotsTable.computedAt] = computedAt
+                        it[StandingsSnapshotsTable.asOf] = asOf
+                        it[StandingsSnapshotsTable.status] = status.name
+                        it[StandingsSnapshotsTable.sourceCol] = source.name
+                    }[StandingsSnapshotsTable.id]
+                    .value
             StandingsEntriesTable.batchInsert(data = entries) { entry ->
                 this[StandingsEntriesTable.snapshotId] = snapshotId
                 this[StandingsEntriesTable.band] = entry.band.code
@@ -172,7 +174,8 @@ class StandingsSnapshotRepository {
             val entries =
                 query()
                     .orderBy(StandingsEntriesTable.rank to SortOrder.ASC)
-                    .limit(count = limit).offset(start = offset.toLong())
+                    .limit(count = limit)
+                    .offset(start = offset.toLong())
                     .map { it.toStandingsEntryEntity().toDomain() }
             StandingsPage(entries = entries, total = total.toInt())
         }

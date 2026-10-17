@@ -65,15 +65,16 @@ class AuditServiceTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -148,12 +149,19 @@ class AuditServiceTest {
         }
 
         // An invite's entityId isn't a user → no resolved target.
-        service.list(token = token(uid = "admin"), categoryRaw = "INVITE", limit = 10, offset = 0)
-            .shouldBeRight().items.single().target.shouldBeNull()
+        service
+            .list(token = token(uid = "admin"), categoryRaw = "INVITE", limit = 10, offset = 0)
+            .shouldBeRight()
+            .items
+            .single()
+            .target
+            .shouldBeNull()
 
         // A category with no events wired yet returns nothing.
-        service.list(token = token(uid = "admin"), categoryRaw = "NAME_CHANGE", limit = 10, offset = 0)
-            .shouldBeRight().total shouldBe 0
+        service
+            .list(token = token(uid = "admin"), categoryRaw = "NAME_CHANGE", limit = 10, offset = 0)
+            .shouldBeRight()
+            .total shouldBe 0
     }
 
     @Test
@@ -162,20 +170,21 @@ class AuditServiceTest {
         val p1 = provision(uid = "p1", roles = setOf(element = Capability.PLAYER))
         val p2 = provision(uid = "p2", roles = setOf(element = Capability.PLAYER))
         val match =
-            matches.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.parse("2026-02-03"),
-                        team1UserIds = listOf(element = p1.id),
-                        team2UserIds = listOf(element = p2.id),
-                        team1Name = "p1",
-                        team2Name = "p2",
-                        createdBy = admin.id,
-                        eventId = fixtureEventId(),
-                    ),
-            ).toDomain()
+            matches
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.parse("2026-02-03"),
+                            team1UserIds = listOf(element = p1.id),
+                            team2UserIds = listOf(element = p2.id),
+                            team1Name = "p1",
+                            team2Name = "p2",
+                            createdBy = admin.id,
+                            eventId = fixtureEventId(),
+                        ),
+                ).toDomain()
         service.record(
             write =
                 AuditWrite(
@@ -187,8 +196,12 @@ class AuditServiceTest {
                 ),
         )
 
-        service.list(token = token(uid = "admin"), categoryRaw = "MATCH_FIXTURE", limit = 10, offset = 0)
-            .shouldBeRight().items.single().let {
+        service
+            .list(token = token(uid = "admin"), categoryRaw = "MATCH_FIXTURE", limit = 10, offset = 0)
+            .shouldBeRight()
+            .items
+            .single()
+            .let {
                 it.target.shouldBeNull() // a match is not a user target
                 it.matchTarget.shouldNotBeNull()
                 it.matchTarget.publicCode shouldBe match.publicCode
@@ -210,8 +223,13 @@ class AuditServiceTest {
                 ),
         )
 
-        service.list(token = token(uid = "admin"), categoryRaw = "MATCH_RESULT", limit = 10, offset = 0)
-            .shouldBeRight().items.single().matchTarget.shouldBeNull()
+        service
+            .list(token = token(uid = "admin"), categoryRaw = "MATCH_RESULT", limit = 10, offset = 0)
+            .shouldBeRight()
+            .items
+            .single()
+            .matchTarget
+            .shouldBeNull()
     }
 
     @Test
@@ -221,20 +239,39 @@ class AuditServiceTest {
         seedEntry(actor = admin.id)
         val id =
             UUID.fromString(
-                service.list(token = token(uid = "admin"), categoryRaw = null, limit = 1, offset = 0).shouldBeRight().items.single().id,
+                service
+                    .list(token = token(uid = "admin"), categoryRaw = null, limit = 1, offset = 0)
+                    .shouldBeRight()
+                    .items
+                    .single()
+                    .id,
             )
 
         service.setComment(token = token(uid = "admin"), id = id, comment = "Looks intentional").shouldBeRight()
-        service.list(token = token(uid = "admin"), categoryRaw = null, limit = 1, offset = 0)
-            .shouldBeRight().items.single().comment shouldBe "Looks intentional"
+        service
+            .list(token = token(uid = "admin"), categoryRaw = null, limit = 1, offset = 0)
+            .shouldBeRight()
+            .items
+            .single()
+            .comment shouldBe "Looks intentional"
 
         // A blank comment clears the note; a null comment likewise leaves none.
         service.setComment(token = token(uid = "admin"), id = id, comment = "   ").shouldBeRight()
-        service.list(token = token(uid = "admin"), categoryRaw = null, limit = 1, offset = 0)
-            .shouldBeRight().items.single().comment.shouldBeNull()
+        service
+            .list(token = token(uid = "admin"), categoryRaw = null, limit = 1, offset = 0)
+            .shouldBeRight()
+            .items
+            .single()
+            .comment
+            .shouldBeNull()
         service.setComment(token = token(uid = "admin"), id = id, comment = null).shouldBeRight()
-        service.list(token = token(uid = "admin"), categoryRaw = null, limit = 1, offset = 0)
-            .shouldBeRight().items.single().comment.shouldBeNull()
+        service
+            .list(token = token(uid = "admin"), categoryRaw = null, limit = 1, offset = 0)
+            .shouldBeRight()
+            .items
+            .single()
+            .comment
+            .shouldBeNull()
 
         service
             .setComment(token = token(uid = "player"), id = id, comment = "x")
@@ -265,7 +302,12 @@ class AuditServiceTest {
                 ),
         )
 
-        val entry = service.list(token = token(uid = "admin"), categoryRaw = null, limit = 10, offset = 0).shouldBeRight().items.first()
+        val entry =
+            service
+                .list(token = token(uid = "admin"), categoryRaw = null, limit = 10, offset = 0)
+                .shouldBeRight()
+                .items
+                .first()
 
         entry.actorClient.shouldNotBeNull().name shouldBe "Standings Scheduler"
         // Still no person, and that is correct — the point is that "no person" no longer means "no idea".
@@ -290,7 +332,12 @@ class AuditServiceTest {
                 ),
         )
 
-        val entry = service.list(token = token(uid = "admin"), categoryRaw = null, limit = 10, offset = 0).shouldBeRight().items.first()
+        val entry =
+            service
+                .list(token = token(uid = "admin"), categoryRaw = null, limit = 10, offset = 0)
+                .shouldBeRight()
+                .items
+                .first()
 
         entry.actor.shouldNotBeNull().userId shouldBe admin.id.toString()
         entry.actorClient.shouldNotBeNull().name shouldBe "Partner App"
@@ -302,7 +349,12 @@ class AuditServiceTest {
         val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         seedEntry(actor = admin.id)
 
-        val entry = service.list(token = token(uid = "admin"), categoryRaw = null, limit = 10, offset = 0).shouldBeRight().items.first()
+        val entry =
+            service
+                .list(token = token(uid = "admin"), categoryRaw = null, limit = 10, offset = 0)
+                .shouldBeRight()
+                .items
+                .first()
 
         entry.actorClient.shouldBeNull()
         entry.actor.shouldNotBeNull()
@@ -372,6 +424,9 @@ class AuditServiceTest {
         val views = service.list(token = token(uid = "admin"), categoryRaw = null, limit = 10, offset = 0).shouldBeRight()
         views.items.all { it.actor == null }.shouldBeTrue() // null actor → no resolved actor
         // A RATING entry with no entityId resolves to no target.
-        views.items.first { it.action == AuditAction.RATING_SET.name }.target.shouldBeNull()
+        views.items
+            .first { it.action == AuditAction.RATING_SET.name }
+            .target
+            .shouldBeNull()
     }
 }

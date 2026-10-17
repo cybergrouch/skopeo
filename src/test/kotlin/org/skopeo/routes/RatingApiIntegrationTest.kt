@@ -142,11 +142,12 @@ class RatingApiIntegrationTest {
             val user = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "fb-bad"))
 
             suspend fun setRating(request: SetRatingRequest) =
-                client.put(urlString = "/api/v1/users/${user.id}/ratings") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                    contentType(type = ContentType.Application.Json)
-                    setBody(body = request)
-                }.status
+                client
+                    .put(urlString = "/api/v1/users/${user.id}/ratings") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                        contentType(type = ContentType.Application.Json)
+                        setBody(body = request)
+                    }.status
 
             // Value outside the NTRP 1.0–7.0 range and a non-numeric value are both rejected.
             setRating(request = SetRatingRequest(value = "9.0")) shouldBe HttpStatusCode.BadRequest
@@ -174,9 +175,10 @@ class RatingApiIntegrationTest {
             page.total shouldBe page.items.size // single small page: total equals what's returned
 
             // A normal user cannot list pending assessments.
-            client.get(urlString = "/api/v1/users/pending-assessment") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/users/pending-assessment") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
@@ -188,14 +190,16 @@ class RatingApiIntegrationTest {
             val alice = client.provisionSelf(token = aliceToken)
             client.provisionSelf(token = bobToken)
 
-            client.put(urlString = "/api/v1/users/${alice.id}/ratings") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $aliceToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetRatingRequest(value = "4.0"))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .put(urlString = "/api/v1/users/${alice.id}/ratings") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $aliceToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetRatingRequest(value = "4.0"))
+                }.status shouldBe HttpStatusCode.Forbidden
 
-            client.get(urlString = "/api/v1/users/${alice.id}/ratings") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $bobToken")
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/users/${alice.id}/ratings") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $bobToken")
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 }

@@ -79,16 +79,18 @@ class StandingsCalculationApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        org.skopeo.repository.UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    sex = "Male",
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        org.skopeo.repository
+            .UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        sex = "Male",
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun seedAward(userId: UUID) {
         RankingPointRepository().award(
@@ -121,18 +123,21 @@ class StandingsCalculationApiIntegrationTest {
             seedUser(uid = "player-user", roles = setOf(element = Capability.PLAYER))
             val player = seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
             // Park the player in the award's band so band-scoped counting (#403 Phase D) counts it.
-            org.skopeo.repository.RatingRepository().setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+            org.skopeo.repository
+                .RatingRepository()
+                .setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
             seedAward(userId = player.id)
             val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
             val playerToken = TestFirebaseAuth.mintToken(uid = "player-user")
             val snapshots = StandingsSnapshotRepository()
 
             // A non-admin is forbidden.
-            client.post(urlString = "/api/v1/standings/calculations") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = StandingsCalculationRequest(dryRun = true))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .post(urlString = "/api/v1/standings/calculations") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = StandingsCalculationRequest(dryRun = true))
+                }.status shouldBe HttpStatusCode.Forbidden
 
             // An admin dry-run (empty body defaults to a dry run) previews and persists nothing.
             val preview =
@@ -168,7 +173,9 @@ class StandingsCalculationApiIntegrationTest {
         withApp { client ->
             seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
             val player = seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
-            org.skopeo.repository.RatingRepository().setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+            org.skopeo.repository
+                .RatingRepository()
+                .setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
             seedAward(userId = player.id)
             val adminAuth = "Bearer ${TestFirebaseAuth.mintToken(uid = "admin")}"
             val key = client.issueKeyFor(adminAuth = adminAuth, scopes = listOf(element = Capability.POINTS_MANAGER.name))
@@ -191,9 +198,10 @@ class StandingsCalculationApiIntegrationTest {
             val adminAuth = "Bearer ${TestFirebaseAuth.mintToken(uid = "admin")}"
             val key = client.issueKeyFor(adminAuth = adminAuth, scopes = listOf(element = Capability.POINTS_MANAGER.name))
 
-            client.post(urlString = "/api/v1/standings/calculations") {
-                header(key = "X-Api-Key", value = key.apiKey)
-            }.status shouldBe HttpStatusCode.OK
+            client
+                .post(urlString = "/api/v1/standings/calculations") {
+                    header(key = "X-Api-Key", value = key.apiKey)
+                }.status shouldBe HttpStatusCode.OK
 
             // No invented service user: actorUserId stays null, and the client carries the attribution.
             // Without this the entry would be indistinguishable from the app's own background work.
@@ -215,9 +223,10 @@ class StandingsCalculationApiIntegrationTest {
 
             // A valid key is not a licence: least privilege (#597) means the scope has to match.
             val wrongScope = client.issueKeyFor(adminAuth = adminAuth, scopes = listOf(element = Capability.RESEARCHER.name))
-            client.post(urlString = "/api/v1/standings/calculations") {
-                header(key = "X-Api-Key", value = wrongScope.apiKey)
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .post(urlString = "/api/v1/standings/calculations") {
+                    header(key = "X-Api-Key", value = wrongScope.apiKey)
+                }.status shouldBe HttpStatusCode.Forbidden
 
             // And `optional = true` must not have made the endpoint anonymous.
             client.post(urlString = "/api/v1/standings/calculations").status shouldBe HttpStatusCode.Unauthorized

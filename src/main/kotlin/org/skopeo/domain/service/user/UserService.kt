@@ -153,13 +153,14 @@ class UserService(
             // `validatedQuery` is shared, so the calibration facet reaches this search too and its N must
             // be resolved here as well — only when asked for, so the pickers pay nothing.
             val users =
-                repository.search(
-                    query = query,
-                    limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
-                    offset = offset.coerceAtLeast(minimumValue = 0),
-                    includeInactive = includeInactive,
-                    calibrationRequired = query.inCalibration?.let { calibration.requiredMatches() },
-                ).map { it.toDomain() }
+                repository
+                    .search(
+                        query = query,
+                        limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
+                        offset = offset.coerceAtLeast(minimumValue = 0),
+                        includeInactive = includeInactive,
+                        calibrationRequired = query.inCalibration?.let { calibration.requiredMatches() },
+                    ).map { it.toDomain() }
             // Enrich each summary with the current rating + the raw-reveal flag here (was assembled in the
             // route), so the route stays thin and never touches the mapper.
             val ratingsById = currentRatings(ids = users.map { it.id })
@@ -201,15 +202,16 @@ class UserService(
                     null
                 }
             val items =
-                repository.search(
-                    query = query,
-                    limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
-                    offset = offset.coerceAtLeast(minimumValue = 0),
-                    includeInactive = includeInactive,
-                    sort = sortKey,
-                    direction = sortOrder ?: SortDirection.ASC,
-                    calibrationRequired = calibrationRequired,
-                ).map { it.toDomain() }
+                repository
+                    .search(
+                        query = query,
+                        limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
+                        offset = offset.coerceAtLeast(minimumValue = 0),
+                        includeInactive = includeInactive,
+                        sort = sortKey,
+                        direction = sortOrder ?: SortDirection.ASC,
+                        calibrationRequired = calibrationRequired,
+                    ).map { it.toDomain() }
             val total =
                 repository.countSearch(
                     query = query,
@@ -353,10 +355,16 @@ class UserService(
         // A disabled duplicate (#124) cannot sign back in; point them at the canonical account.
         val canonical = existing.canonicalUserId?.let { repository.findById(id = it).getOrNull()?.toDomain() }
         return when {
-            canonical != null -> ServiceError.AccountMerged(canonicalPublicCode = canonical.publicCode).left()
+            canonical != null -> {
+                ServiceError.AccountMerged(canonicalPublicCode = canonical.publicCode).left()
+            }
+
             // An admin-deleted account (#518) — inactive with no canonical pointer (a merged duplicate was
             // ruled out above) — cannot sign back in until an admin re-allows login.
-            existing.isDeleted() -> ServiceError.AccountDeleted.left()
+            existing.isDeleted() -> {
+                ServiceError.AccountDeleted.left()
+            }
+
             else -> {
                 val promoted =
                     promoteIfBootstrapAdmin(token = token, user = existing, adminEmails = adminEmails, capabilities = capabilities)
@@ -397,8 +405,11 @@ class UserService(
         either {
             val target = repository.findById(id = id).bind().toDomain()
             requireAccess(token = token, target = target).bind()
-            repository.updatePhotoSettings(id = id, customPhotoUrl = customPhotoUrl, photoHidden = photoHidden)
-                .bind().toDomain().toResponse()
+            repository
+                .updatePhotoSettings(id = id, customPhotoUrl = customPhotoUrl, photoHidden = photoHidden)
+                .bind()
+                .toDomain()
+                .toResponse()
         }
 
     /**
@@ -413,7 +424,11 @@ class UserService(
         either {
             val target = repository.findById(id = id).bind().toDomain()
             requireAccess(token = token, target = target).bind()
-            repository.setMatchHistoryHidden(id = id, hidden = hidden).bind().toDomain().toResponse()
+            repository
+                .setMatchHistoryHidden(id = id, hidden = hidden)
+                .bind()
+                .toDomain()
+                .toResponse()
         }
 
     /** First-time sign-up: enforce the invite gate, write the aggregate, and audit the creation. */
@@ -467,7 +482,11 @@ class UserService(
         either {
             val target = repository.findById(id = id).bind().toDomain()
             requireAccess(token = token, target = target).bind()
-            repository.updateProfile(id = id, patch = patch).bind().toDomain().toResponse()
+            repository
+                .updateProfile(id = id, patch = patch)
+                .bind()
+                .toDomain()
+                .toResponse()
         }
 
     fun replaceProfile(
@@ -478,7 +497,11 @@ class UserService(
         either {
             val target = repository.findById(id = id).bind().toDomain()
             requireAccess(token = token, target = target).bind()
-            repository.replaceProfile(id = id, patch = patch).bind().toDomain().toResponse()
+            repository
+                .replaceProfile(id = id, patch = patch)
+                .bind()
+                .toDomain()
+                .toResponse()
         }
 
     /**

@@ -53,20 +53,26 @@ sealed interface ScoreEvent {
     }
 
     /** A point to [side]. In a tiebreak this is an ordinal tick; otherwise it may close the game. */
-    data class PointWon(val side: TeamSide) : ScoreEvent
+    data class PointWon(
+        val side: TeamSide,
+    ) : ScoreEvent
 
     /**
      * The umpire hands [side] the game outright, whatever the points. The override for a scoring slip or
      * a point-penalty game, and the reason `apply` never needs to be talked out of its own arithmetic.
      */
-    data class GameAwarded(val side: TeamSide) : ScoreEvent
+    data class GameAwarded(
+        val side: TeamSide,
+    ) : ScoreEvent
 
     /**
      * The umpire declares the set won by [side] and banks it, at whatever the score is — 6-4, 7-6, or 3-2
      * because daylight ran out. Also how a tiebreak ends: #911 requires that the umpire, not the UI, marks
      * who won it, so the tiebreak points ride along onto the completed set rather than deciding it.
      */
-    data class SetAwarded(val side: TeamSide) : ScoreEvent
+    data class SetAwarded(
+        val side: TeamSide,
+    ) : ScoreEvent
 
     /**
      * The next set begins (#984).
@@ -111,16 +117,24 @@ sealed interface ScoreEvent {
      * The engine no longer needs one of these to rotate — it toggles as part of scoring — so this is
      * exactly what its name says: the opening designation, and an umpire's correction.
      */
-    data class ServerAssigned(val side: TeamSide) : ScoreEvent
+    data class ServerAssigned(
+        val side: TeamSide,
+    ) : ScoreEvent
 
     /** [side] retired. The opponent wins the match; the score reached stands as the record. */
-    data class Retired(override val side: TeamSide) : ScoreEvent.Ending
+    data class Retired(
+        override val side: TeamSide,
+    ) : ScoreEvent.Ending
 
     /** [side] was defaulted. Same shape as a retirement, different reason, and the record says which. */
-    data class Defaulted(override val side: TeamSide) : ScoreEvent.Ending
+    data class Defaulted(
+        override val side: TeamSide,
+    ) : ScoreEvent.Ending
 
     /** The umpire declares the match won by [side] — the ordinary end of a match that was played out. */
-    data class MatchAwarded(override val side: TeamSide) : ScoreEvent.Ending
+    data class MatchAwarded(
+        override val side: TeamSide,
+    ) : ScoreEvent.Ending
 
     /**
      * Play has officially begun (#911).
@@ -157,7 +171,10 @@ sealed interface LoggedAction {
     val sequence: Long
 
     /** A real scoring action. */
-    data class Scored(override val sequence: Long, val event: ScoreEvent) : LoggedAction
+    data class Scored(
+        override val sequence: Long,
+        val event: ScoreEvent,
+    ) : LoggedAction
 
     /**
      * The umpire took back the action at [targetSequence].
@@ -167,7 +184,10 @@ sealed interface LoggedAction {
      * here*. Cancelling an [Undone] is therefore a redo, and cancelling a sequence that does not exist (or
      * is already cancelled) is simply inert, which is what "undo when there is nothing to undo" should do.
      */
-    data class Undone(override val sequence: Long, val targetSequence: Long) : LoggedAction
+    data class Undone(
+        override val sequence: Long,
+        val targetSequence: Long,
+    ) : LoggedAction
 }
 
 /** How a set finished, banked at the moment [ScoreEvent.SetAwarded] is applied. */
@@ -289,11 +309,14 @@ data class ScoreState(
         val other = points(side = side.opponent())
         return when {
             isTiebreak -> own.toString()
+
             // Deuce/advantage territory needs BOTH sides at 40 — otherwise 40-0 would read as "AD". In
             // this branch `own` cannot exceed 3: reaching 4 with the opponent below 3 is two clear, so
             // the game would already have closed and the points reset.
             own < ADVANTAGE_THRESHOLD || other < ADVANTAGE_THRESHOLD -> POINT_NAMES[own]
+
             own > other -> ADVANTAGE
+
             // Level, or trailing the advantage: both read 40.
             else -> DEUCE
         }
@@ -328,4 +351,12 @@ data class LiveMatchView(
      * markers are never sent to it -- so "is Undo worth showing" has to be answered here.
      */
     val canUndo: Boolean = false,
+    /**
+     * Who recorded the newest row of the log (#1183) — the "current scorer" a spectator is told about.
+     *
+     * Not [scorerId]: that is the soft claim, which a takeover moves before the new umpire has keyed
+     * anything. This follows what was actually recorded, so it agrees with the umpire credit folded out of
+     * the same log at finalize. Null before the first action.
+     */
+    val lastRecorderId: UUID? = null,
 )

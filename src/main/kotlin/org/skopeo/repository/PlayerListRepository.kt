@@ -34,11 +34,12 @@ class PlayerListRepository {
         transaction {
             val now = LocalDateTime.now()
             val id =
-                PlayerListsTable.insertAndGetId {
-                    it[PlayerListsTable.ownerId] = ownerId
-                    it[PlayerListsTable.name] = name
-                    it[createdAt] = now
-                }.value
+                PlayerListsTable
+                    .insertAndGetId {
+                        it[PlayerListsTable.ownerId] = ownerId
+                        it[PlayerListsTable.name] = name
+                        it[createdAt] = now
+                    }.value
             PlayerListAggregateEntity(
                 list = PlayerListEntity(id = id, ownerId = ownerId, name = name, createdAt = now),
                 memberUserIds = emptyList(),

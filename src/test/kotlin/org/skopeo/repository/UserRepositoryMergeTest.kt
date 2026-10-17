@@ -55,33 +55,35 @@ class UserRepositoryMergeTest {
         uid: String,
         provider: AuthProvider = AuthProvider.GOOGLE,
     ): UUID =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = provider, providerUid = "$provider:$uid", isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    sex = "Male",
-                ),
-        ).user.id
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = provider, providerUid = "$provider:$uid", isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        sex = "Male",
+                    ),
+            ).user.id
 
     private fun fixture(
         u1: UUID,
         u2: UUID,
-    ) = matches.createFixture(
-        command =
-            CreateFixtureCommand(
-                matchFormat = TeamType.SINGLES,
-                matchType = MatchType.OPEN_PLAY,
-                matchDate = LocalDate.of(2026, 1, 1),
-                team1UserIds = listOf(element = u1),
-                team2UserIds = listOf(element = u2),
-                team1Name = "T1",
-                team2Name = "T2",
-                createdBy = u1,
-                eventId = fixtureEventId(),
-            ),
-    ).toDomain()
+    ) = matches
+        .createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.SINGLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = LocalDate.of(2026, 1, 1),
+                    team1UserIds = listOf(element = u1),
+                    team2UserIds = listOf(element = u2),
+                    team1Name = "T1",
+                    team2Name = "T2",
+                    createdBy = u1,
+                    eventId = fixtureEventId(),
+                ),
+        ).toDomain()
 
     @Test
     fun `selective absorb moves participation and reports counts, without touching the survivor's rating`() {
@@ -96,7 +98,11 @@ class UserRepositoryMergeTest {
         result.teamMemberships shouldBe 1
         result.loginTransferred shouldBe true
         // The survivor's rating is untouched (the retired match was not re-rated).
-        ratings.findCurrentRating(userId = survivor).shouldNotBeNull().currentRating.toPlainString() shouldBe "4.200000"
+        ratings
+            .findCurrentRating(userId = survivor)
+            .shouldNotBeNull()
+            .currentRating
+            .toPlainString() shouldBe "4.200000"
         users.hasMatchParticipation(userId = survivor) shouldBe true
         users.hasMatchParticipation(userId = retired) shouldBe false
     }
@@ -136,7 +142,16 @@ class UserRepositoryMergeTest {
             users.mergeAccounts(retiredId = retired, survivorId = survivor, transferLogin = true)
         }
 
-        users.findById(id = survivor).getOrNull()!!.toDomain().firebaseUid shouldBe "survivor"
-        users.findById(id = retired).getOrNull()!!.toDomain().firebaseUid.shouldBeNull()
+        users
+            .findById(id = survivor)
+            .getOrNull()!!
+            .toDomain()
+            .firebaseUid shouldBe "survivor"
+        users
+            .findById(id = retired)
+            .getOrNull()!!
+            .toDomain()
+            .firebaseUid
+            .shouldBeNull()
     }
 }

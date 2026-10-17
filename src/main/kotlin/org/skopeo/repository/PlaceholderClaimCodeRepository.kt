@@ -83,7 +83,11 @@ class PlaceholderClaimCodeRepository {
     }
 
     private fun loadByIdOrThrow(id: UUID): ClaimCodeEntity =
-        PlaceholderClaimCodesTable.selectAll().where { PlaceholderClaimCodesTable.id eq id }.single().toClaimCodeEntity()
+        PlaceholderClaimCodesTable
+            .selectAll()
+            .where { PlaceholderClaimCodesTable.id eq id }
+            .single()
+            .toClaimCodeEntity()
 }
 
 internal fun ResultRow.toClaimCodeEntity(): ClaimCodeEntity =

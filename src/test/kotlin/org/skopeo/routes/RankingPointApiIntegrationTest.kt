@@ -68,16 +68,17 @@ class RankingPointApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    sex = "Male",
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        sex = "Male",
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     @Test
     fun `an admin grants, lists, and revokes an award while a non-admin is forbidden`() =
@@ -90,11 +91,12 @@ class RankingPointApiIntegrationTest {
             val playerToken = TestFirebaseAuth.mintToken(uid = "player-user")
 
             // A non-admin cannot grant.
-            client.post(urlString = "/api/v1/users/${player.id}/ranking-points") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = GrantRankingPointsRequest(points = "100", pointClass = "ANNUAL_TOURNAMENT"))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .post(urlString = "/api/v1/users/${player.id}/ranking-points") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = GrantRankingPointsRequest(points = "100", pointClass = "ANNUAL_TOURNAMENT"))
+                }.status shouldBe HttpStatusCode.Forbidden
 
             // The admin grants.
             val granted =
@@ -117,16 +119,18 @@ class RankingPointApiIntegrationTest {
             list.body<List<RankingPointAwardResponse>>() shouldHaveSize 1
 
             // The admin revokes it (204).
-            client.post(urlString = "/api/v1/ranking-points/${award.id}/revoke") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = RevokeRankingPointsRequest(reason = "mistake"))
-            }.status shouldBe HttpStatusCode.NoContent
+            client
+                .post(urlString = "/api/v1/ranking-points/${award.id}/revoke") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = RevokeRankingPointsRequest(reason = "mistake"))
+                }.status shouldBe HttpStatusCode.NoContent
 
             // Now the ledger has the original (revoked) + a marker row.
-            client.get(urlString = "/api/v1/users/${player.id}/ranking-points") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-            }.body<List<RankingPointAwardResponse>>() shouldHaveSize 2
+            client
+                .get(urlString = "/api/v1/users/${player.id}/ranking-points") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }.body<List<RankingPointAwardResponse>>() shouldHaveSize 2
         }
 
     @Test
@@ -143,11 +147,12 @@ class RankingPointApiIntegrationTest {
 
             // Two awards so paging is observable.
             repeat(times = 2) {
-                client.post(urlString = "/api/v1/users/${player.id}/ranking-points") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                    contentType(type = ContentType.Application.Json)
-                    setBody(body = GrantRankingPointsRequest(points = "100", pointClass = "ANNUAL_TOURNAMENT"))
-                }.status shouldBe HttpStatusCode.Created
+                client
+                    .post(urlString = "/api/v1/users/${player.id}/ranking-points") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                        contentType(type = ContentType.Application.Json)
+                        setBody(body = GrantRankingPointsRequest(points = "100", pointClass = "ANNUAL_TOURNAMENT"))
+                    }.status shouldBe HttpStatusCode.Created
             }
 
             // A points manager can read the whole ledger, paginated (total stays the full count).
@@ -163,9 +168,10 @@ class RankingPointApiIntegrationTest {
             page.rows.first().playerPublicCode shouldBe player.publicCode
 
             // A plain player is forbidden.
-            client.get(urlString = "/api/v1/ranking-points") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $plainToken")
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/ranking-points") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $plainToken")
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
@@ -176,10 +182,11 @@ class RankingPointApiIntegrationTest {
             RatingRepository().setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
             val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
 
-            client.post(urlString = "/api/v1/users/${player.id}/ranking-points") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = GrantRankingPointsRequest(points = "0", pointClass = "ANNUAL_TOURNAMENT"))
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .post(urlString = "/api/v1/users/${player.id}/ranking-points") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = GrantRankingPointsRequest(points = "0", pointClass = "ANNUAL_TOURNAMENT"))
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 }

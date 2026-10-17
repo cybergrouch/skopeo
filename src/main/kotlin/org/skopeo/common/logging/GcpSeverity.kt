@@ -27,9 +27,13 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 fun gcpSeverityOf(level: Level): String =
     when (level.toInt()) {
         Level.TRACE_INT, Level.DEBUG_INT -> "DEBUG"
+
         Level.INFO_INT -> "INFO"
+
         Level.WARN_INT -> "WARNING"
+
         Level.ERROR_INT -> "ERROR"
+
         // Logback's OFF/ALL sentinels reach here only from a misconfiguration; DEFAULT is GCP's
         // "unspecified" and sorts below DEBUG, which is the right place for a level we cannot name.
         else -> "DEFAULT"

@@ -61,15 +61,16 @@ class EventPublicMatchesTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -88,20 +89,21 @@ class EventPublicMatchesTest {
         p1: User,
         p2: User,
     ): Match =
-        matchRepo.createFixture(
-            command =
-                CreateFixtureCommand(
-                    matchFormat = TeamType.SINGLES,
-                    matchType = MatchType.OPEN_PLAY,
-                    matchDate = LocalDate.parse("2026-03-02"),
-                    team1UserIds = listOf(element = p1.id),
-                    team2UserIds = listOf(element = p2.id),
-                    team1Name = "p1",
-                    team2Name = "p2",
-                    createdBy = host.id,
-                    eventId = eventId,
-                ),
-        ).toDomain()
+        matchRepo
+            .createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.parse("2026-03-02"),
+                        team1UserIds = listOf(element = p1.id),
+                        team2UserIds = listOf(element = p2.id),
+                        team1Name = "p1",
+                        team2Name = "p2",
+                        createdBy = host.id,
+                        eventId = eventId,
+                    ),
+            ).toDomain()
 
     private fun recordResult(
         match: Match,

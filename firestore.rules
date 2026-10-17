@@ -16,8 +16,9 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Live scores: world-readable, because the spectator view is public and shareable exactly like the
-    // match page it mirrors. The document holds only the scoreboard — no umpire identity, no action log
-    // — so there is nothing here that is not already on the public match page once the match is over.
+    // match page it mirrors. The document holds the scoreboard and the current scorer's DISPLAY NAME
+    // (#1183) — no user id, no action log — so there is nothing here that is not already on the public
+    // match page once the match is over: that page names who scored it ("Scored by") too.
     // Keyed by the match's PUBLIC code, not its internal id. The internal id is withheld from ordinary
     // viewers precisely so it is not an alternative public identifier, and a world-readable collection
     // path is about as public as an identifier gets. The code is also the only one a spectator has.

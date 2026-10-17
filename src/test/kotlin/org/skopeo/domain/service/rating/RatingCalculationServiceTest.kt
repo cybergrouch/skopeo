@@ -92,15 +92,16 @@ class RatingCalculationServiceTest {
         rated: Boolean = false,
     ): User {
         val user =
-            users.provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = uid,
-                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                        capabilities = roles,
-                    ),
-            ).toDomain()
+            users
+                .provision(
+                    command =
+                        ProvisionUserCommand(
+                            firebaseUid = uid,
+                            identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                            names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                            capabilities = roles,
+                        ),
+                ).toDomain()
         if (rated) {
             ratings.setRating(
                 userId = user.id,
@@ -121,30 +122,32 @@ class RatingCalculationServiceTest {
         matchType: MatchType = MatchType.OPEN_PLAY,
     ): UUID {
         val match =
-            matchService.createFixture(
+            matchService
+                .createFixture(
+                    token = token(uid = admin),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = matchType,
+                            matchDate = LocalDate.parse("2026-01-01"),
+                            team1 = listOf(element = winner),
+                            team2 = listOf(element = loser),
+                            eventId = fixtureEventFor(team1 = listOf(element = winner), team2 = listOf(element = loser)),
+                        ),
+                ).shouldBeRight()
+        matchService
+            .uploadResult(
                 token = token(uid = admin),
+                matchId = UUID.fromString(match.id),
                 request =
-                    FixtureInput(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = matchType,
-                        matchDate = LocalDate.parse("2026-01-01"),
-                        team1 = listOf(element = winner),
-                        team2 = listOf(element = loser),
-                        eventId = fixtureEventFor(team1 = listOf(element = winner), team2 = listOf(element = loser)),
+                    MatchResultRequest(
+                        sets =
+                            listOf(
+                                SetScoreRequest(team1Games = 6, team2Games = 4),
+                                SetScoreRequest(team1Games = 6, team2Games = 2),
+                            ),
                     ),
             ).shouldBeRight()
-        matchService.uploadResult(
-            token = token(uid = admin),
-            matchId = UUID.fromString(match.id),
-            request =
-                MatchResultRequest(
-                    sets =
-                        listOf(
-                            SetScoreRequest(team1Games = 6, team2Games = 4),
-                            SetScoreRequest(team1Games = 6, team2Games = 2),
-                        ),
-                ),
-        ).shouldBeRight()
         return UUID.fromString(match.id)
     }
 
@@ -156,36 +159,39 @@ class RatingCalculationServiceTest {
         date: LocalDate,
     ): UUID =
         UUID.fromString(
-            matchService.createFixture(
-                token = token(uid = admin),
-                request =
-                    FixtureInput(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = date,
-                        team1 = listOf(element = a),
-                        team2 = listOf(element = b),
-                        eventId = fixtureEventFor(team1 = listOf(element = a), team2 = listOf(element = b)),
-                    ),
-            ).shouldBeRight().id,
+            matchService
+                .createFixture(
+                    token = token(uid = admin),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = date,
+                            team1 = listOf(element = a),
+                            team2 = listOf(element = b),
+                            eventId = fixtureEventFor(team1 = listOf(element = a), team2 = listOf(element = b)),
+                        ),
+                ).shouldBeRight()
+                .id,
         )
 
     private fun recordResult(
         admin: String,
         matchId: UUID,
     ) {
-        matchService.uploadResult(
-            token = token(uid = admin),
-            matchId = matchId,
-            request =
-                MatchResultRequest(
-                    sets =
-                        listOf(
-                            SetScoreRequest(team1Games = 6, team2Games = 4),
-                            SetScoreRequest(team1Games = 6, team2Games = 2),
-                        ),
-                ),
-        ).shouldBeRight()
+        matchService
+            .uploadResult(
+                token = token(uid = admin),
+                matchId = matchId,
+                request =
+                    MatchResultRequest(
+                        sets =
+                            listOf(
+                                SetScoreRequest(team1Games = 6, team2Games = 4),
+                                SetScoreRequest(team1Games = 6, team2Games = 2),
+                            ),
+                    ),
+            ).shouldBeRight()
     }
 
     @Test
@@ -246,28 +252,32 @@ class RatingCalculationServiceTest {
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
         val match =
-            matchService.createFixture(
+            matchService
+                .createFixture(
+                    token = token(uid = "root"),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.parse("2026-01-01"),
+                            team1 = listOf(element = p1.id),
+                            team2 = listOf(element = p2.id),
+                            eventId = fixtureEventFor(team1 = listOf(element = p1.id), team2 = listOf(element = p2.id)),
+                        ),
+                ).shouldBeRight()
+        matchService
+            .uploadResult(
                 token = token(uid = "root"),
-                request =
-                    FixtureInput(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.parse("2026-01-01"),
-                        team1 = listOf(element = p1.id),
-                        team2 = listOf(element = p2.id),
-                        eventId = fixtureEventFor(team1 = listOf(element = p1.id), team2 = listOf(element = p2.id)),
-                    ),
+                matchId = UUID.fromString(match.id),
+                // 6-5 (won by one) — previously rejected by SetScore's win-by-2 rule during the rebuild.
+                request = MatchResultRequest(sets = listOf(element = SetScoreRequest(team1Games = 6, team2Games = 5))),
             ).shouldBeRight()
-        matchService.uploadResult(
-            token = token(uid = "root"),
-            matchId = UUID.fromString(match.id),
-            // 6-5 (won by one) — previously rejected by SetScore's win-by-2 rule during the rebuild.
-            request = MatchResultRequest(sets = listOf(element = SetScoreRequest(team1Games = 6, team2Games = 5))),
-        ).shouldBeRight()
 
         val result = calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "root"), dryRun = true).shouldBeRight()
 
-        result.matches.single().changes.size shouldBe 2
+        result.matches
+            .single()
+            .changes.size shouldBe 2
     }
 
     /**
@@ -283,33 +293,40 @@ class RatingCalculationServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val played = playedMatch(admin = "root", winner = p1.id, loser = p2.id)
         val retired =
-            matchService.createFixture(
+            matchService
+                .createFixture(
+                    token = token(uid = "root"),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.parse("2026-01-02"),
+                            team1 = listOf(element = p1.id),
+                            team2 = listOf(element = p2.id),
+                            eventId = fixtureEventFor(team1 = listOf(element = p1.id), team2 = listOf(element = p2.id)),
+                        ),
+                ).shouldBeRight()
+        matchService
+            .uploadResult(
                 token = token(uid = "root"),
+                matchId = UUID.fromString(retired.id),
                 request =
-                    FixtureInput(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.parse("2026-01-02"),
-                        team1 = listOf(element = p1.id),
-                        team2 = listOf(element = p2.id),
-                        eventId = fixtureEventFor(team1 = listOf(element = p1.id), team2 = listOf(element = p2.id)),
+                    MatchResultRequest(
+                        sets = listOf(element = SetScoreRequest(team1Games = 5, team2Games = 5)),
+                        winnerTeamId = retired.team1.teamId,
+                        completionReason = "RETIRED",
                     ),
             ).shouldBeRight()
-        matchService.uploadResult(
-            token = token(uid = "root"),
-            matchId = UUID.fromString(retired.id),
-            request =
-                MatchResultRequest(
-                    sets = listOf(element = SetScoreRequest(team1Games = 5, team2Games = 5)),
-                    winnerTeamId = retired.team1.teamId,
-                    completionReason = "RETIRED",
-                ),
-        ).shouldBeRight()
 
         val dry = calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "root"), dryRun = true).shouldBeRight()
 
         dry.matches.map { it.matchId } shouldBe listOf(element = played.toString())
-        matchRepo.findById(matchId = UUID.fromString(retired.id)).shouldBeRight().toDomain().ratedAt.shouldBeNull()
+        matchRepo
+            .findById(matchId = UUID.fromString(retired.id))
+            .shouldBeRight()
+            .toDomain()
+            .ratedAt
+            .shouldBeNull()
     }
 
     @Test
@@ -322,7 +339,9 @@ class RatingCalculationServiceTest {
         val dry = calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "root"), dryRun = true).shouldBeRight()
 
         dry.dryRun.shouldBeTrue()
-        dry.matches.single().changes.size shouldBe 2
+        dry.matches
+            .single()
+            .changes.size shouldBe 2
         dry.matches.single().changes.first { it.userId == p1.id.toString() }.let {
             it.previousRating shouldBe "4.000000"
             (BigDecimal(it.newRating) > BigDecimal("4.000000")).shouldBeTrue() // winner gains
@@ -343,7 +362,12 @@ class RatingCalculationServiceTest {
         }
         // nothing persisted
         ratings.findCurrentRating(userId = p1.id)!!.currentRating shouldBe BigDecimal("4.000000")
-        matchRepo.findById(matchId = matchId).shouldBeRight().toDomain().ratedAt.shouldBeNull()
+        matchRepo
+            .findById(matchId = matchId)
+            .shouldBeRight()
+            .toDomain()
+            .ratedAt
+            .shouldBeNull()
         matchRepo.listPendingCalculation().size shouldBe 1
     }
 
@@ -359,15 +383,20 @@ class RatingCalculationServiceTest {
         playedMatch(admin = "root", winner = b1.id, loser = b2.id, matchType = MatchType.TOURNAMENT)
 
         val changes =
-            calc.afterFinalizingFixtureEvent().calculate(
-                token = token(uid = "root"),
-                dryRun = true,
-            ).shouldBeRight().matches.flatMap {
-                it.changes
-            }
+            calc
+                .afterFinalizingFixtureEvent()
+                .calculate(
+                    token = token(uid = "root"),
+                    dryRun = true,
+                ).shouldBeRight()
+                .matches
+                .flatMap {
+                    it.changes
+                }
         val openGain = changes.first { it.userId == a1.id.toString() }.let { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }
         val tournamentGain =
-            changes.first { it.userId == b1.id.toString() }
+            changes
+                .first { it.userId == b1.id.toString() }
                 .let { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }
 
         (openGain > BigDecimal.ZERO).shouldBeTrue()
@@ -385,31 +414,37 @@ class RatingCalculationServiceTest {
         // Two identical equal-4.0 dominant wins; one has a 0.3 handicap on the LOSING side (team2).
         playedMatch(admin = "root", winner = a1.id, loser = a2.id, matchType = MatchType.OPEN_PLAY)
         val handicapped =
-            matchService.createFixture(
-                token = token(uid = "root"),
-                request =
-                    FixtureInput(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.parse("2026-01-01"),
-                        team1 = listOf(element = b1.id),
-                        team2 = listOf(element = b2.id),
-                        eventId = fixtureEventFor(team1 = listOf(element = b1.id), team2 = listOf(element = b2.id)),
-                        team2Handicap = BigDecimal("0.300"),
-                    ),
-            ).shouldBeRight()
+            matchService
+                .createFixture(
+                    token = token(uid = "root"),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.parse("2026-01-01"),
+                            team1 = listOf(element = b1.id),
+                            team2 = listOf(element = b2.id),
+                            eventId = fixtureEventFor(team1 = listOf(element = b1.id), team2 = listOf(element = b2.id)),
+                            team2Handicap = BigDecimal("0.300"),
+                        ),
+                ).shouldBeRight()
         recordResult(admin = "root", matchId = UUID.fromString(handicapped.id))
 
         val changes =
-            calc.afterFinalizingFixtureEvent().calculate(
-                token = token(uid = "root"),
-                dryRun = true,
-            ).shouldBeRight().matches.flatMap {
-                it.changes
-            }
+            calc
+                .afterFinalizingFixtureEvent()
+                .calculate(
+                    token = token(uid = "root"),
+                    dryRun = true,
+                ).shouldBeRight()
+                .matches
+                .flatMap {
+                    it.changes
+                }
         val plainLoss = changes.first { it.userId == a2.id.toString() }.let { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }
         val handicappedLoss =
-            changes.first { it.userId == b2.id.toString() }
+            changes
+                .first { it.userId == b2.id.toString() }
                 .let { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }
 
         // Both are losses; the handicapped side loses strictly less (closer to zero).
@@ -437,7 +472,12 @@ class RatingCalculationServiceTest {
             it.matchId shouldBe matchId
             // The source match's completed_at is snapshotted onto the history row as the ordering
             // tiebreaker (#301); it matches what the match itself records.
-            it.completedAt shouldBe matchRepo.findById(matchId = matchId).shouldBeRight().toDomain().completedAt
+            it.completedAt shouldBe
+                matchRepo
+                    .findById(matchId = matchId)
+                    .shouldBeRight()
+                    .toDomain()
+                    .completedAt
             it.completedAt.shouldNotBeNull()
             // The v2 per-set breakdown is persisted at commit and round-trips through the JSON column (#110);
             // the net fields stay null for v2.
@@ -451,14 +491,23 @@ class RatingCalculationServiceTest {
                 set.isUpset shouldBe false
             }
         }
-        matchRepo.findById(matchId = matchId).shouldBeRight().toDomain().ratedAt.shouldNotBeNull()
+        matchRepo
+            .findById(matchId = matchId)
+            .shouldBeRight()
+            .toDomain()
+            .ratedAt
+            .shouldNotBeNull()
         matchRepo.listPendingCalculation().shouldBe(expected = emptyList())
 
         // idempotent — nothing left to process
-        calc.afterFinalizingFixtureEvent().calculate(
-            token = token(uid = "root"),
-            dryRun = false,
-        ).shouldBeRight().matches.shouldBe(expected = emptyList())
+        calc
+            .afterFinalizingFixtureEvent()
+            .calculate(
+                token = token(uid = "root"),
+                dryRun = false,
+            ).shouldBeRight()
+            .matches
+            .shouldBe(expected = emptyList())
     }
 
     /** Every persisted rating_run_id (nulls excluded), one entry per history row. */
@@ -507,45 +556,62 @@ class RatingCalculationServiceTest {
         val p4 = provisionUser(uid = "p4", rated = true)
         val eventRepo = EventRepository()
         val event =
-            eventRepo.create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = "E",
-                        startDate = LocalDate.parse("2026-01-01"),
-                        endDate = LocalDate.parse("2026-01-03"),
-                        participantIds = listOf(p1.id, p2.id),
-                        createdBy = users.findByFirebaseUid(firebaseUid = "root")!!.toDomain().id,
-                    ),
-            ).toDomain()
+            eventRepo
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = "E",
+                            startDate = LocalDate.parse("2026-01-01"),
+                            endDate = LocalDate.parse("2026-01-03"),
+                            participantIds = listOf(p1.id, p2.id),
+                            createdBy = users.findByFirebaseUid(firebaseUid = "root")!!.toDomain().id,
+                        ),
+                ).toDomain()
         // An evented match (recorded while the event is open) and an event-less one.
         val eventedFixture =
-            matchService.createFixture(
-                token = token(uid = "root"),
-                request =
-                    FixtureInput(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.parse("2026-01-02"),
-                        team1 = listOf(element = p1.id),
-                        team2 = listOf(element = p2.id),
-                        eventId = event.id,
-                    ),
-            ).shouldBeRight()
+            matchService
+                .createFixture(
+                    token = token(uid = "root"),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.parse("2026-01-02"),
+                            team1 = listOf(element = p1.id),
+                            team2 = listOf(element = p2.id),
+                            eventId = event.id,
+                        ),
+                ).shouldBeRight()
         recordResult(admin = "root", matchId = UUID.fromString(eventedFixture.id))
         val eventless = playedMatch(admin = "root", winner = p3.id, loser = p4.id)
 
         // Commit while the event is still open: the event-less match is rated, the evented one is not.
         calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
-        matchRepo.findById(matchId = eventless).shouldBeRight().toDomain().ratedAt.shouldNotBeNull()
-        matchRepo.findById(matchId = UUID.fromString(eventedFixture.id)).shouldBeRight().toDomain().ratedAt.shouldBeNull()
+        matchRepo
+            .findById(matchId = eventless)
+            .shouldBeRight()
+            .toDomain()
+            .ratedAt
+            .shouldNotBeNull()
+        matchRepo
+            .findById(matchId = UUID.fromString(eventedFixture.id))
+            .shouldBeRight()
+            .toDomain()
+            .ratedAt
+            .shouldBeNull()
 
         // After finalizing the event, its match becomes eligible and a commit rates it.
         val root = users.findByFirebaseUid(firebaseUid = "root")!!.toDomain().id
         eventRepo.finalize(id = event.id, finalizedAt = LocalDateTime.now(), finalizedBy = root)
         calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
-        matchRepo.findById(matchId = UUID.fromString(eventedFixture.id)).shouldBeRight().toDomain().ratedAt.shouldNotBeNull()
+        matchRepo
+            .findById(matchId = UUID.fromString(eventedFixture.id))
+            .shouldBeRight()
+            .toDomain()
+            .ratedAt
+            .shouldNotBeNull()
     }
 
     @Test
@@ -581,10 +647,14 @@ class RatingCalculationServiceTest {
 
         // With nothing left pending, a dry-run preview writes no new summary (the empty-guard branch);
         // the PREVIEWED count stays at the two from earlier.
-        calc.afterFinalizingFixtureEvent().calculate(
-            token = token(uid = "root"),
-            dryRun = true,
-        ).shouldBeRight().matches.shouldBe(expected = emptyList())
+        calc
+            .afterFinalizingFixtureEvent()
+            .calculate(
+                token = token(uid = "root"),
+                dryRun = true,
+            ).shouldBeRight()
+            .matches
+            .shouldBe(expected = emptyList())
         audit.list(actions = listOf(element = AuditAction.RATING_CALCULATION_PREVIEWED), limit = 50, offset = 0).second shouldBe 2L
     }
 
@@ -612,7 +682,12 @@ class RatingCalculationServiceTest {
         // Committing persists them; reading the history back returns the same per-set breakdown.
         calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
         // The persisted domain breakdown maps to the same response shape as the preview (#110).
-        val persistedSets = ratings.historyByUser(userId = p1.id).single().setBreakdown.map { it.toResponse() }
+        val persistedSets =
+            ratings
+                .historyByUser(userId = p1.id)
+                .single()
+                .setBreakdown
+                .map { it.toResponse() }
         persistedSets shouldBe previewSets
     }
 
@@ -638,14 +713,20 @@ class RatingCalculationServiceTest {
         provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
 
-        calc.afterFinalizingFixtureEvent().calculate(
-            token = token(uid = "host"),
-            dryRun = true,
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        calc.afterFinalizingFixtureEvent().calculate(
-            token = token(uid = "ghost"),
-            dryRun = false,
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        calc
+            .afterFinalizingFixtureEvent()
+            .calculate(
+                token = token(uid = "host"),
+                dryRun = true,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        calc
+            .afterFinalizingFixtureEvent()
+            .calculate(
+                token = token(uid = "ghost"),
+                dryRun = false,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     /**
@@ -698,7 +779,11 @@ class RatingCalculationServiceTest {
         val outcome = calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
 
         // The preview still accounts for both players; one of them is flagged rather than dropped.
-        val changes = outcome.matches.single().changes.associateBy { it.userId }
+        val changes =
+            outcome.matches
+                .single()
+                .changes
+                .associateBy { it.userId }
         changes.getValue(key = rookie.id.toString()).suppressed shouldBe false
         changes.getValue(key = veteran.id.toString()).suppressed shouldBe true
         changes.getValue(key = veteran.id.toString()).change shouldBe "0"
@@ -732,7 +817,10 @@ class RatingCalculationServiceTest {
 
         val outcome = calc.afterFinalizingFixtureEvent().calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
 
-        outcome.matches.single().changes.forEach { it.suppressed shouldBe false }
+        outcome.matches
+            .single()
+            .changes
+            .forEach { it.suppressed shouldBe false }
         storedRating(userId = veteran.id) shouldNotBe BigDecimal("4.000000")
         historyRowCount(userId = veteran.id, matchId = matchId) shouldBe 1
     }
@@ -790,30 +878,32 @@ class RatingCalculationServiceTest {
         format: TeamType = TeamType.DOUBLES,
     ): UUID {
         val match =
-            matchService.createFixture(
+            matchService
+                .createFixture(
+                    token = token(uid = admin),
+                    request =
+                        FixtureInput(
+                            matchFormat = format,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.parse("2026-01-01"),
+                            team1 = team1,
+                            team2 = team2,
+                            eventId = fixtureEventFor(team1 = team1, team2 = team2),
+                        ),
+                ).shouldBeRight()
+        matchService
+            .uploadResult(
                 token = token(uid = admin),
+                matchId = UUID.fromString(match.id),
                 request =
-                    FixtureInput(
-                        matchFormat = format,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.parse("2026-01-01"),
-                        team1 = team1,
-                        team2 = team2,
-                        eventId = fixtureEventFor(team1 = team1, team2 = team2),
+                    MatchResultRequest(
+                        sets =
+                            listOf(
+                                SetScoreRequest(team1Games = 6, team2Games = 4),
+                                SetScoreRequest(team1Games = 6, team2Games = 2),
+                            ),
                     ),
             ).shouldBeRight()
-        matchService.uploadResult(
-            token = token(uid = admin),
-            matchId = UUID.fromString(match.id),
-            request =
-                MatchResultRequest(
-                    sets =
-                        listOf(
-                            SetScoreRequest(team1Games = 6, team2Games = 4),
-                            SetScoreRequest(team1Games = 6, team2Games = 2),
-                        ),
-                ),
-        ).shouldBeRight()
         return UUID.fromString(match.id)
     }
 
@@ -858,10 +948,15 @@ class RatingCalculationServiceTest {
         playedDoubles(admin = "root", team1 = listOf(a1.id, a2.id), team2 = listOf(b1.id, b2.id))
 
         val changes =
-            calc.afterFinalizingFixtureEvent().calculate(
-                token = token(uid = "root"),
-                dryRun = true,
-            ).shouldBeRight().matches.single().changes
+            calc
+                .afterFinalizingFixtureEvent()
+                .calculate(
+                    token = token(uid = "root"),
+                    dryRun = true,
+                ).shouldBeRight()
+                .matches
+                .single()
+                .changes
         val stronger = changes.first { it.userId == a1.id.toString() }.let { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }
         val weaker = changes.first { it.userId == a2.id.toString() }.let { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }
 
@@ -937,10 +1032,13 @@ class RatingCalculationServiceTest {
         // but the calculation guards against): currentRating then has nothing to resolve.
         transaction { UserRatingsTable.deleteAll() }
 
-        calc.afterFinalizingFixtureEvent().calculate(
-            token = token(uid = "root"),
-            dryRun = true,
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        calc
+            .afterFinalizingFixtureEvent()
+            .calculate(
+                token = token(uid = "root"),
+                dryRun = true,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     private val eventRepo = EventRepository()
@@ -958,31 +1056,33 @@ class RatingCalculationServiceTest {
     ): UUID {
         val root = users.findByFirebaseUid(firebaseUid = "root")!!.toDomain().id
         val event =
-            eventRepo.create(
-                command =
-                    CreateEventCommand(
-                        // Every event needs a club (#794).
-                        clubId = seedClub().id,
-                        name = name,
-                        startDate = startDate,
-                        endDate = endDate,
-                        participantIds = listOf(a, b),
-                        createdBy = root,
-                    ),
-            ).toDomain()
+            eventRepo
+                .create(
+                    command =
+                        CreateEventCommand(
+                            // Every event needs a club (#794).
+                            clubId = seedClub().id,
+                            name = name,
+                            startDate = startDate,
+                            endDate = endDate,
+                            participantIds = listOf(a, b),
+                            createdBy = root,
+                        ),
+                ).toDomain()
         val fixture =
-            matchService.createFixture(
-                token = token(uid = "root"),
-                request =
-                    FixtureInput(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = startDate,
-                        team1 = listOf(element = a),
-                        team2 = listOf(element = b),
-                        eventId = event.id,
-                    ),
-            ).shouldBeRight()
+            matchService
+                .createFixture(
+                    token = token(uid = "root"),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = startDate,
+                            team1 = listOf(element = a),
+                            team2 = listOf(element = b),
+                            eventId = event.id,
+                        ),
+                ).shouldBeRight()
         recordResult(admin = "root", matchId = UUID.fromString(fixture.id))
         eventRepo.finalize(id = event.id, finalizedAt = LocalDateTime.now(), finalizedBy = root)
         return event.id
@@ -1065,22 +1165,32 @@ class RatingCalculationServiceTest {
         )
 
         val fullFirst =
-            calc.afterFinalizingFixtureEvent().calculate(
-                token = token(uid = "root"),
-                dryRun = true,
-                eventIds = null,
-            ).shouldBeRight().matches.first()
+            calc
+                .afterFinalizingFixtureEvent()
+                .calculate(
+                    token = token(uid = "root"),
+                    dryRun = true,
+                    eventIds = null,
+                ).shouldBeRight()
+                .matches
+                .first()
         // Selecting only the earliest event (A) previews just its one match.
         val scoped =
-            calc.afterFinalizingFixtureEvent().calculate(
-                token = token(uid = "root"),
-                dryRun = true,
-                eventIds = listOf(element = eventA.toString()),
-            ).shouldBeRight()
+            calc
+                .afterFinalizingFixtureEvent()
+                .calculate(
+                    token = token(uid = "root"),
+                    dryRun = true,
+                    eventIds = listOf(element = eventA.toString()),
+                ).shouldBeRight()
         scoped.matches.size shouldBe 1
         scoped.matches.single().matchId shouldBe fullFirst.matchId
         // The scoped ratings are identical to what a full run would produce for that same leading match.
-        scoped.matches.single().changes.map { it.userId to it.newRating }.toSet() shouldBe
+        scoped.matches
+            .single()
+            .changes
+            .map { it.userId to it.newRating }
+            .toSet() shouldBe
             fullFirst.changes.map { it.userId to it.newRating }.toSet()
     }
 
@@ -1145,11 +1255,13 @@ class RatingCalculationServiceTest {
             b = p4.id,
         )
 
-        calc.afterFinalizingFixtureEvent().calculate(
-            token = token(uid = "root"),
-            dryRun = false,
-            eventIds = listOf(element = eventA.toString()),
-        ).shouldBeRight()
+        calc
+            .afterFinalizingFixtureEvent()
+            .calculate(
+                token = token(uid = "root"),
+                dryRun = false,
+                eventIds = listOf(element = eventA.toString()),
+            ).shouldBeRight()
 
         // Event A's players are rated; event B's are untouched and B's match is still pending.
         ratings.historyByUser(userId = p1.id).size shouldBe 1

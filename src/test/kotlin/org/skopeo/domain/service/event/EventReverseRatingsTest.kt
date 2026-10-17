@@ -93,15 +93,16 @@ class EventReverseRatingsTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -120,21 +121,23 @@ class EventReverseRatingsTest {
         // these fixtures need a finalize that actually pays out (so a reversal has awards to revoke).
         val actor = requireNotNull(value = users.findByFirebaseUid(firebaseUid = hostUid)) { "unknown host $hostUid" }
         TestAppSettings.setAwardRankingPoints(enabled = true, updatedBy = actor.toDomain().id)
-        return service.create(
-            token = token(uid = hostUid),
-            input =
-                CreateEventInput(
-                    clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
-                    name = "Spring Open",
-                    startDate = LocalDate.now(),
-                    endDate = LocalDate.now().plusDays(7),
-                    participantIds = participants,
-                    // TOURNAMENT is the host-designated awarding type (#525).
-                    type = EventType.TOURNAMENT.name,
-                    // A tournament must reference a circuit (#525).
-                    circuitId = seedCircuit(hostUid = hostUid),
-                ),
-        ).shouldBeRight().domain()
+        return service
+            .create(
+                token = token(uid = hostUid),
+                input =
+                    CreateEventInput(
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                        name = "Spring Open",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
+                        participantIds = participants,
+                        // TOURNAMENT is the host-designated awarding type (#525).
+                        type = EventType.TOURNAMENT.name,
+                        // A tournament must reference a circuit (#525).
+                        circuitId = seedCircuit(hostUid = hostUid),
+                    ),
+            ).shouldBeRight()
+            .domain()
     }
 
     /** Seed a circuit (#525) attributed to [hostUid]; a tournament must reference one. */
@@ -158,22 +161,23 @@ class EventReverseRatingsTest {
         date: LocalDate = LocalDate.now(),
     ): Match {
         val match =
-            matchRepo.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = date,
-                        team1UserIds = listOf(element = p1.id),
-                        team2UserIds = listOf(element = p2.id),
-                        team1Name = "t1",
-                        team2Name = "t2",
-                        createdBy = host.id,
-                        eventId = eventId,
-                        isPlacementMatch = true,
-                        placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
-                    ),
-            ).toDomain()
+            matchRepo
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = date,
+                            team1UserIds = listOf(element = p1.id),
+                            team2UserIds = listOf(element = p2.id),
+                            team1Name = "t1",
+                            team2Name = "t2",
+                            createdBy = host.id,
+                            eventId = eventId,
+                            isPlacementMatch = true,
+                            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
+                        ),
+                ).toDomain()
         matchRepo.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = match.team1.teamId)),
@@ -263,7 +267,12 @@ class EventReverseRatingsTest {
     @Test
     fun `reversal clears rated_at on the event's matches and clears the finalize flag (#478)`() {
         val re = ratedEvent()
-        matchRepo.findById(matchId = re.match.id).shouldBeRight().toDomain().ratedAt.shouldNotBeNull()
+        matchRepo
+            .findById(matchId = re.match.id)
+            .shouldBeRight()
+            .toDomain()
+            .ratedAt
+            .shouldNotBeNull()
 
         val view = service.reverseRatings(token = token(uid = "admin"), id = re.eventId).shouldBeRight()
 
@@ -271,7 +280,12 @@ class EventReverseRatingsTest {
         val persisted = events.findById(id = re.eventId).shouldNotBeNull().toDomain()
         persisted.finalizedAt.shouldBeNull()
         persisted.finalizedBy.shouldBeNull()
-        matchRepo.findById(matchId = re.match.id).shouldBeRight().toDomain().ratedAt.shouldBeNull()
+        matchRepo
+            .findById(matchId = re.match.id)
+            .shouldBeRight()
+            .toDomain()
+            .ratedAt
+            .shouldBeNull()
     }
 
     @Test
@@ -280,8 +294,11 @@ class EventReverseRatingsTest {
 
         service.reverseRatings(token = token(uid = "admin"), id = re.eventId).shouldBeRight()
 
-        AuditRepository().list(actions = listOf(element = AuditAction.EVENT_RATINGS_REVERSED), limit = 10, offset = 0)
-            .first.single().let {
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.EVENT_RATINGS_REVERSED), limit = 10, offset = 0)
+            .first
+            .single()
+            .let {
                 it.actorUserId shouldBe re.admin.id
                 it.entityId shouldBe re.eventId
                 it.entityType shouldBe AuditEntityType.EVENT.name
@@ -298,7 +315,12 @@ class EventReverseRatingsTest {
         service.reverseRatings(token = token(uid = "admin"), id = re.eventId).shouldBeRight()
 
         // The matches re-enter the pending-calculation queue (once re-finalized) and the event re-finalizes.
-        service.finalize(token = token(uid = "host"), id = re.eventId).shouldBeRight().domain().isFinalized.shouldBeTrue()
+        service
+            .finalize(token = token(uid = "host"), id = re.eventId)
+            .shouldBeRight()
+            .domain()
+            .isFinalized
+            .shouldBeTrue()
         calc.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().matches shouldHaveSize 1
     }
 
@@ -316,19 +338,21 @@ class EventReverseRatingsTest {
         seedCompletedFixture(eventId = eventA.id, host = host, p1 = p1, p2 = p2, date = LocalDate.now().minusDays(5))
         service.finalize(token = token(uid = "host"), id = eventA.id).shouldBeRight()
         val eventB =
-            service.create(
-                token = token(uid = "host"),
-                input =
-                    CreateEventInput(
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
-                        name = "Later Cup",
-                        startDate = LocalDate.now(),
-                        endDate = LocalDate.now().plusDays(1),
-                        participantIds = listOf(p1.id, p2.id),
-                        type = EventType.TOURNAMENT.name,
-                        circuitId = seedCircuit(hostUid = "host"),
-                    ),
-            ).shouldBeRight().domain()
+            service
+                .create(
+                    token = token(uid = "host"),
+                    input =
+                        CreateEventInput(
+                            clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                            name = "Later Cup",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now().plusDays(1),
+                            participantIds = listOf(p1.id, p2.id),
+                            type = EventType.TOURNAMENT.name,
+                            circuitId = seedCircuit(hostUid = "host"),
+                        ),
+                ).shouldBeRight()
+                .domain()
         seedCompletedFixture(eventId = eventB.id, host = host, p1 = p1, p2 = p2, date = LocalDate.now())
         service.finalize(token = token(uid = "host"), id = eventB.id).shouldBeRight()
         // Rate both events together: A then B in one batch, so B is dated on top of A for p1/p2.
@@ -336,11 +360,18 @@ class EventReverseRatingsTest {
 
         // Reversing the earlier event A is refused — B was rated on top of it.
         val error =
-            service.reverseRatings(token = token(uid = "admin"), id = eventA.id)
-                .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+            service
+                .reverseRatings(token = token(uid = "admin"), id = eventA.id)
+                .shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Validation>()
         error.message shouldContain "later matches have already been rated"
         // Nothing was touched: A stays finalized and its awards stay live (both placements).
-        events.findById(id = eventA.id).shouldNotBeNull().toDomain().isFinalized.shouldBeTrue()
+        events
+            .findById(id = eventA.id)
+            .shouldNotBeNull()
+            .toDomain()
+            .isFinalized
+            .shouldBeTrue()
         awardRepo.listActiveByEvent(eventId = eventA.id) shouldHaveSize 2
 
         // The tip event B, however, reverses cleanly.
@@ -353,11 +384,15 @@ class EventReverseRatingsTest {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val event = budgetedEvent(hostUid = "host", participants = emptyList())
 
-        service.reverseRatings(token = token(uid = "admin"), id = event.id)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .reverseRatings(token = token(uid = "admin"), id = event.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
             .message shouldContain "not finalized"
-        service.reverseRatings(token = token(uid = "admin"), id = UUID.randomUUID())
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .reverseRatings(token = token(uid = "admin"), id = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
         host.id shouldBe event.createdBy
     }
 
@@ -375,8 +410,10 @@ class EventReverseRatingsTest {
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
         val error =
-            service.reverseRatings(token = token(uid = "admin"), id = event.id)
-                .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+            service
+                .reverseRatings(token = token(uid = "admin"), id = event.id)
+                .shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Validation>()
         error.message shouldContain "no rated matches"
     }
 
@@ -385,13 +422,24 @@ class EventReverseRatingsTest {
         val re = ratedEvent()
         provision(uid = "clubowner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
 
-        service.reverseRatings(token = token(uid = "host"), id = re.eventId)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.reverseRatings(token = token(uid = "clubowner"), id = re.eventId)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.reverseRatings(token = token(uid = "ghost"), id = re.eventId)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .reverseRatings(token = token(uid = "host"), id = re.eventId)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .reverseRatings(token = token(uid = "clubowner"), id = re.eventId)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .reverseRatings(token = token(uid = "ghost"), id = re.eventId)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
         // Nothing was reversed by the forbidden attempts.
-        events.findById(id = re.eventId).shouldNotBeNull().toDomain().isFinalized.shouldBeTrue()
+        events
+            .findById(id = re.eventId)
+            .shouldNotBeNull()
+            .toDomain()
+            .isFinalized
+            .shouldBeTrue()
     }
 }

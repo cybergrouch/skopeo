@@ -115,17 +115,18 @@ class ApiClientService(
                 }.toDomain()
             val generated = ApiKeyCrypto.generate(environment = environment)
             val key =
-                clients.insertKey(
-                    command =
-                        InsertApiKeyCommand(
-                            clientId = clientId,
-                            keyPrefix = generated.displayPrefix,
-                            keyHash = generated.hash,
-                            scopes = scopes,
-                            createdBy = adminId,
-                            expiresAt = expiresInDays?.let { LocalDateTime.now().plusDays(it) },
-                        ),
-                ).toDomain()
+                clients
+                    .insertKey(
+                        command =
+                            InsertApiKeyCommand(
+                                clientId = clientId,
+                                keyPrefix = generated.displayPrefix,
+                                keyHash = generated.hash,
+                                scopes = scopes,
+                                createdBy = adminId,
+                                expiresAt = expiresInDays?.let { LocalDateTime.now().plusDays(it) },
+                            ),
+                    ).toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -320,16 +321,18 @@ class ApiClientService(
     /** Parse a key scope name to a [Capability] (#225); an unknown name is a [ServiceError.Validation]. */
     private fun parseScope(raw: String): Either<ServiceError, Capability> =
         Capability.entries.find { it.name == raw }?.right()
-            ?: ServiceError.Validation(
-                message = "Invalid scope '$raw'; expected one of ${Capability.entries.joinToString { it.name }}",
-            ).left()
+            ?: ServiceError
+                .Validation(
+                    message = "Invalid scope '$raw'; expected one of ${Capability.entries.joinToString { it.name }}",
+                ).left()
 
     /** Parse a key environment name to an [ApiKeyEnvironment]; an unknown name is a [ServiceError.Validation]. */
     private fun parseEnvironment(raw: String): Either<ServiceError, ApiKeyEnvironment> =
         ApiKeyEnvironment.entries.find { it.name == raw }?.right()
-            ?: ServiceError.Validation(
-                message = "Invalid environment '$raw'; expected one of ${ApiKeyEnvironment.entries.joinToString { it.name }}",
-            ).left()
+            ?: ServiceError
+                .Validation(
+                    message = "Invalid environment '$raw'; expected one of ${ApiKeyEnvironment.entries.joinToString { it.name }}",
+                ).left()
 
     /** Access gate: the caller must be an ADMINISTRATOR. Returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {

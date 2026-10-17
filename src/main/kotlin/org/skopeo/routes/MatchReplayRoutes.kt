@@ -22,13 +22,20 @@ import org.skopeo.domain.service.livematch.MatchReplayService
  * The read is public and anonymous, like the match page it sits on: it is addressed by the match's public
  * code, and a 404 means "no replay to show" — never scored live, or the result has since been edited away
  * from the one the replay ends at.
+ *
+ * **Optional auth** (#1183), like the match points read: a token is used when supplied but never
+ * required. It decides only whether the per-point scorers are included, which the service omits from the
+ * payload for a caller not entitled to them.
  */
 fun Application.configureMatchReplayRoutes(service: MatchReplayService = MatchReplayService()) {
     routing {
-        get(path = "/api/v1/matches/code/{code}/replay") {
-            respondMappingErrors {
-                respondEither(result = service.byCode(code = call.parameters.getOrFail(name = "code"))) { replay ->
-                    call.respond(status = HttpStatusCode.OK, message = replay)
+        authenticate(FIREBASE_AUTH, optional = true) {
+            get(path = "/api/v1/matches/code/{code}/replay") {
+                respondMappingErrors {
+                    val code = call.parameters.getOrFail(name = "code")
+                    respondEither(result = service.byCode(code = code, token = optionalVerifiedToken())) { replay ->
+                        call.respond(status = HttpStatusCode.OK, message = replay)
+                    }
                 }
             }
         }

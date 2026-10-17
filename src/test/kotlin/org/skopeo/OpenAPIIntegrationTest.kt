@@ -105,6 +105,23 @@ class OpenAPIIntegrationTest {
             body shouldContain "resultEdited"
         }
 
+    /** Scorer attribution (#1183): the filtered replay response, per-step scorers, and the live/public scorer fields. */
+    @Test
+    fun testOpenAPISpecIncludesScorerAttribution() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "ReplayResponse:"
+            body shouldContain "ReplayScorer:"
+            body shouldContain "scorers:"
+            body shouldContain "scorer:"
+            body shouldContain "scorerName:"
+            body shouldContain "scoredBy:"
+            body shouldContain "Optional auth (#1183)"
+        }
+
     /** Account merge (#643): the admin merge route, its request schema, and the derived link-status field. */
     @Test
     fun testOpenAPISpecIncludesAccountMerge() =
@@ -366,12 +383,19 @@ class OpenAPIIntegrationTest {
     /** Recursively collect every `$ref` string value in the parsed spec. */
     private fun collectRefs(node: Any?): List<String> =
         when (node) {
-            is Map<*, *> ->
+            is Map<*, *> -> {
                 node.entries.flatMap { (key, value) ->
                     if (key == "\$ref" && value is String) listOf(element = value) else collectRefs(node = value)
                 }
-            is List<*> -> node.flatMap { element -> collectRefs(node = element) }
-            else -> emptyList()
+            }
+
+            is List<*> -> {
+                node.flatMap { element -> collectRefs(node = element) }
+            }
+
+            else -> {
+                emptyList()
+            }
         }
 
     /** Whether an internal JSON-pointer `$ref` (`#/a/b/c`) resolves to an existing node. External refs pass. */
@@ -381,7 +405,8 @@ class OpenAPIIntegrationTest {
     ): Boolean {
         if (!ref.startsWith(prefix = "#/")) return true
         val segments =
-            ref.removePrefix(prefix = "#/")
+            ref
+                .removePrefix(prefix = "#/")
                 .split("/")
                 .map { segment -> segment.replace(oldValue = "~1", newValue = "/").replace(oldValue = "~0", newValue = "~") }
         val target =

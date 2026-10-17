@@ -83,9 +83,10 @@ class PlaceholderService(
             // never leaves an orphan placeholder. A caller who omits [initialRating] skips all of this.
             val ratingValue = initialRating?.let { validatedRating(raw = it).bind() }
             val created =
-                users.createPlaceholder(
-                    command = CreatePlaceholderCommand(displayName = name, sex = sex, dateOfBirth = dateOfBirth),
-                ).toDomain()
+                users
+                    .createPlaceholder(
+                        command = CreatePlaceholderCommand(displayName = name, sex = sex, dateOfBirth = dateOfBirth),
+                    ).toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -223,7 +224,11 @@ class PlaceholderService(
                             ),
                     ),
             )
-            users.findById(id = caller.id).bind().toDomain().toResponse()
+            users
+                .findById(id = caller.id)
+                .bind()
+                .toDomain()
+                .toResponse()
         }
 
     /** ADMINISTRATOR-only; returns the caller's id (the audit actor). */

@@ -5,7 +5,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
-import type { ReplayDocument, ReplayScore } from "@/api/generated/model";
+import type { ReplayResponse, ReplayScore } from "@/api/generated/model";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,7 +24,7 @@ import { stepText } from "./replayStepText";
 import { ReplayTimeline } from "./ReplayTimeline";
 
 export type ReplayCardProps = {
-  replay: ReplayDocument;
+  replay: ReplayResponse;
   /** An index into `replay.points`, or `REPLAY_START` for the 0-0 opening position. */
   selected: number;
   onSelect: (index: number) => void;
