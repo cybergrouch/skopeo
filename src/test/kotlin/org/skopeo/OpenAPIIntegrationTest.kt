@@ -105,6 +105,23 @@ class OpenAPIIntegrationTest {
             body shouldContain "resultEdited"
         }
 
+    /** Scorer attribution (#1183): the filtered replay response, per-step scorers, and the live/public scorer fields. */
+    @Test
+    fun testOpenAPISpecIncludesScorerAttribution() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "ReplayResponse:"
+            body shouldContain "ReplayScorer:"
+            body shouldContain "scorers:"
+            body shouldContain "scorer:"
+            body shouldContain "scorerName:"
+            body shouldContain "scoredBy:"
+            body shouldContain "Optional auth (#1183)"
+        }
+
     /** Account merge (#643): the admin merge route, its request schema, and the derived link-status field. */
     @Test
     fun testOpenAPISpecIncludesAccountMerge() =

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.contract.ReplayDocument
+import org.skopeo.common.contract.ReplayScorer
 import org.skopeo.common.dto.livematch.LiveMatchSweepRequest
 import org.skopeo.common.dto.match.MatchReplayBackfillRequest
 import org.skopeo.common.error.ServiceError
@@ -39,6 +40,8 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.fixtureEventId
+import org.skopeo.testsupport.seedEvent
+import org.skopeo.testsupport.seedFixtureClub
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -92,7 +95,10 @@ class MatchReplayServiceTest {
         return token(uid = "boss")
     }
 
-    private fun fixture(name: String): Match {
+    private fun fixture(
+        name: String,
+        eventId: UUID? = null,
+    ): Match {
         val home = user(uid = "$name-home")
         val away = user(uid = "$name-away")
         return matches
@@ -107,7 +113,7 @@ class MatchReplayServiceTest {
                         team1Name = "$name-home",
                         team2Name = "$name-away",
                         createdBy = home,
-                        eventId = fixtureEventId(home, away),
+                        eventId = eventId ?: fixtureEventId(home, away),
                     ),
             ).toDomain()
     }
@@ -181,6 +187,25 @@ class MatchReplayServiceTest {
             ).shouldBeRight()
     }
 
+    private fun storedDocument(match: Match): ReplayDocument =
+        Json.decodeFromString<ReplayDocument>(string = replays.find(matchId = match.id).shouldNotBeNull().replay)
+
+    /** [document] as format 1 stored it: no scorer on any event or point. */
+    private fun asVersionOne(document: ReplayDocument): ReplayDocument =
+        document.copy(
+            version = 1,
+            events = document.events.map { it.copy(scorer = null) },
+            points = document.points.map { it.copy(scorer = null) },
+        )
+
+    /** The public code of [match]'s home player — who [log] attributes every row to. */
+    private fun homeCode(match: Match): String =
+        UserRepository()
+            .findById(id = match.team1.userIds.first())
+            .shouldBeRight()
+            .toDomain()
+            .publicCode
+
     private fun finishedMatch(name: String = "m"): Match {
         val match = fixture(name = name)
         log(match = match, rows = oneGameLog())
@@ -203,6 +228,11 @@ class MatchReplayServiceTest {
         // The game-winning point was the tenth row: 90 seconds after the first.
         replay.points[3].atMs shouldBe 90_000L
         replay.points[3].gameWon shouldBe true
+        // Stored with every step's scorer, but an anonymous caller is shown none of them (#1183).
+        replay.version shouldBe 2
+        replay.scorers.shouldBeNull()
+        replay.points.all { it.scorer == null } shouldBe true
+        storedDocument(match = match).points.map { it.scorer }.toSet() shouldBe setOf(element = homeCode(match = match))
     }
 
     @Test
@@ -308,14 +338,115 @@ class MatchReplayServiceTest {
         val match = finishedMatch()
         service.recordFromLog(matchId = match.id)
         // Stand in for an older format: the source survives, the derived timeline does not.
-        val stored = Json.decodeFromString<ReplayDocument>(string = replays.find(matchId = match.id).shouldNotBeNull().replay)
+        val stored = asVersionOne(document = storedDocument(match = match))
         replays.save(matchId = match.id, formatVersion = 1, replay = Json.encodeToString(value = stored.copy(points = emptyList())))
         // The log can be gone by then — the sweep deletes it — so it must not be what the upgrade reads.
         live.discardLog(matchId = match.id)
-        val newer = MatchReplayService(currentVersion = 2)
 
-        newer.backfill(token = boss, request = MatchReplayBackfillRequest()).shouldBeRight().upgraded shouldBe 1
-        newer.byCode(code = match.publicCode).shouldBeRight().points shouldBe stored.points
+        service.backfill(token = boss, request = MatchReplayBackfillRequest()).shouldBeRight().upgraded shouldBe 1
+        val upgraded = service.byCode(code = match.publicCode, token = boss).shouldBeRight()
+        upgraded.version shouldBe ReplayBuilder.CURRENT_VERSION
+        upgraded.points shouldBe stored.points
+        // Without the log there is nobody to name: an upgraded v1 simply has no scorers (#1183).
+        upgraded.points.all { it.scorer == null } shouldBe true
+        upgraded.scorers shouldBe emptyMap()
+    }
+
+    @Test
+    fun `an older format whose log survives is re-recorded from it, gaining scorers, on read and by the backfill (#1183)`() {
+        val boss = admin()
+        val match = finishedMatch()
+        service.recordFromLog(matchId = match.id)
+        val v1 = asVersionOne(document = storedDocument(match = match))
+        replays.save(matchId = match.id, formatVersion = 1, replay = Json.encodeToString(value = v1))
+        val home = homeCode(match = match)
+
+        service.backfill(token = boss, request = MatchReplayBackfillRequest()).shouldBeRight().upgraded shouldBe 1
+        val upgraded = service.byCode(code = match.publicCode, token = boss).shouldBeRight()
+
+        upgraded.points.map { it.scorer }.toSet() shouldBe setOf(element = home)
+        upgraded.events.map { it.scorer }.toSet() shouldBe setOf(element = home)
+        replays.find(matchId = match.id).shouldNotBeNull().formatVersion shouldBe ReplayBuilder.CURRENT_VERSION
+    }
+
+    @Test
+    fun `a surviving log that no longer ends at the replay's result is not used for the upgrade`() {
+        val boss = admin()
+        val match = finishedMatch()
+        service.recordFromLog(matchId = match.id)
+        val v1 = asVersionOne(document = storedDocument(match = match))
+        replays.save(matchId = match.id, formatVersion = 1, replay = Json.encodeToString(value = v1))
+        // The log now ends with the match going the other way — not the match this replay recorded.
+        live.append(
+            matchId = match.id,
+            sequence = 12,
+            kind = LiveMatchEventKinds.UNDONE,
+            targetSequence = 11,
+            recordedBy = match.team1.userIds.first(),
+            recordedAt = start.plusMinutes(5),
+        )
+        live.append(
+            matchId = match.id,
+            sequence = 13,
+            kind = LiveMatchEventKinds.MATCH_AWARDED,
+            side = "TEAM2",
+            recordedBy = match.team1.userIds.first(),
+            recordedAt = start.plusMinutes(6),
+        )
+
+        val upgraded = service.byCode(code = match.publicCode, token = boss).shouldBeRight()
+
+        upgraded.result shouldBe v1.result
+        upgraded.points.all { it.scorer == null } shouldBe true
+    }
+
+    @Test
+    fun `per-point scorers reach the event's organizers and administrators only (#1183)`() {
+        user(uid = "boss", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        user(uid = "fan")
+        user(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
+        user(uid = "stranger", roles = setOf(Capability.PLAYER, Capability.HOST))
+        // The stranger organizes an event of their own, under a club of their own — just not this one.
+        seedEvent(name = "Elsewhere", clubId = seedFixtureClub(ownerUids = arrayOf("stranger"), name = "Elsewhere TC").id)
+        val match = fixture(name = "club", eventId = seedEvent(name = "Cup", clubId = seedFixtureClub(ownerUids = arrayOf("owner")).id).id)
+        log(match = match, rows = oneGameLog())
+        recordResult(match = match)
+        service.recordFromLog(matchId = match.id)
+        val home = homeCode(match = match)
+
+        val seen =
+            mapOf(
+                "anonymous" to null,
+                "fan" to token(uid = "fan"),
+                "stranger" to token(uid = "stranger"),
+                "owner" to token(uid = "owner"),
+                "boss" to token(uid = "boss"),
+            ).mapValues { (_, caller) -> service.byCode(code = match.publicCode, token = caller).shouldBeRight() }
+
+        seen.filterValues { it.scorers != null }.keys shouldBe setOf("owner", "boss")
+        seen.forEach { (who, replay) ->
+            val entitled = who == "owner" || who == "boss"
+            replay.points.all { (it.scorer == home) == entitled } shouldBe true
+            replay.events.all { (it.scorer == home) == entitled } shouldBe true
+        }
+        seen.getValue(key = "owner").scorers shouldBe mapOf(pair = home to ReplayScorer(displayName = "club-home"))
+    }
+
+    @Test
+    fun `a deleted scorer is shown as deleted and never by name (#1183)`() {
+        val boss = admin()
+        val match = finishedMatch()
+        service.recordFromLog(matchId = match.id)
+        UserRepository().deactivate(id = match.team1.userIds.first()).shouldBeRight()
+
+        val scorers =
+            service
+                .byCode(code = match.publicCode, token = boss)
+                .shouldBeRight()
+                .scorers
+                .shouldNotBeNull()
+
+        scorers shouldBe mapOf(pair = homeCode(match = match) to ReplayScorer(displayName = null, isDeleted = true))
     }
 
     @Test

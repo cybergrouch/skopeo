@@ -18,10 +18,14 @@ import org.skopeo.domain.model.ScoreEvent
 import org.skopeo.domain.model.ScoreState
 import org.skopeo.domain.model.TeamSide
 
-/** One surviving umpire action and when it happened, in milliseconds since the first one. */
+/**
+ * One surviving umpire action and when it happened, in milliseconds since the first one — and who
+ * recorded it, as their public code (#1183), when that is known.
+ */
 data class TimedScoreEvent(
     val event: ScoreEvent,
     val atMs: Long,
+    val scorer: String? = null,
 )
 
 /**
@@ -34,8 +38,13 @@ data class TimedScoreEvent(
  * fresh recording would have produced.
  */
 object ReplayBuilder {
-    /** The format this code writes. Bump only with an additive change; [rebuild] upgrades older ones. */
-    const val CURRENT_VERSION = 1
+    /**
+     * The format this code writes. Bump only with an additive change; [rebuild] upgrades older ones.
+     *
+     * - 1: the first format (#1145).
+     * - 2: each event and point names its scorer's public code (#1183).
+     */
+    const val CURRENT_VERSION = 2
 
     /** The replay of [events], or null when they never reach an ending — there is no result to replay to. */
     fun build(events: List<TimedScoreEvent>): ReplayDocument? {
@@ -53,7 +62,10 @@ object ReplayBuilder {
         return ReplayDocument(
             version = CURRENT_VERSION,
             result = ReplayResult(sets = recordableSets(state = state).map { it.toReplaySet() }, winner = outcome.winner.name),
-            events = events.map { ReplayEvent(kind = kindOf(event = it.event), side = sideOf(event = it.event), atMs = it.atMs) },
+            events =
+                events.map {
+                    ReplayEvent(kind = kindOf(event = it.event), side = sideOf(event = it.event), atMs = it.atMs, scorer = it.scorer)
+                },
             points = points,
         )
     }
@@ -66,6 +78,7 @@ object ReplayBuilder {
                     TimedScoreEvent(
                         event = scoreEventOf(kind = event.kind, side = event.side, sequence = index.toLong()),
                         atMs = event.atMs,
+                        scorer = event.scorer,
                     )
                 },
         )
@@ -100,6 +113,7 @@ object ReplayBuilder {
                     ?.name
                     .takeIf { kind == KIND_END },
             score = after.toReplayScore(),
+            scorer = timed.scorer,
         )
     }
 

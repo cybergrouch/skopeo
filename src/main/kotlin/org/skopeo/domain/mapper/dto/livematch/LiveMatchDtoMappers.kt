@@ -25,11 +25,14 @@ fun LiveMatchView.toResponse(
     // The sides' own names (#1079) — null unless the team is a standing one; see the DTO's note.
     team1Name: String? = null,
     team2Name: String? = null,
+    // The current scorer's display name (#1183), resolved by the caller from [LiveMatchView.lastRecorderId].
+    scorerName: String? = null,
 ): LiveMatchResponse =
     LiveMatchResponse(
         matchId = matchId.toString(),
         sequence = sequence,
         scorerId = scorerId?.toString(),
+        scorerName = scorerName,
         hasStarted = state.hasStarted,
         isBetweenSets = state.isBetweenSets,
         isPaused = state.isPaused,

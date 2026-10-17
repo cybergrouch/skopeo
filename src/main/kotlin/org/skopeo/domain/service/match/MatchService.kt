@@ -49,6 +49,7 @@ import org.skopeo.domain.model.User
 import org.skopeo.domain.model.canSeeRawRatingOrFalse
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.event.EventOrganizerGate
+import org.skopeo.domain.service.livematch.MatchScorers
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
@@ -104,6 +105,9 @@ data class FixtureInput(
     val placementBracket: PlacementBracket? = null,
 )
 
+/** Statuses of a match not yet played out — it has no final scorer to name (#1183). */
+private val AWAITING_PLAY = setOf(MatchStatus.SCHEDULED, MatchStatus.IN_PROGRESS)
+
 /**
  * Match fixtures & results. Creating fixtures, uploading results, and disabling are
  * HOST/ADMINISTRATOR actions; the oversight queries are ADMINISTRATOR-only. Recording a result
@@ -122,6 +126,8 @@ class MatchService(
     private val audit: AuditService = AuditService(),
     // The club-ownership gate for an event-scoped operation (#789); see [EventOrganizerGate].
     private val organizer: EventOrganizerGate = EventOrganizerGate(),
+    // Who scored a live-scored match (#1183), for the public page's "Scored by" headline.
+    private val scorers: MatchScorers = MatchScorers(),
 ) {
     /** Create a fixture from the raw HTTP request (#116): parse/validate enums, date, ids, and composition. */
     fun createFixture(
@@ -558,17 +564,21 @@ class MatchService(
             // to it. Every match has one since #898.
             val owningEvent = events.getById(id = match.eventId).toDomain()
             val event = MatchPublicEvent(publicCode = owningEvent.publicCode, name = owningEvent.name)
-            match.toPublicResponse(
-                players = players,
-                ratingChanges = ratingChanges,
-                headToHead = headToHead,
-                event = event,
-                // The id is revealed to viewers who have an ACTION to take on this match, and to nobody
-                // else. An ADMINISTRATOR may correct a rated score (#776); a scorer needs it to open the
-                // umpire view, because the live API is keyed by the match id while this page is keyed by
-                // its public code (#911). Same rule, one more reason to satisfy it.
-                revealId = callerMayActOnMatch(token = token),
-            )
+            match
+                .toPublicResponse(
+                    players = players,
+                    ratingChanges = ratingChanges,
+                    headToHead = headToHead,
+                    event = event,
+                    // The id is revealed to viewers who have an ACTION to take on this match, and to nobody
+                    // else. An ADMINISTRATOR may correct a rated score (#776); a scorer needs it to open the
+                    // umpire view, because the live API is keyed by the match id while this page is keyed by
+                    // its public code (#911). Same rule, one more reason to satisfy it.
+                    revealId = callerMayActOnMatch(token = token),
+                ).copy(
+                    // The last scorer (#1183), once the match is finished; public, like the players.
+                    scoredBy = if (match.status in AWAITING_PLAY) null else scorers.finalScorer(matchId = match.id),
+                )
         }
 
     /**
