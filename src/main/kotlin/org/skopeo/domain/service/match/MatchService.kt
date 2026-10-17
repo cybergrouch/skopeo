@@ -177,35 +177,6 @@ class MatchService(
         )
     }
 
-    /** Map the `filter` query value to a [MatchQuery] (#331); an unknown value is a 400. */
-    @Suppress("NamedArguments") // java.lang.IllegalArgumentException ctors can't be called with named args.
-    private fun matchQueryOf(value: String?): MatchQuery =
-        when (value) {
-            "pending-calculation" -> MatchQuery.PENDING_CALCULATION
-            "awaiting-results" -> MatchQuery.AWAITING_RESULTS
-            "results" -> MatchQuery.RESULTS
-            else -> throw IllegalArgumentException("filter must be 'pending-calculation', 'awaiting-results', or 'results'")
-        }
-
-    @Suppress("NamedArguments") // java.lang.IllegalArgumentException ctors can't be called with named args.
-    private fun matchDateOf(value: String): LocalDate =
-        try {
-            LocalDate.parse(value)
-        } catch (e: DateTimeParseException) {
-            throw IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
-        }
-
-    @Suppress("NamedArguments") // java.lang.IllegalArgumentException ctors can't be called with named args.
-    private fun uuidOf(
-        value: String,
-        field: String = "user id",
-    ): UUID =
-        try {
-            UUID.fromString(value)
-        } catch (e: IllegalArgumentException) {
-            throw IllegalArgumentException("Invalid $field '$value'", e)
-        }
-
     fun createFixture(
         token: VerifiedFirebaseToken,
         request: FixtureInput,
@@ -685,24 +656,6 @@ class MatchService(
     }
 
     /**
-     * True when [playerA] and [playerB] faced each other as opponents in [meeting] — one on each side,
-     * in either orientation. Doubles partners on the same team are excluded, which is why a meeting
-     * surfaced by `listBetweenUsers` isn't automatically a head-to-head (#285). Written as a single
-     * membership check per side (rather than a compound boolean) so each side/orientation is coverable.
-     */
-    private fun wereOpponents(
-        meeting: Match,
-        playerA: UUID,
-        playerB: UUID,
-    ): Boolean {
-        val aOnTeam1 = playerA in meeting.team1.userIds
-        val aOnTeam2 = playerA in meeting.team2.userIds
-        val bOnTeam1 = playerB in meeting.team1.userIds
-        val bOnTeam2 = playerB in meeting.team2.userIds
-        return (aOnTeam1 && bOnTeam2) || (aOnTeam2 && bOnTeam1)
-    }
-
-    /**
      * Per-player rating changes for a rated match. Bands ([previousLevel]/[newLevel]) are public; the
      * precise rates (6-dp) are included only when the viewer holds RATER or ADMINISTRATOR. Players are
      * ordered team1-then-team2 (mirroring [calculationDetail]); empty when no history is recorded. Names
@@ -853,23 +806,6 @@ class MatchService(
                 ServiceError.Validation(message = "All players must be participants of the event")
             }
         }
-
-    /**
-     * How the match ended, from the wire (#911). Absent means [MatchCompletionReason.COMPLETED].
-     *
-     * Parsed here rather than in the DTO because the permitted values are a `model` concept and `dto`
-     * must not reach into `model` — the same reason every other enum on a request is parsed in a service.
-     */
-    private fun parseCompletionReason(raw: String?): Either<ServiceError, MatchCompletionReason> {
-        val value = raw ?: return MatchCompletionReason.COMPLETED.right()
-        return MatchCompletionReason.entries.firstOrNull { it.name == value.uppercase() }?.right()
-            ?: ServiceError
-                .Validation(
-                    message =
-                        "Unknown completionReason '$value'; expected one of " +
-                            MatchCompletionReason.entries.joinToString { it.name },
-                ).left()
-    }
 
     private fun staffCaller(token: VerifiedFirebaseToken): Either<ServiceError, User> = staffCallerOf(users = users, token = token)
 
@@ -1057,4 +993,70 @@ private fun headToHeadEntry(
         sets = meeting.sets.map { orientSet(set = it, refIsTeam1 = refIsTeam1) },
         winnerPublicCode = if (refSideWon) codes[team1Id] else codes[team2Id],
     )
+}
+
+// Stateless input parsing and match predicates, file-level to hold MatchService under detekt's LargeClass ceiling.
+
+/** Map the `filter` query value to a [MatchQuery] (#331); an unknown value is a 400. */
+@Suppress("NamedArguments") // java.lang.IllegalArgumentException ctors can't be called with named args.
+private fun matchQueryOf(value: String?): MatchQuery =
+    when (value) {
+        "pending-calculation" -> MatchQuery.PENDING_CALCULATION
+        "awaiting-results" -> MatchQuery.AWAITING_RESULTS
+        "results" -> MatchQuery.RESULTS
+        else -> throw IllegalArgumentException("filter must be 'pending-calculation', 'awaiting-results', or 'results'")
+    }
+
+@Suppress("NamedArguments") // java.lang.IllegalArgumentException ctors can't be called with named args.
+private fun matchDateOf(value: String): LocalDate =
+    try {
+        LocalDate.parse(value)
+    } catch (e: DateTimeParseException) {
+        throw IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
+    }
+
+@Suppress("NamedArguments") // java.lang.IllegalArgumentException ctors can't be called with named args.
+private fun uuidOf(
+    value: String,
+    field: String = "user id",
+): UUID =
+    try {
+        UUID.fromString(value)
+    } catch (e: IllegalArgumentException) {
+        throw IllegalArgumentException("Invalid $field '$value'", e)
+    }
+
+/**
+ * True when [playerA] and [playerB] faced each other as opponents in [meeting] — one on each side,
+ * in either orientation. Doubles partners on the same team are excluded, which is why a meeting
+ * surfaced by `listBetweenUsers` isn't automatically a head-to-head (#285). Written as a single
+ * membership check per side (rather than a compound boolean) so each side/orientation is coverable.
+ */
+private fun wereOpponents(
+    meeting: Match,
+    playerA: UUID,
+    playerB: UUID,
+): Boolean {
+    val aOnTeam1 = playerA in meeting.team1.userIds
+    val aOnTeam2 = playerA in meeting.team2.userIds
+    val bOnTeam1 = playerB in meeting.team1.userIds
+    val bOnTeam2 = playerB in meeting.team2.userIds
+    return (aOnTeam1 && bOnTeam2) || (aOnTeam2 && bOnTeam1)
+}
+
+/**
+ * How the match ended, from the wire (#911). Absent means [MatchCompletionReason.COMPLETED].
+ *
+ * Parsed here rather than in the DTO because the permitted values are a `model` concept and `dto`
+ * must not reach into `model` — the same reason every other enum on a request is parsed in a service.
+ */
+private fun parseCompletionReason(raw: String?): Either<ServiceError, MatchCompletionReason> {
+    val value = raw ?: return MatchCompletionReason.COMPLETED.right()
+    return MatchCompletionReason.entries.firstOrNull { it.name == value.uppercase() }?.right()
+        ?: ServiceError
+            .Validation(
+                message =
+                    "Unknown completionReason '$value'; expected one of " +
+                        MatchCompletionReason.entries.joinToString { it.name },
+            ).left()
 }

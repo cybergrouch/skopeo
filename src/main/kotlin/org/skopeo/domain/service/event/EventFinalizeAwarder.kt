@@ -388,6 +388,19 @@ class EventFinalizeAwarder(
         return written
     }
 
+    /** The event's completed, decided matches that [policy] pays for — narrowed to [onlyMatchId] when given. */
+    private fun completedInScope(
+        event: Event,
+        policy: PerSetPolicy,
+        onlyMatchId: UUID?,
+    ): List<Match> =
+        matches
+            .listByEvent(eventId = event.id)
+            .map { it.toDomain() }
+            .filter { it.status == MatchStatus.COMPLETED && it.winnerTeamId != null }
+            .filter { policy.includeMatch(it) }
+            .filter { onlyMatchId == null || it.id == onlyMatchId }
+
     /**
      * Computed per-set awarding (#525). Each fixture [policy] admits is scored per set from the two teams'
      * ENTRY bands (their current band at finalize — the event's own matches are not rated until after
@@ -416,13 +429,7 @@ class EventFinalizeAwarder(
                 .plusDays(policy.validityDays.toLong())
                 .plusDays(1)
                 .atStartOfDay()
-        val completed =
-            matches
-                .listByEvent(eventId = event.id)
-                .map { it.toDomain() }
-                .filter { it.status == MatchStatus.COMPLETED && it.winnerTeamId != null }
-                .filter { policy.includeMatch(it) }
-                .filter { onlyMatchId == null || it.id == onlyMatchId }
+        val completed = completedInScope(event = event, policy = policy, onlyMatchId = onlyMatchId)
         val userIds = completed.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
         val bands = ratings.findCurrentRatings(userIds = userIds)
         val sexes = users.findAllByIds(ids = userIds).map { it.toDomain() }.associate { it.id to (it.sex ?: UNSPECIFIED_SEX) }

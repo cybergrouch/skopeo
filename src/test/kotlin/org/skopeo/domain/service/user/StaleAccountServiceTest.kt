@@ -117,6 +117,21 @@ class StaleAccountServiceTest {
 
     private fun admin(): UUID = signUp(uid = "root", daysAgo = 400, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
+    /** A team row for [userId] with no event or match around it: match history in its barest form. */
+    private fun seedTeamMembership(userId: UUID) {
+        transaction {
+            val team =
+                TeamsTable.insertAndGetId {
+                    it[name] = "T"
+                    it[teamType] = "SINGLES"
+                }
+            TeamUsersTable.insert {
+                it[teamId] = team
+                it[TeamUsersTable.userId] = userId
+            }
+        }
+    }
+
     @Test
     fun `the rule matches only an old, unrated, untouched self-sign-up`() {
         val stale = signUp(uid = "stale", daysAgo = 45)
@@ -129,20 +144,7 @@ class StaleAccountServiceTest {
         val staff = signUp(uid = "staff", daysAgo = 45).also { CapabilityRepository().grant(userId = it, capability = Capability.HOST) }
         val inEvent = signUp(uid = "event", daysAgo = 45).also { fixtureEventFor(team1 = listOf(element = it), team2 = emptyList()) }
         // Match history without an event entry, so this proves the team_users exclusion on its own.
-        val inMatch =
-            signUp(uid = "match", daysAgo = 45).also { userId ->
-                transaction {
-                    val team =
-                        TeamsTable.insertAndGetId {
-                            it[name] = "T"
-                            it[teamType] = "SINGLES"
-                        }
-                    TeamUsersTable.insert {
-                        it[teamId] = team
-                        it[TeamUsersTable.userId] = userId
-                    }
-                }
-            }
+        val inMatch = signUp(uid = "match", daysAgo = 45).also { seedTeamMembership(userId = it) }
         // The #1121 shape: an unrated account something was merged into.
         val mergeTarget =
             signUp(uid = "survivor", daysAgo = 45).also { survivor ->

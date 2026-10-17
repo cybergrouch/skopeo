@@ -594,248 +594,6 @@ class UserRepository {
             moved.copy(loginTransferred = transferLogin, ratingCarriedOver = ratingCarriedOver, rankingPointAwards = awardsMoved)
         }
 
-    /**
-     * Move the retired account's login onto the survivor (#643) so the survivor keeps the accessible login. Order is
-     * load-bearing for the UNIQUE constraints (`users.firebase_uid`, `uq_identity_provider_uid(provider, provider_uid)`):
-     * FIRST free the retired account — null out its `firebase_uid` and delete its primary identity row (freeing the
-     * `(provider, provider_uid)` pair) — THEN set the survivor's `firebase_uid` and re-home that same `(provider, provider_uid)`
-     * as the survivor's primary identity. Doing it in the reverse order would collide on those UNIQUEs. A survivor that was
-     * a placeholder gains an identity row here and stops being a placeholder. Must run inside a transaction; no-op if the
-     * retired account has no login.
-     */
-    private fun transferLogin(
-        fromUserId: UUID,
-        intoUserId: UUID,
-    ) {
-        val uid =
-            UsersTable
-                .selectAll()
-                .where { UsersTable.id eq fromUserId }
-                .singleOrNull()
-                ?.let { it[UsersTable.firebaseUid] }
-                ?: return
-        val primaryIdentity =
-            UserIdentitiesTable
-                .selectAll()
-                .where { UserIdentitiesTable.userId eq fromUserId }
-                .toList()
-                .let { rows -> rows.firstOrNull { it[UserIdentitiesTable.isPrimary] } ?: rows.firstOrNull() }
-
-        // 1. FREE the retired account (release both UNIQUE anchors before re-using them on the survivor).
-        UsersTable.update(where = { UsersTable.id eq fromUserId }) { it[firebaseUid] = null }
-        if (primaryIdentity != null) {
-            UserIdentitiesTable.deleteWhere { UserIdentitiesTable.id eq primaryIdentity[UserIdentitiesTable.id] }
-        }
-
-        // 2. Put the login on the survivor: firebase_uid + the primary identity (update the existing primary
-        // in place, or insert one when the survivor was a placeholder). Clear the placeholder flag — an account
-        // with a login is no longer a login-less placeholder.
-        UsersTable.update(where = { UsersTable.id eq intoUserId }) {
-            it[firebaseUid] = uid
-            it[placeholder] = false
-        }
-        if (primaryIdentity != null) {
-            val existingPrimary =
-                UserIdentitiesTable
-                    .selectAll()
-                    .where { (UserIdentitiesTable.userId eq intoUserId) and (UserIdentitiesTable.isPrimary eq true) }
-                    .firstOrNull()
-            if (existingPrimary != null) {
-                UserIdentitiesTable.update(where = { UserIdentitiesTable.id eq existingPrimary[UserIdentitiesTable.id] }) {
-                    it[provider] = primaryIdentity[UserIdentitiesTable.provider]
-                    it[providerUid] = primaryIdentity[UserIdentitiesTable.providerUid]
-                    it[isPrimary] = true
-                }
-            } else {
-                UserIdentitiesTable.insert {
-                    it[userId] = intoUserId
-                    it[provider] = primaryIdentity[UserIdentitiesTable.provider]
-                    it[providerUid] = primaryIdentity[UserIdentitiesTable.providerUid]
-                    it[isPrimary] = true
-                }
-            }
-        }
-    }
-
-    /**
-     * Move only participation/membership records from [fromUserId] onto [intoUserId] (#643) — the selective variant of
-     * [absorbUserRecords]. Re-points matches (team_users), event participants, player-list members, club owners, and
-     * seeding entries (deduping per-(parent, user) UNIQUE rows exactly as the full absorb does), but deliberately SKIPS
-     * rating history, the current rating, and ranking points, so the survivor keeps its own rating + standings with no
-     * recompute. Returns a per-table count of what was moved (counted before re-pointing, so it includes deduped rows).
-     * Must run inside a transaction.
-     */
-    private fun absorbParticipationRecords(
-        fromUserId: UUID,
-        intoUserId: UUID,
-    ): AccountMergeResult {
-        val teamMemberships =
-            TeamUsersTable
-                .selectAll()
-                .where { TeamUsersTable.userId eq fromUserId }
-                .count()
-                .toInt()
-        val eventParticipations =
-            EventParticipantsTable
-                .selectAll()
-                .where { EventParticipantsTable.userId eq fromUserId }
-                .count()
-                .toInt()
-        val playerListMemberships =
-            PlayerListMembersTable
-                .selectAll()
-                .where { PlayerListMembersTable.userId eq fromUserId }
-                .count()
-                .toInt()
-        val clubOwnerships =
-            ClubOwnersTable
-                .selectAll()
-                .where { ClubOwnersTable.userId eq fromUserId }
-                .count()
-                .toInt()
-        val seedingEntries =
-            SeedingEntriesTable
-                .selectAll()
-                .where { SeedingEntriesTable.userId eq fromUserId }
-                .count()
-                .toInt()
-
-        repointTeamUsers(fromUserId = fromUserId, intoUserId = intoUserId)
-        repointEventParticipants(fromUserId = fromUserId, intoUserId = intoUserId)
-        repointPlayerListMembers(fromUserId = fromUserId, intoUserId = intoUserId)
-        repointClubOwners(fromUserId = fromUserId, intoUserId = intoUserId)
-        SeedingEntriesTable.update(where = { SeedingEntriesTable.userId eq fromUserId }) { it[userId] = intoUserId }
-
-        return AccountMergeResult(
-            teamMemberships = teamMemberships,
-            eventParticipations = eventParticipations,
-            playerListMemberships = playerListMemberships,
-            clubOwnerships = clubOwnerships,
-            seedingEntries = seedingEntries,
-            loginTransferred = false,
-        )
-    }
-
-    /**
-     * Absorb every record owned by [fromUserId] into [intoUserId] — the shared consolidation primitive behind
-     * placeholder-claim (#496) and duplicate-import (#124). Re-points rating history + points (no per-user
-     * uniqueness), the current rating, match participation (team_users), event/list/club memberships, and
-     * seeding entries. Rosters/memberships carrying a per-(parent, user) UNIQUE are deduped (drop the source
-     * row when the target already belongs) before re-pointing. The current-rating re-point assumes [intoUserId]
-     * has no rating row (an empty target — callers enforce that); it defensively drops the source row otherwise.
-     * Must run inside a transaction.
-     */
-    private fun absorbUserRecords(
-        fromUserId: UUID,
-        intoUserId: UUID,
-    ) {
-        // History + points: pure re-point (no per-user uniqueness).
-        UserRatingHistoryTable.update(where = { UserRatingHistoryTable.userId eq fromUserId }) { it[userId] = intoUserId }
-        RankingPointAwardsTable.update(where = { RankingPointAwardsTable.userId eq fromUserId }) { it[userId] = intoUserId }
-        // user_ratings: UNIQUE(user_id). The target is empty (no row), so a straight re-point is safe;
-        // guard anyway by dropping the source's row if the target somehow already has one.
-        if (UserRatingsTable.selectAll().where { UserRatingsTable.userId eq intoUserId }.any()) {
-            UserRatingsTable.deleteWhere { UserRatingsTable.userId eq fromUserId }
-        } else {
-            UserRatingsTable.update(where = { UserRatingsTable.userId eq fromUserId }) { it[userId] = intoUserId }
-        }
-        // Rosters + memberships with a per-(parent,user) UNIQUE: dedupe, then re-point the rest.
-        repointTeamUsers(fromUserId = fromUserId, intoUserId = intoUserId)
-        repointEventParticipants(fromUserId = fromUserId, intoUserId = intoUserId)
-        repointPlayerListMembers(fromUserId = fromUserId, intoUserId = intoUserId)
-        repointClubOwners(fromUserId = fromUserId, intoUserId = intoUserId)
-        // seeding_entries: SET NULL semantics — re-point the id so a re-render shows the real player.
-        SeedingEntriesTable.update(where = { SeedingEntriesTable.userId eq fromUserId }) { it[userId] = intoUserId }
-    }
-
-    /**
-     * team_users re-point (#496): re-point the placeholder's rows to the claimant, dropping any row for a
-     * team the claimant is already on (UNIQUE team_id, user_id, joined_at). Must run in a transaction.
-     *
-     * This is the only path on which rated-match participation moves between accounts, so it is where the
-     * stored calibration count (#1051) is recomputed for both sides — the survivor gains the retired
-     * account's rated matches, and a deduped row means the survivor's own count can move too. Editing a
-     * fixture's players ([setFixturePlayers]) cannot reach a rated match: it is refused once the match is
-     * `IN_PROGRESS`/`COMPLETED` or its event is finalized, and rating requires both.
-     */
-    private fun repointTeamUsers(
-        fromUserId: UUID,
-        intoUserId: UUID,
-    ) {
-        TeamUsersTable.selectAll().where { TeamUsersTable.userId eq fromUserId }.toList().forEach { row ->
-            val teamId = row[TeamUsersTable.teamId]
-            val claimantOnTeam =
-                TeamUsersTable.selectAll().where { (TeamUsersTable.userId eq intoUserId) and (TeamUsersTable.teamId eq teamId) }.any()
-            if (claimantOnTeam) {
-                TeamUsersTable.deleteWhere { TeamUsersTable.id eq row[TeamUsersTable.id] }
-            } else {
-                TeamUsersTable.update(where = { TeamUsersTable.id eq row[TeamUsersTable.id] }) { it[userId] = intoUserId }
-            }
-        }
-        refreshCalibrationCounts(userIds = listOf(fromUserId, intoUserId))
-    }
-
-    /** event_participants re-point (#496): re-point, dropping duplicates (UNIQUE event_id, user_id). In a transaction. */
-    private fun repointEventParticipants(
-        fromUserId: UUID,
-        intoUserId: UUID,
-    ) {
-        EventParticipantsTable.selectAll().where { EventParticipantsTable.userId eq fromUserId }.toList().forEach { row ->
-            val eventId = row[EventParticipantsTable.eventId]
-            val claimantInEvent =
-                EventParticipantsTable
-                    .selectAll()
-                    .where { (EventParticipantsTable.userId eq intoUserId) and (EventParticipantsTable.eventId eq eventId) }
-                    .any()
-            if (claimantInEvent) {
-                EventParticipantsTable.deleteWhere { EventParticipantsTable.id eq row[EventParticipantsTable.id] }
-            } else {
-                EventParticipantsTable.update(where = { EventParticipantsTable.id eq row[EventParticipantsTable.id] }) {
-                    it[userId] = intoUserId
-                }
-            }
-        }
-    }
-
-    /** player_list_members re-point (#496): re-point, dropping duplicates (UNIQUE list_id, user_id). In a transaction. */
-    private fun repointPlayerListMembers(
-        fromUserId: UUID,
-        intoUserId: UUID,
-    ) {
-        PlayerListMembersTable.selectAll().where { PlayerListMembersTable.userId eq fromUserId }.toList().forEach { row ->
-            val listId = row[PlayerListMembersTable.listId]
-            val claimantInList =
-                PlayerListMembersTable
-                    .selectAll()
-                    .where { (PlayerListMembersTable.userId eq intoUserId) and (PlayerListMembersTable.listId eq listId) }
-                    .any()
-            if (claimantInList) {
-                PlayerListMembersTable.deleteWhere { PlayerListMembersTable.id eq row[PlayerListMembersTable.id] }
-            } else {
-                PlayerListMembersTable.update(where = { PlayerListMembersTable.id eq row[PlayerListMembersTable.id] }) {
-                    it[userId] = intoUserId
-                }
-            }
-        }
-    }
-
-    /** club_owners re-point (#496): re-point, dropping duplicates (UNIQUE club_id, user_id). In a transaction. */
-    private fun repointClubOwners(
-        fromUserId: UUID,
-        intoUserId: UUID,
-    ) {
-        ClubOwnersTable.selectAll().where { ClubOwnersTable.userId eq fromUserId }.toList().forEach { row ->
-            val clubId = row[ClubOwnersTable.clubId]
-            val claimantOwnsClub =
-                ClubOwnersTable.selectAll().where { (ClubOwnersTable.userId eq intoUserId) and (ClubOwnersTable.clubId eq clubId) }.any()
-            if (claimantOwnsClub) {
-                ClubOwnersTable.deleteWhere { ClubOwnersTable.id eq row[ClubOwnersTable.id] }
-            } else {
-                ClubOwnersTable.update(where = { ClubOwnersTable.id eq row[ClubOwnersTable.id] }) { it[userId] = intoUserId }
-            }
-        }
-    }
-
     /** Load the aggregate as an [Either], turning absence into a [ServiceError.NotFound]. Must run in a transaction. */
     private fun aggregateOrNotFound(id: UUID): Either<ServiceError, UserAggregateEntity> {
         val user = loadAggregate(id = id)
@@ -1255,3 +1013,249 @@ private fun moveEarnedAwards(
                 (RankingPointAwardsTable.matchId.isNotNull() or RankingPointAwardsTable.eventId.isNotNull())
         },
     ) { it[userId] = intoUserId }
+
+// Account-merge and record-absorb steps (#643/#496), file-level because they touch only tables: they hold no
+// repository state, and keeping them out of the class holds UserRepository under detekt's LargeClass ceiling.
+// Each must run inside the caller's transaction.
+
+/**
+ * Move the retired account's login onto the survivor (#643) so the survivor keeps the accessible login. Order is
+ * load-bearing for the UNIQUE constraints (`users.firebase_uid`, `uq_identity_provider_uid(provider, provider_uid)`):
+ * FIRST free the retired account — null out its `firebase_uid` and delete its primary identity row (freeing the
+ * `(provider, provider_uid)` pair) — THEN set the survivor's `firebase_uid` and re-home that same `(provider, provider_uid)`
+ * as the survivor's primary identity. Doing it in the reverse order would collide on those UNIQUEs. A survivor that was
+ * a placeholder gains an identity row here and stops being a placeholder. Must run inside a transaction; no-op if the
+ * retired account has no login.
+ */
+private fun transferLogin(
+    fromUserId: UUID,
+    intoUserId: UUID,
+) {
+    val uid =
+        UsersTable
+            .selectAll()
+            .where { UsersTable.id eq fromUserId }
+            .singleOrNull()
+            ?.let { it[UsersTable.firebaseUid] }
+            ?: return
+    val primaryIdentity =
+        UserIdentitiesTable
+            .selectAll()
+            .where { UserIdentitiesTable.userId eq fromUserId }
+            .toList()
+            .let { rows -> rows.firstOrNull { it[UserIdentitiesTable.isPrimary] } ?: rows.firstOrNull() }
+
+    // 1. FREE the retired account (release both UNIQUE anchors before re-using them on the survivor).
+    UsersTable.update(where = { UsersTable.id eq fromUserId }) { it[firebaseUid] = null }
+    if (primaryIdentity != null) {
+        UserIdentitiesTable.deleteWhere { UserIdentitiesTable.id eq primaryIdentity[UserIdentitiesTable.id] }
+    }
+
+    // 2. Put the login on the survivor: firebase_uid + the primary identity (update the existing primary
+    // in place, or insert one when the survivor was a placeholder). Clear the placeholder flag — an account
+    // with a login is no longer a login-less placeholder.
+    UsersTable.update(where = { UsersTable.id eq intoUserId }) {
+        it[firebaseUid] = uid
+        it[placeholder] = false
+    }
+    if (primaryIdentity != null) {
+        val existingPrimary =
+            UserIdentitiesTable
+                .selectAll()
+                .where { (UserIdentitiesTable.userId eq intoUserId) and (UserIdentitiesTable.isPrimary eq true) }
+                .firstOrNull()
+        if (existingPrimary != null) {
+            UserIdentitiesTable.update(where = { UserIdentitiesTable.id eq existingPrimary[UserIdentitiesTable.id] }) {
+                it[provider] = primaryIdentity[UserIdentitiesTable.provider]
+                it[providerUid] = primaryIdentity[UserIdentitiesTable.providerUid]
+                it[isPrimary] = true
+            }
+        } else {
+            UserIdentitiesTable.insert {
+                it[userId] = intoUserId
+                it[provider] = primaryIdentity[UserIdentitiesTable.provider]
+                it[providerUid] = primaryIdentity[UserIdentitiesTable.providerUid]
+                it[isPrimary] = true
+            }
+        }
+    }
+}
+
+/**
+ * Move only participation/membership records from [fromUserId] onto [intoUserId] (#643) — the selective variant of
+ * [absorbUserRecords]. Re-points matches (team_users), event participants, player-list members, club owners, and
+ * seeding entries (deduping per-(parent, user) UNIQUE rows exactly as the full absorb does), but deliberately SKIPS
+ * rating history, the current rating, and ranking points, so the survivor keeps its own rating + standings with no
+ * recompute. Returns a per-table count of what was moved (counted before re-pointing, so it includes deduped rows).
+ * Must run inside a transaction.
+ */
+private fun absorbParticipationRecords(
+    fromUserId: UUID,
+    intoUserId: UUID,
+): AccountMergeResult {
+    val teamMemberships =
+        TeamUsersTable
+            .selectAll()
+            .where { TeamUsersTable.userId eq fromUserId }
+            .count()
+            .toInt()
+    val eventParticipations =
+        EventParticipantsTable
+            .selectAll()
+            .where { EventParticipantsTable.userId eq fromUserId }
+            .count()
+            .toInt()
+    val playerListMemberships =
+        PlayerListMembersTable
+            .selectAll()
+            .where { PlayerListMembersTable.userId eq fromUserId }
+            .count()
+            .toInt()
+    val clubOwnerships =
+        ClubOwnersTable
+            .selectAll()
+            .where { ClubOwnersTable.userId eq fromUserId }
+            .count()
+            .toInt()
+    val seedingEntries =
+        SeedingEntriesTable
+            .selectAll()
+            .where { SeedingEntriesTable.userId eq fromUserId }
+            .count()
+            .toInt()
+
+    repointTeamUsers(fromUserId = fromUserId, intoUserId = intoUserId)
+    repointEventParticipants(fromUserId = fromUserId, intoUserId = intoUserId)
+    repointPlayerListMembers(fromUserId = fromUserId, intoUserId = intoUserId)
+    repointClubOwners(fromUserId = fromUserId, intoUserId = intoUserId)
+    SeedingEntriesTable.update(where = { SeedingEntriesTable.userId eq fromUserId }) { it[userId] = intoUserId }
+
+    return AccountMergeResult(
+        teamMemberships = teamMemberships,
+        eventParticipations = eventParticipations,
+        playerListMemberships = playerListMemberships,
+        clubOwnerships = clubOwnerships,
+        seedingEntries = seedingEntries,
+        loginTransferred = false,
+    )
+}
+
+/**
+ * Absorb every record owned by [fromUserId] into [intoUserId] — the shared consolidation primitive behind
+ * placeholder-claim (#496) and duplicate-import (#124). Re-points rating history + points (no per-user
+ * uniqueness), the current rating, match participation (team_users), event/list/club memberships, and
+ * seeding entries. Rosters/memberships carrying a per-(parent, user) UNIQUE are deduped (drop the source
+ * row when the target already belongs) before re-pointing. The current-rating re-point assumes [intoUserId]
+ * has no rating row (an empty target — callers enforce that); it defensively drops the source row otherwise.
+ * Must run inside a transaction.
+ */
+private fun absorbUserRecords(
+    fromUserId: UUID,
+    intoUserId: UUID,
+) {
+    // History + points: pure re-point (no per-user uniqueness).
+    UserRatingHistoryTable.update(where = { UserRatingHistoryTable.userId eq fromUserId }) { it[userId] = intoUserId }
+    RankingPointAwardsTable.update(where = { RankingPointAwardsTable.userId eq fromUserId }) { it[userId] = intoUserId }
+    // user_ratings: UNIQUE(user_id). The target is empty (no row), so a straight re-point is safe;
+    // guard anyway by dropping the source's row if the target somehow already has one.
+    if (UserRatingsTable.selectAll().where { UserRatingsTable.userId eq intoUserId }.any()) {
+        UserRatingsTable.deleteWhere { UserRatingsTable.userId eq fromUserId }
+    } else {
+        UserRatingsTable.update(where = { UserRatingsTable.userId eq fromUserId }) { it[userId] = intoUserId }
+    }
+    // Rosters + memberships with a per-(parent,user) UNIQUE: dedupe, then re-point the rest.
+    repointTeamUsers(fromUserId = fromUserId, intoUserId = intoUserId)
+    repointEventParticipants(fromUserId = fromUserId, intoUserId = intoUserId)
+    repointPlayerListMembers(fromUserId = fromUserId, intoUserId = intoUserId)
+    repointClubOwners(fromUserId = fromUserId, intoUserId = intoUserId)
+    // seeding_entries: SET NULL semantics — re-point the id so a re-render shows the real player.
+    SeedingEntriesTable.update(where = { SeedingEntriesTable.userId eq fromUserId }) { it[userId] = intoUserId }
+}
+
+/**
+ * team_users re-point (#496): re-point the placeholder's rows to the claimant, dropping any row for a
+ * team the claimant is already on (UNIQUE team_id, user_id, joined_at). Must run in a transaction.
+ *
+ * This is the only path on which rated-match participation moves between accounts, so it is where the
+ * stored calibration count (#1051) is recomputed for both sides — the survivor gains the retired
+ * account's rated matches, and a deduped row means the survivor's own count can move too. Editing a
+ * fixture's players ([setFixturePlayers]) cannot reach a rated match: it is refused once the match is
+ * `IN_PROGRESS`/`COMPLETED` or its event is finalized, and rating requires both.
+ */
+private fun repointTeamUsers(
+    fromUserId: UUID,
+    intoUserId: UUID,
+) {
+    TeamUsersTable.selectAll().where { TeamUsersTable.userId eq fromUserId }.toList().forEach { row ->
+        val teamId = row[TeamUsersTable.teamId]
+        val claimantOnTeam =
+            TeamUsersTable.selectAll().where { (TeamUsersTable.userId eq intoUserId) and (TeamUsersTable.teamId eq teamId) }.any()
+        if (claimantOnTeam) {
+            TeamUsersTable.deleteWhere { TeamUsersTable.id eq row[TeamUsersTable.id] }
+        } else {
+            TeamUsersTable.update(where = { TeamUsersTable.id eq row[TeamUsersTable.id] }) { it[userId] = intoUserId }
+        }
+    }
+    refreshCalibrationCounts(userIds = listOf(fromUserId, intoUserId))
+}
+
+/** event_participants re-point (#496): re-point, dropping duplicates (UNIQUE event_id, user_id). In a transaction. */
+private fun repointEventParticipants(
+    fromUserId: UUID,
+    intoUserId: UUID,
+) {
+    EventParticipantsTable.selectAll().where { EventParticipantsTable.userId eq fromUserId }.toList().forEach { row ->
+        val eventId = row[EventParticipantsTable.eventId]
+        val claimantInEvent =
+            EventParticipantsTable
+                .selectAll()
+                .where { (EventParticipantsTable.userId eq intoUserId) and (EventParticipantsTable.eventId eq eventId) }
+                .any()
+        if (claimantInEvent) {
+            EventParticipantsTable.deleteWhere { EventParticipantsTable.id eq row[EventParticipantsTable.id] }
+        } else {
+            EventParticipantsTable.update(where = { EventParticipantsTable.id eq row[EventParticipantsTable.id] }) {
+                it[userId] = intoUserId
+            }
+        }
+    }
+}
+
+/** player_list_members re-point (#496): re-point, dropping duplicates (UNIQUE list_id, user_id). In a transaction. */
+private fun repointPlayerListMembers(
+    fromUserId: UUID,
+    intoUserId: UUID,
+) {
+    PlayerListMembersTable.selectAll().where { PlayerListMembersTable.userId eq fromUserId }.toList().forEach { row ->
+        val listId = row[PlayerListMembersTable.listId]
+        val claimantInList =
+            PlayerListMembersTable
+                .selectAll()
+                .where { (PlayerListMembersTable.userId eq intoUserId) and (PlayerListMembersTable.listId eq listId) }
+                .any()
+        if (claimantInList) {
+            PlayerListMembersTable.deleteWhere { PlayerListMembersTable.id eq row[PlayerListMembersTable.id] }
+        } else {
+            PlayerListMembersTable.update(where = { PlayerListMembersTable.id eq row[PlayerListMembersTable.id] }) {
+                it[userId] = intoUserId
+            }
+        }
+    }
+}
+
+/** club_owners re-point (#496): re-point, dropping duplicates (UNIQUE club_id, user_id). In a transaction. */
+private fun repointClubOwners(
+    fromUserId: UUID,
+    intoUserId: UUID,
+) {
+    ClubOwnersTable.selectAll().where { ClubOwnersTable.userId eq fromUserId }.toList().forEach { row ->
+        val clubId = row[ClubOwnersTable.clubId]
+        val claimantOwnsClub =
+            ClubOwnersTable.selectAll().where { (ClubOwnersTable.userId eq intoUserId) and (ClubOwnersTable.clubId eq clubId) }.any()
+        if (claimantOwnsClub) {
+            ClubOwnersTable.deleteWhere { ClubOwnersTable.id eq row[ClubOwnersTable.id] }
+        } else {
+            ClubOwnersTable.update(where = { ClubOwnersTable.id eq row[ClubOwnersTable.id] }) { it[userId] = intoUserId }
+        }
+    }
+}

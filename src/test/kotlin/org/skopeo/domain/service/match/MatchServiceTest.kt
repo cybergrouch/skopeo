@@ -1185,6 +1185,16 @@ class MatchServiceTest {
             .shouldBeNull()
     }
 
+    /** The public match view's rating changes as [viewer] sees them; null [viewer] is an anonymous visitor (#193). */
+    private fun ratingChangesAs(
+        viewer: VerifiedFirebaseToken?,
+        code: String,
+    ) = service
+        .publicByCode(token = viewer, code = code)
+        .shouldBeRight()
+        .ratingChanges
+        .shouldNotBeNull()
+
     @Test
     fun `publicByCode reveals rating changes once rated, gated by viewer capability (#136)`() {
         provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
@@ -1213,48 +1223,28 @@ class MatchServiceTest {
         }
 
         // A viewer with a valid token but no provisioned Skopeo profile still gets the public bands, no rates.
-        val asGhost =
-            service
-                .publicByCode(token = token(uid = "ghost"), code = match.publicCode)
-                .shouldBeRight()
-                .ratingChanges
-                .shouldNotBeNull()
+        val asGhost = ratingChangesAs(viewer = token(uid = "ghost"), code = match.publicCode)
         asGhost.forEach { change ->
             change.newLevel.shouldNotBeNull()
             change.newRating.shouldBeNull()
         }
 
         // An anonymous viewer (no token, #193) is treated like any non-privileged viewer: bands, no rates.
-        val asAnon =
-            service
-                .publicByCode(token = null, code = match.publicCode)
-                .shouldBeRight()
-                .ratingChanges
-                .shouldNotBeNull()
+        val asAnon = ratingChangesAs(viewer = null, code = match.publicCode)
         asAnon.forEach { change ->
             change.newLevel.shouldNotBeNull()
             change.newRating.shouldBeNull()
         }
 
         // A RATER no longer sees the precise rates (#583) — bands only, like any non-admin viewer.
-        service
-            .publicByCode(token = token(uid = "rater"), code = match.publicCode)
-            .shouldBeRight()
-            .ratingChanges
-            .shouldNotBeNull()
-            .forEach { change ->
-                change.newLevel.shouldNotBeNull()
-                change.newRating.shouldBeNull()
-                change.ratingChange.shouldBeNull()
-            }
+        ratingChangesAs(viewer = token(uid = "rater"), code = match.publicCode).forEach { change ->
+            change.newLevel.shouldNotBeNull()
+            change.newRating.shouldBeNull()
+            change.ratingChange.shouldBeNull()
+        }
 
         // Only an ADMINISTRATOR sees the precise 6-dp rates.
-        val staffChanges =
-            service
-                .publicByCode(token = token(uid = "root"), code = match.publicCode)
-                .shouldBeRight()
-                .ratingChanges
-                .shouldNotBeNull()
+        val staffChanges = ratingChangesAs(viewer = token(uid = "root"), code = match.publicCode)
         staffChanges.forEach { change ->
             change.previousRating.shouldNotBeNull()
             change.newRating.shouldNotBeNull()
