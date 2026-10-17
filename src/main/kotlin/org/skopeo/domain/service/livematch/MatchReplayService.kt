@@ -177,8 +177,10 @@ class MatchReplayService(
         match: Match,
     ): Boolean {
         val viewer = token?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() } ?: return false
-        val event = events.findById(id = match.eventId)?.toEventDomain() ?: return false
-        return clubAccess.mayOrganize(caller = viewer, event = event)
+        return events
+            .findById(id = match.eventId)
+            ?.toEventDomain()
+            ?.let { clubAccess.mayOrganize(caller = viewer, event = it) } == true
     }
 
     private fun save(

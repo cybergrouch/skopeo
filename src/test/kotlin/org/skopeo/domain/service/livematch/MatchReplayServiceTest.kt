@@ -429,7 +429,7 @@ class MatchReplayServiceTest {
             replay.points.all { (it.scorer == home) == entitled } shouldBe true
             replay.events.all { (it.scorer == home) == entitled } shouldBe true
         }
-        seen.getValue(key = "owner").scorers shouldBe mapOf(home to ReplayScorer(displayName = "club-home"))
+        seen.getValue(key = "owner").scorers shouldBe mapOf(pair = home to ReplayScorer(displayName = "club-home"))
     }
 
     @Test
@@ -446,7 +446,7 @@ class MatchReplayServiceTest {
                 .scorers
                 .shouldNotBeNull()
 
-        scorers shouldBe mapOf(homeCode(match = match) to ReplayScorer(displayName = null, isDeleted = true))
+        scorers shouldBe mapOf(pair = homeCode(match = match) to ReplayScorer(displayName = null, isDeleted = true))
     }
 
     @Test
