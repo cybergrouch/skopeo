@@ -99,9 +99,12 @@ class RankingPointService(
                 ServiceError.Validation(message = "A reason is required for an external or ad-hoc grant")
             }
             val target =
-                users.findById(
-                    id = command.userId,
-                ).mapLeft { ServiceError.Validation(message = "Unknown user ${command.userId}") }.bind().toDomain()
+                users
+                    .findById(
+                        id = command.userId,
+                    ).mapLeft { ServiceError.Validation(message = "Unknown user ${command.userId}") }
+                    .bind()
+                    .toDomain()
             ensure(condition = target.isActive) { ServiceError.Validation(message = "${target.nameForMessage()} is not active") }
 
             val validFrom = command.validFrom ?: LocalDateTime.now()
@@ -118,29 +121,30 @@ class RankingPointService(
                 }
 
             val award =
-                awards.award(
-                    write =
-                        RankingPointAwardWrite(
-                            userId = command.userId,
-                            points = command.points,
-                            pointClass = command.pointClass,
-                            sourceType = command.sourceType,
-                            sourceId = command.sourceId?.ifBlank { null },
-                            band = band,
-                            sex = target.sex ?: "Unspecified",
-                            reason = command.reason?.ifBlank { null },
-                            validFrom = validFrom,
-                            validUntil = validUntil,
-                            status = AwardStatus.ACTIVE,
-                            revokesAwardId = null,
-                            grantedBy = adminId,
-                            awardedAt = LocalDateTime.now(),
-                            // A manual grant is not computed from a schedule, but it is still stamped with
-                            // the version in force so the ledger has no unattributed rows (#862). Its
-                            // team/opponent bands stay null — there is no matchup to record.
-                            pointsScheduleVersion = configs.currentVersion(),
-                        ),
-                ).toDomain()
+                awards
+                    .award(
+                        write =
+                            RankingPointAwardWrite(
+                                userId = command.userId,
+                                points = command.points,
+                                pointClass = command.pointClass,
+                                sourceType = command.sourceType,
+                                sourceId = command.sourceId?.ifBlank { null },
+                                band = band,
+                                sex = target.sex ?: "Unspecified",
+                                reason = command.reason?.ifBlank { null },
+                                validFrom = validFrom,
+                                validUntil = validUntil,
+                                status = AwardStatus.ACTIVE,
+                                revokesAwardId = null,
+                                grantedBy = adminId,
+                                awardedAt = LocalDateTime.now(),
+                                // A manual grant is not computed from a schedule, but it is still stamped with
+                                // the version in force so the ledger has no unattributed rows (#862). Its
+                                // team/opponent bands stay null — there is no matchup to record.
+                                pointsScheduleVersion = configs.currentVersion(),
+                            ),
+                    ).toDomain()
             audit.record(write = grantAudit(actorId = adminId, award = award))
             award.toResponse()
         }
@@ -180,9 +184,12 @@ class RankingPointService(
                 ServiceError.Validation(message = "valid_until must be after valid_from")
             }
             val target =
-                users.findById(
-                    id = command.userId,
-                ).mapLeft { ServiceError.Validation(message = "Unknown user ${command.userId}") }.bind().toDomain()
+                users
+                    .findById(
+                        id = command.userId,
+                    ).mapLeft { ServiceError.Validation(message = "Unknown user ${command.userId}") }
+                    .bind()
+                    .toDomain()
             ensure(condition = target.isActive) { ServiceError.Validation(message = "${target.nameForMessage()} is not active") }
 
             // Band tagged from the player's current rating; an unrated player has nothing to tag → Validation.
@@ -192,30 +199,31 @@ class RankingPointService(
                 }
 
             val award =
-                awards.award(
-                    write =
-                        RankingPointAwardWrite(
-                            userId = command.userId,
-                            points = command.points,
-                            // Ad-hoc, non-budgeted (decision #5): an EXTERNAL class + EXTERNAL source, no club/budget.
-                            pointClass = PointClass.EXTERNAL,
-                            sourceType = PointSourceType.EXTERNAL,
-                            sourceId = null,
-                            band = band,
-                            sex = target.sex ?: "Unspecified",
-                            reason = command.reason.trim(),
-                            validFrom = command.validFrom,
-                            validUntil = command.validUntil,
-                            status = AwardStatus.ACTIVE,
-                            revokesAwardId = null,
-                            grantedBy = adminId,
-                            awardedAt = LocalDateTime.now(),
-                            // A manual grant is not computed from a schedule, but it is still stamped with
-                            // the version in force so the ledger has no unattributed rows (#862). Its
-                            // team/opponent bands stay null — there is no matchup to record.
-                            pointsScheduleVersion = configs.currentVersion(),
-                        ),
-                ).toDomain()
+                awards
+                    .award(
+                        write =
+                            RankingPointAwardWrite(
+                                userId = command.userId,
+                                points = command.points,
+                                // Ad-hoc, non-budgeted (decision #5): an EXTERNAL class + EXTERNAL source, no club/budget.
+                                pointClass = PointClass.EXTERNAL,
+                                sourceType = PointSourceType.EXTERNAL,
+                                sourceId = null,
+                                band = band,
+                                sex = target.sex ?: "Unspecified",
+                                reason = command.reason.trim(),
+                                validFrom = command.validFrom,
+                                validUntil = command.validUntil,
+                                status = AwardStatus.ACTIVE,
+                                revokesAwardId = null,
+                                grantedBy = adminId,
+                                awardedAt = LocalDateTime.now(),
+                                // A manual grant is not computed from a schedule, but it is still stamped with
+                                // the version in force so the ledger has no unattributed rows (#862). Its
+                                // team/opponent bands stay null — there is no matchup to record.
+                                pointsScheduleVersion = configs.currentVersion(),
+                            ),
+                    ).toDomain()
             audit.record(write = grantAudit(actorId = adminId, award = award))
             award.toResponse()
         }
@@ -292,7 +300,11 @@ class RankingPointService(
     ): Either<ServiceError, List<RankingPointAwardResponse>> =
         either {
             requireAnyOf(users = users, token = token, allowed = setOf(element = Capability.ADMINISTRATOR)).bind()
-            users.findById(id = userId).mapLeft { ServiceError.NotFound(message = "User $userId not found") }.bind().toDomain()
+            users
+                .findById(id = userId)
+                .mapLeft { ServiceError.NotFound(message = "User $userId not found") }
+                .bind()
+                .toDomain()
             awards.listByUser(userId = userId).map { it.toDomain().toResponse() }
         }
 
@@ -404,14 +416,6 @@ class RankingPointService(
         val rating = ratings.findCurrentRating(userId = userId) ?: return null
         return Level.fromValue(value = rating.currentRating.toPlainString()).value
     }
-
-    /**
-     * Resolves the caller and returns their id (the audit actor) when they hold any of [allowed];
-     * `Forbidden` otherwise.
-     *
-     * One gate parameterised by the role set, rather than one function per role: the two it replaced
-     * differed only in that set, and the set is what a reader wants to see at the call site anyway.
-     */
 }
 
 /**

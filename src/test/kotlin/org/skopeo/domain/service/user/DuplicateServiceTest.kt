@@ -61,15 +61,16 @@ class DuplicateServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
@@ -79,20 +80,21 @@ class DuplicateServiceTest {
     private fun fixture(
         u1: UUID,
         u2: UUID,
-    ) = matches.createFixture(
-        command =
-            CreateFixtureCommand(
-                matchFormat = TeamType.SINGLES,
-                matchType = MatchType.OPEN_PLAY,
-                matchDate = LocalDate.of(2026, 1, 1),
-                team1UserIds = listOf(element = u1),
-                team2UserIds = listOf(element = u2),
-                team1Name = "T1",
-                team2Name = "T2",
-                createdBy = u1,
-                eventId = fixtureEventId(),
-            ),
-    ).toDomain()
+    ) = matches
+        .createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.SINGLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = LocalDate.of(2026, 1, 1),
+                    team1UserIds = listOf(element = u1),
+                    team2UserIds = listOf(element = u2),
+                    team1Name = "T1",
+                    team2Name = "T2",
+                    createdBy = u1,
+                    eventId = fixtureEventId(),
+                ),
+        ).toDomain()
 
     @Test
     fun `replaceAccount imports the old account's rating and matches into an empty canonical, then deletes the old (#124)`() {
@@ -110,7 +112,11 @@ class DuplicateServiceTest {
         service.replaceAccount(token = token(uid = "root"), canonicalId = canonical.id, duplicateId = old.id).shouldBeRight()
 
         // The rating (+ match participation) now belong to the canonical; the old account is emptied.
-        ratings.findCurrentRating(userId = canonical.id).shouldNotBeNull().currentRating.toPlainString() shouldBe "4.200000"
+        ratings
+            .findCurrentRating(userId = canonical.id)
+            .shouldNotBeNull()
+            .currentRating
+            .toPlainString() shouldBe "4.200000"
         ratings.findCurrentRating(userId = old.id).shouldBeNull()
         users.hasMatchParticipation(userId = canonical.id).shouldBeTrue()
         users.hasMatchParticipation(userId = old.id).shouldBeFalse()
@@ -225,11 +231,12 @@ class DuplicateServiceTest {
         val dup2 = provisionUser(uid = "dup2")
 
         val result =
-            service.markDuplicates(
-                token = token(uid = "root"),
-                canonicalId = canonical.id,
-                duplicateIds = listOf(dup1.id, dup2.id),
-            ).shouldBeRight()
+            service
+                .markDuplicates(
+                    token = token(uid = "root"),
+                    canonicalId = canonical.id,
+                    duplicateIds = listOf(dup1.id, dup2.id),
+                ).shouldBeRight()
 
         result.map { it.id }.toSet() shouldBe setOf(dup1.id.toString(), dup2.id.toString())
         listOf(dup1.id, dup2.id).forEach { id ->
@@ -239,7 +246,12 @@ class DuplicateServiceTest {
             }
         }
         // The canonical itself is untouched.
-        users.findById(id = canonical.id).shouldBeRight().toDomain().isActive.shouldBeTrue()
+        users
+            .findById(id = canonical.id)
+            .shouldBeRight()
+            .toDomain()
+            .isActive
+            .shouldBeTrue()
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.USER_MARKED_DUPLICATE), limit = 10, offset = 0).second shouldBe 2L
@@ -382,6 +394,10 @@ class DuplicateServiceTest {
             .markDuplicates(token = token(uid = "root"), canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
             .shouldBeRight()
 
-        service.duplicatesOf(token = token(uid = "root"), canonicalId = canonical.id).shouldBeRight().single().id shouldBe dup.id.toString()
+        service
+            .duplicatesOf(token = token(uid = "root"), canonicalId = canonical.id)
+            .shouldBeRight()
+            .single()
+            .id shouldBe dup.id.toString()
     }
 }

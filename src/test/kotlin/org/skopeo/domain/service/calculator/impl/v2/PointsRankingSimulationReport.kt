@@ -192,7 +192,11 @@ class PointsRankingSimulationReport {
         private const val SATURATION_SEED_TAG = 8_282
     }
 
-    private enum class SkillClass(val label: String, val winRate: Double, val placementChance: Double) {
+    private enum class SkillClass(
+        val label: String,
+        val winRate: Double,
+        val placementChance: Double,
+    ) {
         BELOW(label = "Below 50%", winRate = 0.35, placementChance = 0.35),
         EVEN(label = "Even 50%", winRate = 0.50, placementChance = 0.50),
         ABOVE(label = "Above 50%", winRate = 0.65, placementChance = 0.65),
@@ -209,10 +213,18 @@ class PointsRankingSimulationReport {
         HEAVY_OPEN(label = "2×/wk open + 1 / 2 mo tourney", openSpacingDays = TWICE_WEEKLY, tourneySpacingDays = EVERY_TWO_MONTHS),
     }
 
-    private data class Stats(val mean: Double, val sd: Double, val percentiles: Map<Int, Double>)
+    private data class Stats(
+        val mean: Double,
+        val sd: Double,
+        val percentiles: Map<Int, Double>,
+    )
 
     /** One event on a player's timeline: when it happened, the points it carries, and its validity (days). */
-    private data class Ev(val time: Double, val points: Double, val validity: Int)
+    private data class Ev(
+        val time: Double,
+        val points: Double,
+        val validity: Int,
+    )
 
     /** Spread + collision metrics for one population snapshot (#530). */
     private data class SpreadStats(
@@ -437,8 +449,8 @@ class PointsRankingSimulationReport {
             seedOffset = seedOffset,
             validities = listOf(V_1_MONTH, V_2_MONTHS),
             drawEvents = {
-                    rng,
-                    snapshot,
+                rng,
+                snapshot,
                 ->
                 openEventsInWindow(
                     rng = rng,
@@ -458,8 +470,8 @@ class PointsRankingSimulationReport {
             seedOffset = seedOffset,
             validities = listOf(V_3_MONTHS, V_6_MONTHS, V_12_MONTHS),
             drawEvents = {
-                    rng,
-                    snapshot,
+                rng,
+                snapshot,
                 ->
                 tourneyEventsInWindow(
                     rng = rng,
@@ -563,22 +575,18 @@ class PointsRankingSimulationReport {
     private fun render(): String {
         val skills = SkillClass.entries
         val expectedOpen =
-            skills.associateWith {
-                    skill ->
+            skills.associateWith { skill ->
                 expectedPerEvent(seedOffset = 100L + skill.ordinal) { rng -> openPlayPoints(rng = rng, winRate = skill.winRate) }
             }
         val expectedTourney =
-            skills.associateWith {
-                    skill ->
+            skills.associateWith { skill ->
                 expectedPerEvent(
                     seedOffset = 200L + skill.ordinal,
                 ) { rng -> tournamentPoints(rng = rng, placementChance = skill.placementChance) }
             }
         val archetype =
-            BehaviorClass.entries.associateWith {
-                    behavior ->
-                skills.associateWith {
-                        skill ->
+            BehaviorClass.entries.associateWith { behavior ->
+                skills.associateWith { skill ->
                     archetypeTotal(skill = skill, behavior = behavior, seedOffset = 700L + behavior.ordinal * 10 + skill.ordinal)
                 }
             }
@@ -743,8 +751,14 @@ class PointsRankingSimulationReport {
                     cells =
                         listOf(
                             "Horizon",
-                            "band sd", "band range", "band distinct", "band coll%",
-                            "fib sd", "fib range", "fib distinct", "fib coll%",
+                            "band sd",
+                            "band range",
+                            "band distinct",
+                            "band coll%",
+                            "fib sd",
+                            "fib range",
+                            "fib distinct",
+                            "fib coll%",
                         ),
                 ),
             )
@@ -1035,7 +1049,13 @@ class PointsRankingSimulationReport {
 
     /** Players tied on an exact integer total with at least one other player. */
     private fun collidedCount(scores: DoubleArray): Int =
-        scores.asList().groupingBy { it.roundToInt() }.eachCount().values.filter { it > 1 }.sum()
+        scores
+            .asList()
+            .groupingBy { it.roundToInt() }
+            .eachCount()
+            .values
+            .filter { it > 1 }
+            .sum()
 
     /**
      * Recompute spread/collisions PER band cohort (group by band, ties only within a cohort) plus a
@@ -1312,7 +1332,10 @@ class PointsRankingSimulationReport {
             append(row(cells = listOf("---", "---:", "---:", "---:", "---:", "---:")))
             HORIZONS.forEach { (days, label) ->
                 val snap = movement.getValue(key = days)
-                val moved = snap.currentBand.indices.count { snap.currentBand[it] != snap.fixedBand[it] }.toDouble() / POPULATION * PERCENT
+                val moved =
+                    snap.currentBand.indices
+                        .count { snap.currentBand[it] != snap.fixedBand[it] }
+                        .toDouble() / POPULATION * PERCENT
                 val noMove = bandScoped(scores = snap.pooledScore, bands = snap.fixedBand).aggregateCollisionPct
                 val withMove = bandScoped(scores = snap.movedScore, bands = snap.currentBand).aggregateCollisionPct
                 append(

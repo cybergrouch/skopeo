@@ -89,9 +89,10 @@ class CalibrationOverrideApiIntegrationTest {
             RatingRepository().setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
 
             val listed =
-                client.get(urlString = "/api/v1/ratings/calibrations") {
-                    header(key = HttpHeaders.Authorization, value = auth(uid = "host"))
-                }.body<PlayerCalibrationPageResponse>()
+                client
+                    .get(urlString = "/api/v1/ratings/calibrations") {
+                        header(key = HttpHeaders.Authorization, value = auth(uid = "host"))
+                    }.body<PlayerCalibrationPageResponse>()
             listed.items.map { it.publicCode } shouldBe listOf(element = player.publicCode)
 
             val set =
@@ -104,9 +105,10 @@ class CalibrationOverrideApiIntegrationTest {
             set.body<PlayerCalibrationResponse>().inCalibration shouldBe false
 
             val forcedOff =
-                client.get(urlString = "/api/v1/ratings/calibrations?includeForcedOff=true") {
-                    header(key = HttpHeaders.Authorization, value = auth(uid = "host"))
-                }.body<PlayerCalibrationPageResponse>()
+                client
+                    .get(urlString = "/api/v1/ratings/calibrations?includeForcedOff=true") {
+                        header(key = HttpHeaders.Authorization, value = auth(uid = "host"))
+                    }.body<PlayerCalibrationPageResponse>()
             forcedOff.items.single().override shouldBe "FORCED_OFF"
         }
 
@@ -118,18 +120,21 @@ class CalibrationOverrideApiIntegrationTest {
             val player = seedUser(uid = "player")
             RatingRepository().setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
 
-            client.get(urlString = "/api/v1/ratings/calibrations") {
-                header(key = HttpHeaders.Authorization, value = auth(uid = "plain"))
-            }.status shouldBe HttpStatusCode.Forbidden
-            client.put(urlString = "/api/v1/users/${player.id}/calibration-override") {
-                header(key = HttpHeaders.Authorization, value = auth(uid = "plain"))
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetCalibrationOverrideRequest(override = "FORCED_OFF", reason = "Because"))
-            }.status shouldBe HttpStatusCode.Forbidden
-            client.put(urlString = "/api/v1/users/${player.id}/calibration-override") {
-                header(key = HttpHeaders.Authorization, value = auth(uid = "rater"))
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetCalibrationOverrideRequest(override = "FORCED_OFF", reason = "  "))
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .get(urlString = "/api/v1/ratings/calibrations") {
+                    header(key = HttpHeaders.Authorization, value = auth(uid = "plain"))
+                }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .put(urlString = "/api/v1/users/${player.id}/calibration-override") {
+                    header(key = HttpHeaders.Authorization, value = auth(uid = "plain"))
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetCalibrationOverrideRequest(override = "FORCED_OFF", reason = "Because"))
+                }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .put(urlString = "/api/v1/users/${player.id}/calibration-override") {
+                    header(key = HttpHeaders.Authorization, value = auth(uid = "rater"))
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetCalibrationOverrideRequest(override = "FORCED_OFF", reason = "  "))
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 }

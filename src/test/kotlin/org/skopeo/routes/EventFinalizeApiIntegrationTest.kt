@@ -88,15 +88,16 @@ class EventFinalizeApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun tokenFor(uid: String): String = TestFirebaseAuth.mintToken(uid = uid, emailVerified = true)
 
@@ -149,9 +150,10 @@ class EventFinalizeApiIntegrationTest {
             seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
             val event = client.createEvent(token = tokenFor(uid = "host"))
 
-            client.post(urlString = "/api/v1/events/${event.id}/finalize") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $admin")
-            }.let { it.status shouldBe HttpStatusCode.OK }
+            client
+                .post(urlString = "/api/v1/events/${event.id}/finalize") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                }.let { it.status shouldBe HttpStatusCode.OK }
 
             val reopened =
                 client.post(urlString = "/api/v1/events/${event.id}/unfinalize") {
@@ -168,13 +170,15 @@ class EventFinalizeApiIntegrationTest {
             seedUser(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
             val owner = tokenFor(uid = "owner")
             val event = client.createEvent(token = owner, ownerUid = "owner")
-            client.post(urlString = "/api/v1/events/${event.id}/finalize") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $owner")
-            }.let { it.status shouldBe HttpStatusCode.OK }
+            client
+                .post(urlString = "/api/v1/events/${event.id}/finalize") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $owner")
+                }.let { it.status shouldBe HttpStatusCode.OK }
 
-            client.post(urlString = "/api/v1/events/${event.id}/unfinalize") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "other")}")
-            }.let { it.status shouldBe HttpStatusCode.Forbidden }
+            client
+                .post(urlString = "/api/v1/events/${event.id}/unfinalize") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "other")}")
+                }.let { it.status shouldBe HttpStatusCode.Forbidden }
         }
 
     @Test
@@ -184,13 +188,17 @@ class EventFinalizeApiIntegrationTest {
             val host = tokenFor(uid = "host")
             val event = client.createEvent(token = host)
 
-            client.post(urlString = "/api/v1/events/${event.id}/unfinalize") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.let { it.status shouldBe HttpStatusCode.BadRequest }
+            client
+                .post(urlString = "/api/v1/events/${event.id}/unfinalize") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.let { it.status shouldBe HttpStatusCode.BadRequest }
             // The event is still open after the rejected un-finalize.
-            client.post(urlString = "/api/v1/events/${event.id}/finalize") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.body<EventResponse>().isFinalized.shouldBeTrue()
+            client
+                .post(urlString = "/api/v1/events/${event.id}/finalize") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.body<EventResponse>()
+                .isFinalized
+                .shouldBeTrue()
         }
 
     // --- Global "award ranking points" flag enforced server-side (#752). ---
@@ -281,9 +289,10 @@ class EventFinalizeApiIntegrationTest {
             seedCompletedOpenPlayFixture(eventId = UUID.fromString(event.id), host = host, p1 = p1, p2 = p2)
 
             val finalized =
-                client.post(urlString = "/api/v1/events/${event.id}/finalize") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $admin")
-                }.body<EventResponse>()
+                client
+                    .post(urlString = "/api/v1/events/${event.id}/finalize") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                    }.body<EventResponse>()
 
             finalized.awardingSuppressedByGlobalFlag.shouldBeFalse()
             // Open-play pays both sides (winner 3, loser 0) — the flag-on path is unchanged.
@@ -299,20 +308,21 @@ class EventFinalizeApiIntegrationTest {
     ) {
         val matchRepo = MatchRepository()
         val fixture =
-            matchRepo.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.now(),
-                        team1UserIds = listOf(element = p1.id),
-                        team2UserIds = listOf(element = p2.id),
-                        team1Name = "t1",
-                        team2Name = "t2",
-                        createdBy = host.id,
-                        eventId = eventId,
-                    ),
-            ).toDomain()
+            matchRepo
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.now(),
+                            team1UserIds = listOf(element = p1.id),
+                            team2UserIds = listOf(element = p2.id),
+                            team1Name = "t1",
+                            team2Name = "t2",
+                            createdBy = host.id,
+                            eventId = eventId,
+                        ),
+                ).toDomain()
         matchRepo.addResult(
             matchId = fixture.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = fixture.team1.teamId)),
@@ -344,34 +354,36 @@ class EventFinalizeApiIntegrationTest {
         val eventService = EventService()
         val hostToken = VerifiedFirebaseToken(uid = "host", providerUid = "host")
         val eventId =
-            eventService.create(
-                token = hostToken,
-                input =
-                    CreateEventInput(
-                        name = "Spring Open",
-                        startDate = LocalDate.now(),
-                        endDate = LocalDate.now().plusDays(7),
-                        participantIds = listOf(p1.id, p2.id),
-                        type = EventType.OPEN_PLAY.name,
-                        // Every event needs a club (#794), owned by its creator (#789).
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
-                    ),
-            ).let { UUID.fromString(requireNotNull(value = it.getOrNull()).id) }
+            eventService
+                .create(
+                    token = hostToken,
+                    input =
+                        CreateEventInput(
+                            name = "Spring Open",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now().plusDays(7),
+                            participantIds = listOf(p1.id, p2.id),
+                            type = EventType.OPEN_PLAY.name,
+                            // Every event needs a club (#794), owned by its creator (#789).
+                            clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                        ),
+                ).let { UUID.fromString(requireNotNull(value = it.getOrNull()).id) }
         val fixture =
-            matchRepo.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
-                        matchDate = LocalDate.now(),
-                        team1UserIds = listOf(element = p1.id),
-                        team2UserIds = listOf(element = p2.id),
-                        team1Name = "t1",
-                        team2Name = "t2",
-                        createdBy = host.id,
-                        eventId = eventId,
-                    ),
-            ).toDomain()
+            matchRepo
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.now(),
+                            team1UserIds = listOf(element = p1.id),
+                            team2UserIds = listOf(element = p2.id),
+                            team1Name = "t1",
+                            team2Name = "t2",
+                            createdBy = host.id,
+                            eventId = eventId,
+                        ),
+                ).toDomain()
         matchRepo.addResult(
             matchId = fixture.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = fixture.team1.teamId)),
@@ -382,7 +394,8 @@ class EventFinalizeApiIntegrationTest {
         eventService.finalize(token = hostToken, id = eventId).getOrNull().shouldNotBeNull()
         RatingCalculationService()
             .calculate(token = VerifiedFirebaseToken(uid = "admin", providerUid = "admin"), dryRun = false)
-            .getOrNull().shouldNotBeNull()
+            .getOrNull()
+            .shouldNotBeNull()
         return eventId.toString()
     }
 
@@ -409,13 +422,15 @@ class EventFinalizeApiIntegrationTest {
             seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
             val host = tokenFor(uid = "host")
             val event = client.createEvent(token = host)
-            client.post(urlString = "/api/v1/events/${event.id}/finalize") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.let { it.status shouldBe HttpStatusCode.OK }
+            client
+                .post(urlString = "/api/v1/events/${event.id}/finalize") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.let { it.status shouldBe HttpStatusCode.OK }
 
-            client.post(urlString = "/api/v1/events/${event.id}/reverse-ratings") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.let { it.status shouldBe HttpStatusCode.Forbidden }
+            client
+                .post(urlString = "/api/v1/events/${event.id}/reverse-ratings") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.let { it.status shouldBe HttpStatusCode.Forbidden }
         }
 
     @Test
@@ -425,12 +440,14 @@ class EventFinalizeApiIntegrationTest {
             seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
             val host = tokenFor(uid = "host")
             val event = client.createEvent(token = host)
-            client.post(urlString = "/api/v1/events/${event.id}/finalize") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.let { it.status shouldBe HttpStatusCode.OK }
+            client
+                .post(urlString = "/api/v1/events/${event.id}/finalize") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.let { it.status shouldBe HttpStatusCode.OK }
 
-            client.post(urlString = "/api/v1/events/${event.id}/reverse-ratings") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "admin")}")
-            }.let { it.status shouldBe HttpStatusCode.BadRequest }
+            client
+                .post(urlString = "/api/v1/events/${event.id}/reverse-ratings") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "admin")}")
+                }.let { it.status shouldBe HttpStatusCode.BadRequest }
         }
 }

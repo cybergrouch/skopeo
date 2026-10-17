@@ -42,14 +42,15 @@ class DuplicateCandidateRepository {
             openRow(a = a, b = b)?.let { return@transaction it.toDuplicateCandidateEntity() }
             val flaggedAt = LocalDateTime.now()
             val id =
-                DuplicateCandidatesTable.insertAndGetId {
-                    it[DuplicateCandidatesTable.userAId] = a
-                    it[DuplicateCandidatesTable.userBId] = b
-                    it[DuplicateCandidatesTable.signal] = signal.name
-                    it[DuplicateCandidatesTable.detail] = detail
-                    it[DuplicateCandidatesTable.flaggedBy] = flaggedBy
-                    it[DuplicateCandidatesTable.flaggedAt] = flaggedAt
-                }.value
+                DuplicateCandidatesTable
+                    .insertAndGetId {
+                        it[DuplicateCandidatesTable.userAId] = a
+                        it[DuplicateCandidatesTable.userBId] = b
+                        it[DuplicateCandidatesTable.signal] = signal.name
+                        it[DuplicateCandidatesTable.detail] = detail
+                        it[DuplicateCandidatesTable.flaggedBy] = flaggedBy
+                        it[DuplicateCandidatesTable.flaggedAt] = flaggedAt
+                    }.value
             DuplicateCandidateEntity(
                 id = id,
                 userAId = a,
@@ -81,7 +82,8 @@ class DuplicateCandidateRepository {
             val items =
                 query()
                     .orderBy(DuplicateCandidatesTable.flaggedAt to SortOrder.DESC)
-                    .limit(count = limit).offset(start = offset.toLong())
+                    .limit(count = limit)
+                    .offset(start = offset.toLong())
                     .map { it.toDuplicateCandidateEntity() }
             items to total
         }
@@ -141,7 +143,11 @@ class DuplicateCandidateRepository {
             .firstOrNull()
 
     private fun loadByIdOrThrow(id: UUID): DuplicateCandidateEntity =
-        DuplicateCandidatesTable.selectAll().where { DuplicateCandidatesTable.id eq id }.single().toDuplicateCandidateEntity()
+        DuplicateCandidatesTable
+            .selectAll()
+            .where { DuplicateCandidatesTable.id eq id }
+            .single()
+            .toDuplicateCandidateEntity()
 }
 
 internal fun ResultRow.toDuplicateCandidateEntity(): DuplicateCandidateEntity =

@@ -144,9 +144,13 @@ val AuditAction.category: AuditCategory
             AuditAction.STALE_ACCOUNT_SWEEP_PREVIEWED,
             AuditAction.STALE_ACCOUNT_SWEEP_COMMITTED,
             -> AuditCategory.USER_CREATION
+
             AuditAction.NAME_ADDED, AuditAction.NAME_UPDATED -> AuditCategory.NAME_CHANGE
+
             AuditAction.CONTACT_ADDED, AuditAction.CONTACT_UPDATED -> AuditCategory.CONTACT_CHANGE
+
             AuditAction.CAPABILITY_GRANTED, AuditAction.CAPABILITY_REVOKED -> AuditCategory.CAPABILITY_CHANGE
+
             AuditAction.RATING_SET,
             AuditAction.RATING_OVERRIDDEN,
             AuditAction.RATING_REREQUESTED,
@@ -154,17 +158,21 @@ val AuditAction.category: AuditCategory
             // Beside the rating it qualifies, so the category filter shows both decisions together (#1126).
             AuditAction.CALIBRATION_OVERRIDE_CHANGED,
             -> AuditCategory.RATING_CHANGE
+
             AuditAction.INVITE_CREATED, AuditAction.INVITE_REVOKED -> AuditCategory.INVITE
+
             AuditAction.MATCH_FIXTURE_CREATED,
             // Who played is exactly the kind of edit that has to be answerable later (#957).
             AuditAction.MATCH_FIXTURE_PLAYERS_CHANGED,
             AuditAction.FIXTURE_HANDICAP_SET,
             -> AuditCategory.MATCH_FIXTURE
+
             // The score half of a post-rating correction (#776) belongs with results; its rating half
             // (MATCH_RATINGS_RE_RATED) rolls up under RATING_CALCULATION so each can be filtered alone.
             AuditAction.MATCH_RESULT_RECORDED,
             AuditAction.MATCH_SCORE_CORRECTED,
             -> AuditCategory.MATCH_RESULT
+
             AuditAction.EVENT_CREATED,
             AuditAction.EVENT_RENAMED,
             AuditAction.EVENT_CLUB_CHANGED,
@@ -174,11 +182,13 @@ val AuditAction.category: AuditCategory
             AuditAction.EVENT_RATINGS_REVERSED,
             AuditAction.EVENT_POINTS_AWARDED,
             -> AuditCategory.EVENT_MANAGEMENT
+
             AuditAction.RATING_CALCULATION_PREVIEWED,
             AuditAction.RATING_CALCULATION_MATCH_RATED,
             AuditAction.RATING_CALCULATION_COMMITTED,
             AuditAction.MATCH_RATINGS_RE_RATED,
             -> AuditCategory.RATING_CALCULATION
+
             AuditAction.USER_MARKED_DUPLICATE,
             AuditAction.USER_UNMARKED_DUPLICATE,
             // Replacing an old account with its canonical: import history + rating, then delete the old (#124).
@@ -191,6 +201,7 @@ val AuditAction.category: AuditCategory
             // Claiming retires a placeholder via the same canonical-link mechanism as a duplicate merge (#496).
             AuditAction.PLACEHOLDER_CLAIMED,
             -> AuditCategory.DUPLICATE_RECTIFICATION
+
             AuditAction.CLUB_CREATED,
             AuditAction.CLUB_RENAMED,
             AuditAction.CLUB_DELETED,
@@ -198,10 +209,12 @@ val AuditAction.category: AuditCategory
             AuditAction.CLUB_OWNER_REMOVED,
             AuditAction.CLUB_SANCTION_CHANGED,
             -> AuditCategory.CLUB_MANAGEMENT
+
             AuditAction.CIRCUIT_CREATED,
             AuditAction.CIRCUIT_RENAMED,
             AuditAction.CIRCUIT_DELETED,
             -> AuditCategory.CIRCUIT_MANAGEMENT
+
             AuditAction.SETTINGS_THEME_CHANGED,
             AuditAction.SETTINGS_STANDINGS_SOURCE_CHANGED,
             AuditAction.SETTINGS_FACEBOOK_LOGIN_CHANGED,
@@ -212,12 +225,15 @@ val AuditAction.category: AuditCategory
             AuditAction.SETTINGS_POINTS_CONFIG_CHANGED,
             AuditAction.SETTINGS_RATING_PREVIEW_CHANGED,
             -> AuditCategory.SETTINGS_MANAGEMENT
+
             AuditAction.RANKING_POINTS_AWARDED,
             AuditAction.RANKING_POINTS_REVOKED,
             -> AuditCategory.RANKING_POINTS
+
             AuditAction.STANDINGS_RECALCULATED,
             AuditAction.STANDINGS_PUBLISHED,
             -> AuditCategory.STANDINGS
+
             AuditAction.API_CLIENT_CREATED,
             AuditAction.API_KEY_ISSUED,
             AuditAction.API_KEY_REVOKED,

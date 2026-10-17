@@ -58,15 +58,16 @@ class SettingsServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -115,7 +116,8 @@ class SettingsServiceTest {
             SnapshotSource.POINTS.name
 
         val audit = AuditRepository()
-        audit.list(actions = listOf(element = AuditAction.SETTINGS_STANDINGS_SOURCE_CHANGED), limit = 10, offset = 0)
+        audit
+            .list(actions = listOf(element = AuditAction.SETTINGS_STANDINGS_SOURCE_CHANGED), limit = 10, offset = 0)
             .let { (items, total) ->
                 total shouldBe 1L
                 items.single().summary shouldBe "Set standings source to POINTS"
@@ -125,14 +127,16 @@ class SettingsServiceTest {
     @Test
     fun `a non-admin cannot set the standings source (#146)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        service.setStandingsSource(token = token(uid = "host"), source = "POINTS")
+        service
+            .setStandingsSource(token = token(uid = "host"), source = "POINTS")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
     fun `an unprovisioned caller cannot set the standings source (#146)`() {
-        service.setStandingsSource(token = token(uid = "ghost"), source = "POINTS")
+        service
+            .setStandingsSource(token = token(uid = "ghost"), source = "POINTS")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -140,7 +144,8 @@ class SettingsServiceTest {
     @Test
     fun `an unknown standings source string is a validation error (#146)`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        service.setStandingsSource(token = token(uid = "admin"), source = "GRAVEL")
+        service
+            .setStandingsSource(token = token(uid = "admin"), source = "GRAVEL")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -181,7 +186,8 @@ class SettingsServiceTest {
     @Test
     fun `a non-admin cannot set the facebook login flag (#647)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        service.setFacebookLogin(token = token(uid = "host"), enabled = false)
+        service
+            .setFacebookLogin(token = token(uid = "host"), enabled = false)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -221,7 +227,8 @@ class SettingsServiceTest {
     @Test
     fun `a non-admin cannot set the award ranking points flag (#641)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        service.setAwardRankingPoints(token = token(uid = "host"), enabled = true)
+        service
+            .setAwardRankingPoints(token = token(uid = "host"), enabled = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -261,7 +268,8 @@ class SettingsServiceTest {
     fun `a non-admin cannot tick the flag (#865)`() {
         // A points manager may SEE points while it is on, but only an administrator decides whether it is.
         provision(uid = "pm", roles = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
-        service.setHideRankingPoints(token = token(uid = "pm"), hidden = true)
+        service
+            .setHideRankingPoints(token = token(uid = "pm"), hidden = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }

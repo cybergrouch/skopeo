@@ -515,7 +515,12 @@ private fun rosterOf(
         ids.map { id ->
             LivePlayerResponse(
                 userId = id.toString(),
-                name = users.findById(id = id).getOrNull()?.toDomain()?.displayName() ?: "Unknown",
+                name =
+                    users
+                        .findById(id = id)
+                        .getOrNull()
+                        ?.toDomain()
+                        ?.displayName() ?: "Unknown",
                 side = side.name,
             )
         }

@@ -109,10 +109,16 @@ class ApiClientRepositoryTest {
     fun `records last-used time`() {
         val client = repo.createClient(name = "Partner A", createdBy = null).toDomain()
         val key = insertKey(clientId = client.id, hash = "hash-1")
-        repo.findKeyByHash(hash = "hash-1")!!.first.lastUsedAt.shouldBeNull()
+        repo
+            .findKeyByHash(hash = "hash-1")!!
+            .first.lastUsedAt
+            .shouldBeNull()
 
         repo.touchLastUsed(keyId = key.id, usedAt = LocalDateTime.now())
-        repo.findKeyByHash(hash = "hash-1")!!.first.lastUsedAt.shouldNotBeNull()
+        repo
+            .findKeyByHash(hash = "hash-1")!!
+            .first.lastUsedAt
+            .shouldNotBeNull()
     }
 
     @Test
@@ -120,10 +126,23 @@ class ApiClientRepositoryTest {
         val client = repo.createClient(name = "Partner A", createdBy = null).toDomain()
         client.rateLimitPerMin.shouldBeNull()
 
-        repo.setRateLimit(clientId = client.id, rateLimitPerMin = 250).shouldNotBeNull().toDomain().rateLimitPerMin shouldBe 250
-        repo.findClientById(id = client.id).shouldNotBeNull().toDomain().rateLimitPerMin shouldBe 250
+        repo
+            .setRateLimit(clientId = client.id, rateLimitPerMin = 250)
+            .shouldNotBeNull()
+            .toDomain()
+            .rateLimitPerMin shouldBe 250
+        repo
+            .findClientById(id = client.id)
+            .shouldNotBeNull()
+            .toDomain()
+            .rateLimitPerMin shouldBe 250
 
-        repo.setRateLimit(clientId = client.id, rateLimitPerMin = null).shouldNotBeNull().toDomain().rateLimitPerMin.shouldBeNull()
+        repo
+            .setRateLimit(clientId = client.id, rateLimitPerMin = null)
+            .shouldNotBeNull()
+            .toDomain()
+            .rateLimitPerMin
+            .shouldBeNull()
 
         // A missing client returns null.
         repo.setRateLimit(clientId = UUID.randomUUID(), rateLimitPerMin = 10).shouldBeNull()

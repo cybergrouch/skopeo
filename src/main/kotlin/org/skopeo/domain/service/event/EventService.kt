@@ -169,21 +169,22 @@ class EventService(
             val awardRankingPoints = input.awardRankingPoints && awardingEnabled
             val awardCoerced = input.awardRankingPoints && !awardingEnabled
             val event =
-                events.create(
-                    command =
-                        CreateEventCommand(
-                            name = input.name.trim(),
-                            startDate = input.startDate,
-                            endDate = input.endDate,
-                            participantIds = input.participantIds.distinct(),
-                            createdBy = createdBy,
-                            clubId = input.clubId,
-                            circuitId = circuitId,
-                            format = format,
-                            type = type,
-                            awardRankingPoints = awardRankingPoints,
-                        ),
-                ).toDomain()
+                events
+                    .create(
+                        command =
+                            CreateEventCommand(
+                                name = input.name.trim(),
+                                startDate = input.startDate,
+                                endDate = input.endDate,
+                                participantIds = input.participantIds.distinct(),
+                                createdBy = createdBy,
+                                clubId = input.clubId,
+                                circuitId = circuitId,
+                                format = format,
+                                type = type,
+                                awardRankingPoints = awardRankingPoints,
+                            ),
+                    ).toDomain()
             // Activity Log entry for the creation (#334); rename/set-club/delete are follow-ups.
             audit.record(
                 write =
@@ -803,7 +804,8 @@ class EventService(
             val updated =
                 ensureNotNull(
                     value =
-                        events.setParticipantStatus(eventId = eventId, userId = userId, status = status, approvedBy = approver)
+                        events
+                            .setParticipantStatus(eventId = eventId, userId = userId, status = status, approvedBy = approver)
                             ?.toDomain(),
                 ) { ServiceError.NotFound(message = "Event $eventId not found") }
             toView(event = updated).toResponse()
@@ -1070,10 +1072,16 @@ private fun ensureKnownUsers(
     val distinct = ids.distinct()
     val loaded = users.findAllByIds(ids = distinct).map { it.toDomain() }
     return when {
-        !loaded.map { it.id }.toSet().containsAll(elements = distinct) ->
+        !loaded.map { it.id }.toSet().containsAll(elements = distinct) -> {
             ServiceError.Validation(message = "One or more participants do not exist").left()
-        loaded.any { it.isDeleted() } ->
+        }
+
+        loaded.any { it.isDeleted() } -> {
             ServiceError.Validation(message = "A deleted account cannot be added to an event").left()
-        else -> Unit.right()
+        }
+
+        else -> {
+            Unit.right()
+        }
     }
 }

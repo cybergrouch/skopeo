@@ -33,9 +33,13 @@ import java.util.UUID
 class SeedingRepository {
     /** The source a seeding belongs to (#714): exactly one column is set on the `seedings` row. */
     sealed interface SeedingSource {
-        data class List(val listId: UUID) : SeedingSource
+        data class List(
+            val listId: UUID,
+        ) : SeedingSource
 
-        data class Event(val eventId: UUID) : SeedingSource
+        data class Event(
+            val eventId: UUID,
+        ) : SeedingSource
     }
 
     /**
@@ -97,13 +101,14 @@ class SeedingRepository {
             val sourceListId = (source as? SeedingSource.List)?.listId
             val sourceEventId = (source as? SeedingSource.Event)?.eventId
             val newSeedingId =
-                SeedingsTable.insertAndGetId {
-                    it[listId] = sourceListId
-                    it[eventId] = sourceEventId
-                    it[generatedAt] = now
-                    it[SeedingsTable.generatedBy] = generatedBy
-                    it[SeedingsTable.manuallyEdited] = manuallyEdited
-                }.value
+                SeedingsTable
+                    .insertAndGetId {
+                        it[listId] = sourceListId
+                        it[eventId] = sourceEventId
+                        it[generatedAt] = now
+                        it[SeedingsTable.generatedBy] = generatedBy
+                        it[SeedingsTable.manuallyEdited] = manuallyEdited
+                    }.value
             entries.forEach { entry ->
                 SeedingEntriesTable.insert {
                     it[seedingId] = newSeedingId

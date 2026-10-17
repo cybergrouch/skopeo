@@ -40,7 +40,12 @@ class GroupCategoryFactorV2Test {
     private fun changeFor(
         request: RankingCalculationRequest,
         playerId: String,
-    ): String = v2.calculate(request = request).response.ratingChanges.getValue(key = playerId).change
+    ): String =
+        v2
+            .calculate(request = request)
+            .response.ratingChanges
+            .getValue(key = playerId)
+            .change
 
     @Test
     fun `matching groups leave the delta identical to the ungrouped result`() {

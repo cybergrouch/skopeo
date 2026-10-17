@@ -46,15 +46,16 @@ class PlayerListServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun host(uid: String = "host") = provision(uid = uid, roles = setOf(Capability.PLAYER, Capability.HOST))
 
@@ -67,7 +68,11 @@ class PlayerListServiceTest {
         created.name shouldBe "Club Open 2026"
         created.memberCount shouldBe 0
 
-        service.listMine(token = token(uid = "host")).shouldBeRight().single().id shouldBe created.id
+        service
+            .listMine(token = token(uid = "host"))
+            .shouldBeRight()
+            .single()
+            .id shouldBe created.id
         service.get(token = token(uid = "host"), listId = UUID.fromString(created.id)).shouldBeRight().name shouldBe "Club Open 2026"
     }
 
@@ -99,18 +104,24 @@ class PlayerListServiceTest {
         provision(uid = "host2", roles = setOf(Capability.PLAYER, Capability.HOST))
         val list = service.create(token = token(uid = "host1"), name = "Mine").shouldBeRight()
 
-        service.get(
-            token = token(uid = "host2"),
-            listId = UUID.fromString(list.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.detail(
-            token = token(uid = "host2"),
-            listId = UUID.fromString(list.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.delete(
-            token = token(uid = "host2"),
-            listId = UUID.fromString(list.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .get(
+                token = token(uid = "host2"),
+                listId = UUID.fromString(list.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .detail(
+                token = token(uid = "host2"),
+                listId = UUID.fromString(list.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .delete(
+                token = token(uid = "host2"),
+                listId = UUID.fromString(list.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -124,16 +135,22 @@ class PlayerListServiceTest {
         detail.members.single().id shouldBe p1.id.toString()
 
         // Adding the same player again conflicts; an unknown user is not found.
-        service.addMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = p1.id)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
-        service.addMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = UUID.randomUUID())
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .addMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = p1.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+        service
+            .addMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
 
         // Removing works; removing a non-member is not found.
         service.removeMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = p1.id).shouldBeRight()
         service.detail(token = token(uid = "host"), listId = UUID.fromString(list.id)).shouldBeRight().members shouldHaveSize 0
-        service.removeMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = p1.id)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .removeMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = p1.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -142,8 +159,10 @@ class PlayerListServiceTest {
         val staffOnly = provision(uid = "staff", roles = setOf(element = Capability.HOST)) // no PLAYER
         val list = service.create(token = token(uid = "host"), name = "Roster").shouldBeRight()
 
-        service.addMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = staffOnly.id)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .addMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = staffOnly.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -152,9 +171,11 @@ class PlayerListServiceTest {
         val list = service.create(token = token(uid = "host"), name = "Temp").shouldBeRight()
 
         service.delete(token = token(uid = "host"), listId = UUID.fromString(list.id)).shouldBeRight()
-        service.get(
-            token = token(uid = "host"),
-            listId = UUID.fromString(list.id),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .get(
+                token = token(uid = "host"),
+                listId = UUID.fromString(list.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 }

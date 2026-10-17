@@ -145,12 +145,18 @@ class EventFinalizeAwarder(
         val nothing = AwardSummary(matchCount = 0, awardCount = 0, totalPoints = BigDecimal.ZERO)
         return when {
             // "Award Ranking Points" unchecked (#559): finalizing awards nothing, whatever the type.
-            !event.awardRankingPoints -> nothing
+            !event.awardRankingPoints -> {
+                nothing
+            }
+
             // Global kill switch off (#752): award nothing regardless of the per-event opt-in, and flag it.
-            !settings.getAwardRankingPoints().enabled -> nothing.copy(suppressedByGlobalFlag = true)
-            else ->
+            !settings.getAwardRankingPoints().enabled -> {
+                nothing.copy(suppressedByGlobalFlag = true)
+            }
+
+            else -> {
                 when (event.type) {
-                    EventType.OPEN_PLAY ->
+                    EventType.OPEN_PLAY -> {
                         awardComputedPerSet(
                             event = event,
                             grantedBy = grantedBy,
@@ -163,7 +169,9 @@ class EventFinalizeAwarder(
                                     includeMatch = { true },
                                 ),
                         )
-                    EventType.FULL_MATCH ->
+                    }
+
+                    EventType.FULL_MATCH -> {
                         // Full Match (#840) pays the SAME per-set amounts as open play — no second table
                         // to keep in step — but on its own longer window and its own point class, so the
                         // two are distinguishable in the ledger and the window can be tuned separately.
@@ -179,9 +187,13 @@ class EventFinalizeAwarder(
                                     includeMatch = { true },
                                 ),
                         )
-                    EventType.TOURNAMENT ->
+                    }
+
+                    EventType.TOURNAMENT -> {
                         awardTournament(event = event, grantedBy = grantedBy, now = now, correctedMatchId = correctedMatchId)
+                    }
                 }
+            }
         }
     }
 
@@ -206,7 +218,13 @@ class EventFinalizeAwarder(
         correctedMatchId: UUID?,
     ): AwardSummary {
         val correctedIsPlacement =
-            correctedMatchId?.let { matches.findById(matchId = it).getOrNull()?.toDomain()?.isPlacementMatch }
+            correctedMatchId?.let {
+                matches
+                    .findById(matchId = it)
+                    .getOrNull()
+                    ?.toDomain()
+                    ?.isPlacementMatch
+            }
         val rebuildAll = correctedIsPlacement != false
         val placement =
             if (rebuildAll) {
@@ -250,9 +268,11 @@ class EventFinalizeAwarder(
         val start = event.endDate
         val end = event.endDate.plusDays(tournament.validityDays.toLong())
         val placementMatches =
-            matches.listByEvent(eventId = event.id).map {
-                it.toDomain()
-            } // A COMPLETED placement match with a bracket and a winner — the only fixtures that pay placement.
+            matches
+                .listByEvent(eventId = event.id)
+                .map {
+                    it.toDomain()
+                } // A COMPLETED placement match with a bracket and a winner — the only fixtures that pay placement.
                 .filter { it.status == MatchStatus.COMPLETED && it.isPlacementMatch }
                 .filter { it.placementBracket != null && it.winnerTeamId != null }
         val userIds = placementMatches.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
@@ -368,6 +388,19 @@ class EventFinalizeAwarder(
         return written
     }
 
+    /** The event's completed, decided matches that [policy] pays for — narrowed to [onlyMatchId] when given. */
+    private fun completedInScope(
+        event: Event,
+        policy: PerSetPolicy,
+        onlyMatchId: UUID?,
+    ): List<Match> =
+        matches
+            .listByEvent(eventId = event.id)
+            .map { it.toDomain() }
+            .filter { it.status == MatchStatus.COMPLETED && it.winnerTeamId != null }
+            .filter { policy.includeMatch(it) }
+            .filter { onlyMatchId == null || it.id == onlyMatchId }
+
     /**
      * Computed per-set awarding (#525). Each fixture [policy] admits is scored per set from the two teams'
      * ENTRY bands (their current band at finalize — the event's own matches are not rated until after
@@ -391,14 +424,12 @@ class EventFinalizeAwarder(
         // Validity runs from the event end for the window [policy] carries (#559: no per-event override) —
         // the open-play window for an open play, the tournament window for a tournament round (#836).
         val validFrom = event.endDate.atStartOfDay()
-        val validUntil = event.endDate.plusDays(policy.validityDays.toLong()).plusDays(1).atStartOfDay()
-        val completed =
-            matches
-                .listByEvent(eventId = event.id)
-                .map { it.toDomain() }
-                .filter { it.status == MatchStatus.COMPLETED && it.winnerTeamId != null }
-                .filter { policy.includeMatch(it) }
-                .filter { onlyMatchId == null || it.id == onlyMatchId }
+        val validUntil =
+            event.endDate
+                .plusDays(policy.validityDays.toLong())
+                .plusDays(1)
+                .atStartOfDay()
+        val completed = completedInScope(event = event, policy = policy, onlyMatchId = onlyMatchId)
         val userIds = completed.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
         val bands = ratings.findCurrentRatings(userIds = userIds)
         val sexes = users.findAllByIds(ids = userIds).map { it.toDomain() }.associate { it.id to (it.sex ?: UNSPECIFIED_SEX) }

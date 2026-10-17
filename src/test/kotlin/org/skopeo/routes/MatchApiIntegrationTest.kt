@@ -356,9 +356,10 @@ class MatchApiIntegrationTest {
             }
 
             // A participant (non-admin) can no longer read the breakdown — it's an ADMINISTRATOR tool (#583).
-            client.get(urlString = "/api/v1/matches/${match.id}/calculation") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "p1")}")
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/matches/${match.id}/calculation") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "p1")}")
+                }.status shouldBe HttpStatusCode.Forbidden
 
             // An ADMINISTRATOR sees the full breakdown (with raw values).
             val detail =
@@ -374,7 +375,10 @@ class MatchApiIntegrationTest {
                 // v2 (default) surfaces per-set steps; the net kFactor is null, each set carries its own (#110).
                 winner.breakdown?.kFactor.shouldBeNull()
                 winner.breakdown?.sets?.size shouldBe 2
-                winner.breakdown?.sets?.first()?.kFactor shouldBe "0.160000"
+                winner.breakdown
+                    ?.sets
+                    ?.first()
+                    ?.kFactor shouldBe "0.160000"
             }
         }
 
@@ -428,38 +432,45 @@ class MatchApiIntegrationTest {
                 HttpStatusCode.BadRequest
             client.postFixture(token = adminToken, team1 = one, team2 = one).status shouldBe HttpStatusCode.BadRequest
             // A missing match type (required, no default) is rejected at deserialization.
-            client.post(urlString = "/api/v1/matches") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = """{"matchFormat":"SINGLES","matchDate":"2026-01-01","team1":["${p1.id}"],"team2":["${p2.id}"]}""")
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .post(urlString = "/api/v1/matches") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = """{"matchFormat":"SINGLES","matchDate":"2026-01-01","team1":["${p1.id}"],"team2":["${p2.id}"]}""")
+                }.status shouldBe HttpStatusCode.BadRequest
             // A missing eventId is likewise rejected at deserialization (#898). Every match belongs to an
             // event, so this is now a wire-contract requirement rather than a service-layer validation —
             // the service can no longer be reached with a null event, and matches.event_id is NOT NULL (V50).
-            client.post(urlString = "/api/v1/matches") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(
-                    body =
-                        """{"matchFormat":"SINGLES","matchType":"OPEN_PLAY","matchDate":"2026-01-01",""" +
-                            """"team1":["${p1.id}"],"team2":["${p2.id}"]}""",
-                )
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .post(urlString = "/api/v1/matches") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(
+                        body =
+                            """{"matchFormat":"SINGLES","matchType":"OPEN_PLAY","matchDate":"2026-01-01",""" +
+                                """"team1":["${p1.id}"],"team2":["${p2.id}"]}""",
+                    )
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
     fun `result upload rejects bad score shape at the route with a 400 (#116)`() =
         withApp { client ->
             val adminToken = seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
-            val matchId = java.util.UUID.randomUUID().toString()
+            val matchId =
+                java.util.UUID
+                    .randomUUID()
+                    .toString()
 
             // Negative games and an empty set list are rejected at deserialization, before any match lookup.
-            client.postRawResult(token = adminToken, matchId = matchId, json = """{"sets":[{"team1Games":-1,"team2Games":6}]}""")
+            client
+                .postRawResult(token = adminToken, matchId = matchId, json = """{"sets":[{"team1Games":-1,"team2Games":6}]}""")
                 .status shouldBe HttpStatusCode.BadRequest
             client.postRawResult(token = adminToken, matchId = matchId, json = """{"sets":[]}""").status shouldBe
                 HttpStatusCode.BadRequest
             // A set won on fewer than 4 games is rejected at the boundary too (#213).
-            client.postRawResult(token = adminToken, matchId = matchId, json = """{"sets":[{"team1Games":3,"team2Games":2}]}""")
+            client
+                .postRawResult(token = adminToken, matchId = matchId, json = """{"sets":[{"team1Games":3,"team2Games":2}]}""")
                 .status shouldBe HttpStatusCode.BadRequest
         }
 }

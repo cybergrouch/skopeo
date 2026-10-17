@@ -51,15 +51,16 @@ class NameServiceTest {
         uid: String,
         capabilities: Set<Capability> = setOf(Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = "Display $uid")),
-                    capabilities = capabilities,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = "Display $uid")),
+                        capabilities = capabilities,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -73,18 +74,20 @@ class NameServiceTest {
         val owner = provisionUser(uid = "owner")
         val added =
             service.create(token = token(uid = "owner"), userId = owner.id, typeRaw = "NICKNAME", value = "JB").shouldBeRight()
-        service.setActive(
-            token = token(uid = "owner"),
-            userId = owner.id,
-            nameId = UUID.fromString(added.id),
-            active = false,
-        ).shouldBeRight()
-        service.setActive(
-            token = token(uid = "owner"),
-            userId = owner.id,
-            nameId = UUID.fromString(added.id),
-            active = true,
-        ).shouldBeRight()
+        service
+            .setActive(
+                token = token(uid = "owner"),
+                userId = owner.id,
+                nameId = UUID.fromString(added.id),
+                active = false,
+            ).shouldBeRight()
+        service
+            .setActive(
+                token = token(uid = "owner"),
+                userId = owner.id,
+                nameId = UUID.fromString(added.id),
+                active = true,
+            ).shouldBeRight()
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.NAME_ADDED), limit = 10, offset = 0).first.single().let {
@@ -124,11 +127,14 @@ class NameServiceTest {
         replacement.value shouldBe "Johnny"
         // exactly one active display, and the old one is retained as disabled history
         displayNameOf(uid = "owner", userId = owner.id).id shouldBe replacement.id
-        service.get(
-            token = token(uid = "owner"),
-            userId = owner.id,
-            nameId = UUID.fromString(original.id),
-        ).shouldBeRight().isActive.shouldBeFalse()
+        service
+            .get(
+                token = token(uid = "owner"),
+                userId = owner.id,
+                nameId = UUID.fromString(original.id),
+            ).shouldBeRight()
+            .isActive
+            .shouldBeFalse()
     }
 
     @Test

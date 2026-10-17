@@ -120,21 +120,22 @@ class CalculationApiIntegrationTest {
             client.rate(adminToken = admin, userId = p1.id)
             client.rate(adminToken = admin, userId = p2.id)
             val match =
-                client.post(urlString = "/api/v1/matches") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $admin")
-                    contentType(type = ContentType.Application.Json)
-                    setBody(
-                        body =
-                            CreateFixtureRequest(
-                                matchFormat = "SINGLES",
-                                matchType = "OPEN_PLAY",
-                                matchDate = "2026-01-01",
-                                team1 = listOf(p1.id),
-                                team2 = listOf(p2.id),
-                                eventId = fixtureEventForRequest(team1 = listOf(p1.id), team2 = listOf(p2.id)),
-                            ),
-                    )
-                }.body<MatchResponse>()
+                client
+                    .post(urlString = "/api/v1/matches") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                        contentType(type = ContentType.Application.Json)
+                        setBody(
+                            body =
+                                CreateFixtureRequest(
+                                    matchFormat = "SINGLES",
+                                    matchType = "OPEN_PLAY",
+                                    matchDate = "2026-01-01",
+                                    team1 = listOf(p1.id),
+                                    team2 = listOf(p2.id),
+                                    eventId = fixtureEventForRequest(team1 = listOf(p1.id), team2 = listOf(p2.id)),
+                                ),
+                        )
+                    }.body<MatchResponse>()
             client.post(urlString = "/api/v1/matches/${match.id}/result") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $admin")
                 contentType(type = ContentType.Application.Json)
@@ -179,11 +180,12 @@ class CalculationApiIntegrationTest {
             seedAdmin()
             val p1 = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "p1"))
 
-            client.post(urlString = "/api/v1/ratings/calculations") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "p1")}")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = CalculationRequest(dryRun = true))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .post(urlString = "/api/v1/ratings/calculations") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "p1")}")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = CalculationRequest(dryRun = true))
+                }.status shouldBe HttpStatusCode.Forbidden
             p1.id // referenced to avoid unused warning
         }
 }

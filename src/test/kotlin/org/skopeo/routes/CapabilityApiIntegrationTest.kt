@@ -102,14 +102,16 @@ class CapabilityApiIntegrationTest {
             granted.body<CapabilityResponse>().capability shouldBe "HOST"
 
             val roles =
-                client.get(urlString = "/api/v1/users/${user.id}/capabilities") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                }.body<List<CapabilityResponse>>()
+                client
+                    .get(urlString = "/api/v1/users/${user.id}/capabilities") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    }.body<List<CapabilityResponse>>()
             roles.any { it.capability == "HOST" && it.isActive } shouldBe true
 
-            client.delete(urlString = "/api/v1/users/${user.id}/capabilities/HOST") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-            }.status shouldBe HttpStatusCode.NoContent
+            client
+                .delete(urlString = "/api/v1/users/${user.id}/capabilities/HOST") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }.status shouldBe HttpStatusCode.NoContent
         }
 
     @Test
@@ -119,15 +121,17 @@ class CapabilityApiIntegrationTest {
             val userToken = TestFirebaseAuth.mintToken(uid = "fb-2")
             val user = client.provisionSelf(token = userToken)
 
-            client.get(urlString = "/api/v1/users/${user.id}/capabilities") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/users/${user.id}/capabilities") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
+                }.status shouldBe HttpStatusCode.Forbidden
 
-            client.post(urlString = "/api/v1/users/${user.id}/capabilities") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = CapabilityGrantRequest(capability = "ADMINISTRATOR"))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .post(urlString = "/api/v1/users/${user.id}/capabilities") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = CapabilityGrantRequest(capability = "ADMINISTRATOR"))
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
@@ -136,15 +140,17 @@ class CapabilityApiIntegrationTest {
             val adminToken = seedAdminToken()
             val user = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "fb-3"))
 
-            client.post(urlString = "/api/v1/users/${user.id}/capabilities") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = CapabilityGrantRequest(capability = "WIZARD"))
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .post(urlString = "/api/v1/users/${user.id}/capabilities") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = CapabilityGrantRequest(capability = "WIZARD"))
+                }.status shouldBe HttpStatusCode.BadRequest
 
-            client.delete(urlString = "/api/v1/users/${user.id}/capabilities/WIZARD") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .delete(urlString = "/api/v1/users/${user.id}/capabilities/WIZARD") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
@@ -153,8 +159,9 @@ class CapabilityApiIntegrationTest {
             val adminToken = seedAdminToken()
             val admin = UserRepository().findByFirebaseUid(firebaseUid = "admin")!!.toDomain()
 
-            client.delete(urlString = "/api/v1/users/${admin.id}/capabilities/ADMINISTRATOR") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-            }.status shouldBe HttpStatusCode.Conflict
+            client
+                .delete(urlString = "/api/v1/users/${admin.id}/capabilities/ADMINISTRATOR") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }.status shouldBe HttpStatusCode.Conflict
         }
 }

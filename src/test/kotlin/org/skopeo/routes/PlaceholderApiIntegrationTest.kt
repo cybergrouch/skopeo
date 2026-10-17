@@ -73,16 +73,17 @@ class PlaceholderApiIntegrationTest {
         uid: String,
         roles: Set<Capability>,
     ): User =
-        UserRepository().provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    sex = "Male",
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        UserRepository()
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        sex = "Male",
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun tokenFor(uid: String): String = TestFirebaseAuth.mintToken(uid = uid, emailVerified = true)
 
@@ -304,5 +305,10 @@ class PlaceholderApiIntegrationTest {
             client.claim(token = tokenFor(uid = "second"), code = code).status shouldBe HttpStatusCode.NotFound
         }
 
-    private fun seededClaimantId(uid: String): String = UserRepository().findByFirebaseUid(firebaseUid = uid)!!.toDomain().id.toString()
+    private fun seededClaimantId(uid: String): String =
+        UserRepository()
+            .findByFirebaseUid(firebaseUid = uid)!!
+            .toDomain()
+            .id
+            .toString()
 }

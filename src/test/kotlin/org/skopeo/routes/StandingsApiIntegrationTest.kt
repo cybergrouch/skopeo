@@ -84,11 +84,12 @@ class StandingsApiIntegrationTest {
     ): Pair<UserResponse, String> {
         val token = TestFirebaseAuth.mintToken(uid = uid)
         val user: UserResponse =
-            client.post(urlString = "/api/v1/users") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $token")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = CreateUserRequest(proposedRating = "4.0", displayName = name, dateOfBirth = "2000-01-01", sex = "Male"))
-            }.body()
+            client
+                .post(urlString = "/api/v1/users") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = CreateUserRequest(proposedRating = "4.0", displayName = name, dateOfBirth = "2000-01-01", sex = "Male"))
+                }.body()
         return user to token
     }
 
@@ -98,11 +99,12 @@ class StandingsApiIntegrationTest {
         userId: String,
         value: String,
     ) {
-        client.put(urlString = "/api/v1/users/$userId/ratings") {
-            header(key = HttpHeaders.Authorization, value = "Bearer $admin")
-            contentType(type = ContentType.Application.Json)
-            setBody(body = SetRatingRequest(value = value))
-        }.status shouldBe HttpStatusCode.OK
+        client
+            .put(urlString = "/api/v1/users/$userId/ratings") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = SetRatingRequest(value = value))
+            }.status shouldBe HttpStatusCode.OK
     }
 
     @Test
@@ -129,9 +131,10 @@ class StandingsApiIntegrationTest {
 
             // An ADMINISTRATOR (or RATER) does see the precise rating (#186).
             val asAdmin: StandingsPageResponse =
-                client.get(urlString = "/api/v1/standings?band=4.0&sex=Male") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $admin")
-                }.body()
+                client
+                    .get(urlString = "/api/v1/standings?band=4.0&sex=Male") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                    }.body()
             asAdmin.entries.single().currentRating shouldBe "4.200000"
         }
 
@@ -163,9 +166,10 @@ class StandingsApiIntegrationTest {
             setRating(client = client, admin = admin, userId = rated.id, value = "4.2")
             val (_, unratedToken) = signUp(client = client, uid = "unrated", name = "Unrated")
 
-            client.get(urlString = "/api/v1/standings/me") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $unratedToken")
-            }.status shouldBe HttpStatusCode.NotFound
+            client
+                .get(urlString = "/api/v1/standings/me") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $unratedToken")
+                }.status shouldBe HttpStatusCode.NotFound
         }
 
     @Test
@@ -179,15 +183,17 @@ class StandingsApiIntegrationTest {
             setRating(client = client, admin = admin, userId = player.id, value = "4.7") // FROM_4_5
 
             val old: StandingsPageResponse =
-                client.get(urlString = "/api/v1/standings?band=4.0&sex=Male") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-                }.body()
+                client
+                    .get(urlString = "/api/v1/standings?band=4.0&sex=Male") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                    }.body()
             old.total shouldBe 0
 
             val current: StandingsPageResponse =
-                client.get(urlString = "/api/v1/standings?band=4.5&sex=Male") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-                }.body()
+                client
+                    .get(urlString = "/api/v1/standings?band=4.5&sex=Male") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                    }.body()
             current.entries.single().userId shouldBe player.id
         }
 
@@ -195,8 +201,9 @@ class StandingsApiIntegrationTest {
     fun `an unknown band code is a 400`() =
         withApp { client ->
             val playerToken = TestFirebaseAuth.mintToken(uid = "p1")
-            client.get(urlString = "/api/v1/standings?band=nope") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .get(urlString = "/api/v1/standings?band=nope") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 }

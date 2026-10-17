@@ -68,13 +68,20 @@ fun kindOf(event: ScoreEvent): String =
 fun sideOf(event: ScoreEvent): String? =
     when (event) {
         is ScoreEvent.PointWon -> event.side.name
+
         is ScoreEvent.GameAwarded -> event.side.name
+
         is ScoreEvent.SetAwarded -> event.side.name
+
         is ScoreEvent.Retired -> event.side.name
+
         is ScoreEvent.Defaulted -> event.side.name
+
         is ScoreEvent.MatchAwarded -> event.side.name
+
         // A side since #1098, so it stores like any other sided kind rather than in `player_id`.
         is ScoreEvent.ServerAssigned -> event.side.name
+
         is ScoreEvent.SetStarted,
         is ScoreEvent.GameStarted,
         is ScoreEvent.TiebreakStarted,
@@ -94,12 +101,16 @@ fun sideOf(event: ScoreEvent): String? =
  */
 fun LiveMatchEventEntity.toLoggedAction(): LoggedAction =
     when (kind) {
-        LiveMatchEventKinds.UNDONE ->
+        LiveMatchEventKinds.UNDONE -> {
             LoggedAction.Undone(
                 sequence = sequence,
                 targetSequence = requireNotNull(value = targetSequence) { payloadError(field = "target_sequence") },
             )
-        else -> LoggedAction.Scored(sequence = sequence, event = toScoreEvent())
+        }
+
+        else -> {
+            LoggedAction.Scored(sequence = sequence, event = toScoreEvent())
+        }
     }
 
 private fun LiveMatchEventEntity.toScoreEvent(): ScoreEvent = scoreEventOf(kind = kind, side = side, sequence = sequence)

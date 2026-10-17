@@ -95,11 +95,12 @@ class PlayerListApiIntegrationTest {
             val host = seedStaff(uid = "host", roles = setOf(element = Capability.HOST))
             val admin = seedStaff(uid = "admin", roles = setOf(element = Capability.ADMINISTRATOR))
             val player = client.provisionPlayer(uid = "p1")
-            client.put(urlString = "/api/v1/users/${player.id}/ratings") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $admin")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetRatingRequest(value = "4.0"))
-            }.status shouldBe HttpStatusCode.OK
+            client
+                .put(urlString = "/api/v1/users/${player.id}/ratings") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetRatingRequest(value = "4.0"))
+                }.status shouldBe HttpStatusCode.OK
 
             // Create the list.
             val created =
@@ -113,11 +114,12 @@ class PlayerListApiIntegrationTest {
             list.memberCount shouldBe 0
 
             // Add the player.
-            client.post(urlString = "/api/v1/player-lists/${list.id}/members") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = AddMemberRequest(userId = player.id))
-            }.status shouldBe HttpStatusCode.NoContent
+            client
+                .post(urlString = "/api/v1/player-lists/${list.id}/members") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = AddMemberRequest(userId = player.id))
+                }.status shouldBe HttpStatusCode.NoContent
 
             // The detail now lists the member.
             val detail =
@@ -125,7 +127,11 @@ class PlayerListApiIntegrationTest {
                     header(key = HttpHeaders.Authorization, value = "Bearer $host")
                 }
             detail.status shouldBe HttpStatusCode.OK
-            detail.body<PlayerListResponse>().members.single().id shouldBe player.id
+            detail
+                .body<PlayerListResponse>()
+                .members
+                .single()
+                .id shouldBe player.id
 
             // Generate the seeding: one rated member → seed 1.
             val generated =
@@ -144,12 +150,16 @@ class PlayerListApiIntegrationTest {
             }
 
             // And it reads back (still band-only for the non-admin host, #583).
-            client.get(urlString = "/api/v1/player-lists/${list.id}/seeding") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.body<SeedingResponse>().entries.single().let {
-                it.userId shouldBe player.id
-                it.rating.shouldBeNull()
-            }
+            client
+                .get(urlString = "/api/v1/player-lists/${list.id}/seeding") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.body<SeedingResponse>()
+                .entries
+                .single()
+                .let {
+                    it.userId shouldBe player.id
+                    it.rating.shouldBeNull()
+                }
         }
 
     @Test
@@ -159,36 +169,41 @@ class PlayerListApiIntegrationTest {
             val admin = seedStaff(uid = "admin", roles = setOf(element = Capability.ADMINISTRATOR))
             val p1 = client.provisionPlayer(uid = "p1")
             val p2 = client.provisionPlayer(uid = "p2")
-            client.put(urlString = "/api/v1/users/${p1.id}/ratings") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $admin")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetRatingRequest(value = "4.5"))
-            }.status shouldBe HttpStatusCode.OK
-            client.put(urlString = "/api/v1/users/${p2.id}/ratings") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $admin")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetRatingRequest(value = "3.5"))
-            }.status shouldBe HttpStatusCode.OK
+            client
+                .put(urlString = "/api/v1/users/${p1.id}/ratings") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetRatingRequest(value = "4.5"))
+                }.status shouldBe HttpStatusCode.OK
+            client
+                .put(urlString = "/api/v1/users/${p2.id}/ratings") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetRatingRequest(value = "3.5"))
+                }.status shouldBe HttpStatusCode.OK
 
             val list =
-                client.post(urlString = "/api/v1/player-lists") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
-                    contentType(type = ContentType.Application.Json)
-                    setBody(body = CreatePlayerListRequest(name = "Club Open"))
-                }.body<PlayerListSummaryResponse>()
+                client
+                    .post(urlString = "/api/v1/player-lists") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                        contentType(type = ContentType.Application.Json)
+                        setBody(body = CreatePlayerListRequest(name = "Club Open"))
+                    }.body<PlayerListSummaryResponse>()
             for (id in listOf(p1.id, p2.id)) {
-                client.post(urlString = "/api/v1/player-lists/${list.id}/members") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
-                    contentType(type = ContentType.Application.Json)
-                    setBody(body = AddMemberRequest(userId = id))
-                }.status shouldBe HttpStatusCode.NoContent
+                client
+                    .post(urlString = "/api/v1/player-lists/${list.id}/members") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                        contentType(type = ContentType.Application.Json)
+                        setBody(body = AddMemberRequest(userId = id))
+                    }.status shouldBe HttpStatusCode.NoContent
             }
 
             // Generated order is rating-desc (p1, p2) and not manually edited.
             val generated =
-                client.post(urlString = "/api/v1/player-lists/${list.id}/seeding") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
-                }.body<SeedingResponse>()
+                client
+                    .post(urlString = "/api/v1/player-lists/${list.id}/seeding") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    }.body<SeedingResponse>()
             generated.entries.map { it.userId } shouldBe listOf(p1.id, p2.id)
             generated.manuallyEdited shouldBe false
 
@@ -207,12 +222,14 @@ class PlayerListApiIntegrationTest {
             }
 
             // A read reflects the saved order + flag.
-            client.get(urlString = "/api/v1/player-lists/${list.id}/seeding") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.body<SeedingResponse>().let {
-                it.entries.map { e -> e.userId } shouldBe listOf(p2.id, p1.id)
-                it.manuallyEdited shouldBe true
-            }
+            client
+                .get(urlString = "/api/v1/player-lists/${list.id}/seeding") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.body<SeedingResponse>()
+                .let {
+                    it.entries.map { e -> e.userId } shouldBe listOf(p2.id, p1.id)
+                    it.manuallyEdited shouldBe true
+                }
         }
 
     @Test
@@ -221,14 +238,16 @@ class PlayerListApiIntegrationTest {
             val playerToken = TestFirebaseAuth.mintToken(uid = "pp")
             client.provisionPlayer(uid = "pp")
 
-            client.post(urlString = "/api/v1/player-lists") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = CreatePlayerListRequest(name = "Nope"))
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .post(urlString = "/api/v1/player-lists") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = CreatePlayerListRequest(name = "Nope"))
+                }.status shouldBe HttpStatusCode.Forbidden
 
-            client.get(urlString = "/api/v1/player-lists") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/player-lists") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 }

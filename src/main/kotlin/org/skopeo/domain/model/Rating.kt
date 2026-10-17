@@ -65,8 +65,8 @@ object RatingSerializer : KSerializer<Rating> {
     // both elements positionally and so has to reject each independently. Folding them into one
     // validation path would mean losing which field was missing — the one thing the message is for.
     @Suppress("ThrowsCount")
-    override fun deserialize(decoder: Decoder): Rating {
-        return if (decoder is JsonDecoder) {
+    override fun deserialize(decoder: Decoder): Rating =
+        if (decoder is JsonDecoder) {
             val jsonObject = decoder.decodeJsonElement().jsonObject
 
             val value =
@@ -88,12 +88,22 @@ object RatingSerializer : KSerializer<Rating> {
 
                 while (true) {
                     when (val index = decodeElementIndex(descriptor = descriptor)) {
-                        0 -> value = decodeStringElement(descriptor = descriptor, index = 0)
-                        1 ->
+                        0 -> {
+                            value = decodeStringElement(descriptor = descriptor, index = 0)
+                        }
+
+                        1 -> {
                             publishedLevel =
                                 decodeSerializableElement(descriptor = descriptor, index = 1, deserializer = Level.serializer())
-                        -1 -> break
-                        else -> error(message = "Unexpected index: $index")
+                        }
+
+                        -1 -> {
+                            break
+                        }
+
+                        else -> {
+                            error(message = "Unexpected index: $index")
+                        }
                     }
                 }
 
@@ -103,5 +113,4 @@ object RatingSerializer : KSerializer<Rating> {
                 )
             }
         }
-    }
 }

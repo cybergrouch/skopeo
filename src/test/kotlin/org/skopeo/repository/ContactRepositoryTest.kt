@@ -49,14 +49,16 @@ class ContactRepositoryTest {
     }
 
     private fun newUser(uid: String): UUID =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(UserName(type = NameType.FIRST, value = "Test")),
-                ),
-        ).toDomain().id
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(UserName(type = NameType.FIRST, value = "Test")),
+                    ),
+            ).toDomain()
+            .id
 
     /** Add a contact, returning the raw [Either] so callers can assert either branch. */
     private fun addContact(
@@ -90,26 +92,30 @@ class ContactRepositoryTest {
         val contact = addContact(userId = userId, type = ContactType.EMAIL, value = "u2@example.com").shouldBeRight()
 
         val verified =
-            contacts.setVerification(
-                id = contact.id,
-                status = VerificationStatus.VERIFIED,
-                method = VerificationMethod.ADMIN_OVERRIDE,
-                verifiedBy = userId,
-                verifiedAt = LocalDateTime.now(),
-            ).shouldBeRight().toDomain()
+            contacts
+                .setVerification(
+                    id = contact.id,
+                    status = VerificationStatus.VERIFIED,
+                    method = VerificationMethod.ADMIN_OVERRIDE,
+                    verifiedBy = userId,
+                    verifiedAt = LocalDateTime.now(),
+                ).shouldBeRight()
+                .toDomain()
         verified.status shouldBe VerificationStatus.VERIFIED
         verified.method shouldBe VerificationMethod.ADMIN_OVERRIDE
         verified.verifiedAt.shouldNotBeNull()
         verified.verifiedBy shouldBe userId
 
         val reverted =
-            contacts.setVerification(
-                id = contact.id,
-                status = VerificationStatus.PENDING,
-                method = null,
-                verifiedBy = userId,
-                verifiedAt = LocalDateTime.now(),
-            ).shouldBeRight().toDomain()
+            contacts
+                .setVerification(
+                    id = contact.id,
+                    status = VerificationStatus.PENDING,
+                    method = null,
+                    verifiedBy = userId,
+                    verifiedAt = LocalDateTime.now(),
+                ).shouldBeRight()
+                .toDomain()
         reverted.status shouldBe VerificationStatus.PENDING
         reverted.method.shouldBeNull()
         reverted.verifiedAt.shouldBeNull()
@@ -122,13 +128,15 @@ class ContactRepositoryTest {
         val contact = addContact(userId = userId, type = ContactType.EMAIL, value = "u2b@example.com").shouldBeRight()
 
         val verified =
-            contacts.setVerification(
-                id = contact.id,
-                status = VerificationStatus.VERIFIED,
-                method = null,
-                verifiedBy = userId,
-                verifiedAt = LocalDateTime.now(),
-            ).shouldBeRight().toDomain()
+            contacts
+                .setVerification(
+                    id = contact.id,
+                    status = VerificationStatus.VERIFIED,
+                    method = null,
+                    verifiedBy = userId,
+                    verifiedAt = LocalDateTime.now(),
+                ).shouldBeRight()
+                .toDomain()
 
         verified.status shouldBe VerificationStatus.VERIFIED
         verified.method.shouldBeNull()
@@ -138,13 +146,15 @@ class ContactRepositoryTest {
 
     @Test
     fun `setVerification reports absence`() {
-        contacts.setVerification(
-            id = UUID.randomUUID(),
-            status = VerificationStatus.VERIFIED,
-            method = VerificationMethod.ADMIN_OVERRIDE,
-            verifiedBy = UUID.randomUUID(),
-            verifiedAt = LocalDateTime.now(),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        contacts
+            .setVerification(
+                id = UUID.randomUUID(),
+                status = VerificationStatus.VERIFIED,
+                method = VerificationMethod.ADMIN_OVERRIDE,
+                verifiedBy = UUID.randomUUID(),
+                verifiedAt = LocalDateTime.now(),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -193,35 +203,40 @@ class ContactRepositoryTest {
     fun `a verified value is globally unique`() {
         val userA = newUser(uid = "ua")
         val first = addContact(userId = userA, type = ContactType.EMAIL, value = "shared@example.com").shouldBeRight()
-        contacts.setVerification(
-            id = first.id,
-            status = VerificationStatus.VERIFIED,
-            method = VerificationMethod.ADMIN_OVERRIDE,
-            verifiedBy = userA,
-            verifiedAt = LocalDateTime.now(),
-        ).shouldBeRight()
+        contacts
+            .setVerification(
+                id = first.id,
+                status = VerificationStatus.VERIFIED,
+                method = VerificationMethod.ADMIN_OVERRIDE,
+                verifiedBy = userA,
+                verifiedAt = LocalDateTime.now(),
+            ).shouldBeRight()
 
         val userB = newUser(uid = "ub")
         val second = addContact(userId = userB, type = ContactType.EMAIL, value = "shared@example.com").shouldBeRight()
 
-        contacts.setVerification(
-            id = second.id,
-            status = VerificationStatus.VERIFIED,
-            method = VerificationMethod.ADMIN_OVERRIDE,
-            verifiedBy = userB,
-            verifiedAt = LocalDateTime.now(),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
-
-        // Disabling the first holder releases the value: the second can now be verified.
-        contacts.setActive(id = first.id, active = false, disabledAt = LocalDateTime.now()).shouldBeRight()
-        val nowVerified =
-            contacts.setVerification(
+        contacts
+            .setVerification(
                 id = second.id,
                 status = VerificationStatus.VERIFIED,
                 method = VerificationMethod.ADMIN_OVERRIDE,
                 verifiedBy = userB,
                 verifiedAt = LocalDateTime.now(),
-            ).shouldBeRight().toDomain()
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+
+        // Disabling the first holder releases the value: the second can now be verified.
+        contacts.setActive(id = first.id, active = false, disabledAt = LocalDateTime.now()).shouldBeRight()
+        val nowVerified =
+            contacts
+                .setVerification(
+                    id = second.id,
+                    status = VerificationStatus.VERIFIED,
+                    method = VerificationMethod.ADMIN_OVERRIDE,
+                    verifiedBy = userB,
+                    verifiedAt = LocalDateTime.now(),
+                ).shouldBeRight()
+                .toDomain()
         nowVerified.status shouldBe VerificationStatus.VERIFIED
     }
 }

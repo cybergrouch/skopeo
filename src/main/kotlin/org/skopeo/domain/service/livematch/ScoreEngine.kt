@@ -67,32 +67,63 @@ object ScoreEngine {
         // and an undo of the concluding event restores the ability to score by removing it from the fold.
         if (state.isFinished && event !is ScoreEvent.ServerAssigned) return state
         return when (event) {
-            is ScoreEvent.PointWon -> pointWon(state = state, side = event.side)
-            is ScoreEvent.GameAwarded -> gameTo(state = state, side = event.side)
-            is ScoreEvent.SetAwarded -> setTo(state = state, side = event.side)
-            is ScoreEvent.SetStarted -> state.copy(isBetweenSets = false)
-            is ScoreEvent.GameStarted -> state.copy(isInGame = true)
+            is ScoreEvent.PointWon -> {
+                pointWon(state = state, side = event.side)
+            }
+
+            is ScoreEvent.GameAwarded -> {
+                gameTo(state = state, side = event.side)
+            }
+
+            is ScoreEvent.SetAwarded -> {
+                setTo(state = state, side = event.side)
+            }
+
+            is ScoreEvent.SetStarted -> {
+                state.copy(isBetweenSets = false)
+            }
+
+            is ScoreEvent.GameStarted -> {
+                state.copy(isInGame = true)
+            }
+
             // A tiebreak is its own state, not a flavour of game scoring (#1083), so it does not set
             // isInGame: it is scored by points and ended by awarding the set, and the control that ends
             // it is Set rather than Game.
-            is ScoreEvent.TiebreakStarted ->
+            is ScoreEvent.TiebreakStarted -> {
                 state.copy(isTiebreak = true, isInGame = false, pointsTeam1 = 0, pointsTeam2 = 0, tiebreakFirstServer = null)
+            }
+
             // The umpire's own designation or correction (#1098). The engine no longer needs one of
             // these to rotate, so it means exactly what its name says. A correction composes with the
             // schedule rather than fighting it: handover *timing* comes from the score and cannot be
             // wrong, so flipping the side here stays flipped for the rest of the tiebreak.
-            is ScoreEvent.ServerAssigned -> state.copy(servingSide = event.side)
+            is ScoreEvent.ServerAssigned -> {
+                state.copy(servingSide = event.side)
+            }
+
             // The three ways a match ends share a branch: each sets an outcome and changes nothing else.
-            is ScoreEvent.Ending -> state.copy(outcome = endingOf(event = event))
+            is ScoreEvent.Ending -> {
+                state.copy(outcome = endingOf(event = event))
+            }
+
             // Starting also clears a pause, so a restart after a suspension needs no separate Resumed.
             //
             // It lands BETWEEN SETS (#1083). The first set now begins explicitly like every other one,
             // which is what makes "before the first set" a state rather than a special case: previously
             // points were scorable the instant the match started, so there was nowhere to stand between
             // starting a match and scoring in it, and the derivation needed an exception for set one.
-            is ScoreEvent.MatchStarted -> state.copy(hasStarted = true, isPaused = false, isBetweenSets = true)
-            is ScoreEvent.Paused -> state.copy(isPaused = true)
-            is ScoreEvent.Resumed -> state.copy(isPaused = false)
+            is ScoreEvent.MatchStarted -> {
+                state.copy(hasStarted = true, isPaused = false, isBetweenSets = true)
+            }
+
+            is ScoreEvent.Paused -> {
+                state.copy(isPaused = true)
+            }
+
+            is ScoreEvent.Resumed -> {
+                state.copy(isPaused = false)
+            }
         }
     }
 
@@ -183,11 +214,17 @@ object ScoreEngine {
      */
     private fun endingOf(event: ScoreEvent.Ending): LiveOutcome =
         when (event) {
-            is ScoreEvent.Retired ->
+            is ScoreEvent.Retired -> {
                 LiveOutcome(kind = LiveOutcomeKind.RETIRED, winner = event.side.opponent(), concededBy = event.side)
-            is ScoreEvent.Defaulted ->
+            }
+
+            is ScoreEvent.Defaulted -> {
                 LiveOutcome(kind = LiveOutcomeKind.DEFAULTED, winner = event.side.opponent(), concededBy = event.side)
-            is ScoreEvent.MatchAwarded -> LiveOutcome(kind = LiveOutcomeKind.COMPLETED, winner = event.side)
+            }
+
+            is ScoreEvent.MatchAwarded -> {
+                LiveOutcome(kind = LiveOutcomeKind.COMPLETED, winner = event.side)
+            }
         }
 
     /** Bank a game to [side] and start the next one. Does not end the set — that is the umpire's call. */

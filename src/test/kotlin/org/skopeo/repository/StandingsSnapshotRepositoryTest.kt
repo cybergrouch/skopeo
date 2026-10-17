@@ -44,15 +44,17 @@ class StandingsSnapshotRepositoryTest {
     }
 
     private fun newUser(uid: String): UUID =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = emptySet(),
-                ),
-        ).toDomain().id
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = emptySet(),
+                    ),
+            ).toDomain()
+            .id
 
     private fun write(
         band: StandingsBand,
@@ -159,11 +161,17 @@ class StandingsSnapshotRepositoryTest {
                         write(band = StandingsBand.FROM_4_0, sex = null, rank = 1, userId = none, rating = "4.0"),
                     ),
             )
-        repo.page(snapshotId = id, band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
-            .entries.single().userId shouldBe male
+        repo
+            .page(snapshotId = id, band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
+            .entries
+            .single()
+            .userId shouldBe male
         val unspecified = repo.page(snapshotId = id, band = StandingsBand.FROM_4_0, sex = null, limit = 25, offset = 0)
         unspecified.entries.single().userId shouldBe none
-        unspecified.entries.single().sex.shouldBeNull()
+        unspecified.entries
+            .single()
+            .sex
+            .shouldBeNull()
     }
 
     @Test

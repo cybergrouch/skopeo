@@ -33,12 +33,20 @@ class RankingPointRepository {
     fun award(write: RankingPointAwardWrite): RankingPointAwardEntity =
         transaction {
             val id = insertRow(write = write)
-            RankingPointAwardsTable.selectAll().where { RankingPointAwardsTable.id eq id }.single().toRankingPointAwardEntity()
+            RankingPointAwardsTable
+                .selectAll()
+                .where { RankingPointAwardsTable.id eq id }
+                .single()
+                .toRankingPointAwardEntity()
         }
 
     fun findById(id: UUID): RankingPointAwardEntity? =
         transaction {
-            RankingPointAwardsTable.selectAll().where { RankingPointAwardsTable.id eq id }.singleOrNull()?.toRankingPointAwardEntity()
+            RankingPointAwardsTable
+                .selectAll()
+                .where { RankingPointAwardsTable.id eq id }
+                .singleOrNull()
+                ?.toRankingPointAwardEntity()
         }
 
     /**
@@ -91,7 +99,11 @@ class RankingPointRepository {
                             opponentBand = original.opponentBand,
                         ),
                 )
-            RankingPointAwardsTable.selectAll().where { RankingPointAwardsTable.id eq markerId }.single().toRankingPointAwardEntity()
+            RankingPointAwardsTable
+                .selectAll()
+                .where { RankingPointAwardsTable.id eq markerId }
+                .single()
+                .toRankingPointAwardEntity()
         }
 
     /**
@@ -109,7 +121,8 @@ class RankingPointRepository {
                 RankingPointAwardsTable
                     .selectAll()
                     .orderBy(RankingPointAwardsTable.awardedAt to SortOrder.DESC)
-                    .limit(count = limit).offset(start = offset.toLong())
+                    .limit(count = limit)
+                    .offset(start = offset.toLong())
                     .map { it.toRankingPointAwardEntity() }
             rows to total
         }
@@ -191,27 +204,28 @@ class RankingPointRepository {
         }
 
     private fun insertRow(write: RankingPointAwardWrite): UUID =
-        RankingPointAwardsTable.insertAndGetId {
-            it[userId] = write.userId
-            it[points] = write.points
-            it[pointClass] = write.pointClass.name
-            it[sourceType] = write.sourceType.name
-            it[sourceId] = write.sourceId
-            it[band] = write.band
-            it[sex] = write.sex
-            it[reason] = write.reason
-            it[validFrom] = write.validFrom
-            it[validUntil] = write.validUntil
-            it[status] = write.status.name
-            it[revokesAwardId] = write.revokesAwardId
-            it[grantedBy] = write.grantedBy
-            it[awardedAt] = write.awardedAt
-            it[eventId] = write.eventId
-            it[matchId] = write.matchId
-            it[pointsScheduleVersion] = write.pointsScheduleVersion
-            it[teamBand] = write.teamBand
-            it[opponentBand] = write.opponentBand
-        }.value
+        RankingPointAwardsTable
+            .insertAndGetId {
+                it[userId] = write.userId
+                it[points] = write.points
+                it[pointClass] = write.pointClass.name
+                it[sourceType] = write.sourceType.name
+                it[sourceId] = write.sourceId
+                it[band] = write.band
+                it[sex] = write.sex
+                it[reason] = write.reason
+                it[validFrom] = write.validFrom
+                it[validUntil] = write.validUntil
+                it[status] = write.status.name
+                it[revokesAwardId] = write.revokesAwardId
+                it[grantedBy] = write.grantedBy
+                it[awardedAt] = write.awardedAt
+                it[eventId] = write.eventId
+                it[matchId] = write.matchId
+                it[pointsScheduleVersion] = write.pointsScheduleVersion
+                it[teamBand] = write.teamBand
+                it[opponentBand] = write.opponentBand
+            }.value
 }
 
 internal fun ResultRow.toRankingPointAwardEntity(): RankingPointAwardEntity =

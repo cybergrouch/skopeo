@@ -24,8 +24,18 @@ import java.math.BigDecimal
 @Serializable
 data class MatchScore(
     val sets: List<SetScore>,
-    val winnerTeamId: String = sets.groupingBy { it.winnerTeamId }.eachCount().maxBy { it.value }.key,
-    val loserTeamId: String = sets.groupingBy { it.loserTeamId }.eachCount().maxBy { it.value }.key,
+    val winnerTeamId: String =
+        sets
+            .groupingBy { it.winnerTeamId }
+            .eachCount()
+            .maxBy { it.value }
+            .key,
+    val loserTeamId: String =
+        sets
+            .groupingBy { it.loserTeamId }
+            .eachCount()
+            .maxBy { it.value }
+            .key,
 ) {
     init {
         require(value = sets.isNotEmpty()) { "Match must have at least 1 set" }
@@ -53,15 +63,21 @@ data class MatchScore(
  * (one set's dominance is just that set's efficiency).
  */
 internal fun MatchScore.calculateDominanceFactor(teamId: String): BigDecimal =
-    sets.sumOf { set ->
-        val gamesWon = set.games[teamId] ?: 0
-        val gamesLost = set.games.filterKeys { it != teamId }.values.sum()
-        (gamesWon - gamesLost).bd.divideBy(divisor = (gamesWon + gamesLost).bd)
-    }.divideBy(divisor = sets.size.bd)
+    sets
+        .sumOf { set ->
+            val gamesWon = set.games[teamId] ?: 0
+            val gamesLost =
+                set.games
+                    .filterKeys { it != teamId }
+                    .values
+                    .sum()
+            (gamesWon - gamesLost).bd.divideBy(divisor = (gamesWon + gamesLost).bd)
+        }.divideBy(divisor = sets.size.bd)
 
 internal val MatchScore.matchScore: String get() =
-    sets.map {
-        val gamesWonByWinner = it.games[winnerTeamId] ?: 0
-        val gamesWonByLoser = it.games[loserTeamId] ?: 0
-        "$gamesWonByWinner-$gamesWonByLoser"
-    }.joinToString(separator = " ")
+    sets
+        .map {
+            val gamesWonByWinner = it.games[winnerTeamId] ?: 0
+            val gamesWonByLoser = it.games[loserTeamId] ?: 0
+            "$gamesWonByWinner-$gamesWonByLoser"
+        }.joinToString(separator = " ")

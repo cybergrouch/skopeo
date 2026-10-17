@@ -52,15 +52,16 @@ class PointsConfigServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -108,18 +109,24 @@ class PointsConfigServiceTest {
     @Test
     fun `a non-admin cannot set the open-play schedule`() {
         provision(uid = "player")
-        service.setOpenPlay(token = token(uid = "player"), config = sampleOpenPlay())
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .setOpenPlay(token = token(uid = "player"), config = sampleOpenPlay())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
         // An unknown caller is likewise forbidden.
-        service.setOpenPlay(token = token(uid = "ghost"), config = sampleOpenPlay())
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .setOpenPlay(token = token(uid = "ghost"), config = sampleOpenPlay())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
     fun `an invalid open-play schedule is rejected as Validation`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        service.setOpenPlay(token = token(uid = "admin"), config = sampleOpenPlay().copy(validityDays = 0))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .setOpenPlay(token = token(uid = "admin"), config = sampleOpenPlay().copy(validityDays = 0))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -141,15 +148,19 @@ class PointsConfigServiceTest {
         saved.updatedBy shouldBe admin.id.toString()
         service.getTournament().value.unsanctioned shouldBe listOf(50, 35, 25, 18)
 
-        service.setTournament(token = token(uid = "player"), config = config)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .setTournament(token = token(uid = "player"), config = config)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
     fun `a tournament schedule with the wrong number of places is rejected as Validation`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val bad = TournamentPointsConfig(sanctioned = listOf(80, 60, 40), unsanctioned = listOf(40, 30, 20, 15), validityDays = 365)
-        service.setTournament(token = token(uid = "admin"), config = bad)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .setTournament(token = token(uid = "admin"), config = bad)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 }

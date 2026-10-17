@@ -29,18 +29,25 @@ class RatingRequestRepository {
         conflictAware(message = "You already have an open re-rate request") {
             transaction {
                 val id =
-                    RatingRequestsTable.insertAndGetId {
-                        it[RatingRequestsTable.userId] = userId
-                        it[RatingRequestsTable.justification] = justification
-                        it[status] = RatingRequestStatus.PENDING.name
-                        it[createdAt] = LocalDateTime.now()
-                    }.value
+                    RatingRequestsTable
+                        .insertAndGetId {
+                            it[RatingRequestsTable.userId] = userId
+                            it[RatingRequestsTable.justification] = justification
+                            it[status] = RatingRequestStatus.PENDING.name
+                            it[createdAt] = LocalDateTime.now()
+                        }.value
                 loadById(id = id)
             }
         }
 
     fun findById(id: UUID): RatingRequestEntity? =
-        transaction { RatingRequestsTable.selectAll().where { RatingRequestsTable.id eq id }.singleOrNull()?.toRatingRequestEntity() }
+        transaction {
+            RatingRequestsTable
+                .selectAll()
+                .where { RatingRequestsTable.id eq id }
+                .singleOrNull()
+                ?.toRatingRequestEntity()
+        }
 
     /** The player's most recent request (any status) — what the Profile tab shows. */
     fun findLatestByUser(userId: UUID): RatingRequestEntity? =
@@ -67,7 +74,8 @@ class RatingRequestRepository {
             val items =
                 filtered
                     .orderBy(RatingRequestsTable.createdAt to SortOrder.DESC)
-                    .limit(count = limit).offset(start = offset.toLong())
+                    .limit(count = limit)
+                    .offset(start = offset.toLong())
                     .map { it.toRatingRequestEntity() }
             items to total
         }
@@ -95,7 +103,11 @@ class RatingRequestRepository {
         }
 
     private fun loadById(id: UUID): RatingRequestEntity =
-        RatingRequestsTable.selectAll().where { RatingRequestsTable.id eq id }.single().toRatingRequestEntity()
+        RatingRequestsTable
+            .selectAll()
+            .where { RatingRequestsTable.id eq id }
+            .single()
+            .toRatingRequestEntity()
 }
 
 internal fun ResultRow.toRatingRequestEntity(): RatingRequestEntity =

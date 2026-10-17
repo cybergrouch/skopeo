@@ -74,16 +74,17 @@ class RankingPointReadsTest {
         roles: Set<Capability> = setOf(element = Capability.PLAYER),
         sex: String? = "Male",
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    sex = sex,
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        sex = sex,
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -208,19 +209,33 @@ class RankingPointReadsTest {
         val settings = SettingsService()
 
         // Visible to everyone while the flag is off — including anonymously, which is the default.
-        service.awardedForEvent(code = event.publicCode).shouldBeRight().rows.shouldHaveSize(size = 1)
+        service
+            .awardedForEvent(code = event.publicCode)
+            .shouldBeRight()
+            .rows
+            .shouldHaveSize(size = 1)
 
         settings.setHideRankingPoints(token = token(uid = "root"), hidden = true).shouldBeRight()
 
         // Anonymous and plain-player viewers get an empty summary. Not a Forbidden: the endpoint is public
         // and the event is real — there is simply nothing this viewer may see, and the client renders no
         // card for an empty list exactly as it does for an event that awarded nothing.
-        service.awardedForEvent(code = event.publicCode).shouldBeRight().rows.shouldBeEmpty()
-        service.awardedForEvent(code = event.publicCode, token = token(uid = "player"))
-            .shouldBeRight().rows.shouldBeEmpty()
+        service
+            .awardedForEvent(code = event.publicCode)
+            .shouldBeRight()
+            .rows
+            .shouldBeEmpty()
+        service
+            .awardedForEvent(code = event.publicCode, token = token(uid = "player"))
+            .shouldBeRight()
+            .rows
+            .shouldBeEmpty()
         // ...while an administrator still sees it.
-        service.awardedForEvent(code = event.publicCode, token = token(uid = "root"))
-            .shouldBeRight().rows.shouldHaveSize(size = 1)
+        service
+            .awardedForEvent(code = event.publicCode, token = token(uid = "root"))
+            .shouldBeRight()
+            .rows
+            .shouldHaveSize(size = 1)
     }
 
     @Test
@@ -242,8 +257,11 @@ class RankingPointReadsTest {
         ).forEach { role ->
             provision(uid = "sees-$role", roles = setOf(Capability.PLAYER, role))
             withClue(clue = "$role should still see the card") {
-                service.awardedForEvent(code = event.publicCode, token = token(uid = "sees-$role"))
-                    .shouldBeRight().rows.shouldHaveSize(size = 1)
+                service
+                    .awardedForEvent(code = event.publicCode, token = token(uid = "sees-$role"))
+                    .shouldBeRight()
+                    .rows
+                    .shouldHaveSize(size = 1)
             }
         }
     }

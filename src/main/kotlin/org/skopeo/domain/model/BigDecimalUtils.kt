@@ -24,7 +24,8 @@ private fun Double.toBigDecimalPrecise(): BigDecimal = BigDecimal(this).adjusted
  * Used for rating change values and percentages to maintain exact precision.
  */
 internal fun BigDecimal.toStringPrecise(): String =
-    this.setScale(CALCULATION_SCALE, ROUNDING_MODE)
+    this
+        .setScale(CALCULATION_SCALE, ROUNDING_MODE)
         .toPlainString()
 
 internal fun BigDecimal.divideBy(divisor: BigDecimal): BigDecimal = this.divide(divisor, CALCULATION_SCALE, ROUNDING_MODE)

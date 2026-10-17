@@ -57,15 +57,16 @@ class RatingRequestServiceTest {
         rated: Boolean = false,
     ): User {
         val user =
-            users.provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = uid,
-                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                        capabilities = roles,
-                    ),
-            ).toDomain()
+            users
+                .provision(
+                    command =
+                        ProvisionUserCommand(
+                            firebaseUid = uid,
+                            identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                            names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                            capabilities = roles,
+                        ),
+                ).toDomain()
         if (rated) {
             ratings.setRating(userId = user.id, rating = BigDecimal("4.0"), level = "4.0")
         }
@@ -104,7 +105,11 @@ class RatingRequestServiceTest {
         service.mine(token = token(uid = "player")).shouldBeRight().shouldBeNull()
 
         val created = service.create(token = token(uid = "player"), justification = "review me").shouldBeRight()
-        service.mine(token = token(uid = "player")).shouldBeRight().shouldNotBeNull().id shouldBe created.id
+        service
+            .mine(token = token(uid = "player"))
+            .shouldBeRight()
+            .shouldNotBeNull()
+            .id shouldBe created.id
 
         service.mine(token = token(uid = "ghost")).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -116,25 +121,31 @@ class RatingRequestServiceTest {
         service.create(token = token(uid = "player"), justification = "look").shouldBeRight()
 
         val pending =
-            service.list(
-                token = token(uid = "rater"),
-                limit = 50,
-                offset = 0,
-                statusRaw = "PENDING",
-            ).shouldBeRight()
+            service
+                .list(
+                    token = token(uid = "rater"),
+                    limit = 50,
+                    offset = 0,
+                    statusRaw = "PENDING",
+                ).shouldBeRight()
         pending.items shouldHaveSize 1
-        pending.items.single().requester?.displayName shouldBe "player"
+        pending.items
+            .single()
+            .requester
+            ?.displayName shouldBe "player"
         service
             .list(token = token(uid = "rater"), limit = 50, offset = 0, statusRaw = "DENIED")
             .shouldBeRight()
             .total shouldBe 0
 
-        service.list(
-            token = token(uid = "player"),
-            limit = 50,
-            offset = 0,
-            statusRaw = null,
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .list(
+                token = token(uid = "player"),
+                limit = 50,
+                offset = 0,
+                statusRaw = null,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -157,8 +168,10 @@ class RatingRequestServiceTest {
         service.list(token = token(uid = "admin"), limit = 50, offset = 0, statusRaw = null).shouldBeRight().total shouldBe 1
         service.approve(token = token(uid = "admin"), id = UUID.fromString(request.id), newRatingRaw = "4.5").shouldBeRight()
 
-        service.list(token = token(uid = "ghost"), limit = 50, offset = 0, statusRaw = null)
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .list(token = token(uid = "ghost"), limit = 50, offset = 0, statusRaw = null)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -176,11 +189,15 @@ class RatingRequestServiceTest {
         // The override is recorded in the rating history + audited.
         AuditRepository().list(actions = listOf(element = AuditAction.RATING_OVERRIDDEN), limit = 10, offset = 0).second shouldBe 1L
 
-        service.approve(token = token(uid = "rater"), id = UUID.fromString(request.id), newRatingRaw = "5.0")
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
+        service
+            .approve(token = token(uid = "rater"), id = UUID.fromString(request.id), newRatingRaw = "5.0")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
         // Denying an already-resolved request is likewise a conflict.
-        service.deny(token = token(uid = "rater"), id = UUID.fromString(request.id), reason = "too late")
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
+        service
+            .deny(token = token(uid = "rater"), id = UUID.fromString(request.id), reason = "too late")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
     }
 
     @Test
@@ -189,15 +206,18 @@ class RatingRequestServiceTest {
         val player = provision(uid = "player", rated = true)
         val request = service.create(token = token(uid = "player"), justification = "review").shouldBeRight()
 
-        service.deny(token = token(uid = "rater"), id = UUID.fromString(request.id), reason = "  ")
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service
+            .deny(token = token(uid = "rater"), id = UUID.fromString(request.id), reason = "  ")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
 
         val denied =
-            service.deny(
-                token = token(uid = "rater"),
-                id = UUID.fromString(request.id),
-                reason = "Not enough evidence",
-            ).shouldBeRight()
+            service
+                .deny(
+                    token = token(uid = "rater"),
+                    id = UUID.fromString(request.id),
+                    reason = "Not enough evidence",
+                ).shouldBeRight()
         denied.status shouldBe RatingRequestStatus.DENIED.name
         denied.reason shouldBe "Not enough evidence"
         ratings.findCurrentRating(userId = player.id)!!.currentRating shouldBe BigDecimal("4.000000") // unchanged
@@ -210,13 +230,21 @@ class RatingRequestServiceTest {
         provision(uid = "player", rated = true)
         val request = service.create(token = token(uid = "player"), justification = "x").shouldBeRight()
 
-        service.approve(token = token(uid = "rater"), id = UUID.randomUUID(), newRatingRaw = "4.5")
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
-        service.deny(token = token(uid = "rater"), id = UUID.randomUUID(), reason = "no")
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
-        service.approve(token = token(uid = "player"), id = UUID.fromString(request.id), newRatingRaw = "4.5")
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.deny(token = token(uid = "player"), id = UUID.fromString(request.id), reason = "no")
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .approve(token = token(uid = "rater"), id = UUID.randomUUID(), newRatingRaw = "4.5")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .deny(token = token(uid = "rater"), id = UUID.randomUUID(), reason = "no")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .approve(token = token(uid = "player"), id = UUID.fromString(request.id), newRatingRaw = "4.5")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .deny(token = token(uid = "player"), id = UUID.fromString(request.id), reason = "no")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 }

@@ -53,15 +53,16 @@ class RatingServiceTest {
         uid: String,
         roles: Set<Capability> = setOf(Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
+            ).toDomain()
 
     private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
@@ -244,7 +245,11 @@ class RatingServiceTest {
 
         // A RATER sees the same pending queue as an admin.
         val pending =
-            service.pendingAssessment(token = token(uid = "rater"), limit = 50, offset = 0).shouldBeRight().items.map { it.userId }
+            service
+                .pendingAssessment(token = token(uid = "rater"), limit = 50, offset = 0)
+                .shouldBeRight()
+                .items
+                .map { it.userId }
         (unrated.id.toString() in pending) shouldBe true
         (rated.id.toString() in pending) shouldBe false
 
@@ -259,17 +264,18 @@ class RatingServiceTest {
         admin(uid = "root")
         val dob = LocalDate.now().minusYears(30).minusDays(1) // 30 years and a day ago → age 30
         val player =
-            users.provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = "rich",
-                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "rich", isPrimary = true),
-                        names = listOf(element = UserName(type = NameType.DISPLAY, value = "Rich")),
-                        dateOfBirth = dob,
-                        sex = "Female",
-                        capabilities = setOf(element = Capability.PLAYER),
-                    ),
-            ).toDomain()
+            users
+                .provision(
+                    command =
+                        ProvisionUserCommand(
+                            firebaseUid = "rich",
+                            identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "rich", isPrimary = true),
+                            names = listOf(element = UserName(type = NameType.DISPLAY, value = "Rich")),
+                            dateOfBirth = dob,
+                            sex = "Female",
+                            capabilities = setOf(element = Capability.PLAYER),
+                        ),
+                ).toDomain()
 
         val page = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).shouldBeRight()
         val entry = page.items.single { it.userId == player.id.toString() }
@@ -285,16 +291,17 @@ class RatingServiceTest {
     fun `pending assessment surfaces a self-reported rating as its NTRP band`() {
         admin(uid = "root")
         val selfRated =
-            users.provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = "self",
-                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "self", isPrimary = true),
-                        names = listOf(element = UserName(type = NameType.DISPLAY, value = "Self")),
-                        proposedRating = BigDecimal("3.5"),
-                        capabilities = setOf(element = Capability.PLAYER),
-                    ),
-            ).toDomain()
+            users
+                .provision(
+                    command =
+                        ProvisionUserCommand(
+                            firebaseUid = "self",
+                            identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "self", isPrimary = true),
+                            names = listOf(element = UserName(type = NameType.DISPLAY, value = "Self")),
+                            proposedRating = BigDecimal("3.5"),
+                            capabilities = setOf(element = Capability.PLAYER),
+                        ),
+                ).toDomain()
         val plain = provisionUser(uid = "plain")
 
         val items = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).shouldBeRight().items
@@ -331,15 +338,16 @@ class RatingServiceTest {
         // Provision a user with no DISPLAY name (only a FIRST name) so the display-name lookup
         // resolves to null on the pending-assessment list.
         val nameless =
-            users.provision(
-                command =
-                    ProvisionUserCommand(
-                        firebaseUid = "nameless",
-                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "nameless", isPrimary = true),
-                        names = listOf(UserName(type = NameType.FIRST, value = "First")),
-                        capabilities = setOf(Capability.PLAYER),
-                    ),
-            ).toDomain()
+            users
+                .provision(
+                    command =
+                        ProvisionUserCommand(
+                            firebaseUid = "nameless",
+                            identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "nameless", isPrimary = true),
+                            names = listOf(UserName(type = NameType.FIRST, value = "First")),
+                            capabilities = setOf(Capability.PLAYER),
+                        ),
+                ).toDomain()
 
         val entry =
             service
@@ -370,8 +378,18 @@ class RatingServiceTest {
         service.setRating(token = token(uid = "root"), userId = player.id, value = "4.3").shouldBeRight()
 
         // The owner (a plain player) may read their ratings but the raw value stays withheld (reveal folded into the DTO).
-        service.getRatings(token = token(uid = "player"), userId = player.id).shouldBeRight().single().value.shouldBeNull()
+        service
+            .getRatings(token = token(uid = "player"), userId = player.id)
+            .shouldBeRight()
+            .single()
+            .value
+            .shouldBeNull()
         // An ADMINISTRATOR (rating manager) sees the raw value.
-        service.getRatings(token = token(uid = "root"), userId = player.id).shouldBeRight().single().value.shouldNotBeNull()
+        service
+            .getRatings(token = token(uid = "root"), userId = player.id)
+            .shouldBeRight()
+            .single()
+            .value
+            .shouldNotBeNull()
     }
 }

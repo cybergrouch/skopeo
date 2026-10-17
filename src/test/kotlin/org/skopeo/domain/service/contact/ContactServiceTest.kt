@@ -59,15 +59,16 @@ class ContactServiceTest {
         uid: String,
         capabilities: Set<Capability> = setOf(Capability.PLAYER),
     ): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(UserName(type = NameType.FIRST, value = "N")),
-                    capabilities = capabilities,
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(UserName(type = NameType.FIRST, value = "N")),
+                        capabilities = capabilities,
+                    ),
+            ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -129,10 +130,15 @@ class ContactServiceTest {
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
-        service.list(token = token(uid = "owner"), userId = owner.id).shouldBeRight().single().id shouldBe created.id
+        service
+            .list(token = token(uid = "owner"), userId = owner.id)
+            .shouldBeRight()
+            .single()
+            .id shouldBe created.id
         service
             .get(token = token(uid = "owner"), userId = owner.id, contactId = UUID.fromString(created.id))
-            .shouldBeRight().id shouldBe created.id
+            .shouldBeRight()
+            .id shouldBe created.id
 
         val disabled =
             service
@@ -260,10 +266,15 @@ class ContactServiceTest {
                     isPrimary = true,
                 ).shouldBeRight()
 
-        service.list(token = token(uid = "root"), userId = owner.id).shouldBeRight().single().id shouldBe created.id
+        service
+            .list(token = token(uid = "root"), userId = owner.id)
+            .shouldBeRight()
+            .single()
+            .id shouldBe created.id
         service
             .get(token = token(uid = "root"), userId = owner.id, contactId = UUID.fromString(created.id))
-            .shouldBeRight().id shouldBe created.id
+            .shouldBeRight()
+            .id shouldBe created.id
     }
 
     @Test

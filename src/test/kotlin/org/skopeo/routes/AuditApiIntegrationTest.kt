@@ -108,20 +108,23 @@ class AuditApiIntegrationTest {
             entry.target?.userId shouldBe player.id
 
             // Set an admin note on the entry.
-            client.patch(urlString = "/api/v1/audit/${entry.id}/comment") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = AuditCommentRequest(comment = "Initial assessment"))
-            }.status shouldBe HttpStatusCode.NoContent
+            client
+                .patch(urlString = "/api/v1/audit/${entry.id}/comment") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = AuditCommentRequest(comment = "Initial assessment"))
+                }.status shouldBe HttpStatusCode.NoContent
 
             // A non-admin cannot read the audit log.
-            client.get(urlString = "/api/v1/audit") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "p1")}")
-            }.status shouldBe HttpStatusCode.Forbidden
+            client
+                .get(urlString = "/api/v1/audit") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "p1")}")
+                }.status shouldBe HttpStatusCode.Forbidden
 
             // An unknown category is a 400.
-            client.get(urlString = "/api/v1/audit?category=BOGUS") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-            }.status shouldBe HttpStatusCode.BadRequest
+            client
+                .get(urlString = "/api/v1/audit?category=BOGUS") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }.status shouldBe HttpStatusCode.BadRequest
         }
 }

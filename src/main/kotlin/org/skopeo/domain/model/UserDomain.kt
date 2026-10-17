@@ -180,9 +180,12 @@ enum class AccountStatus { MERGED, DELETED, UNCLAIMED, ACTIVE }
 fun User.accountStatus(): AccountStatus =
     when {
         canonicalUserId != null -> AccountStatus.MERGED
+
         !isActive -> AccountStatus.DELETED
+
         // `placeholder` already means "login-less and NOT YET CLAIMED" (#496/#505) — claiming clears it.
         placeholder -> AccountStatus.UNCLAIMED
+
         else -> AccountStatus.ACTIVE
     }
 

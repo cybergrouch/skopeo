@@ -134,7 +134,9 @@ class CalibrationService(
         val inCalibration =
             when (override) {
                 CalibrationOverride.FORCED_OFF -> false
+
                 CalibrationOverride.FORCED_ON -> true
+
                 // Strictly less than N: the window covers the 1st through the Nth rated match, so a player
                 // whose Nth match has been rated has completed it. Off by one here would either rate an
                 // opponent's match that should have been suppressed, or suppress one that should have counted.

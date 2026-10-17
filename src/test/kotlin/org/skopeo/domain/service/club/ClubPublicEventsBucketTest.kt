@@ -70,15 +70,16 @@ class ClubPublicEventsBucketTest {
     private val today: LocalDate = LocalDate.now()
 
     private fun provision(uid: String): User =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = setOf(element = Capability.PLAYER),
-                ),
-        ).toDomain()
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = setOf(element = Capability.PLAYER),
+                    ),
+            ).toDomain()
 
     /** A club plus a player to populate rosters with. */
     private data class Fixture(
@@ -314,10 +315,12 @@ class ClubPublicEventsBucketTest {
 
         // Parsing lives in the service (routes must not depend on `model`), so a bad value surfaces as a
         // Validation the route maps to 400 — never as a quiet fallback to some other bucket.
-        reader.publicEventsByCode(code = f.publicCode, bucket = "NOPE", limit = 10, offset = 0)
+        reader
+            .publicEventsByCode(code = f.publicCode, bucket = "NOPE", limit = 10, offset = 0)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
-        reader.publicEventsByCode(code = f.publicCode, bucket = null, limit = 10, offset = 0)
+        reader
+            .publicEventsByCode(code = f.publicCode, bucket = null, limit = 10, offset = 0)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }

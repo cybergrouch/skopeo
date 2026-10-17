@@ -61,6 +61,7 @@ data class Team(
                     "SINGLES team must have exactly 1 player, got ${players.size}"
                 }
             }
+
             TeamType.DOUBLES, TeamType.MIXED_DOUBLES -> {
                 require(value = players.size == 2) {
                     "DOUBLES/MIXED_DOUBLES team must have exactly 2 players, got ${players.size}"

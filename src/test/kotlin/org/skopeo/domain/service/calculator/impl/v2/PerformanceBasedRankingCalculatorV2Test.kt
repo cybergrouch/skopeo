@@ -56,7 +56,10 @@ class PerformanceBasedRankingCalculatorV2Test {
     private fun changeFor(
         result: org.skopeo.domain.service.calculator.RankingCalculationResult,
         playerId: String,
-    ): String = result.response.ratingChanges.getValue(key = playerId).change
+    ): String =
+        result.response.ratingChanges
+            .getValue(key = playerId)
+            .change
 
     @Test
     fun `a single set applies one dominance-scaled step`() {
@@ -146,7 +149,9 @@ class PerformanceBasedRankingCalculatorV2Test {
     fun `doubles conserves total rating across the four players`() {
         val result = v2.calculate(request = doublesRequest(t1 = "5.0" to "3.0", t2 = "4.5" to "3.5", sets = listOf(6 to 2, 4 to 6, 6 to 3)))
 
-        val net = result.response.ratingChanges.values.sumOf { it.change.toDouble() }
+        val net =
+            result.response.ratingChanges.values
+                .sumOf { it.change.toDouble() }
         net shouldBe (0.0 plusOrMinus 0.001)
     }
 
@@ -346,8 +351,14 @@ class PerformanceBasedRankingCalculatorV2Test {
         // Split by TRUE share 5/4 : 3/4 → the stronger partner's delta is 5/3 of the weaker's.
         (handA / handB) shouldBe ((5.0 / 3.0) plusOrMinus 0.01)
         // Previous ratings are the TRUE 5.0 / 3.0 values.
-        handResult.response.ratingChanges.getValue(key = "T1a").previousRating.value.toDouble() shouldBe (5.0 plusOrMinus 1e-9)
-        handResult.response.ratingChanges.getValue(key = "T1b").previousRating.value.toDouble() shouldBe (3.0 plusOrMinus 1e-9)
+        handResult.response.ratingChanges
+            .getValue(key = "T1a")
+            .previousRating.value
+            .toDouble() shouldBe (5.0 plusOrMinus 1e-9)
+        handResult.response.ratingChanges
+            .getValue(key = "T1b")
+            .previousRating.value
+            .toDouble() shouldBe (3.0 plusOrMinus 1e-9)
     }
 
     @Test

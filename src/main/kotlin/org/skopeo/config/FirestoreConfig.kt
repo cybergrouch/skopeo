@@ -79,7 +79,9 @@ private fun firestoreFor(projectId: String): Firestore {
  * scoreboard — the wrong way round. Failures are logged and swallowed, which is the contract
  * [LiveScoreBroadcaster] states.
  */
-internal class FirestoreLiveScoreBroadcaster(private val firestore: Firestore) : LiveScoreBroadcaster {
+internal class FirestoreLiveScoreBroadcaster(
+    private val firestore: Firestore,
+) : LiveScoreBroadcaster {
     private val logger = KotlinLogging.logger {}
 
     override fun publish(payload: LiveScorePayload) {

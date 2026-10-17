@@ -366,12 +366,19 @@ class OpenAPIIntegrationTest {
     /** Recursively collect every `$ref` string value in the parsed spec. */
     private fun collectRefs(node: Any?): List<String> =
         when (node) {
-            is Map<*, *> ->
+            is Map<*, *> -> {
                 node.entries.flatMap { (key, value) ->
                     if (key == "\$ref" && value is String) listOf(element = value) else collectRefs(node = value)
                 }
-            is List<*> -> node.flatMap { element -> collectRefs(node = element) }
-            else -> emptyList()
+            }
+
+            is List<*> -> {
+                node.flatMap { element -> collectRefs(node = element) }
+            }
+
+            else -> {
+                emptyList()
+            }
         }
 
     /** Whether an internal JSON-pointer `$ref` (`#/a/b/c`) resolves to an existing node. External refs pass. */
@@ -381,7 +388,8 @@ class OpenAPIIntegrationTest {
     ): Boolean {
         if (!ref.startsWith(prefix = "#/")) return true
         val segments =
-            ref.removePrefix(prefix = "#/")
+            ref
+                .removePrefix(prefix = "#/")
                 .split("/")
                 .map { segment -> segment.replace(oldValue = "~1", newValue = "/").replace(oldValue = "~0", newValue = "~") }
         val target =

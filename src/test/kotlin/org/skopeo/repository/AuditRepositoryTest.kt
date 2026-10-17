@@ -44,15 +44,17 @@ class AuditRepositoryTest {
     }
 
     private fun provisionAdmin(): UUID =
-        users.provision(
-            command =
-                ProvisionUserCommand(
-                    firebaseUid = "admin",
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = "Admin")),
-                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
-                ),
-        ).toDomain().id
+        users
+            .provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = "admin",
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = "Admin")),
+                        capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                    ),
+            ).toDomain()
+            .id
 
     @Test
     fun `records an entry and reads it back with details (incl a null value) round-tripped`() {
@@ -113,7 +115,12 @@ class AuditRepositoryTest {
                     summary = "Set rating",
                 ),
         )
-        audit.list(actions = null, limit = 10, offset = 0).first.single().actorClientId.shouldBeNull()
+        audit
+            .list(actions = null, limit = 10, offset = 0)
+            .first
+            .single()
+            .actorClientId
+            .shouldBeNull()
     }
 
     @Test
@@ -202,10 +209,19 @@ class AuditRepositoryTest {
                     summary = "Overrode rating 4.0 → 4.5",
                 ),
         )
-        val id = audit.list(actions = null, limit = 1, offset = 0).first.single().id
+        val id =
+            audit
+                .list(actions = null, limit = 1, offset = 0)
+                .first
+                .single()
+                .id
 
         audit.updateComment(id = id, comment = "Corrected after review").shouldBeTrue()
-        audit.list(actions = null, limit = 1, offset = 0).first.single().comment shouldBe "Corrected after review"
+        audit
+            .list(actions = null, limit = 1, offset = 0)
+            .first
+            .single()
+            .comment shouldBe "Corrected after review"
 
         audit.updateComment(id = UUID.randomUUID(), comment = "x").shouldBeFalse()
     }

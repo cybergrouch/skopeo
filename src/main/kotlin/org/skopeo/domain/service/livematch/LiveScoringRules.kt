@@ -48,6 +48,7 @@ internal fun ScoreEvent.isScoringAction(): Boolean =
         is ScoreEvent.TiebreakStarted,
         is ScoreEvent.GameStarted,
         -> true
+
         else -> false
     }
 
@@ -98,21 +99,27 @@ private fun Raise<ServiceError>.gameLevelAllowed(
     when (event) {
         // A point needs somewhere to go. Between games there is nowhere, and silently banking it into
         // the next game is exactly the quiet wrongness this state exists to prevent.
-        is ScoreEvent.PointWon ->
+        is ScoreEvent.PointWon -> {
             ensure(condition = state.isPointable) {
                 ServiceError.Conflict(message = "No game is under way. Press Start game, or start a tiebreak, before scoring a point.")
             }
+        }
+
         // Awarding a game that never started would bank a game the log has no points for.
-        is ScoreEvent.GameAwarded ->
+        is ScoreEvent.GameAwarded -> {
             ensure(condition = state.isInGame) {
                 ServiceError.Conflict(message = "No game is under way. Press Start game before awarding a game.")
             }
+        }
+
         // Award the game first (#1083). This is the mis-tap that used to end a set mid-rally, and the
         // game in progress would have been lost rather than banked.
-        is ScoreEvent.SetAwarded ->
+        is ScoreEvent.SetAwarded -> {
             ensure(condition = !state.isInGame) {
                 ServiceError.Conflict(message = "A game is under way. Award that game before ending the set.")
             }
+        }
+
         is ScoreEvent.GameStarted -> {
             ensure(condition = !state.isInGame) {
                 ServiceError.Conflict(message = "A game is already under way.")
@@ -121,6 +128,7 @@ private fun Raise<ServiceError>.gameLevelAllowed(
                 ServiceError.Conflict(message = "A tiebreak is under way. End the set to finish it.")
             }
         }
+
         is ScoreEvent.TiebreakStarted -> {
             ensure(condition = !state.isInGame) {
                 ServiceError.Conflict(message = "A game is under way. Award that game before starting a tiebreak.")
@@ -135,7 +143,10 @@ private fun Raise<ServiceError>.gameLevelAllowed(
                 )
             }
         }
-        else -> Unit
+
+        else -> {
+            Unit
+        }
     }
 }
 

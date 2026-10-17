@@ -43,9 +43,24 @@ class RedactionConventionTest {
          */
         val SENSITIVE_NAMES =
             setOf(
-                "email", "emailAddress", "phone", "phoneNumber", "dateOfBirth", "dob",
-                "plaintext", "secret", "password", "apiKey", "keyHash", "token", "accessToken",
-                "refreshToken", "providerUid", "firebaseUid", "ssn", "taxId",
+                "email",
+                "emailAddress",
+                "phone",
+                "phoneNumber",
+                "dateOfBirth",
+                "dob",
+                "plaintext",
+                "secret",
+                "password",
+                "apiKey",
+                "keyHash",
+                "token",
+                "accessToken",
+                "refreshToken",
+                "providerUid",
+                "firebaseUid",
+                "ssn",
+                "taxId",
             )
 
         /**
@@ -89,7 +104,12 @@ class RedactionConventionTest {
         val DATA_CLASS = Regex(pattern = """^\s*(?:internal\s+|private\s+)?data class (\w+)""")
     }
 
-    private data class Finding(val type: String, val field: String, val declared: String, val file: String)
+    private data class Finding(
+        val type: String,
+        val field: String,
+        val declared: String,
+        val file: String,
+    )
 
     private fun sourceRoot(): File {
         // Resolved by walking up rather than assuming a working directory, so this passes whether Gradle
@@ -162,7 +182,8 @@ class RedactionConventionTest {
         // here, one of the known allowlisted ones, found by disabling the allowlist check.
         val root = sourceRoot()
         val seen =
-            File(root, "domain/model").walkTopDown()
+            File(root, "domain/model")
+                .walkTopDown()
                 .filter { it.extension == "kt" }
                 .flatMap { f -> f.readLines().asSequence().mapNotNull { FIELD.find(input = it) } }
                 .map { it.groupValues[1] }

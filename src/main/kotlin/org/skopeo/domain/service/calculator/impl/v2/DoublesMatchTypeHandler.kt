@@ -53,7 +53,10 @@ class DoublesMatchTypeHandler(
     ): List<PlayerSetResult> {
         val mean = teamMean(teamId = teamId)
         return playersOf(teamId = teamId).map { player ->
-            val delta = step.delta * player.rating.value.bd.divideBy(divisor = mean)
+            val delta =
+                step.delta *
+                    player.rating.value.bd
+                        .divideBy(divisor = mean)
             val ratingAfter = running.getOrPut(key = player.playerId) { player.rating.value.bd } + delta
             running[player.playerId] = ratingAfter
             PlayerSetResult(player = player, delta = delta, ratingAfter = ratingAfter)
@@ -71,7 +74,10 @@ class DoublesMatchTypeHandler(
                         val playerChange =
                             playerRatingChange(
                                 oldRating = player.rating,
-                                delta = netTeamDelta * player.rating.value.bd.divideBy(divisor = mean),
+                                delta =
+                                    netTeamDelta *
+                                        player.rating.value.bd
+                                            .divideBy(divisor = mean),
                             )
                         player.copy(rating = playerChange.newRating) to playerChange
                     }

@@ -94,7 +94,10 @@ class AccessLogTest {
             line.getValue(key = "route").jsonPrimitive.content shouldBe "/api/v1/matches/{id}"
             // Numbers, not strings: `"200"` would break a distribution metric over these fields.
             line.getValue(key = "status").jsonPrimitive.longOrNull shouldBe 200L
-            line.getValue(key = "durationMs").jsonPrimitive.longOrNull.shouldNotBeNull()
+            line
+                .getValue(key = "durationMs")
+                .jsonPrimitive.longOrNull
+                .shouldNotBeNull()
         }
 
     @Test
