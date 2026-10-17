@@ -449,7 +449,8 @@ private fun LiveMatchRepository.umpireCredit(matchId: UUID): List<MatchUmpireEnt
 
 /** The current score and who is scoring it. Internal — the wire gets [scoreboard]. */
 internal fun LiveMatchRepository.view(matchId: UUID): LiveMatchView {
-    val log = loggedActions(matchId = matchId)
+    val rows = log(matchId = matchId)
+    val log = rows.map { it.toLoggedAction() }
     return LiveMatchView(
         matchId = matchId,
         state = ScoreEngine.replay(log = log),
@@ -459,6 +460,9 @@ internal fun LiveMatchRepository.view(matchId: UUID): LiveMatchView {
         // `undo` would find nothing -- which is what made an always-visible Undo inert on a fresh
         // match (#1083).
         canUndo = ScoreEngine.surviving(log = log).isNotEmpty(),
+        // The newest row, undo markers included: correcting yourself is scoring, the same rule the
+        // umpire credit counts by, so this and the finished match's headline name the same person.
+        lastRecorderId = rows.maxByOrNull { it.sequence }?.recordedBy,
     )
 }
 
@@ -478,10 +482,12 @@ private class LiveRoster(
     val players: List<LivePlayerResponse>,
     val team1Name: String?,
     val team2Name: String?,
+    /** A scorer's public name (#1183): their display name, or null once deleted. */
+    val scorerNameOf: (UUID) -> String?,
 ) {
     companion object {
         /** No match, or no roster resolved — the shape every early return wants. */
-        val EMPTY = LiveRoster(players = emptyList(), team1Name = null, team2Name = null)
+        val EMPTY = LiveRoster(players = emptyList(), team1Name = null, team2Name = null, scorerNameOf = { null })
     }
 }
 
@@ -490,13 +496,16 @@ private fun LiveMatchRepository.responseFor(
     matchId: UUID,
     now: LocalDateTime,
     roster: LiveRoster = LiveRoster.EMPTY,
-): LiveMatchResponse =
-    view(matchId = matchId).toResponse(
+): LiveMatchResponse {
+    val current = view(matchId = matchId)
+    return current.toResponse(
         timing = matchTiming(rows = log(matchId = matchId), now = now),
         players = roster.players,
         team1Name = roster.team1Name,
         team2Name = roster.team2Name,
+        scorerName = current.lastRecorderId?.let(block = roster.scorerNameOf),
     )
+}
 
 /**
  * Both sides' players, id and name, for the umpire's server picker (#943).
@@ -529,5 +538,12 @@ private fun rosterOf(
         players = named(match.team1.userIds, TeamSide.TEAM1) + named(match.team2.userIds, TeamSide.TEAM2),
         team1Name = match.team1.officialName(),
         team2Name = match.team2.officialName(),
+        scorerNameOf = { id ->
+            users
+                .findById(id = id)
+                .getOrNull()
+                ?.toDomain()
+                ?.shownName()
+        },
     )
 }

@@ -351,4 +351,12 @@ data class LiveMatchView(
      * markers are never sent to it -- so "is Undo worth showing" has to be answered here.
      */
     val canUndo: Boolean = false,
+    /**
+     * Who recorded the newest row of the log (#1183) — the "current scorer" a spectator is told about.
+     *
+     * Not [scorerId]: that is the soft claim, which a takeover moves before the new umpire has keyed
+     * anything. This follows what was actually recorded, so it agrees with the umpire credit folded out of
+     * the same log at finalize. Null before the first action.
+     */
+    val lastRecorderId: UUID? = null,
 )

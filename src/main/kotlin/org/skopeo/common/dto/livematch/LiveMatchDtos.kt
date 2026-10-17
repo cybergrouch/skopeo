@@ -71,6 +71,14 @@ data class LiveMatchResponse(
     val matchId: String,
     val sequence: Long,
     val scorerId: String? = null,
+    /**
+     * The current scorer's display name (#1183): whoever recorded the most recent action, so it follows a
+     * handover once the new umpire keys something. Null before the first action, and for a deleted
+     * account, which is never shown by name.
+     *
+     * Not the person behind [scorerId] — that is the soft claim, which moves the moment someone takes over.
+     */
+    val scorerName: String? = null,
     val hasStarted: Boolean,
     val isPaused: Boolean,
     /**
