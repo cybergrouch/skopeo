@@ -320,7 +320,7 @@ class AwardDerivationAssemblerTest {
         one: User,
         oneUid: String,
         two: User,
-        bracket: PlacementBracket,
+        bracket: PlacementBracket?,
         sanctioned: Boolean,
         team1Wins: Boolean = true,
     ): Pair<UUID, Match> {
@@ -502,6 +502,26 @@ class AwardDerivationAssemblerTest {
 
         derivation.recorded.shouldBeFalse()
         derivation.unavailableReason.shouldNotBeNull() shouldContain "no longer available"
+        derivation.placement.shouldBeNull()
+    }
+
+    @Test
+    fun `a placement fixture that records no bracket says so rather than guessing a place`() {
+        val ana = player(uid = "ana")
+        val ben = player(uid = "ben")
+        // Flagged as a placement but with no bracket: nothing constrains the pair to agree, so the place
+        // paid cannot be read off the fixture and must not be guessed.
+        val (eventId, match) = placementMatch(one = ana, oneUid = "ana", two = ben, bracket = null, sanctioned = true)
+
+        val derivation =
+            assembler.derive(
+                award =
+                    award(userId = ana.id, matchId = match.id, points = "1000", pointClass = PointClass.ANNUAL_TOURNAMENT)
+                        .copy(eventId = eventId),
+            )
+
+        derivation.recorded.shouldBeFalse()
+        derivation.unavailableReason.shouldNotBeNull() shouldContain "no placement bracket"
         derivation.placement.shouldBeNull()
     }
 
