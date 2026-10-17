@@ -112,10 +112,17 @@ export function LiveScoreCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
-        {score.serverName && !finished ? (
-          <p className="text-sm text-muted-foreground">
-            <span aria-hidden="true">🎾 </span>
-            {score.serverName} to serve
+        {/* Who is serving and who is scoring, on one line (#1183). Each is gated on its own field, so a
+            document written before `scorerName` existed simply renders without it. */}
+        {(score.serverName && !finished) || score.scorerName ? (
+          <p className="flex flex-wrap gap-x-3 text-sm text-muted-foreground">
+            {score.serverName && !finished ? (
+              <span>
+                <span aria-hidden="true">🎾 </span>
+                {score.serverName} to serve
+              </span>
+            ) : null}
+            {score.scorerName ? <span>Scored by {score.scorerName}</span> : null}
           </p>
         ) : null}
         {score.sets.length > 0 && (

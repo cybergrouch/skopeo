@@ -24,6 +24,13 @@ export interface LiveScore {
   isRunning?: boolean
   /** The server's display NAME — the document never carries a user id (#943). */
   serverName?: string | null
+  /**
+   * The current scorer's display NAME (#1183): whoever recorded the newest action. Absent on a document
+   * written before the field existed (version 1), null before the first action or for a deleted account.
+   */
+  scorerName?: string | null
+  /** The document's shape (#1183). Absent means 1; 2 adds `version` and `scorerName`. */
+  version?: number
   outcomeKind: string | null
   outcomeWinner: string | null
 }

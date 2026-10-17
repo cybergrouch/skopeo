@@ -7,13 +7,17 @@ import type { ReplayDocument, ReplayPoint } from '@/api/generated/model'
  * that feature is simply not offered. This table is the ONE place that decides it — never compare
  * version numbers in components.
  */
-export type ReplayFeature = 'serve' | 'breaks' | 'breakPoints' | 'timing'
+export type ReplayFeature = 'serve' | 'breaks' | 'breakPoints' | 'timing' | 'scorers'
 
 const REQUIRED_FIELD: Record<ReplayFeature, keyof ReplayPoint> = {
   serve: 'server',
   breaks: 'breakOfServe',
   breakPoints: 'breakPoint',
   timing: 'atMs',
+  // Who scored each point (#1183). Absent from a replay upgraded without its log, AND from every
+  // response to a viewer the server does not entitle to it — so this one gate covers both, and the web
+  // makes no role decision of its own.
+  scorers: 'scorer',
 }
 
 /** Whether [replay] carries the data [feature] needs. */

@@ -200,4 +200,31 @@ describe("LiveScoreCard", () => {
     renderCard();
     expect(screen.queryByText(/to serve/)).not.toBeInTheDocument();
   });
+
+  it("names the current scorer beside the server while live (#1183)", () => {
+    useLiveScore.mockReturnValue({ ...score, serverName: "Ana", scorerName: "Uma", version: 2 });
+    renderCard();
+    expect(screen.getByText(/Ana to serve/)).toBeInTheDocument();
+    expect(screen.getByText("Scored by Uma")).toBeInTheDocument();
+  });
+
+  it("names the scorer even before anyone is serving, and after the end (#1183)", () => {
+    useLiveScore.mockReturnValue({
+      ...score,
+      serverName: "Ana",
+      scorerName: "Uma",
+      outcomeKind: "COMPLETED",
+      outcomeWinner: "TEAM1",
+    });
+    renderCard();
+    expect(screen.queryByText(/to serve/)).not.toBeInTheDocument();
+    expect(screen.getByText("Scored by Uma")).toBeInTheDocument();
+  });
+
+  it("renders a version-1 document, which has no scorer field, without a scorer line (#1183)", () => {
+    // `score` is a v1 document: no `version`, no `scorerName`.
+    useLiveScore.mockReturnValue(score);
+    renderCard();
+    expect(screen.queryByText(/Scored by/)).not.toBeInTheDocument();
+  });
 });
