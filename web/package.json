@@ -58,5 +58,11 @@
     "typescript-eslint": "^8.71.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
+  },
+  "allowScripts": {
+    "@firebase/util": false,
+    "esbuild": false,
+    "fsevents": false,
+    "protobufjs": false
   }
 }
