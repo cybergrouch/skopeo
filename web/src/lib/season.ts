@@ -17,8 +17,8 @@ export type ThemeName =
   | 'rainy'
   | 'halloween'
   | 'autumn'
-  // Skopeo OG (#512): the original all-white look. Manually-selectable only — deliberately NOT
-  // produced by resolveSeasonTheme (it's not part of the AUTO rotation).
+  // Skopeo OG (#512): the original all-white look. Selectable by hand, and also in the AUTO rotation
+  // for Apr 1–15 (#1194), ahead of the clay season.
   | 'og'
 
 /** Month is 1-based here (Jan = 1) to match how the windows read in the design doc. */
@@ -47,7 +47,8 @@ const SEASON_WINDOWS: Array<{ start: DateParts; theme: ThemeName }> = [
   { start: { month: 1, day: 1 }, theme: 'ao' },
   { start: { month: 2, day: 1 }, theme: 'valentines' },
   { start: { month: 2, day: 15 }, theme: 'spring' },
-  { start: { month: 4, day: 1 }, theme: 'clay' },
+  { start: { month: 4, day: 1 }, theme: 'og' },
+  { start: { month: 4, day: 16 }, theme: 'clay' },
   { start: { month: 6, day: 11 }, theme: 'grass' },
   { start: { month: 8, day: 1 }, theme: 'uso' },
   { start: { month: 9, day: 16 }, theme: 'rainy' },
@@ -69,9 +70,10 @@ function windowIndexOf(now: Date): number {
 
 /**
  * Resolve the active theme for `now` (the last window whose start is on/before `now` wins):
- * Jan 1 → ao; Feb 1 → valentines; Feb 15 → spring; Apr 1 → clay; Jun 11 → grass; Aug 1 → uso;
- * Sep 16 → rainy; Oct 17 → offseason; Oct 25 → halloween; Nov 3 → autumn; Dec 10 → christmas. The
- * table is Jan-1-anchored, so any date before Feb 1 lands on the first (ao) window.
+ * Jan 1 → ao; Feb 1 → valentines; Feb 15 → spring; Apr 1 → og; Apr 16 → clay; Jun 11 → grass;
+ * Aug 1 → uso; Sep 16 → rainy; Oct 17 → offseason; Oct 25 → halloween; Nov 3 → autumn;
+ * Dec 10 → christmas. The table is Jan-1-anchored, so any date before Feb 1 lands on the first (ao)
+ * window.
  */
 export function resolveSeasonTheme(now: Date): ThemeName {
   return SEASON_WINDOWS[windowIndexOf(now)].theme
@@ -103,8 +105,7 @@ const ENUM_TO_THEME: Record<string, ThemeName> = {
   RAINY: 'rainy',
   HALLOWEEN: 'halloween',
   AUTUMN: 'autumn',
-  // Skopeo OG (#512) is manual-only, so it appears here (explicit picks map 1:1) but not in
-  // resolveSeasonTheme (the AUTO date rotation).
+  // Skopeo OG (#512): an explicit pick maps 1:1 like the others; AUTO also produces it Apr 1–15 (#1194).
   SKOPEO_OG: 'og',
 }
 

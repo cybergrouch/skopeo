@@ -18,7 +18,9 @@ describe('resolveSeasonTheme', () => {
     ['Feb 14 → valentines (end boundary)', on(2, 14), 'valentines'],
     ['Feb 15 → spring (start boundary)', on(2, 15), 'spring'],
     ['Mar 31 → spring (end boundary)', on(3, 31), 'spring'],
-    ['Apr 1 → clay (start boundary)', on(4, 1), 'clay'],
+    ['Apr 1 → og (start boundary, #1194)', on(4, 1), 'og'],
+    ['Apr 15 → og (end boundary)', on(4, 15), 'og'],
+    ['Apr 16 → clay (start boundary)', on(4, 16), 'clay'],
     ['May 20 → clay', on(5, 20), 'clay'],
     ['Jun 10 → clay (end boundary)', on(6, 10), 'clay'],
     ['Jun 11 → grass (start boundary)', on(6, 11), 'grass'],
@@ -85,7 +87,9 @@ describe('resolveSeasonStart', () => {
     ['Feb 15 → Feb 15', on(2, 15), on(2, 15)],
     ['Mar 20 → Feb 15', on(3, 20), on(2, 15)],
     ['Apr 1 → Apr 1', on(4, 1), on(4, 1)],
-    ['May 5 → Apr 1', on(5, 5), on(4, 1)],
+    ['Apr 15 → Apr 1', on(4, 15), on(4, 1)],
+    ['Apr 16 → Apr 16', on(4, 16), on(4, 16)],
+    ['May 5 → Apr 16', on(5, 5), on(4, 16)],
     ['Jun 11 → Jun 11', on(6, 11), on(6, 11)],
     ['Jul 4 → Jun 11', on(7, 4), on(6, 11)],
     ['Aug 1 → Aug 1', on(8, 1), on(8, 1)],
@@ -125,7 +129,7 @@ describe('resolveEffectiveTheme', () => {
       expect(
         resolveEffectiveTheme(
           { global: undefined, localTheme: undefined, localSetAt: undefined },
-          on(4, 15),
+          on(5, 15),
         ),
       ).toBe('clay')
     })

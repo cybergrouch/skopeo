@@ -32,7 +32,7 @@ const THEME_OPTIONS: ReadonlyArray<{ value: SetThemeRequestTheme; label: string 
   { value: 'RAINY', label: 'Rainy' },
   { value: 'HALLOWEEN', label: 'Halloween' },
   { value: 'AUTUMN', label: 'Autumn' },
-  // Skopeo OG (#512): the original all-white look, manually-selectable (not in the AUTO rotation).
+  // Skopeo OG (#512): the original all-white look; also AUTO's theme for Apr 1–15 (#1194).
   { value: 'SKOPEO_OG', label: 'Skopeo OG' },
 ]
 

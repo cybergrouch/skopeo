@@ -145,9 +145,9 @@ The four court seasons are Vibrant Depth (#409); Off-Season + US Open stay all-d
 | **Rainy** *(vibrant)* | `#37474F` Storm Slate | `#212121` Near-Black · `#ECEFF1` | `#00E5FF` Electric Cyan | `#ECEFF1` Cloud (2px) | Moody, cool, overcast |
 | **Halloween** *(vibrant)* | `#E65100` Pumpkin Orange | `#1A0933` Witching Purple · `#FFFFFF` | `#76FF03` Toxic Green | `#FFFFFF` White (2px) | Spooky, high-contrast, playful |
 | **Autumn** *(vibrant)* | `#BF360C` Burnt Rust | `#3E2723` Cocoa · `#FFF3E0` | `#FFB300` Amber | `#FFF3E0` Linen (2px) | Warm, harvest, earthy |
-| **Skopeo OG** *(light, manual-only)* | `#FFFFFF` White | `#FFFFFF` White · near-black `oklch(0.145 0 0)` | dark neutral `oklch(0.205 0 0)` | `oklch(0.922 0 0)` Light Gray (1px) | The original clean all-white look |
+| **Skopeo OG** *(light)* | `#FFFFFF` White | `#FFFFFF` White · near-black `oklch(0.145 0 0)` | dark neutral `oklch(0.205 0 0)` | `oklch(0.922 0 0)` Light Gray (1px) | The original clean all-white look |
 
-> **Skopeo OG (#512):** the app's original all-white look from before seasonal theming (#378), brought back as a **manually-selectable** theme (backend enum `SKOPEO_OG`; `data-theme='og'`; label "Skopeo OG"). It re-asserts the pre-#378 neutral light palette that `:root` still carries as the default/fallback (`web/src/index.css`), so it is **not** part of the AUTO rotation (§6) — an admin picks it explicitly. Because it drives the same tokens as every other theme, the shared content links/badges stay AA on the OG surface.
+> **Skopeo OG (#512):** the app's original all-white look from before seasonal theming (#378), brought back as a selectable theme (backend enum `SKOPEO_OG`; `data-theme='og'`; label "Skopeo OG"). It re-asserts the pre-#378 neutral light palette that `:root` still carries as the default/fallback (`web/src/index.css`), and since #1194 it is also AUTO's theme for **Apr 1 – Apr 15** (§6), just before the clay season; an admin or user can still pick it explicitly at any time. Because it drives the same tokens as every other theme, the shared content links/badges stay AA on the OG surface.
 
 ### 5.1 Content-link colors (#399, supersedes #394/#395)
 
@@ -174,14 +174,15 @@ Public-page / share links (the "Public page (QR)" anchors and similar) get an ex
 
 ## 6. AUTO season resolver
 
-When the setting is `AUTO`, a small data-driven table (`resolveSeasonTheme` in `web/src/lib/season.ts`) maps today's date → theme. Windows are **inclusive** and **first-match-wins** (evaluated top→bottom); anything unmatched falls through to `offseason`. The confirmed 11-row calendar (seasonal-themes-expansion):
+When the setting is `AUTO`, a small data-driven table (`resolveSeasonTheme` in `web/src/lib/season.ts`) maps today's date → theme. Windows are **inclusive** and **first-match-wins** (evaluated top→bottom); anything unmatched falls through to `offseason`. The confirmed 12-row calendar (seasonal-themes-expansion, plus Skopeo OG in #1194):
 
 | Window (inclusive) | Theme |
 |---|---|
 | Jan 1 – Jan 31 | Australian Open (`ao`) |
 | Feb 1 – Feb 14 | Valentine's Day (`valentines`) |
 | Feb 15 – Mar 31 | Spring (`spring`) |
-| Apr 1 – Jun 10 | Clay (`clay`) |
+| Apr 1 – Apr 15 | Skopeo OG (`og`) |
+| Apr 16 – Jun 10 | Clay (`clay`) |
 | Jun 11 – Jul 31 | Grass (`grass`) |
 | Aug 1 – Sep 15 | US Open (`uso`) |
 | Sep 16 – Oct 16 | Rainy (`rainy`) |
@@ -191,7 +192,7 @@ When the setting is `AUTO`, a small data-driven table (`resolveSeasonTheme` in `
 | Dec 10 – Dec 31 | Christmas (`christmas`) |
 | *(anything unmatched)* | Off-Season (`offseason`) default |
 
-The five seasonal themes (valentines, spring, rainy, halloween, autumn) fill the former Feb–Mar and Sep–Nov "swing" gaps; the short Oct 17–24 offseason strip separates the rainy and halloween windows, and Christmas remains a December carve-out.
+The five seasonal themes (valentines, spring, rainy, halloween, autumn) fill the former Feb–Mar and Sep–Nov "swing" gaps; the short Oct 17–24 offseason strip separates the rainy and halloween windows, and Christmas remains a December carve-out. Skopeo OG (#1194) takes the first half of April, around when Skopeo started (spring 2026). Clay starts on Apr 16 and runs unbroken through the French Open; Grass still starts on Jun 11, well ahead of Wimbledon.
 
 The windows are contiguous and cover the whole year, so the table is stored as an ordered list of *window starts* (`SEASON_WINDOWS` in `season.ts`, the single source of truth); `resolveSeasonTheme` returns the theme of the last window whose start is on/before `now`. A companion `resolveSeasonStart(now)` returns that window's **start boundary** (midnight, `now`'s year) — used by the per-user local theme below to detect a new-season takeover.
 
