@@ -4182,6 +4182,45 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/theme/schedule:
+    put:
+      summary: Replace the AUTO season schedule (#1196)
+      description: >-
+        ADMINISTRATOR only. Replaces the whole AUTO schedule that `GET /api/v1/theme` returns. Rows are
+        tested top to bottom and the first row whose inclusive range contains the date wins; an end before
+        the start wraps past Dec 31; a range ending Feb 28 also covers Feb 29; uncovered dates show Skopeo OG.
+        Rejected with a 400 listing every problem (structured, in `problems`) when two rows share a date,
+        two rows share a name (case-insensitive, trimmed), or a row has no name or theme, an invalid date,
+        or AUTO as its theme. Uncovered dates are only a warning, returned in `gaps`. Audit-logged as
+        SETTINGS_THEME_SCHEDULE_CHANGED with the schedule before and after.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetThemeScheduleRequest'
+      responses:
+        '200':
+          description: The saved schedule and any uncovered ranges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThemeScheduleResponse'
+        '400':
+          description: The schedule breaks a rule; every problem is listed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/users/me/theme:
     get:
       summary: Get the caller's local theme (#514)
@@ -9457,6 +9496,7 @@ components:
       type: object
       required:
         - theme
+        - schedule
       properties:
         theme:
           type: string
@@ -9471,6 +9511,141 @@ components:
           format: uuid
           nullable: true
           description: The administrator who last set the theme; null when never set.
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThemeScheduleRow'
+          description: >-
+            The AUTO season schedule (#1196), in resolution order. Always present: the built-in default
+            when none is stored.
+        scheduleUpdatedAt:
+          type: string
+          nullable: true
+          description: ISO timestamp of the last schedule change; null when the built-in default is served.
+        scheduleUpdatedBy:
+          type: string
+          format: uuid
+          nullable: true
+          description: The administrator who last saved the schedule; null for the seeded or built-in default.
+
+    ScheduleDate:
+      type: object
+      required: [month, day]
+      properties:
+        month:
+          type: integer
+          description: 1-based month (Jan = 1).
+        day:
+          type: integer
+          description: Day of the month; Feb 29 is allowed.
+
+    ThemeScheduleRow:
+      type: object
+      required: [name, theme, start, end]
+      properties:
+        name:
+          type: string
+          description: Unique (case-insensitive, trimmed) row name.
+        theme:
+          type: string
+          enum: [GRASS, CLAY, AO, US_OPEN, OFF_SEASON, CHRISTMAS, VALENTINES, SPRING, RAINY, HALLOWEEN, AUTUMN, SKOPEO_OG]
+          description: The theme this row applies; never AUTO.
+        start:
+          $ref: '#/components/schemas/ScheduleDate'
+        end:
+          $ref: '#/components/schemas/ScheduleDate'
+
+    ThemeScheduleRowRequest:
+      type: object
+      required: [start, end]
+      properties:
+        name:
+          type: string
+          nullable: true
+          description: Required; a missing or blank name is reported as that row's problem.
+        theme:
+          type: string
+          nullable: true
+          description: A ThemeSetting name other than AUTO; a missing one is reported as that row's problem.
+        start:
+          $ref: '#/components/schemas/ScheduleDate'
+        end:
+          $ref: '#/components/schemas/ScheduleDate'
+
+    SetThemeScheduleRequest:
+      type: object
+      required: [schedule]
+      properties:
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThemeScheduleRowRequest'
+          description: The whole schedule, in resolution order.
+
+    ScheduleSpan:
+      type: object
+      required: [start, end]
+      properties:
+        start:
+          $ref: '#/components/schemas/ScheduleDate'
+        end:
+          $ref: '#/components/schemas/ScheduleDate'
+
+    ThemeScheduleResponse:
+      type: object
+      required: [schedule, gaps]
+      properties:
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThemeScheduleRow'
+        gaps:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduleSpan'
+          description: Dates no row covers (a warning; they show Skopeo OG). Feb 29 alone is never listed.
+        updatedAt:
+          type: string
+          nullable: true
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+
+    ValidationProblem:
+      type: object
+      required: [code, message, rows, names]
+      properties:
+        code:
+          type: string
+          description: >-
+            The kind of problem. For the theme schedule (#1196) one of OVERLAP, DUPLICATE_NAME,
+            MISSING_NAME, MISSING_THEME, UNKNOWN_THEME, AUTO_THEME, INVALID_DATE.
+        message:
+          type: string
+        rows:
+          type: array
+          items:
+            type: integer
+          description: 1-based positions of the entries involved.
+        names:
+          type: array
+          items:
+            type: string
+          description: The names of those entries, in the same order.
+
+    ValidationErrorResponse:
+      type: object
+      required: [error, message, problems]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationProblem'
 
     SetThemeRequest:
       type: object

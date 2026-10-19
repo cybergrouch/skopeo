@@ -43,7 +43,7 @@ describe('ThemeProvider', () => {
     expect(document.documentElement.dataset.theme).toBe('uso')
   })
 
-  it('maps SKOPEO_OG to the og data-theme (#512, manual-only)', () => {
+  it('maps SKOPEO_OG to the og data-theme (#512)', () => {
     useGetApiV1Theme.mockReturnValue({ data: { theme: 'SKOPEO_OG' } })
     renderProvider()
     expect(document.documentElement.dataset.theme).toBe('og')
@@ -53,6 +53,17 @@ describe('ThemeProvider', () => {
     useGetApiV1Theme.mockReturnValue({ data: undefined })
     renderProvider()
     expect(document.documentElement.dataset.theme).toBe('ao')
+  })
+
+  it('resolves AUTO from the server schedule, not the built-in one (#1196)', () => {
+    useGetApiV1Theme.mockReturnValue({
+      data: {
+        theme: 'AUTO',
+        schedule: [{ name: 'Winter grass', theme: 'GRASS', start: { month: 1, day: 1 }, end: { month: 1, day: 31 } }],
+      },
+    })
+    renderProvider()
+    expect(document.documentElement.dataset.theme).toBe('grass')
   })
 
   it('re-applies when the query data changes', () => {

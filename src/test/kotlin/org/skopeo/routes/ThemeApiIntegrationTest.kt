@@ -3,7 +3,9 @@
 
 package org.skopeo.routes
 
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -11,6 +13,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -22,9 +25,13 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.settings.LocalThemeResponse
+import org.skopeo.common.dto.settings.ScheduleDateDto
 import org.skopeo.common.dto.settings.SetLocalThemeRequest
 import org.skopeo.common.dto.settings.SetThemeRequest
+import org.skopeo.common.dto.settings.SetThemeScheduleRequest
 import org.skopeo.common.dto.settings.ThemeResponse
+import org.skopeo.common.dto.settings.ThemeScheduleResponse
+import org.skopeo.common.dto.settings.ThemeScheduleRowRequest
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -209,5 +216,107 @@ class ThemeApiIntegrationTest {
     fun `an anonymous request cannot read the local theme (#514)`() =
         withApp { client ->
             client.get(urlString = "/api/v1/users/me/theme").status shouldBe HttpStatusCode.Unauthorized
+        }
+
+    private fun scheduleRow(
+        name: String,
+        start: Pair<Int, Int>,
+        end: Pair<Int, Int>,
+    ) = ThemeScheduleRowRequest(
+        name = name,
+        theme = "CLAY",
+        start = ScheduleDateDto(month = start.first, day = start.second),
+        end = ScheduleDateDto(month = end.first, day = end.second),
+    )
+
+    @Test
+    fun `the public read carries the AUTO schedule (#1196)`() =
+        withApp { client ->
+            val body = client.get(urlString = "/api/v1/theme").body<ThemeResponse>()
+            body.schedule.first().name shouldBe "Australian Open"
+            body.schedule.size shouldBe 12
+        }
+
+    @Test
+    fun `an admin saves the schedule and the public read reflects it (#1196)`() =
+        withApp { client ->
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
+
+            val saved =
+                client.put(urlString = "/api/v1/theme/schedule") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(
+                        body =
+                            SetThemeScheduleRequest(
+                                schedule =
+                                    listOf(
+                                        element =
+                                            scheduleRow(
+                                                name = "Clay",
+                                                start = 1 to 1,
+                                                end =
+                                                    12 to 31,
+                                            ),
+                                    ),
+                            ),
+                    )
+                }
+            saved.status shouldBe HttpStatusCode.OK
+            saved.body<ThemeScheduleResponse>().gaps shouldBe emptyList()
+
+            client
+                .get(urlString = "/api/v1/theme")
+                .body<ThemeResponse>()
+                .schedule
+                .map { it.name } shouldContainExactly listOf(element = "Clay")
+        }
+
+    @Test
+    fun `an overlapping schedule is a 400 listing the conflicting rows (#1196)`() =
+        withApp { client ->
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
+
+            val response =
+                client.put(urlString = "/api/v1/theme/schedule") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(
+                        body =
+                            SetThemeScheduleRequest(
+                                schedule =
+                                    listOf(
+                                        scheduleRow(name = "A", start = 1 to 1, end = 2 to 1),
+                                        scheduleRow(
+                                            name = "B",
+                                            start =
+                                                1 to 20,
+                                            end = 3 to 1,
+                                        ),
+                                    ),
+                            ),
+                    )
+                }
+            response.status shouldBe HttpStatusCode.BadRequest
+            val text = response.bodyAsText()
+            text shouldContain "\"problems\""
+            text shouldContain "\"code\":\"OVERLAP\""
+            text shouldContain "\"rows\":[1,2]"
+        }
+
+    @Test
+    fun `a non-admin cannot save the schedule (#1196)`() =
+        withApp { client ->
+            seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+            val hostToken = TestFirebaseAuth.mintToken(uid = "host")
+
+            client
+                .put(urlString = "/api/v1/theme/schedule") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $hostToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetThemeScheduleRequest(schedule = emptyList()))
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 }

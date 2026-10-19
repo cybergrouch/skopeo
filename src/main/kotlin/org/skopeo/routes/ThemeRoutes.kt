@@ -16,11 +16,13 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.common.dto.settings.SetLocalThemeRequest
 import org.skopeo.common.dto.settings.SetThemeRequest
+import org.skopeo.common.dto.settings.SetThemeScheduleRequest
 import org.skopeo.domain.service.settings.ThemeService
 
 /**
  * The global UI theme setting (#378). The GET is public (viewable anonymously, so the web UI can
- * skin its sign-in pages) while the PUT is ADMINISTRATOR-only (enforced in [ThemeService]).
+ * skin its sign-in pages) while the PUTs — the theme and its AUTO schedule (#1196) — are ADMINISTRATOR-only
+ * (enforced in [ThemeService]).
  */
 fun Application.configureThemeRoutes(service: ThemeService = ThemeService()) {
     routing {
@@ -38,6 +40,16 @@ fun Application.configureThemeRoutes(service: ThemeService = ThemeService()) {
                     respondMappingErrors {
                         val request = call.receive<SetThemeRequest>()
                         respondEither(result = service.setTheme(token = verifiedToken(), theme = request.theme)) { value ->
+                            call.respond(status = HttpStatusCode.OK, message = value)
+                        }
+                    }
+                }
+                // The AUTO season schedule (#1196), read through the public GET above. ADMINISTRATOR-only,
+                // enforced in ThemeService; a rejected schedule is a 400 listing every problem row.
+                put(path = "/schedule") {
+                    respondMappingErrors {
+                        val request = call.receive<SetThemeScheduleRequest>()
+                        respondEither(result = service.setSchedule(token = verifiedToken(), rows = request.schedule)) { value ->
                             call.respond(status = HttpStatusCode.OK, message = value)
                         }
                     }

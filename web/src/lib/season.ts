@@ -1,8 +1,9 @@
 /**
- * AUTO season resolver (#378). Maps today's date to a court-surface theme using a small, tunable
- * window table (the single source of truth). Pure — no clock reads inside — so it's fully testable.
+ * AUTO season resolver (#378). Maps today's date to a theme using the admin-editable schedule (#1196,
+ * rules in ./themeSchedule.ts). Pure — no clock reads inside — so it's fully testable.
  * See docs/product/UI_SEASONAL_THEMING.md §6.
  */
+import { DEFAULT_SCHEDULE, findRowIndex, resolvePeriodStart, type ScheduleRow } from './themeSchedule'
 
 /** The concrete theme names, matching the `[data-theme="…"]` blocks in index.css. */
 export type ThemeName =
@@ -17,81 +18,35 @@ export type ThemeName =
   | 'rainy'
   | 'halloween'
   | 'autumn'
-  // Skopeo OG (#512): the original all-white look. Manually-selectable only — deliberately NOT
-  // produced by resolveSeasonTheme (it's not part of the AUTO rotation).
+  // Skopeo OG (#512): the original all-white look. Selectable by hand, in the default AUTO schedule for
+  // Apr 1–15 (#1194), and what AUTO shows on any date the schedule leaves uncovered (#1196).
   | 'og'
 
-/** Month is 1-based here (Jan = 1) to match how the windows read in the design doc. */
-interface DateParts {
-  month: number
-  day: number
-}
-
-function partsOf(now: Date): DateParts {
-  return { month: now.getMonth() + 1, day: now.getDate() }
-}
-
-/** Ordinal (month*100 + day) used to compare (month, day) pairs on the same-year calendar. */
-function ordinal(parts: DateParts): number {
-  return parts.month * 100 + parts.day
+/**
+ * Resolve the AUTO theme for `now` from `schedule` (#1196): the theme of the first row containing the
+ * date, or Skopeo OG when no row does (or the row's theme is one this build doesn't know). The schedule
+ * comes from `GET /api/v1/theme`; {@link DEFAULT_SCHEDULE} only stands in while it loads or if it fails.
+ */
+export function resolveSeasonTheme(now: Date, schedule: readonly ScheduleRow[] = DEFAULT_SCHEDULE): ThemeName {
+  const index = findRowIndex(schedule, now)
+  return (index >= 0 ? ENUM_TO_THEME[schedule[index].theme] : undefined) ?? 'og'
 }
 
 /**
- * The single source of truth for the seasonal windows (#378, #514): each entry BEGINS on (month, day)
- * and runs up to (but not including) the next entry's start. Ordered by start; contiguous and covering
- * the whole year (Jan 1 → Dec 31), so every date falls in exactly one window. Both
- * {@link resolveSeasonTheme} (which theme) and {@link resolveSeasonStart} (which start boundary) derive
- * from this table.
+ * The start boundary (midnight) of the period `now` falls in (#514), from the same schedule
+ * {@link resolveSeasonTheme} uses: a row's start, or the day after the previous row ends when `now` is
+ * uncovered. The effective-theme precedence compares this against when the user set their local theme to
+ * detect a new-season takeover. Pure: no clock reads.
  */
-const SEASON_WINDOWS: Array<{ start: DateParts; theme: ThemeName }> = [
-  { start: { month: 1, day: 1 }, theme: 'ao' },
-  { start: { month: 2, day: 1 }, theme: 'valentines' },
-  { start: { month: 2, day: 15 }, theme: 'spring' },
-  { start: { month: 4, day: 1 }, theme: 'clay' },
-  { start: { month: 6, day: 11 }, theme: 'grass' },
-  { start: { month: 8, day: 1 }, theme: 'uso' },
-  { start: { month: 9, day: 16 }, theme: 'rainy' },
-  { start: { month: 10, day: 17 }, theme: 'offseason' },
-  { start: { month: 10, day: 25 }, theme: 'halloween' },
-  { start: { month: 11, day: 3 }, theme: 'autumn' },
-  { start: { month: 12, day: 10 }, theme: 'christmas' },
-]
-
-/** The index of the window `now` falls in: the last window whose start is on/before `now`. */
-function windowIndexOf(now: Date): number {
-  const value = ordinal(partsOf(now))
-  let index = 0
-  for (let i = 0; i < SEASON_WINDOWS.length; i += 1) {
-    if (value >= ordinal(SEASON_WINDOWS[i].start)) index = i
-  }
-  return index
-}
-
-/**
- * Resolve the active theme for `now` (the last window whose start is on/before `now` wins):
- * Jan 1 → ao; Feb 1 → valentines; Feb 15 → spring; Apr 1 → clay; Jun 11 → grass; Aug 1 → uso;
- * Sep 16 → rainy; Oct 17 → offseason; Oct 25 → halloween; Nov 3 → autumn; Dec 10 → christmas. The
- * table is Jan-1-anchored, so any date before Feb 1 lands on the first (ao) window.
- */
-export function resolveSeasonTheme(now: Date): ThemeName {
-  return SEASON_WINDOWS[windowIndexOf(now)].theme
-}
-
-/**
- * The start boundary (midnight, `now`'s year) of the seasonal window `now` falls in (#514) — from the
- * same window table {@link resolveSeasonTheme} uses. Pure: no clock reads. The effective-theme
- * precedence compares this against when the user set their local theme to detect a new-season takeover.
- */
-export function resolveSeasonStart(now: Date): Date {
-  const { start } = SEASON_WINDOWS[windowIndexOf(now)]
-  return new Date(now.getFullYear(), start.month - 1, start.day)
+export function resolveSeasonStart(now: Date, schedule: readonly ScheduleRow[] = DEFAULT_SCHEDULE): Date {
+  return resolvePeriodStart(schedule, now)
 }
 
 /**
  * Maps the backend theme enum to a concrete `data-theme` name. `AUTO` (and any missing/unknown
  * value) is resolved by date; the others map 1:1. See docs/product/UI_SEASONAL_THEMING.md.
  */
-const ENUM_TO_THEME: Record<string, ThemeName> = {
+const ENUM_TO_THEME: Partial<Record<string, ThemeName>> = {
   GRASS: 'grass',
   CLAY: 'clay',
   AO: 'ao',
@@ -103,18 +58,22 @@ const ENUM_TO_THEME: Record<string, ThemeName> = {
   RAINY: 'rainy',
   HALLOWEEN: 'halloween',
   AUTUMN: 'autumn',
-  // Skopeo OG (#512) is manual-only, so it appears here (explicit picks map 1:1) but not in
-  // resolveSeasonTheme (the AUTO date rotation).
+  // Skopeo OG (#512): an explicit pick maps 1:1 like the others; AUTO also produces it (#1194, #1196).
   SKOPEO_OG: 'og',
 }
 
-/** Resolve the setting value (poss. AUTO / unknown) to the active `data-theme` name for `now`. */
-export function resolveActiveTheme(setting: string | undefined, now: Date): ThemeName {
-  if (setting != null && setting !== 'AUTO' && setting in ENUM_TO_THEME) {
-    return ENUM_TO_THEME[setting]
-  }
+/**
+ * Resolve the setting value (poss. AUTO / unknown) to the active `data-theme` name for `now`; AUTO
+ * resolves from `schedule`.
+ */
+export function resolveActiveTheme(
+  setting: string | undefined,
+  now: Date,
+  schedule: readonly ScheduleRow[] = DEFAULT_SCHEDULE,
+): ThemeName {
+  const pinned = setting != null && setting !== 'AUTO' ? ENUM_TO_THEME[setting] : undefined
   // AUTO, missing, or unknown → resolve by date.
-  return resolveSeasonTheme(now)
+  return pinned ?? resolveSeasonTheme(now, schedule)
 }
 
 /** Inputs to the per-user effective-theme precedence (#514). */
@@ -125,6 +84,8 @@ export interface EffectiveThemeInputs {
   localTheme: string | null | undefined
   /** When the local theme was last set (ISO string or Date), or null/undefined when unset. */
   localSetAt: string | Date | null | undefined
+  /** The AUTO schedule (#1196); undefined while it loads → {@link DEFAULT_SCHEDULE}. */
+  schedule?: readonly ScheduleRow[]
 }
 
 /**
@@ -141,15 +102,15 @@ export interface EffectiveThemeInputs {
  * Pure: `now` is passed in, never read from the clock.
  */
 export function resolveEffectiveTheme(inputs: EffectiveThemeInputs, now: Date): ThemeName {
-  const { global, localTheme, localSetAt } = inputs
+  const { global, localTheme, localSetAt, schedule = DEFAULT_SCHEDULE } = inputs
+  const localName = localTheme == null ? undefined : ENUM_TO_THEME[localTheme]
 
   // Branch 1: no local choice → follow the global path exactly.
-  if (localTheme == null || !(localTheme in ENUM_TO_THEME)) {
-    return resolveActiveTheme(global, now)
+  if (localName === undefined) {
+    return resolveActiveTheme(global, now, schedule)
   }
 
-  const localName = ENUM_TO_THEME[localTheme]
-  const globalIsAuto = global == null || global === 'AUTO' || !(global in ENUM_TO_THEME)
+  const globalIsAuto = global == null || global === 'AUTO' || ENUM_TO_THEME[global] === undefined
 
   // Branch 2: a fixed global never overrides a local choice.
   if (!globalIsAuto) {
@@ -158,9 +119,9 @@ export function resolveEffectiveTheme(inputs: EffectiveThemeInputs, now: Date): 
 
   // Branch 3: global AUTO — a season that began after the user set local takes over.
   const setAt = localSetAt == null ? null : new Date(localSetAt)
-  const seasonStart = resolveSeasonStart(now)
+  const seasonStart = resolveSeasonStart(now, schedule)
   if (setAt != null && seasonStart.getTime() > setAt.getTime()) {
-    return resolveSeasonTheme(now)
+    return resolveSeasonTheme(now, schedule)
   }
   return localName
 }

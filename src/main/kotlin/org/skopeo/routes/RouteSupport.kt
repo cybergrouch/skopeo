@@ -16,8 +16,10 @@ import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.response.respond
 import io.ktor.server.routing.RoutingContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.error.ValidationProblem
 import org.skopeo.common.logging.redactedForLogging
 import org.skopeo.common.logging.sqlFailureFacts
 import org.skopeo.common.security.ClientAuthResult
@@ -47,6 +49,14 @@ internal fun errorBody(
         "message" to (message ?: error),
         requestId?.let { "requestId" to it },
     ).toMap()
+
+/** The 400 body for a [ServiceError.Validation] that carries structured [problems] (#1196). */
+@Serializable
+internal data class ValidationErrorBody(
+    val error: String,
+    val message: String,
+    val problems: List<ValidationProblem>,
+)
 
 /** Lift the verified Firebase identity out of the JWT claims (the only place that touches the token shape). */
 internal fun RoutingContext.verifiedToken(): VerifiedFirebaseToken = call.principal<JWTPrincipal>()!!.toVerifiedToken()
@@ -109,7 +119,16 @@ internal suspend fun RoutingContext.respondError(error: ServiceError) {
         }
 
         is ServiceError.Validation -> {
-            call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Validation error", message = error.message))
+            // A structured breakdown (#1196) rides along only when the service supplied one, so every other
+            // 400 keeps the plain error/message body.
+            if (error.problems.isEmpty()) {
+                call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Validation error", message = error.message))
+            } else {
+                call.respond(
+                    status = HttpStatusCode.BadRequest,
+                    message = ValidationErrorBody(error = "Validation error", message = error.message, problems = error.problems),
+                )
+            }
         }
 
         is ServiceError.AccountMerged -> {
