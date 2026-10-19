@@ -607,7 +607,7 @@ A user is granted one or more broad **capabilities**: `PLAYER`, `HOST`, `CLUB_OW
 - **`ranking_point_awards`** (V13/V18/V19, #403/#448) — the append-only ranking-points ledger: `points` in a `point_class` validity tier, `band`/`sex`, a `valid_from`/`valid_until` window, and `status` ACTIVE/REVOKED. A revocation is itself a row (`revokes_award_id`). Awards link to their granting `event_id` and/or `match_id`.
 - **`placeholder_claim_codes`** (V23, #496) — one-time claim codes (stored SHA-256 hashed) that let a real user adopt a login-less `placeholder` account; `status` ACTIVE/CONSUMED with expiry.
 - **`api_clients` / `api_keys`** (V33/V35, #225) — partner applications and their keys. Only the SHA-256 `key_hash` is stored (never the plaintext); `key_prefix` is a non-secret display hint; `scopes` is a CSV of `Capability` names; per-client `rate_limit_per_min` overrides the default tier. `api_clients.status` ACTIVE/SUSPENDED; `api_keys.status` ACTIVE/REVOKED (+ derived expiry).
-- **`points_config`** (V28) / **`app_settings`** (V11) — key/value global settings (`app_settings` holds e.g. `ui_theme`, `standings_source`; `points_config` holds the open-play/tournament points schedules). `updated_by` records the admin.
+- **`points_config`** (V28) / **`app_settings`** (V11) — key/value global settings (`app_settings` holds e.g. `ui_theme`, the AUTO schedule `ui_theme_schedule` as JSON — `value` is `TEXT` since V68 (#1196) — and `standings_source`; `points_config` holds the open-play/tournament points schedules). `updated_by` records the admin.
 
 ## Domain Lifecycles
 

@@ -55,6 +55,17 @@ describe('ThemeProvider', () => {
     expect(document.documentElement.dataset.theme).toBe('ao')
   })
 
+  it('resolves AUTO from the server schedule, not the built-in one (#1196)', () => {
+    useGetApiV1Theme.mockReturnValue({
+      data: {
+        theme: 'AUTO',
+        schedule: [{ name: 'Winter grass', theme: 'GRASS', start: { month: 1, day: 1 }, end: { month: 1, day: 31 } }],
+      },
+    })
+    renderProvider()
+    expect(document.documentElement.dataset.theme).toBe('grass')
+  })
+
   it('re-applies when the query data changes', () => {
     useGetApiV1Theme.mockReturnValue({ data: { theme: 'GRASS' } })
     const { rerender } = renderProvider()

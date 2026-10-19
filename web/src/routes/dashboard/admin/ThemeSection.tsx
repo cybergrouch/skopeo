@@ -17,29 +17,15 @@ import {
 import type { SetThemeRequestTheme } from '@/api/generated/model'
 import { toast } from 'sonner'
 import { toastError } from '@/observability/toastError'
-
-// The setting enum + human labels. AUTO resolves by date on each client; the rest pin a theme.
-const THEME_OPTIONS: ReadonlyArray<{ value: SetThemeRequestTheme; label: string }> = [
-  { value: 'AUTO', label: 'Auto (by season)' },
-  { value: 'GRASS', label: 'Grass' },
-  { value: 'CLAY', label: 'Clay' },
-  { value: 'AO', label: 'Australian Open' },
-  { value: 'US_OPEN', label: 'US Open' },
-  { value: 'OFF_SEASON', label: 'Off-Season' },
-  { value: 'CHRISTMAS', label: 'Christmas' },
-  { value: 'VALENTINES', label: "Valentine's Day" },
-  { value: 'SPRING', label: 'Spring' },
-  { value: 'RAINY', label: 'Rainy' },
-  { value: 'HALLOWEEN', label: 'Halloween' },
-  { value: 'AUTUMN', label: 'Autumn' },
-  // Skopeo OG (#512): the original all-white look; also AUTO's theme for Apr 1–15 (#1194).
-  { value: 'SKOPEO_OG', label: 'Skopeo OG' },
-]
+import { THEME_OPTIONS } from './themeOptions'
+import { ThemeScheduleEditor } from './ThemeScheduleEditor'
 
 /**
  * Admin theme picker (#378): reads the current global theme and writes a new one. On success the
  * theme query is invalidated so every client (including this one, via the ThemeProvider poll)
  * picks up the change. The Admin tab is already ADMINISTRATOR-gated, so no extra gating here.
+ *
+ * Below the picker sits the AUTO schedule editor (#1196), which saves separately.
  */
 export function ThemeSection() {
   const queryClient = useQueryClient()
@@ -70,33 +56,36 @@ export function ThemeSection() {
       <CardHeader>
         <CardTitle>UI theme</CardTitle>
         <CardDescription>
-          Set the global UI theme for every client. Auto resolves by tennis season.
+          Set the global UI theme for every client. Auto follows the season schedule below.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-wrap items-end gap-2">
-        <div className="space-y-1">
-          <Label htmlFor="admin-theme" className="text-xs">
-            Theme
-          </Label>
-          <select
-            id="admin-theme"
-            className="h-9 rounded-md border bg-transparent px-3 py-1 text-sm"
-            value={value}
-            disabled={themeQuery.isLoading}
-            onChange={(e) => {
-              setSelected(e.target.value as SetThemeRequestTheme)
-            }}
-          >
-            {THEME_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+      <CardContent className="space-y-6">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="space-y-1">
+            <Label htmlFor="admin-theme" className="text-xs">
+              Theme
+            </Label>
+            <select
+              id="admin-theme"
+              className="h-9 rounded-md border bg-transparent px-3 py-1 text-sm"
+              value={value}
+              disabled={themeQuery.isLoading}
+              onChange={(e) => {
+                setSelected(e.target.value as SetThemeRequestTheme)
+              }}
+            >
+              {THEME_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button type="button" size="sm" onClick={onSave} disabled={setTheme.isPending}>
+            Save theme
+          </Button>
         </div>
-        <Button type="button" size="sm" onClick={onSave} disabled={setTheme.isPending}>
-          Save theme
-        </Button>
+        <ThemeScheduleEditor schedule={themeQuery.data?.schedule} loading={themeQuery.isLoading} />
       </CardContent>
     </Card>
   )

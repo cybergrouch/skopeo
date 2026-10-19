@@ -56,6 +56,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     },
   });
   const global = data?.theme;
+  // The AUTO schedule (#1196). Undefined while loading or after a failed fetch, and resolveEffectiveTheme
+  // then falls back to the built-in default.
+  const schedule = data?.schedule;
   const [local, setLocal] = useState<LocalTheme>({
     localTheme: null,
     localSetAt: null,
@@ -65,14 +68,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const apply = () =>
       applyTheme(
         resolveEffectiveTheme(
-          { global, localTheme: local.localTheme, localSetAt: local.localSetAt },
+          { global, localTheme: local.localTheme, localSetAt: local.localSetAt, schedule },
           new Date(),
         ),
       );
     apply();
     const id = setInterval(apply, REAPPLY_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [global, local.localTheme, local.localSetAt]);
+  }, [global, schedule, local.localTheme, local.localSetAt]);
 
   return (
     <LocalThemeContext.Provider value={setLocal}>

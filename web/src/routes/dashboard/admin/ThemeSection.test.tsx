@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeSection } from './ThemeSection'
@@ -19,6 +19,8 @@ vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }
 vi.mock('@/api/generated/settings/settings', () => ({
   useGetApiV1Theme,
   usePutApiV1Theme,
+  // The AUTO schedule editor (#1196) lives in this card too; ThemeScheduleEditor.test covers it.
+  usePutApiV1ThemeSchedule: () => ({ isPending: false, mutate: vi.fn() }),
   getGetApiV1ThemeQueryKey: () => ['theme'],
 }))
 
@@ -49,21 +51,21 @@ describe('ThemeSection', () => {
     renderSection()
     const select = screen.getByLabelText('Theme') as HTMLSelectElement
     expect(select.options).toHaveLength(13)
-    expect(screen.getByRole('option', { name: 'Auto (by season)' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'US Open' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Grass' })).toBeInTheDocument()
+    expect(within(select).getByRole('option', { name: 'Auto (by season)' })).toBeInTheDocument()
+    expect(within(select).getByRole('option', { name: 'US Open' })).toBeInTheDocument()
+    expect(within(select).getByRole('option', { name: 'Grass' })).toBeInTheDocument()
   })
 
   it('renders the five new seasonal theme options', () => {
     renderSection()
     for (const name of ["Valentine's Day", 'Spring', 'Rainy', 'Halloween', 'Autumn']) {
-      expect(screen.getByRole('option', { name })).toBeInTheDocument()
+      expect(within(screen.getByLabelText('Theme')).getByRole('option', { name })).toBeInTheDocument()
     }
   })
 
   it('renders the Skopeo OG option (#512)', () => {
     renderSection()
-    expect(screen.getByRole('option', { name: 'Skopeo OG' })).toBeInTheDocument()
+    expect(within(screen.getByLabelText('Theme')).getByRole('option', { name: 'Skopeo OG' })).toBeInTheDocument()
   })
 
   it.each([

@@ -35,7 +35,7 @@ Apply the classic **60-30-10** rule. The all-dark inversion (#399) made every bl
 
 ### Model
 - A **single global theme setting**, controlled from the **Admin tab**.
-- Value is either a **specific theme** (`GRASS` / `CLAY` / `AO` / `US_OPEN` / `OFF_SEASON` / `CHRISTMAS`) or **`AUTO`** (resolve by date — see [§6](#6-auto-season-resolver)).
+- Value is either a **specific theme** (`GRASS` / `CLAY` / `AO` / `US_OPEN` / `OFF_SEASON` / `CHRISTMAS`) or **`AUTO`** (resolve by date from the admin-editable season schedule — see [§6](#6-auto-season-resolver)).
 - **Source of truth: backend / Postgres** — a small `app_settings` row, `GET /api/v1/theme` (public read) + admin-gated `PUT`.
 
 ### Decision: **Poll + live token swap**
@@ -147,7 +147,7 @@ The four court seasons are Vibrant Depth (#409); Off-Season + US Open stay all-d
 | **Autumn** *(vibrant)* | `#BF360C` Burnt Rust | `#3E2723` Cocoa · `#FFF3E0` | `#FFB300` Amber | `#FFF3E0` Linen (2px) | Warm, harvest, earthy |
 | **Skopeo OG** *(light)* | `#FFFFFF` White | `#FFFFFF` White · near-black `oklch(0.145 0 0)` | dark neutral `oklch(0.205 0 0)` | `oklch(0.922 0 0)` Light Gray (1px) | The original clean all-white look |
 
-> **Skopeo OG (#512):** the app's original all-white look from before seasonal theming (#378), brought back as a selectable theme (backend enum `SKOPEO_OG`; `data-theme='og'`; label "Skopeo OG"). It re-asserts the pre-#378 neutral light palette that `:root` still carries as the default/fallback (`web/src/index.css`), and since #1194 it is also AUTO's theme for **Apr 1 – Apr 15** (§6), just before the clay season; an admin or user can still pick it explicitly at any time. Because it drives the same tokens as every other theme, the shared content links/badges stay AA on the OG surface.
+> **Skopeo OG (#512):** the app's original all-white look from before seasonal theming (#378), brought back as a selectable theme (backend enum `SKOPEO_OG`; `data-theme='og'`; label "Skopeo OG"). It re-asserts the pre-#378 neutral light palette that `:root` still carries as the default/fallback (`web/src/index.css`), and since #1194 it is also AUTO's theme for **Apr 1 – Apr 15** in the default schedule (§6), just before the clay season, and for any date the schedule leaves uncovered (#1196); an admin or user can still pick it explicitly at any time. Because it drives the same tokens as every other theme, the shared content links/badges stay AA on the OG surface.
 
 ### 5.1 Content-link colors (#399, supersedes #394/#395)
 
@@ -174,27 +174,75 @@ Public-page / share links (the "Public page (QR)" anchors and similar) get an ex
 
 ## 6. AUTO season resolver
 
-When the setting is `AUTO`, a small data-driven table (`resolveSeasonTheme` in `web/src/lib/season.ts`) maps today's date → theme. Windows are **inclusive** and **first-match-wins** (evaluated top→bottom); anything unmatched falls through to `offseason`. The confirmed 12-row calendar (seasonal-themes-expansion, plus Skopeo OG in #1194):
+When the setting is `AUTO`, each client maps today's date to a theme using the **AUTO season schedule** (#1196). The schedule is data on the server, edited by an ADMINISTRATOR from the UI Theme card in the Admin tab, so changing a date no longer needs a code change and a deploy.
 
-| Window (inclusive) | Theme |
+### The model: named rows with inclusive ranges
+
+The schedule is one **ordered list of rows**. Each row has:
+
+- a **name** (free text, e.g. "French Open run-up"), required and **unique** — compared ignoring case and leading/trailing spaces, so "Clay" and " clay " clash;
+- a **theme** — any `ThemeSetting` except `AUTO`;
+- a **start** and an **end** date, as month + day with no year, both **inclusive**, repeating every year.
+
+**Resolution:** rows are tested **top to bottom** and the **first row whose range contains the date wins**. A date **no row covers shows Skopeo OG** (`og`).
+
+Two calendar rules (decisions 1 and 2 in #1196):
+
+- **Ranges may cross New Year.** An end earlier than the start runs past Dec 31 into January ("Holidays: Dec 20 – Jan 5"). The overlap and gap checks treat it that way.
+- **Feb 29.** It can be a start or an end. A range that **ends on Feb 28 also covers Feb 29** in leap years, so "Feb 15 – Feb 28" followed by a row starting Mar 1 doesn't leave Feb 29 uncovered every fourth year. The gap check ignores Feb 29 for the same reason.
+
+### Validation on save
+
+| Problem | Result |
 |---|---|
-| Jan 1 – Jan 31 | Australian Open (`ao`) |
-| Feb 1 – Feb 14 | Valentine's Day (`valentines`) |
-| Feb 15 – Mar 31 | Spring (`spring`) |
-| Apr 1 – Apr 15 | Skopeo OG (`og`) |
-| Apr 16 – Jun 10 | Clay (`clay`) |
-| Jun 11 – Jul 31 | Grass (`grass`) |
-| Aug 1 – Sep 15 | US Open (`uso`) |
-| Sep 16 – Oct 16 | Rainy (`rainy`) |
-| Oct 17 – Oct 24 | Off-Season (`offseason`) |
-| Oct 25 – Nov 2 | Halloween (`halloween`) |
-| Nov 3 – Dec 9 | Autumn (`autumn`) |
-| Dec 10 – Dec 31 | Christmas (`christmas`) |
-| *(anything unmatched)* | Off-Season (`offseason`) default |
+| Two rows share any date (**overlap**) | **Error** — every conflicting pair is reported, naming both rows and the shared dates: *"Row 4 'Clay' (Apr 16 – Jun 10) overlaps row 5 'Grass' (Jun 1 – Jul 31) on Jun 1 – Jun 10"* |
+| Two or more rows share a **name** | **Error** — naming every row involved: *"Rows 4 and 9 are both named 'Clay'"* |
+| A row with no name or no theme, an **invalid date** (Apr 31), or `AUTO` as its theme | **Error** |
+| Dates no row covers (**gap**) | **Warning only** — *"Not covered: Oct 17 – Oct 24 (these dates will show Skopeo OG)"*; saving is allowed |
+
+The server enforces the errors: `PUT /api/v1/theme/schedule` answers **400** with a `ServiceError.Validation` whose body carries a structured `problems` list (`code`, `message`, 1-based `rows`, `names`) alongside the usual `message`. The rules live in the pure `ThemeScheduleRules` (`domain/service/settings/`); the web editor runs the same rules live (`web/src/lib/themeSchedule.ts`) so problems show as the admin types.
+
+### Storage and API
+
+- **Storage:** `app_settings` key `ui_theme_schedule`, next to `ui_theme`, as one JSON list of `{ name, theme, start: { month, day }, end: { month, day } }`. `V68__theme_schedule.sql` widened `app_settings.value` to `TEXT` and seeded the default below.
+- **Read:** the public `GET /api/v1/theme` returns the schedule (`schedule`, plus `scheduleUpdatedAt`/`scheduleUpdatedBy`), because every visitor needs it to resolve AUTO.
+- **Write:** `PUT /api/v1/theme/schedule`, ADMINISTRATOR only, replaces the whole list. The response includes any `gaps`. Each save is audit-logged as `SETTINGS_THEME_SCHEDULE_CHANGED` with the schedule **before and after**.
+- **Fallback:** if the stored value is missing or no longer parses (say, a theme was renamed), the server serves the built-in default (`ThemeScheduleRules.DEFAULT`). The web keeps its own copy of the same default (`DEFAULT_SCHEDULE`), used **only while the schedule loads or if the request fails**.
+
+### The default schedule
+
+The hard-coded rotation this replaced (seasonal-themes-expansion, plus Skopeo OG in #1194), as inclusive ranges with no gaps. V68 seeds it and `ThemeScheduleRulesTest` fails the build if the seed and `ThemeScheduleRules.DEFAULT` drift apart.
+
+| Row | Range (inclusive) | Theme |
+|---|---|---|
+| Australian Open | Jan 1 – Jan 31 | `ao` |
+| Valentine's Day | Feb 1 – Feb 14 | `valentines` |
+| Spring | Feb 15 – Mar 31 | `spring` |
+| Skopeo OG | Apr 1 – Apr 15 | `og` |
+| Clay | Apr 16 – Jun 10 | `clay` |
+| Grass | Jun 11 – Jul 31 | `grass` |
+| US Open | Aug 1 – Sep 15 | `uso` |
+| Rainy | Sep 16 – Oct 16 | `rainy` |
+| Off-Season | Oct 17 – Oct 24 | `offseason` |
+| Halloween | Oct 25 – Nov 2 | `halloween` |
+| Autumn | Nov 3 – Dec 9 | `autumn` |
+| Christmas | Dec 10 – Dec 31 | `christmas` |
+| *(anything uncovered)* | | Skopeo OG (`og`) |
 
 The five seasonal themes (valentines, spring, rainy, halloween, autumn) fill the former Feb–Mar and Sep–Nov "swing" gaps; the short Oct 17–24 offseason strip separates the rainy and halloween windows, and Christmas remains a December carve-out. Skopeo OG (#1194) takes the first half of April, around when Skopeo started (spring 2026). Clay starts on Apr 16 and runs unbroken through the French Open; Grass still starts on Jun 11, well ahead of Wimbledon.
 
-The windows are contiguous and cover the whole year, so the table is stored as an ordered list of *window starts* (`SEASON_WINDOWS` in `season.ts`, the single source of truth); `resolveSeasonTheme` returns the theme of the last window whose start is on/before `now`. A companion `resolveSeasonStart(now)` returns that window's **start boundary** (midnight, `now`'s year) — used by the per-user local theme below to detect a new-season takeover.
+### The editor
+
+The UI Theme card holds the editor below the global theme picker. It is laid out **vertically**, one block per row, so it works on a phone (#1156): name, theme, start and end month/day, with **move up/down** and **remove**. Below the rows: **Add row** (which starts on the first uncovered range, if any), **Sort by start date**, and **Reset to default**. Overlaps and duplicate names highlight every row involved, with the message, and disable Save; the gap warning lists the uncovered ranges and still allows Save. A **preview** shows what today resolves to (which row, or "Skopeo OG (uncovered)") and when the next change happens, computed from the schedule as edited.
+
+### Resolver functions (web)
+
+`resolveSeasonTheme(now, schedule)` returns the first matching row's theme, or `og` when nothing matches (or the row's theme is one this web build doesn't know). `resolveSeasonStart(now, schedule)` returns the **start of the period** `now` falls in — used by the per-user local theme below to detect a new-season takeover:
+
+- **inside a row:** that row's start date — in the **previous** year when `now` is in the January part of a range that wraps past Dec 31;
+- **inside a gap:** the **day after the previous row ends**, so an uncovered stretch counts as a season of its own.
+
+Both take the schedule as an argument and fall back to `DEFAULT_SCHEDULE`; `ThemeProvider` passes the one from `GET /api/v1/theme`. Server-side resolution and the timezone question (#455) stay out of scope: each client still resolves in its own local time.
 
 ### 6.1 Per-user "local theme" (#514)
 
@@ -202,7 +250,7 @@ On top of the single global theme, a profile owner can set their **own** theme; 
 
 1. **local unset** → the global path (`resolveActiveTheme(global, now)`), unchanged.
 2. **local set + a fixed (non-AUTO) global** → local wins (a fixed global never overrides a local choice).
-3. **local set + global AUTO** → compare `resolveSeasonStart(now)` against `local_theme_set_at`: a season that started **after** the user set local → the seasonal theme wins (new-season takeover); otherwise local wins. Re-setting local re-stamps `local_theme_set_at`, so the user reclaims their choice until the next season boundary. Stateless — no scheduled/batch clearing.
+3. **local set + global AUTO** → compare `resolveSeasonStart(now)` against `local_theme_set_at`: a season that started **after** the user set local → the seasonal theme wins (new-season takeover); otherwise local wins. Re-setting local re-stamps `local_theme_set_at`, so the user reclaims their choice until the next season boundary. Stateless — no scheduled/batch clearing. An admin edit to the schedule can move today's period start past a user's pick, replacing it the same day, exactly as at any normal season change (#1196, decision 5).
 
 Wiring: `ThemeProvider` (above `AuthProvider`, so the public global fetch still skins logged-out pages) is the single `data-theme` writer. A nested `LocalThemeApplier` mounted **inside** the authed tree fetches `/users/me/theme` (disabled while logged out) and reports the local theme up to `ThemeProvider`, which folds it into the effective theme. With no local theme the effective theme equals the global one, so logged-out behavior is unchanged; the hourly tick still re-resolves AUTO/season boundaries live.
 
@@ -250,6 +298,7 @@ Under Vibrant Depth (#409) the four court cards carry **white** text; Off-Season
 
 ### Admin tab
 - A theme picker (the 6 themes + `AUTO`) writing the setting; reflects the current value.
+- Below it, the AUTO season schedule editor (#1196, §6).
 
 ---
 

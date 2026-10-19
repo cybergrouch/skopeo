@@ -189,3 +189,36 @@ describe('resolveEffectiveTheme', () => {
     })
   })
 })
+
+describe('resolution from a server schedule (#1196)', () => {
+  const schedule = [
+    { name: 'Clay', theme: 'CLAY', start: { month: 4, day: 16 }, end: { month: 6, day: 10 } },
+    { name: 'Grass', theme: 'GRASS', start: { month: 6, day: 11 }, end: { month: 7, day: 31 } },
+    { name: 'Future', theme: 'NOT_YET_KNOWN', start: { month: 9, day: 1 }, end: { month: 9, day: 30 } },
+  ]
+
+  it('the first matching row wins and uncovered dates show Skopeo OG', () => {
+    expect(resolveSeasonTheme(on(5, 1), schedule)).toBe('clay')
+    expect(resolveSeasonTheme(on(1, 10), schedule)).toBe('og')
+  })
+
+  it('a row whose theme this build does not know shows Skopeo OG', () => {
+    expect(resolveSeasonTheme(on(9, 10), schedule)).toBe('og')
+  })
+
+  it('AUTO resolves from the given schedule, a pinned theme ignores it', () => {
+    expect(resolveActiveTheme('AUTO', on(6, 20), schedule)).toBe('grass')
+    expect(resolveActiveTheme('AO', on(6, 20), schedule)).toBe('ao')
+  })
+
+  it('an uncovered stretch counts as its own season for the takeover', () => {
+    // The gap after Grass starts Aug 1. A local pick from Jul 20 is overtaken there; one from Aug 5 is not.
+    expect(resolveSeasonStart(on(8, 20), schedule).getTime()).toBe(on(8, 1).getTime())
+    expect(
+      resolveEffectiveTheme({ global: 'AUTO', localTheme: 'CLAY', localSetAt: on(7, 20), schedule }, on(8, 20)),
+    ).toBe('og')
+    expect(
+      resolveEffectiveTheme({ global: 'AUTO', localTheme: 'CLAY', localSetAt: on(8, 5), schedule }, on(8, 20)),
+    ).toBe('clay')
+  })
+})
