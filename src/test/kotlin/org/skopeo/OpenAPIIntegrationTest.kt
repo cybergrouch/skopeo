@@ -237,6 +237,11 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/users/me/theme"
             body shouldContain "LocalThemeResponse"
             body shouldContain "SetLocalThemeRequest"
+            // The editable AUTO schedule (#1196): its admin write and the structured 400.
+            body shouldContain "/api/v1/theme/schedule"
+            body shouldContain "SetThemeScheduleRequest"
+            body shouldContain "ThemeScheduleResponse"
+            body shouldContain "ValidationErrorResponse"
             // The standings serving-source toggle (#146): its read/write path and schemas.
             body shouldContain "/api/v1/settings/standings-source"
             body shouldContain "StandingsSourceResponse"

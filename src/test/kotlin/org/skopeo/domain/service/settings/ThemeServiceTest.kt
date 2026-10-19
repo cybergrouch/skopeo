@@ -5,17 +5,25 @@ package org.skopeo.domain.service.settings
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.settings.ScheduleDateDto
+import org.skopeo.common.dto.settings.ScheduleSpanDto
+import org.skopeo.common.dto.settings.ThemeScheduleRowRequest
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
+import org.skopeo.domain.model.AuditAction
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.ProvisionUserCommand
@@ -26,6 +34,7 @@ import org.skopeo.domain.model.UserName
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.AppSettingsRepository
 import org.skopeo.repository.AppSettingsTable
+import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDateTime
@@ -236,5 +245,153 @@ class ThemeServiceTest {
             .shouldBeRight()
             .theme
             .shouldBeNull()
+    }
+
+    private fun scheduleRow(
+        name: String?,
+        theme: String?,
+        start: Pair<Int, Int>,
+        end: Pair<Int, Int>,
+    ) = ThemeScheduleRowRequest(
+        name = name,
+        theme = theme,
+        start = ScheduleDateDto(month = start.first, day = start.second),
+        end = ScheduleDateDto(month = end.first, day = end.second),
+    )
+
+    @Test
+    fun `the read serves the built-in schedule when none is stored (#1196)`() {
+        val read = service.getTheme()
+        read.schedule.map { it.name } shouldBe ThemeScheduleRules.DEFAULT.map { it.name }
+        read.schedule.first().theme shouldBe ThemeSetting.AO.name
+        read.scheduleUpdatedAt.shouldBeNull()
+        read.scheduleUpdatedBy.shouldBeNull()
+    }
+
+    @Test
+    fun `an admin saves a schedule, the read reflects it and the change is audited with before and after (#1196)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val rows =
+            listOf(
+                scheduleRow(name = " Clay ", theme = "clay", start = 4 to 16, end = 6 to 10),
+                scheduleRow(name = "Holidays", theme = "CHRISTMAS", start = 12 to 20, end = 1 to 5),
+            )
+
+        val saved = service.setSchedule(token = token(uid = "admin"), rows = rows).shouldBeRight()
+        saved.schedule.map { it.name to it.theme } shouldContainExactly listOf("Clay" to "CLAY", "Holidays" to "CHRISTMAS")
+        saved.updatedBy shouldBe admin.id.toString()
+        // The uncovered dates come back as a warning, in calendar order.
+        saved.gaps shouldContainExactly
+            listOf(
+                ScheduleSpanDto(start = ScheduleDateDto(month = 1, day = 6), end = ScheduleDateDto(month = 4, day = 15)),
+                ScheduleSpanDto(start = ScheduleDateDto(month = 6, day = 11), end = ScheduleDateDto(month = 12, day = 19)),
+            )
+
+        val read = service.getTheme()
+        read.schedule shouldBe saved.schedule
+        read.scheduleUpdatedBy shouldBe admin.id.toString()
+        read.scheduleUpdatedAt.shouldNotBeNull()
+
+        val entry =
+            AuditRepository()
+                .list(actions = listOf(element = AuditAction.SETTINGS_THEME_SCHEDULE_CHANGED), limit = 10, offset = 0)
+                .first
+                .single()
+        entry.actorUserId shouldBe admin.id
+        entry.details["before"].shouldNotBeNull() shouldContain "Australian Open"
+        entry.details["after"].shouldNotBeNull() shouldContain "Holidays"
+    }
+
+    @Test
+    fun `a second save audits the first save as its before (#1196)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        service
+            .setSchedule(
+                token = token(uid = "admin"),
+                rows =
+                    listOf(
+                        element =
+                            scheduleRow(
+                                name = "First",
+                                theme = "GRASS",
+                                start = 1 to 1,
+                                end =
+                                    12 to 31,
+                            ),
+                    ),
+            ).shouldBeRight()
+        service
+            .setSchedule(
+                token = token(uid = "admin"),
+                rows =
+                    listOf(
+                        element =
+                            scheduleRow(
+                                name = "Second",
+                                theme = "CLAY",
+                                start = 1 to 1,
+                                end =
+                                    12 to 31,
+                            ),
+                    ),
+            ).shouldBeRight()
+
+        val entries =
+            AuditRepository().list(actions = listOf(element = AuditAction.SETTINGS_THEME_SCHEDULE_CHANGED), limit = 10, offset = 0).first
+        entries shouldHaveSize 2
+        entries.single { it.details["after"].orEmpty().contains(other = "Second") }.details["before"].shouldNotBeNull() shouldContain
+            "First"
+    }
+
+    @Test
+    fun `an empty schedule is allowed and reported as one whole-year gap (#1196)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val saved = service.setSchedule(token = token(uid = "admin"), rows = emptyList()).shouldBeRight()
+        saved.schedule shouldBe emptyList()
+        saved.gaps shouldContainExactly
+            listOf(element = ScheduleSpanDto(start = ScheduleDateDto(month = 1, day = 1), end = ScheduleDateDto(month = 12, day = 31)))
+        service.getTheme().schedule shouldBe emptyList()
+    }
+
+    @Test
+    fun `a schedule breaking the rules is rejected with every problem and nothing is saved (#1196)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val error =
+            service
+                .setSchedule(
+                    token = token(uid = "admin"),
+                    rows =
+                        listOf(
+                            scheduleRow(name = "Clay", theme = "CLAY", start = 4 to 16, end = 6 to 10),
+                            scheduleRow(name = "clay", theme = "GRASS", start = 6 to 1, end = 7 to 31),
+                            scheduleRow(name = "Auto", theme = "AUTO", start = 8 to 1, end = 8 to 31),
+                        ),
+                ).shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Validation>()
+        error.problems.map { it.code } shouldContainExactly listOf("AUTO_THEME", "DUPLICATE_NAME", "OVERLAP")
+        service.getTheme().schedule.map { it.name } shouldBe ThemeScheduleRules.DEFAULT.map { it.name }
+    }
+
+    @Test
+    fun `a non-admin cannot save the schedule (#1196)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        service
+            .setSchedule(token = token(uid = "host"), rows = emptyList())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `an unreadable stored schedule falls back to the built-in one (#1196)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        // A theme that has since been renamed no longer decodes; the read must not fail because of it.
+        settings.upsert(
+            key = "ui_theme_schedule",
+            value = """[{"name":"Old","theme":"RETIRED","start":{"month":1,"day":1},"end":{"month":1,"day":2}}]""",
+            updatedBy = admin.id,
+        )
+        val read = service.getTheme()
+        read.schedule.map { it.name } shouldBe ThemeScheduleRules.DEFAULT.map { it.name }
+        read.scheduleUpdatedBy.shouldBeNull()
     }
 }

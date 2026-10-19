@@ -3,6 +3,7 @@
 
 package org.skopeo.domain.model
 
+import kotlinx.serialization.Serializable
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -32,6 +33,58 @@ enum class ThemeSetting {
  */
 data class ThemeSettingValue(
     val theme: ThemeSetting,
+    val updatedBy: UUID?,
+    val updatedAt: LocalDateTime?,
+)
+
+/**
+ * A yearless calendar date in the AUTO theme schedule (#1196): [month] is 1-based (Jan = 1). Not validated
+ * on construction, because a request has to be able to carry an impossible date (Apr 31) far enough to be
+ * reported as a row problem; `ThemeScheduleRules` is where validity is decided.
+ */
+@Serializable
+data class ScheduleDate(
+    val month: Int,
+    val day: Int,
+)
+
+/**
+ * One validated row of the AUTO theme schedule (#1196): [theme] (never [ThemeSetting.AUTO]) applies from
+ * [start] to [end], both inclusive and repeating every year. An [end] before [start] wraps past Dec 31.
+ * Rows are tested top to bottom and the first match wins; a date no row covers shows Skopeo OG. Also the
+ * stored JSON shape of the `ui_theme_schedule` setting.
+ */
+@Serializable
+data class ThemeScheduleRow(
+    val name: String,
+    val theme: ThemeSetting,
+    val start: ScheduleDate,
+    val end: ScheduleDate,
+)
+
+/**
+ * An unvalidated schedule row as submitted (#1196): [name] and [theme] may be missing or wrong, which
+ * `ThemeScheduleRules.validate` reports per row rather than failing the whole request.
+ */
+data class ThemeScheduleDraftRow(
+    val name: String?,
+    val theme: String?,
+    val start: ScheduleDate,
+    val end: ScheduleDate,
+)
+
+/** An inclusive run of yearless dates, e.g. an uncovered gap in the schedule (#1196). */
+data class ScheduleSpan(
+    val start: ScheduleDate,
+    val end: ScheduleDate,
+)
+
+/**
+ * The AUTO theme schedule (#1196) plus its provenance. [updatedBy] is null for the migration-seeded
+ * default; both are null when no stored schedule exists and the built-in default is served instead.
+ */
+data class ThemeScheduleValue(
+    val rows: List<ThemeScheduleRow>,
     val updatedBy: UUID?,
     val updatedAt: LocalDateTime?,
 )

@@ -3,6 +3,8 @@
 
 package org.skopeo.common.error
 
+import kotlinx.serialization.Serializable
+
 /**
  * The typed-error taxonomy returned (as the Arrow `Either` left) by repositories and services for
  * **expected** failures (issue #115). Truly exceptional/programmer errors (DB/IO faults, bugs) are still
@@ -31,9 +33,14 @@ sealed interface ServiceError {
         override val message: String = "Access is not permitted",
     ) : ServiceError
 
-    /** A request value failed a business rule at the service boundary — mapped to 400. */
+    /**
+     * A request value failed a business rule at the service boundary — mapped to 400. [problems] is the
+     * optional structured breakdown (#1196) for a client that has to point at the offending rows; empty
+     * for the ordinary single-message case, and then left out of the response body.
+     */
     data class Validation(
         override val message: String,
+        val problems: List<ValidationProblem> = emptyList(),
     ) : ServiceError
 
     /**
@@ -56,3 +63,16 @@ sealed interface ServiceError {
         override val message: String = "This account has been deleted. Contact an administrator to restore access."
     }
 }
+
+/**
+ * One structured validation finding (#1196), carried by [ServiceError.Validation.problems]. [code] is a
+ * stable machine-readable kind (e.g. `OVERLAP`, `DUPLICATE_NAME`), [message] the human sentence, [rows]
+ * the 1-based positions of the list entries involved and [names] their names, in the same order.
+ */
+@Serializable
+data class ValidationProblem(
+    val code: String,
+    val message: String,
+    val rows: List<Int>,
+    val names: List<String>,
+)
